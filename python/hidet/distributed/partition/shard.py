@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import Sequence, Optional, Union, List, Tuple
 
+import hidet
 from hidet.ir.compute import ReduceOperation
 from hidet.graph import Tensor
 
@@ -27,6 +28,8 @@ class TensorShardSpec:
     axis can shard at most one dimension, and each dimension can be sharded by multiple mesh axes.
 
     It also accept a single-value parameter, which will be viewed as a single-layer mesh hierarchy.
+
+    None or negative numbers will be treated as not to shard on this dimension
     """
 
     def __init__(self, ndim: int, sharded_dim: Union[Optional[int], Sequence[Optional[int]]] = None):
@@ -72,15 +75,52 @@ class TensorShardSpec:
         return self._sharded_dim == other._sharded_dim
 
 
+def get_tile(tensor, nshards, shard_dim, rank=0):
+    # Only works for 1-D partition
+    slice_list = []
+    for i in range(len(tensor.shape)):
+        if i != shard_dim:
+            slice_list.append(slice(tensor.shape[i]))
+        else:
+            shard_size = tensor.shape[i] // nshards
+            slice_list.append(slice(shard_size * rank, shard_size * (rank + 1)))
+    return tensor[slice_list]
+
+
 class ReduceFunction:
-    def __init__(self, op: ReduceOperation, kind: str = 'all_reduce'):
-        self.op = op
-        assert kind in ('all_reduce', 'reduce_scatter')
-        self.kind = kind
+    def __init__(self, op: ReduceOperation):
+        self._op = op
 
+    @property
+    def op(self) -> str:
+        return str(self._op)
+
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
+        raise NotImplementedError()
+    
+    def cost(self, tensor: Tensor) -> int:
+        raise NotImplementedError() 
+
+class AllReduce(ReduceFunction):
     def __str__(self):
-        return self.kind + '_' + str(self.op)
+        return "all_reduce_" + str(self.op)
 
+    def __call__(self, tensor: Tensor, num_shards: int) -> Tensor:
+        return hidet.ops.distributed.all_reduce(tensor, self.op)
+
+    def cost(self, tensor: Tensor) -> int:
+        return 2 * tensor.nbytes
+    
+class ReduceScatter(ReduceFunction):
+    def __str__(self):
+        return "reduce_scatter_" + str(self.op)
+
+    def __call__(self, tensor: Tensor, num_shards: int) -> Tensor:
+        tensor = tensor.reshape((num_shards, tensor.shape[0] // num_shards) + tensor.shape[1:])
+        return hidet.ops.distributed.reduce_scatter(tensor, self.op)
+
+    def cost(self, tensor: Tensor) -> int:
+        return tensor.nbytes
 
 class OpShardSpec:
     def __init__(
@@ -96,7 +136,7 @@ class OpShardSpec:
         assert len(reduce_fn) == len(output_specs)
         self.reduce_fn = reduce_fn
 
-    def __str__(self):
+    def __str__(self) -> str:
         in_str = ', '.join(map(str, self.input_specs))
         o_list = []
         for o, r in zip(self.output_specs, self.reduce_fn):
@@ -108,33 +148,82 @@ class OpShardSpec:
         return in_str + " -> " + out_str
 
 
-def node_comm_cost(output_tensors, spec):
+def node_comm_cost(output_tensors, spec) -> int:
     # The cost needs to be re-considered
     assert len(output_tensors) == len(spec.output_specs)
     cost = 0
-    for tensor, spec, reduce_fn in zip(output_tensors, spec.output_specs, spec.reduce_fn):
+    for tensor, reduce_fn in zip(output_tensors, spec.reduce_fn):
         if reduce_fn is None:
             continue
-        if reduce_fn.kind == 'all_reduce':
-            cost += 2 * tensor.nbytes
-        elif reduce_fn.kind == 'reduce_scatter':
-            cost += tensor.nbytes
         else:
-            raise ValueError("Unsupported reduction function")
+            cost += reduce_fn.cost(tensor)
     return cost
 
+
+def _gather(tensor, num_shards, shard_dim) -> int:
+    gather_input = hidet.ops.distributed.all_gather(tensor, num_shards)
+    assert gather_input.size == tensor.size * num_shards
+    updated_input = gather_input.rearrange(
+        [[d] for d in range(1, shard_dim + 1)]
+        + [[0, shard_dim + 1]]
+        + [[d] for d in range(shard_dim + 2, len(gather_input.shape))]
+    )
+    return updated_input
+
+
+class ReshardFunction:
+    def __init__(self, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec):
+        self.produce_spec = produce_spec
+        self.consume_spec = consume_spec
+
+    def __call__(
+        self, tensor: Tensor, num_shards: int, rank: int
+    ):
+        raise NotImplementedError()
+
+
+class ReshardSlice(ReshardFunction):
+    def __str__(self):
+        return 'reshard_slice'
+
+    def __call__(
+        self, tensor: Tensor, num_shards: int, rank: int
+    ):
+        shard_dim = self.consume_spec.sharded_dim()
+        assert self.produce_spec.is_full()
+        return get_tile(tensor, num_shards, shard_dim, rank)
+
+
+class ReshardGather(ReshardFunction):
+    def __str__(self):
+        return 'reshard_gather'
+
+    def __call__(
+        self, tensor: Tensor, num_shards: int, rank: int 
+    ):
+        shard_dim = self.produce_spec.sharded_dim()
+        return _gather(tensor, num_shards, shard_dim)
+
+
+class ReshardGatherSlice(ReshardFunction):
+    def __str__(self):
+        return 'reshard_gather_slice'
+
+    def __call__(
+        self, tensor: Tensor, num_shards: int, rank: int
+    ):
+        shard_dim = self.produce_spec.sharded_dim()
+        gathered_tensor = _gather(tensor, num_shards, shard_dim)
+        return get_tile(gathered_tensor, num_shards, self.consume_spec.sharded_dim(), rank)
 
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
     # Only supports 1D partition now
     # The cost needs to be re-considered
-    if produce_spec.is_full():
-        if consume_spec.is_full():
-            return (None, 0)
-        else:
-            return ('slice', 0)
-    if consume_spec.is_full():
-        return ('gather', tensor.nbytes)
-    elif produce_spec.sharded_dim() == consume_spec.sharded_dim():
+    if produce_spec == consume_spec:
         return (None, 0)
+    if produce_spec.is_full():
+        return (ReshardSlice(produce_spec, consume_spec), 0)
+    if consume_spec.is_full():
+        return (ReshardGather(produce_spec, consume_spec), tensor.nbytes)
     else:
-        return ('gather_and_slice', tensor.nbytes)
+        return (ReshardGatherSlice(produce_spec, consume_spec), tensor.nbytes)
