@@ -97,9 +97,10 @@ class ReduceFunction:
 
     def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
         raise NotImplementedError()
-    
+
     def cost(self, tensor: Tensor) -> int:
-        raise NotImplementedError() 
+        raise NotImplementedError()
+
 
 class AllReduce(ReduceFunction):
     def __str__(self):
@@ -110,7 +111,8 @@ class AllReduce(ReduceFunction):
 
     def cost(self, tensor: Tensor) -> int:
         return 2 * tensor.nbytes
-    
+
+
 class ReduceScatter(ReduceFunction):
     def __str__(self):
         return "reduce_scatter_" + str(self.op)
@@ -121,6 +123,7 @@ class ReduceScatter(ReduceFunction):
 
     def cost(self, tensor: Tensor) -> int:
         return tensor.nbytes
+
 
 class OpShardSpec:
     def __init__(
@@ -149,13 +152,10 @@ class OpShardSpec:
 
 
 def node_comm_cost(output_tensors, spec) -> int:
-    # The cost needs to be re-considered
     assert len(output_tensors) == len(spec.output_specs)
     cost = 0
     for tensor, reduce_fn in zip(output_tensors, spec.reduce_fn):
-        if reduce_fn is None:
-            continue
-        else:
+        if reduce_fn is not None:
             cost += reduce_fn.cost(tensor)
     return cost
 
@@ -176,9 +176,7 @@ class ReshardFunction:
         self.produce_spec = produce_spec
         self.consume_spec = consume_spec
 
-    def __call__(
-        self, tensor: Tensor, num_shards: int, rank: int
-    ):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
         raise NotImplementedError()
 
 
@@ -186,9 +184,7 @@ class ReshardSlice(ReshardFunction):
     def __str__(self):
         return 'reshard_slice'
 
-    def __call__(
-        self, tensor: Tensor, num_shards: int, rank: int
-    ):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
         shard_dim = self.consume_spec.sharded_dim()
         assert self.produce_spec.is_full()
         return get_tile(tensor, num_shards, shard_dim, rank)
@@ -198,9 +194,7 @@ class ReshardGather(ReshardFunction):
     def __str__(self):
         return 'reshard_gather'
 
-    def __call__(
-        self, tensor: Tensor, num_shards: int, rank: int 
-    ):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
         shard_dim = self.produce_spec.sharded_dim()
         return _gather(tensor, num_shards, shard_dim)
 
@@ -209,16 +203,14 @@ class ReshardGatherSlice(ReshardFunction):
     def __str__(self):
         return 'reshard_gather_slice'
 
-    def __call__(
-        self, tensor: Tensor, num_shards: int, rank: int
-    ):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
         shard_dim = self.produce_spec.sharded_dim()
         gathered_tensor = _gather(tensor, num_shards, shard_dim)
         return get_tile(gathered_tensor, num_shards, self.consume_spec.sharded_dim(), rank)
 
+
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
     # Only supports 1D partition now
-    # The cost needs to be re-considered
     if produce_spec == consume_spec:
         return (None, 0)
     if produce_spec.is_full():

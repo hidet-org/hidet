@@ -22,7 +22,7 @@ from hidet.ir.functors import ExprRewriter, ComputeRewriter
 from hidet.ir.analyzers.bound_analyzer import infer_bound, BoundInfo
 from hidet.graph.ops.matmul import MatmulOp
 
-from .shard import TensorShardSpec, OpShardSpec, ReduceFunction, get_tile, AllReduce, ReduceScatter
+from .shard import TensorShardSpec, OpShardSpec, get_tile, AllReduce, ReduceScatter
 
 
 class IndexRewriter(ExprRewriter, ComputeRewriter):
@@ -237,16 +237,12 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             else:  # Failed, but it still can be partial results. Try to fix it with reduction.
                 if data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True):
                     reduce_op = op.task.outputs[0].value.reduce_operation
-                    found_rules.append(
-                        OpShardSpec(in_specs, out_specs, reduce_fn=[AllReduce(reduce_op)])
-                    )
+                    found_rules.append(OpShardSpec(in_specs, out_specs, reduce_fn=[AllReduce(reduce_op)]))
                     # if all_reduce is valid, then reduce_scatter is also valid
                     output = op.task.outputs[0]
                     if output.shape[0] % num_shards == 0:
                         out_spec = TensorShardSpec(len(output.shape), 0)
-                        found_rules.append(
-                            OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceScatter(reduce_op)])
-                        )
+                        found_rules.append(OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceScatter(reduce_op)]))
 
     return found_rules
 
