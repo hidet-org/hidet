@@ -268,3 +268,23 @@ def tensor_all(self: Tensor, dim=None, keepdim=False) -> Tensor:
 @register_method(torch.Tensor.matmul)
 def tensor_detach(self: Tensor, other: Tensor) -> Tensor:
     return ops.matmul(self, other)
+def tensor_matmul(self: Tensor, other: Tensor) -> Tensor:
+    return ops.matmul(self, other)
+
+@register_method(torch.Tensor.new_zeros)
+def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = size
+    if dtype is None:
+        dtype = self.dtype
+    if device is None:
+        device = self.device
+
+    _ = pin_memory
+    _ = requires_grad
+
+    return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)

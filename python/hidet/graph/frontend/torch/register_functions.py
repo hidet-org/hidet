@@ -234,6 +234,11 @@ def flatten(x: Tensor, start_dim: int, end_dim: int = -1):
 def getitem(x: Tensor, index):
     return x[index]
 
+@register_function(operator.setitem)
+def setitem(x: Tensor, *args):
+    print("in setitem")
+    pass
+
 
 @register_function(operator.mul)
 @register_function(torch.mul)
@@ -1122,3 +1127,8 @@ def pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', va
     if isinstance(pad, tuple):
         pad = list(pad)
     return ops.pad(x, pads=pad, mode=mode, value=value)
+
+@register_function(torch.roll)
+def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
+    print("in roll")
+    return x
