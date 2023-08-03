@@ -13,7 +13,7 @@ from typing import Dict
 
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.compute import TensorNode, GridCompute
-from hidet.ir.expr import Var, convert, call
+from hidet.ir.expr import Var, call
 from hidet.ir.tools import rewrite
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt
 from hidet.ir.schedulers.base import AutoScheduler, ComputeExprLower
@@ -35,7 +35,7 @@ class CpuAutoScheduler(AutoScheduler):
             fb.extend_params(params)
 
             iter_names = [f'i{i}' for i in range(len(node.shape))]
-            with fb.for_loop('w', extent=prod(node.shape)) as w:
+            with fb.for_loop('w', extent=prod(node.shape), attr='p') as w:
                 with fb.for_mapping(iter_names, row_spatial(*node.shape), worker=w) as task_index:
                     out_param: Var = param_map[node]
                     compute_lower = ComputeExprLower(node.value, param_map=param_map)

@@ -28,7 +28,8 @@ from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
-from hidet.utils import prod
+from hidet.utils.py import prod, median
+from hidet.utils.trace_utils import TraceEventEmitter
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
@@ -97,6 +98,7 @@ class CompiledGraph:
         self.constant_outputs: List[Union[None, Tensor]] = []
 
         # runtime state
+        self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
@@ -258,22 +260,48 @@ class CompiledGraph:
             index2tensor[exe.inputs_index[i]] = inputs[i]
         for i in range(len(self.weights)):
             index2tensor[exe.weights_index[i]] = self.weights[i]
+
         best_candidates = [-1 for _ in range(len(self.compiled_tasks))]
+        trace_emitter = TraceEventEmitter({'graph': self.graph_string})
         for inst in exe.instructions:
+            # prepare inputs and kernel
             node_inputs = [index2tensor[i] for i in inst.inputs]
             node_kernel: CompiledTask = self.compiled_tasks[inst.task_idx]
+
+            # run the kernel
             node_outputs = node_kernel.run_async(node_inputs)
+
+            # record outputs
             for i, output_index in enumerate(inst.outputs):
                 index2tensor[output_index] = node_outputs[i]
 
+            # record best candidate for this kernel
             best_candidates[inst.task_idx] = node_kernel.pick_best_candidate(node_inputs, node_outputs)
 
+            # record trace events
+            trace_emitter.append(
+                name=node_kernel.meta_data.name,
+                duration_us=int(median(node_kernel.profile(*node_inputs, *node_outputs)) * 1000),
+                args={
+                    'name': node_kernel.meta_data.name,
+                    'inputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.inputs],
+                    'outputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.outputs],
+                },
+            )
+
+            # free tensors that are no longer needed
             for idx in inst.free:
                 del index2tensor[idx]
 
         outputs = [index2tensor[i] for i in exe.outputs_index]
 
+        # update the dispatch table
         self._update_symbol_table(symbol_dims, best_candidates)
+
+        # save the trace
+        trace_filename = 'trace{}.json'.format('_'.join(str(x) for x in symbol_dims))
+        with open(os.path.join(self.working_dir, trace_filename), 'w') as f:
+            trace_emitter.save(f)
 
         return outputs
 
