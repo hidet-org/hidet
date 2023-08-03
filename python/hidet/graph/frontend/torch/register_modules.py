@@ -419,8 +419,8 @@ class HidetMultiheadAttention(HidetModule):
         from hidet import ops
 
         steal = dynamo_config['steal_weights']
-        self.in_proj_weight = self.param('in_proj_weight', steal=steal)
-        self.out_proj_weight = self.param('out_proj.weight', steal=steal)
+        self.in_proj_weight_transposed = ops.transpose(self.param('in_proj_weight', steal=steal), [1, 0])
+        self.out_proj_weight_transposed = ops.transpose(self.param('out_proj.weight', steal=steal), [1, 0])
 
     def __call__(self, query: Tensor, key: Tensor, value: Tensor, key_padding_mask=None,
                  need_weights=True, attn_mask=None, average_attn_weights=True,
@@ -443,10 +443,10 @@ class HidetMultiheadAttention(HidetModule):
                 )
         
         # Input feed forward
-        wq, wk, wv = ops.split(self.in_proj_weight, parts_or_sections=3, axis=0)
-        query = ops.matmul(query, wq.transpose(0, 1))
-        key = ops.matmul(key, wk.transpose(0, 1))
-        value = ops.matmul(value, wv.transpose(0, 1))
+        wq, wk, wv = ops.split(self.in_proj_weight_transposed, parts_or_sections=3, axis=1)
+        query = ops.matmul(query, wq)
+        key = ops.matmul(key, wk)
+        value = ops.matmul(value, wv)
         if self.mod.in_proj_bias is not None:
             bq, bk, bv = ops.split(self.param('in_proj_bias'), parts_or_sections=3, axis=0)
             query = ops.add(query, bq)
@@ -467,7 +467,7 @@ class HidetMultiheadAttention(HidetModule):
         # Output feed forward
         merge_head_dims = [out.shape[0], out.shape[2], self.mod.embed_dim]
         out = ops.transpose(out, [0, 2, 1, 3]).reshape(merge_head_dims)
-        out = ops.matmul(out, self.out_proj_weight.transpose(0, 1))
+        out = ops.matmul(out, self.out_proj_weight_transposed)
         if self.mod.out_proj.bias is not None:
             out = ops.add(out, self.param('out_proj.bias'))
         return out
