@@ -361,30 +361,28 @@ class NormalizeTask(Task):
     @tune.space(1, nthreads=[8, 16])
     def schedule_layer_norm_cpu(self, nthreads=16) -> IRModule:
         import hidet
-        from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store, \
-            avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last, \
-            avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
-            avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
-            avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
-            avx_f32x8_rsqrt, avx_f32x8_find_sum
-        from hidet.ir.dtypes import float32, float32x8
-        from hidet.lang import tensor
-        from hidet.ir.stmt import DeclareScope
-        import numpy as np
+        from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
+            avx_f32x8_add, avx_f32x8_broadcast, avx_f32x8_divide, avx_f32x8_multiply, avx_f32x8_find_sum, avx_f32x8_sqrt
+        from hidet.ir.dtypes import float32
         from hidet.utils import prod
 
         shape = self.inputs[0].shape
         head = shape[:-len(self.dims)]
         head_size = prod(head)
         tail_size = prod(shape[-len(self.dims):])
+        pre_tail = shape[-len(self.dims):-1]
+        pre_tail_size = prod(pre_tail)
         with hidet.script_module() as module:
 
             @hidet.script
             def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
                 para = "p" + str(nthreads)
                 for k in grid(head_size, attrs=para):
-                    offset = k * shape[-1]
+                    pre_tail_idx = spatial(*pre_tail).map(pre_tail_size) 
+                    
+                    offset = k * tail_size
                     head_idx = spatial(*head).map(k)
+                    
                     mean_vec = avx_f32x8_setzero()
                     M2_vec = avx_f32x8_setzero()
                     eps = self.attrs['epsilon']
@@ -412,9 +410,9 @@ class NormalizeTask(Task):
                     mean_tail = 0.0
                     M2_tail = 0.0
                     for i in range(tail_size % 8):
-                        delta_tail = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        delta_tail = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
                         mean_tail += delta_tail / cast(i+1, float32)
-                        delta_tail2 = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        delta_tail2 = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
                         M2_tail += delta_tail * delta_tail2
                     delta_end = mean_tail - mean_combined
                     mean = (mean_combined * (tail_size - tail_size % 8) + mean_tail * (tail_size % 8)) / tail_size
@@ -425,13 +423,14 @@ class NormalizeTask(Task):
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
                             avx_f32x8_store(out + offset + i * 8,
-                                            avx_f32x8_multiply(avx_f32x8_subtract(avx_f32x8_load(
+                                            avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
-                                                avx_f32x8_rsqrt(avx_f32x8_add(var_vec, epsilon_vec))))
+                                                avx_f32x8_sqrt(avx_f32x8_add(var_vec, epsilon_vec))))
                             # TODO: try doing div,sqrt for accuracy
                     for i in range(tail_size % 8):
-                        out[head_idx][tail_size - tail_size % 8 + i] = (x[head_idx][tail_size - tail_size % 8 + i] -
-                                                                        mean) * prim.rsqrt(var + self.attrs['epsilon'])
+                        out[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] =\
+                            (x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean) *\
+                            prim.rsqrt(var + self.attrs['epsilon'])
 
         layer_norm_cpu_kernel.kind = "cpu_kernel"
         avx_f32x8_find_sum.kind = "cpu_internal"

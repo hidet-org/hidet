@@ -18,15 +18,14 @@ def np_layernorm(x):
     return x
 
 
-d = 2
+d = 3
 shapes = [([1, 2, 8, 8], d), ([2, 2, 2, 255], d), ([1, 8], 1), ([1, 1, 1, 18], d), ([2, 2, 45, 45], d),
           ([512, 768], 1)]
 for i, (shape, num_last_dims) in enumerate(shapes):
     a = hidet.randn(shape, device="cpu")
     m = torch.nn.LayerNorm(shape[-num_last_dims:], eps=1e-5)
     a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
-    print(np.allclose(np_layernorm(np.array(a.numpy(), copy=True, dtype='float32')), m(a_torch).detach().numpy()))
-    print("asldkghlka")
+    # print(np.allclose(np_layernorm(np.array(a.numpy(), copy=True, dtype='float32')), m(a_torch).detach().numpy()))
     x1 = hidet.symbol_like(a)
     y = layer_norm(x1, num_last_dims=num_last_dims, epsilon=1e-5)
 
@@ -36,11 +35,8 @@ for i, (shape, num_last_dims) in enumerate(shapes):
     b = hidet.zeros(shape, device="cpu")
 
     compiled_func(a, b)
-
-    a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
-    # TODO: torch inaccuracy because it uses bfloat16 and not f32? not sure here but cant test on f64
     print(shape)
-    atol = 1e-3
+    atol = 1e-7
     a_cuda = a.to(device="cuda")
     b_cuda = layer_norm(a_cuda, num_last_dims=num_last_dims)
     b = layer_norm(a, num_last_dims=num_last_dims)
