@@ -949,6 +949,12 @@ def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
 
 @register_function(operator.eq)
 def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    if isinstance(a, Tensor) or isinstance(b, Tensor):
+        from hidet.graph.ops.utils import convert_to_tensor
+        if isinstance(a, Tensor):
+            return ops.equal(a, convert_to_tensor(b, a))
+        else:
+            return ops.equal(b, convert_to_tensor(a, b))
     return a == b
 
 
