@@ -325,7 +325,7 @@ def local_layout(*shape: Int):
     return LocalLayout(shape)
 
 
-def data_layout(shape: Sequence[Int], ranks: Optional[List[int]] = None):
+def strided_layout(shape: Sequence[Int], ranks: Optional[List[int]] = None):
     if ranks is None:
         ranks = list(range(len(shape)))
     return StridesLayout.from_shape(shape, ranks)
