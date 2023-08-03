@@ -357,8 +357,8 @@ def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id:
         if msg:
             with sb.if_then(worker_id == 0):
                 sb += printf(f'{msg}\\n')
-        with sb.for_loop('i', mapping.task_shape[0], unroll=False) as i:
-            with sb.for_loop('j', mapping.task_shape[1], unroll=False) as j:
+        with sb.for_loop('i', mapping.task_shape[0]) as i:
+            with sb.for_loop('j', mapping.task_shape[1]) as j:
                 p = var('p', int32)
                 sb += DeclareStmt(p, int32(0))
                 with sb.for_mapping(['ii', 'jj'], mapping, worker_id) as (ii, jj):

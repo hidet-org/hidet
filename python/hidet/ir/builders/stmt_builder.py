@@ -65,10 +65,10 @@ class StmtBuilder:
         seq_let_stmt = LetStmt(bind_vars, bind_values, body=1)
         return StmtScope(self, stmts=seq_let_stmt, ret=bind_vars)
 
-    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], unroll: Optional[bool] = None) -> StmtScope:
+    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], attr: str = '.') -> StmtScope:
         if isinstance(v, str):
             v = var(v)
-        return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr(unroll)), ret=v)
+        return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr.parse(attr, num_loops=1)[0]), ret=v)
 
     def if_then(self, cond: Union[bool, Expr]) -> StmtScope:
         return StmtScope(self, stmts=[IfStmt(cond)], ret=None)
