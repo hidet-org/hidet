@@ -20,8 +20,9 @@ from hidet.ir.tools import collect
 from hidet.ir.compute import GridCompute, ReduceCompute, TensorInput
 from hidet.ir.functors import ExprRewriter, ComputeRewriter
 from hidet.ir.analyzers.bound_analyzer import infer_bound, BoundInfo
+from hidet.graph.ops.matmul import MatmulOp
 
-from .shard import TensorShardSpec, OpShardSpec, ReduceFunction
+from .shard import TensorShardSpec, OpShardSpec, ReduceFunction, get_tile, AllReduce, ReduceScatter
 
 
 class IndexRewriter(ExprRewriter, ComputeRewriter):
@@ -161,18 +162,6 @@ class DataDependencyAnalyzer:
             return _check()
 
 
-def get_tile(tensor, nshards, shard_dim, rank=0):
-    # Only works for 1-D partition
-    slice_list = []
-    for i in range(len(tensor.shape)):
-        if i != shard_dim:
-            slice_list.append(slice(tensor.shape[i]))
-        else:
-            shard_size = tensor.shape[i] // nshards
-            slice_list.append(slice(shard_size * rank, shard_size * (rank + 1)))
-    return tensor[slice_list]
-
-
 def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     # Now we only search for 1D partition
     inputs = op.inputs
@@ -181,6 +170,14 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
 
     # We do not allow dynamic shapes
     assert len(op.task.symbols) == 0
+
+    # num_shards == 1 will break following logic
+    if num_shards == 1:
+        return [
+            OpShardSpec(
+                [TensorShardSpec(len(t.shape)) for t in op.inputs], [TensorShardSpec(len(t.shape)) for t in op.outputs]
+            )
+        ]
 
     # Initialize data dependency analyzer
     # If it is not valid, it means we meet some scenarios we cannot analyze
@@ -191,6 +188,9 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
 
     # enumerate all possible input shardings. -1 means duplicate
     for in_shard_dims in product(*(range(-1, len(i.shape)) for i in inputs)):
+        if isinstance(op, MatmulOp):
+            if all((in_shard_dim == -1 for in_shard_dim in in_shard_dims)):
+                continue
         # Get a tile of each input tensor according to the input sharding
         # And compute the output shape
         try:
@@ -238,15 +238,16 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
                 if data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True):
                     reduce_op = op.task.outputs[0].value.reduce_operation
                     found_rules.append(
-                        OpShardSpec(in_specs, out_specs, reduce_fn=[ReduceFunction(reduce_op, 'all_reduce')])
+                        OpShardSpec(in_specs, out_specs, reduce_fn=[AllReduce(reduce_op)])
                     )
                     # if all_reduce is valid, then reduce_scatter is also valid
                     output = op.task.outputs[0]
                     if output.shape[0] % num_shards == 0:
                         out_spec = TensorShardSpec(len(output.shape), 0)
                         found_rules.append(
-                            OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceFunction(reduce_op, 'reduce_scatter')])
+                            OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceScatter(reduce_op)])
                         )
+
     return found_rules
 
 
@@ -262,7 +263,7 @@ if __name__ == '__main__':
         for op in flow_graph.nodes:
             print(op)
             if str(op) not in cache:
-                shard_plans = op_shard_rule_search(op, 4)
+                shard_plans = op_shard_rule_search(op, 1)
                 cache[str(op)] = shard_plans
             for sp in cache[str(op)]:
                 print(sp)
