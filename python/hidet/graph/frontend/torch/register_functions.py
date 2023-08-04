@@ -25,7 +25,7 @@ from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
-from .utils import dtype_from_torch, device_from_torch, normalize_to_scalar
+from .utils import dtype_from_torch, device_from_torch, normalize_to_scalar, convert_to_scalar_if_possible
 
 Number = Union[int, float, bool]
 
@@ -590,7 +590,7 @@ def addmm(
 
 
 @register_function(torch.where)
-def where(condition: Tensor, x: Tensor, y: Tensor):
+def where(condition: Tensor, x: Union[Tensor, Number], y: Union[Tensor, Number]):
     return ops.where(cond=condition, x=x, y=y)
 
 
@@ -1069,3 +1069,38 @@ def zeros_like(
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype else x.dtype
 
     return ops.full(x.shape, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
+
+
+@register_function(torch.clamp)
+def clamp(
+    x: Tensor,
+    min: Optional[Union[Tensor, Number]] = None,
+    max: Optional[Union[Tensor, Number]] = None,
+    *,
+    out: Optional[Tensor] = None,
+) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.clamp(..., out=...)")
+
+    min = convert_to_scalar_if_possible(min)
+    max = convert_to_scalar_if_possible(max)
+
+    if min is None and max is None:
+        return x
+    elif min is None:
+        if not isinstance(max, Tensor):
+            assert isinstance(max, (int, float, complex))
+            max = ops.full([], value=max, dtype=x.dtype, device=x.device)
+        return ops.minimum(x, max)
+    elif max is None:
+        if not isinstance(min, Tensor):
+            assert isinstance(min, (int, float, complex))
+            min = ops.full([], value=min, dtype=x.dtype, device=x.device)
+        return ops.maximum(x, min)
+    else:
+        return ops.clamp(x, min, max)
+
+
+@register_function(torch.isinf)
+def isinf(x: Tensor) -> Tensor:
+    return ops.isinf(x)
