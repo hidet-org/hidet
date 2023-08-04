@@ -12,8 +12,8 @@
 from typing import Sequence, Optional, Union, List, Tuple
 
 import hidet
-from hidet.ir.compute import ReduceOperation
-from hidet.graph import Tensor
+from hidet.ir.compute import ReduceOperation, TensorNode
+from hidet.graph import Tensor, Operator
 
 
 class TensorShardSpec:
@@ -32,31 +32,31 @@ class TensorShardSpec:
     None or negative numbers will be treated as not to shard on this dimension
     """
 
-    def __init__(self, ndim: int, sharded_dim: Union[Optional[int], Sequence[Optional[int]]] = None):
+    def __init__(self, ndim: int, sharded_dim_per_axis: Union[Optional[int], Sequence[Optional[int]]] = None):
         self.ndim: int = ndim
-        if not isinstance(sharded_dim, Sequence):
-            sharded_dim = [sharded_dim]
-        for i in range(len(sharded_dim)):
-            if sharded_dim[i] is not None and sharded_dim[i] < 0:
-                sharded_dim[i] = None
-        self._sharded_dim: Sequence[Optional[int]] = sharded_dim
-        self.num_mesh_axis: int = len(sharded_dim)
+        if not isinstance(sharded_dim_per_axis, Sequence):
+            sharded_dim_per_axis = [sharded_dim_per_axis]
+        for i in range(len(sharded_dim_per_axis)):
+            if sharded_dim_per_axis[i] is not None and sharded_dim_per_axis[i] < 0:
+                sharded_dim_per_axis[i] = None
+        self.sharded_dim_per_axis: List[Optional[int]] = list(sharded_dim_per_axis)
+        self.num_mesh_axis: int = len(sharded_dim_per_axis)
 
         # Sanity check and build mesh_axes to dim map
         self.mesh_axes_per_dim: List[List[int]] = [[] for _ in range(self.ndim)]
-        for mesh_axis, dim in enumerate(sharded_dim):
+        for mesh_axis, dim in enumerate(sharded_dim_per_axis):
             if dim is not None:
                 if dim >= self.ndim:
                     raise ValueError("Sharded dim should be less than the number of dimensions")
                 self.mesh_axes_per_dim[dim].append(mesh_axis)
 
     def is_single_layer_hierarchy(self) -> bool:
-        return self.num_mesh_axis
+        return self.num_mesh_axis == 1
 
     def sharded_dim(self) -> int:
         if not self.is_single_layer_hierarchy():
             raise ValueError("Only single layer hierarchy supports directly querying the sharded axis.")
-        return self._sharded_dim[0]
+        return self.sharded_dim_per_axis[0]
 
     def __str__(self) -> str:
         str_per_dim = [
@@ -68,14 +68,15 @@ class TensorShardSpec:
         return all((len(mesh_axes) == 0 for mesh_axes in self.mesh_axes_per_dim))
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, TensorShardSpec):
-            return False
+        assert isinstance(other, TensorShardSpec)
         if self.ndim != other.ndim:
             return False
         return self._sharded_dim == other._sharded_dim
 
 
-def get_tile(tensor, nshards, shard_dim, rank=0):
+def get_tile(
+    tensor: Union[Tensor, TensorNode], shard_dim: int, nshards: int, rank: int = 0
+) -> Union[Tensor, TensorNode]:
     # Only works for 1-D partition
     slice_list = []
     for i in range(len(tensor.shape)):
@@ -132,12 +133,12 @@ class OpShardSpec:
         output_specs: Sequence[TensorShardSpec],
         reduce_fn: Optional[List[ReduceFunction]] = None,
     ):
-        self.input_specs = input_specs
-        self.output_specs = output_specs
+        self.input_specs: List[TensorShardSpec] = list(input_specs)
+        self.output_specs: List[TensorShardSpec] = list(output_specs)
         if reduce_fn is None:
             reduce_fn = [None] * len(output_specs)
         assert len(reduce_fn) == len(output_specs)
-        self.reduce_fn = reduce_fn
+        self.reduce_fn: List[ReduceFunction] = list(reduce_fn)
 
     def __str__(self) -> str:
         in_str = ', '.join(map(str, self.input_specs))
@@ -151,16 +152,26 @@ class OpShardSpec:
         return in_str + " -> " + out_str
 
 
-def node_comm_cost(output_tensors, spec) -> int:
-    assert len(output_tensors) == len(spec.output_specs)
+def node_comm_cost(node: Operator, spec: OpShardSpec) -> int:
+    assert len(node.outputs) == len(spec.output_specs)
     cost = 0
-    for tensor, reduce_fn in zip(output_tensors, spec.reduce_fn):
+    for tensor, reduce_fn in zip(node.outputs, spec.reduce_fn):
         if reduce_fn is not None:
             cost += reduce_fn.cost(tensor)
     return cost
 
 
-def _gather(tensor, num_shards, shard_dim) -> int:
+def _gather(tensor: Tensor, num_shards: int, shard_dim: int) -> Tensor:
+    """
+    Assuming the i-th device has a tensor t_i,  `hidet.ops.distributed.all_gather` will return a
+    tensor [t_0, t_1, ..., t_n]. However, the tensor is not always sharded along the first
+    dimension, therefore we need to rearrange the tensor.
+
+    If the dimensions of the original tensor are (0, 1, 2, ..., d-1, d, d+1, ..., n), where d is the
+    sharded dimension. After all_gather, the dimensions of the return value are
+    (M, 0, ..., d, ..., n), where M is the numebr of devices. We want to move the dimension M to
+    exactly before d and combine them into one dimension M x d. That's what this function does.
+    """
     gather_input = hidet.ops.distributed.all_gather(tensor, num_shards)
     assert gather_input.size == tensor.size * num_shards
     updated_input = gather_input.rearrange(
@@ -173,10 +184,10 @@ def _gather(tensor, num_shards, shard_dim) -> int:
 
 class ReshardFunction:
     def __init__(self, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec):
-        self.produce_spec = produce_spec
-        self.consume_spec = consume_spec
+        self.produce_spec: TensorShardSpec = produce_spec
+        self.consume_spec: TensorShardSpec = consume_spec
 
-    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
         raise NotImplementedError()
 
 
@@ -184,17 +195,17 @@ class ReshardSlice(ReshardFunction):
     def __str__(self):
         return 'reshard_slice'
 
-    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
         shard_dim = self.consume_spec.sharded_dim()
         assert self.produce_spec.is_full()
-        return get_tile(tensor, num_shards, shard_dim, rank)
+        return get_tile(tensor, shard_dim, num_shards, rank)
 
 
 class ReshardGather(ReshardFunction):
     def __str__(self):
         return 'reshard_gather'
 
-    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
         shard_dim = self.produce_spec.sharded_dim()
         return _gather(tensor, num_shards, shard_dim)
 
@@ -203,10 +214,10 @@ class ReshardGatherSlice(ReshardFunction):
     def __str__(self):
         return 'reshard_gather_slice'
 
-    def __call__(self, tensor: Tensor, num_shards: int, rank: int):
+    def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
         shard_dim = self.produce_spec.sharded_dim()
         gathered_tensor = _gather(tensor, num_shards, shard_dim)
-        return get_tile(gathered_tensor, num_shards, self.consume_spec.sharded_dim(), rank)
+        return get_tile(gathered_tensor, self.consume_spec.sharded_dim(), num_shards, rank)
 
 
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
