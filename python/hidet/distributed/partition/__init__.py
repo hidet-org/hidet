@@ -18,3 +18,5 @@ other modules.
 
 We are planning to extend it to 2-D (multi-machine-multi-GPU) in the future.
 """
+
+from .partition import partition

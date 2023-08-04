@@ -222,6 +222,7 @@ class ReshardGatherSlice(ReshardFunction):
         return get_tile(gathered_tensor, self.consume_spec.sharded_dim(), num_shards, rank)
 
 
+
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
     if not produce_spec.is_single_layer_hierarchy() or not consume_spec.is_single_layer_hierarchy():
         raise NotImplementedError("Only support 1-D sharding now")

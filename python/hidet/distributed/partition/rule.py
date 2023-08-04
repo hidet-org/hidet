@@ -141,6 +141,8 @@ class DataDependencyAnalyzer:
             return _check()
 
 
+
+
 def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     # Now we only search for 1D partition
     inputs = op.inputs
