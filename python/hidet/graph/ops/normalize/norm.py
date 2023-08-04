@@ -391,7 +391,7 @@ class NormalizeTask(Task):
                     mean_combined = 0.0
                     M2_combined = 0.0
                     if tail_size >= 8:
-                        for i in range(tail_size // 8):  # TODO: parallelize
+                        for i in range(tail_size // 8):
                             # welford algorithm
                             i_float = cast(i + 1, float32)
                             n_vec = avx_f32x8_broadcast(~i_float)
@@ -426,7 +426,7 @@ class NormalizeTask(Task):
                                             avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
                                                 avx_f32x8_sqrt(avx_f32x8_add(var_vec, epsilon_vec))))
-                            # TODO: try doing div,sqrt for accuracy
+                            # TODO: rsqrt is fast but inaccurate to 1.5x2^(-12)
                     for i in range(tail_size % 8):
                         out[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] =\
                             (x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean) *\
