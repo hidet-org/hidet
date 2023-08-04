@@ -10,16 +10,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict
+from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 
 from hidet.ir import primitives
 from hidet.ir import Var, expr, dtypes
 from hidet.ir.type import DataType
+from hidet.ir.expr import Expr, Var, if_then_else, logical_or
 from hidet.ir.tools import rewrite
 from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
-from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
+from .utils import broadcast_shape, broadcast_shapes, broadcast_indices, normalize_slice
+from hidet.ir.expr import is_constant
 
 PyScalar = Union[int, float, bool]
 
@@ -187,6 +189,43 @@ class WhereTask(Task):
             },
         )
 
+class SetStridedSliceTask(Task):
+    def __init__(
+        self,
+        data: TensorNode,
+        starts: List[Optional[int]],
+        ends: List[Optional[int]],
+        axes: List[int],
+        strides: List[int],
+        setvalue: [Union[int, float]],
+    ):
+        assert len(starts) == len(ends) == len(axes) == len(strides)
+        if len(axes) != len(set(axes)):
+            raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
+        output_shape = list(data.shape)
+        axis2info = {}
+        for axis, start, end, stride in zip(axes, starts, ends, strides):
+            if stride == 0:
+                raise NotImplementedError(
+                    'Stride can not be 0 in slicing: '
+                    'starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides)
+                )
+            if is_constant(output_shape[axis]) and output_shape[axis] < 0:
+                raise NotImplementedError(
+                    'Slice result can not be: '
+                    'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides)
+                )
+            axis2info[axis] = (start, end, stride)
+
+        def fmap(indices):
+            ret = data.type.dtype(setvalue)
+            for axis, index in enumerate(indices):
+                start, end, stride = axis2info[axis]
+                ret = if_then_else(logical_or(index < start, index >= end, (index - start) % stride != 0), data[indices], ret)
+            return ret
+
+        out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
+        super().__init__(name='set_slice', inputs=[data], outputs=[out])
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
@@ -625,6 +664,21 @@ class MinOp(Operator):
             ),
         )
 
+class SetStridedSliceOp(Operator):
+    def __init__(
+        self,
+        data: Tensor,
+        starts: Sequence[Optional[int]],
+        ends: Sequence[Optional[int]],
+        strides: Optional[Sequence[Optional[int]]] = None,
+        setvalue: Optional[Union[int, float]] = 0.0,
+    ):
+        starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes=None, strides=strides)
+        task = SetStridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides, setvalue)
+        super().__init__(
+            inputs=[data], attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue}, task=task
+        )
+
 
 Scalar = Union[Expr, float, int, complex]
 
@@ -954,3 +1008,13 @@ def composite_elementwise(
     binary_op: BinaryElementwiseOperation,
 ) -> Tensor:
     return CompositeElementwiseOp(x, left_unary_op, right_unary_op, binary_op).outputs[0]
+
+
+def set_strided_slice(
+    data: Tensor,
+    starts: Sequence[Optional[int]],
+    ends: Sequence[Optional[int]],
+    strides: Optional[Sequence[Optional[int]]] = None,
+    setvalue: Optional[Union[int, float]] = 0.0,
+) -> Tensor:
+    return SetStridedSliceOp(data, starts, ends, strides, setvalue).outputs[0]

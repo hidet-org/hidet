@@ -358,7 +358,11 @@ class Interpreter:
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
                 try:
-                    hidet_env[node.name] = exec_func(*hidet_args, **hidet_kwargs)
+                    from .register_functions import setitem
+                    if exec_func.functions[0] is setitem:
+                        hidet_env[str(node.args[0])] = exec_func(*hidet_args, **hidet_kwargs)
+                    else:
+                        hidet_env[node.name] = exec_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
                     self._raise_exception(e, node.target, exec_func, hidet_args, hidet_kwargs)
             elif node.op == "call_method":

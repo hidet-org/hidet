@@ -18,10 +18,9 @@ from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
-from hidet.ir.expr import Expr
 from hidet.ir import expr
 from hidet.ir.dtypes import promote_type
-from hidet.ir.expr import Int
+from hidet.ir.expr import Expr, Int, Constant, is_constant
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
@@ -235,9 +234,69 @@ def getitem(x: Tensor, index):
     return x[index]
 
 @register_function(operator.setitem)
-def setitem(x: Tensor, *args):
-    print("in setitem")
-    pass
+def setitem(x: Tensor, item, setvalue):
+
+    if isinstance(item, list):
+        item = tuple(item)
+    if not isinstance(item, tuple):
+        item = tuple([item])
+
+    if not isinstance(setvalue, (int, float)):
+        raise NotImplementedError('Currently Tensor __setitem__ only supports int or float values')
+
+    # now, the item could have
+    # 1. integer index
+    # 2. slice
+    # 3. Ellipsis
+    # 4. None
+    # e.g., [1, 3:5, ..., None]
+
+    # process Ellipsis
+    # e.g., x[1, ..., 2] -> x[1, :, :, 2]
+    if Ellipsis in item:
+        if item.count(Ellipsis) > 1:
+            raise ValueError('Only one ellipsis allowed in index.')
+        ellipsis_index = item.index(Ellipsis)
+        ellipsis_ndim = len(x.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
+        ellipsis_ndim = max(ellipsis_ndim, 0)
+        item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1 :]
+
+    # normalize index
+    normalized_item = []
+    for i, v in enumerate(item):
+        if isinstance(v, int):
+            if v < 0:
+                v = v + x.shape[i]
+            if is_constant(v, x.shape[i]) and (v < 0 or v >= x.shape[i]):
+                raise IndexError(
+                    'index {} is out of bound for dimension {} with size {}'.format(v, i, x.shape[i])
+                )
+            normalized_item.append(v)
+        elif v is not None:
+            # None affects getitem, but is ignored in setitem
+            normalized_item.append(v)
+    item = tuple(normalized_item)
+
+    # process slice and integer index
+    rank = len(x.shape)
+    while len(item) < rank:
+        item = item + (slice(None),)
+    starts, ends, steps = [], [], []
+    squeeze_dims = []
+    for dim, v in enumerate(item):
+        if isinstance(v, (int, Expr)):
+            squeeze_dims.append(dim)
+            starts.append(v)
+            ends.append(v + 1)
+            steps.append(1)
+        else:
+            assert isinstance(v, slice)
+            starts.append(v.start)
+            ends.append(v.stop)
+            steps.append(v.step)
+
+    out = ops.set_strided_slice(x, starts, ends, steps, setvalue)
+    return out
 
 
 @register_function(operator.mul)
