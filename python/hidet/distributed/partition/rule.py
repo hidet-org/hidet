@@ -10,16 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import List, Dict
 from itertools import product
 
-import hidet
 from hidet.graph import Operator
-from hidet.ir import TensorElement, Var
+from hidet.ir import TensorElement, Var, Expr
 from hidet.ir.compute import GridCompute, ReduceCompute, ArgReduceCompute, TensorInput
 from hidet.ir.functors import ExprRewriter, ComputeRewriter
 from hidet.ir.analyzers.bound_analyzer import infer_bound, BoundInfo
-from hidet.graph.ops.matmul import MatmulOp
 
 
 from .shard import TensorShardSpec, OpShardSpec, get_tile, AllReduce, ReduceScatter
@@ -28,9 +26,9 @@ from .shard import TensorShardSpec, OpShardSpec, get_tile, AllReduce, ReduceScat
 class IndexRewriter(ExprRewriter, ComputeRewriter):
     def __init__(self):
         super().__init__()
-        self.var2idx = {}
-        self.input_accessed_indices = {}
-        self.reduce_axis_shapes = {}
+        self.var2idx: Dict[Var, Expr] = {}
+        self.input_accessed_indices: Dict[TensorInput, List[Expr]] = {}
+        self.reduce_axis_shapes: Dict[Var, Expr] = {}
 
     def visit_Var(self, e: Var):
         if e in self.var2idx:
@@ -43,8 +41,8 @@ class IndexRewriter(ExprRewriter, ComputeRewriter):
         indices = tuple((self.visit(idx) for idx in e.indices))
         if isinstance(tensor, GridCompute):
             # passing the indices to the dependending grids's axes
-            for axis, index in zip(tensor.axes, e.indices):
-                self.var2idx[axis] = self.visit(index)
+            for axis, index in zip(tensor.axes, indices):
+                self.var2idx[axis] = index
         elif isinstance(tensor, TensorInput):
             if tensor not in self.input_accessed_indices:
                 self.input_accessed_indices[tensor] = []
@@ -66,22 +64,18 @@ class IndexRewriter(ExprRewriter, ComputeRewriter):
 
 class DataDependencyAnalyzer:
     def __init__(self, op: Operator, num_shards: int):
-        self.op = op
-        self.num_shards = num_shards
-        self.valid = self._build_bound_expr()
-
-    def _build_bound_expr(self) -> bool:
-        task = self.op.task
-        outputs = task.outputs
+        self.op: Operator = op
+        self.num_shards: int = num_shards
 
         index_rewriter = IndexRewriter()
-        for o in outputs:
+        for o in self.op.task.outputs:
             if not isinstance(o, GridCompute):
-                return False  # we don't support scalar output
+                self.valid = False
+                return  # we don't support scalar output
             index_rewriter.visit(o)
         self.input_accessed_indices = index_rewriter.input_accessed_indices
         self.reduce_axis_shapes = index_rewriter.reduce_axis_shapes
-        return True
+        self.valid = True
 
     def check(self, in_shard_dim: List[int], out_shard_dim: List[int], shard_reduce: bool = False):
         # Now only supports 1D partition
@@ -177,9 +171,6 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
 
     # enumerate all possible input shardings. -1 means duplicate
     for in_shard_dims in product(*(range(-1, len(i.shape)) for i in inputs)):
-        if isinstance(op, MatmulOp):
-            if all((in_shard_dim == -1 for in_shard_dim in in_shard_dims)):
-                continue
         # Get a tile of each input tensor according to the input sharding
         # And compute the output shape
         try:
@@ -188,7 +179,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
                 if shard_dim >= 0:
                     if inputs[i].shape[shard_dim] % num_shards != 0:
                         break
-                    new_inputs.append(get_tile(inputs[i], num_shards, shard_dim))
+                    new_inputs.append(get_tile(inputs[i], shard_dim, num_shards))
                 else:
                     new_inputs.append(inputs[i])
             if len(new_inputs) < len(inputs):
@@ -234,23 +225,3 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
                         found_rules.append(OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceScatter(reduce_op)]))
 
     return found_rules
-
-
-if __name__ == '__main__':
-    import hidet.testing
-
-    def resnet_test():
-        model = hidet.testing.models.resnet.resnet18()
-        x = hidet.symbol([8, 3, 224, 224])
-        flow_graph = hidet.trace_from(model(x))
-
-        cache = {}
-        for op in flow_graph.nodes:
-            print(op)
-            if str(op) not in cache:
-                shard_plans = op_shard_rule_search(op, 4)
-                cache[str(op)] = shard_plans
-            for sp in cache[str(op)]:
-                print(sp)
-
-    resnet_test()
