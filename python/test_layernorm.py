@@ -19,9 +19,6 @@ print(hidet.option.get_cache_dir())
 b = layer_norm(a, num_last_dims=dims)  # this works but flowgraph doesn't?
 # Also, running using the compiledmodule as above doesn't do any codegen in .cache/hidet
 
-# TODO: reshape for higher dim layernorm instead of normalize? not sure cuz the codegen does diff for graph
-# TODO: and for the function call
-# print(b)
 m = torch.nn.LayerNorm(shape[-dims:], eps=1e-5)
 a = a.to(device="cpu")
 a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
