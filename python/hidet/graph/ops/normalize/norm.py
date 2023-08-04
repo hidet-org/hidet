@@ -357,9 +357,9 @@ class NormalizeTask(Task):
             return NotImplemented
         return tune.extract_ir_modules(self.schedule_layer_norm_cpu)
 
-    @tune.space(2, nthreads=[4, 8, 16, 32, 64, 96])
-    @tune.space(1, nthreads=[8, 16])
-    def schedule_layer_norm_cpu(self, nthreads=16) -> IRModule:
+    @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
+    @tune.space(1, nthreads=['', 8, 16])
+    def schedule_layer_norm_cpu(self, nthreads='') -> IRModule:
         import hidet
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
             avx_f32x8_add, avx_f32x8_broadcast, avx_f32x8_divide, avx_f32x8_multiply, avx_f32x8_find_sum, avx_f32x8_sqrt

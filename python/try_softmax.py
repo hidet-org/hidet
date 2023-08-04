@@ -4,19 +4,17 @@ import torch
 import hidet
 from hidet.graph.ops import softmax
 import torch.nn as nn
-shapes = [([8, 8, 8], 1), ([8, 1000], -1), ([32, 512, 512], -1), ([32, 512, 512], 1), ([8, 3, 224, 224], -1),
+shapes = [([8, 1000], -1), ([32, 512, 512], -1), ([32, 512, 512], 1), ([8, 3, 224, 224], -1),
           ([32, 128, 768], 1)]
 # shapes = [([4, 100], -1)]
 hidet.option.search_space(0)
 # hidet.option.runtime_check(False)
 for shape, axis in shapes:
     a = hidet.randn(shape, device="cpu")
-    x1 = hidet.symbol_like(a)
-    y = softmax(x1, axis=axis)
-
-    graph: hidet.FlowGraph = hidet.trace_from(y, inputs=[x1])
-    opt_graph = hidet.graph.optimize(graph)
-    compiled_func = opt_graph.nodes[0].compiled_task.candidates[0]
+    xx = hidet.symbol(shape, dtype="float32", device="cpu")
+    yy = softmax(xx, axis=axis)
+    op: hidet.Operator = yy.op
+    compiled_func = op.compiled_task.candidates[0]
     b = hidet.zeros(shape, device="cpu")
 
     compiled_func(a, b)

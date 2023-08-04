@@ -21,27 +21,24 @@ def np_layernorm(x):
 d = 3
 shapes = [([1, 2, 8, 8], d), ([2, 2, 2, 255], d), ([1, 8], 1), ([1, 1, 1, 18], d), ([2, 2, 45, 45], d),
           ([512, 768], 1)]
+device = "cpu"
 for i, (shape, num_last_dims) in enumerate(shapes):
-    a = hidet.randn(shape, device="cpu")
+    a = hidet.randn(shape, device=device)
     m = torch.nn.LayerNorm(shape[-num_last_dims:], eps=1e-5)
     a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
     # print(np.allclose(np_layernorm(np.array(a.numpy(), copy=True, dtype='float32')), m(a_torch).detach().numpy()))
-    x1 = hidet.symbol_like(a)
-    y = layer_norm(x1, num_last_dims=num_last_dims, epsilon=1e-5)
-
-    graph: hidet.FlowGraph = hidet.trace_from(y, inputs=[x1])
-    opt_graph = hidet.graph.optimize(graph)
-    compiled_func = opt_graph.nodes[0].compiled_task.candidates[0]
-    b = hidet.zeros(shape, device="cpu")
+    xx = hidet.symbol(shape, dtype="float32", device=device)
+    yy = layer_norm(xx, num_last_dims=num_last_dims, epsilon=1e-5)
+    op: hidet.Operator = yy.op
+    compiled_func = op.compiled_task.candidates[0]
+    b = hidet.zeros(shape, device=device)
 
     compiled_func(a, b)
-    print(shape)
     atol = 1e-7
     # a_cuda = a.to(device="cuda")
     # b_cuda = layer_norm(a_cuda, num_last_dims=num_last_dims)
-    b = layer_norm(a, num_last_dims=num_last_dims)
     # print(b, m(a_torch))
-    # print(np.allclose(b.numpy(), b_cuda.to(device="cpu").numpy(), atol=atol))
+    # print(np.allclose(b.numpy(), b_cuda.to(device=device).numpy(), atol=atol))
     correct = np.allclose(b.numpy(), m(a_torch).detach().numpy(), atol=atol)  # default abs tol doesnt work cuz avxrsqrt
     hidet_latency = hidet.utils.benchmark_func(lambda: compiled_func(a, b), warmup=10, repeat=50)
     pt_latency = hidet.utils.benchmark_func(lambda: m(a_torch), warmup=10, repeat=50)
