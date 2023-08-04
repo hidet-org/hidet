@@ -11,7 +11,7 @@
 # limitations under the License.
 
 from typing import List, Dict
-from itertools import product
+from itertools import product, chain
 
 from hidet.graph import Operator
 from hidet.ir import TensorElement, Var, Expr
@@ -108,7 +108,7 @@ class DataDependencyAnalyzer:
 
                 for input_tensor, accessed_indices in self.input_accessed_indices.items():
                     shard_dim = in_shard_dim[task.inputs.index(input_tensor)]
-                    if shard_dim < 0:
+                    if shard_dim is None:
                         continue
                     for indices in accessed_indices:
                         idx = indices[shard_dim]
@@ -152,13 +152,14 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     found_rules = []
 
     # We do not allow dynamic shapes
-    assert len(op.task.symbols) == 0
+    if len(op.task.symbols) > 0:
+        raise NotImplementedError("Dynamic shapes are not supported now.")
 
     # num_shards == 1 will break following logic
     if num_shards == 1:
         return [
             OpShardSpec(
-                [TensorShardSpec(len(t.shape)) for t in op.inputs], [TensorShardSpec(len(t.shape)) for t in op.outputs]
+                [TensorShardSpec(len(t.shape)) for t in inputs], [TensorShardSpec(len(t.shape)) for t in outputs]
             )
         ]
 
@@ -170,20 +171,20 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
         return []
 
     # enumerate all possible input shardings. -1 means duplicate
-    for in_shard_dims in product(*(range(-1, len(i.shape)) for i in inputs)):
+    for in_shard_dims in product(*(chain([None], range(len(i.shape))) for i in inputs)):
         # Get a tile of each input tensor according to the input sharding
         # And compute the output shape
         try:
             new_inputs = []
             for i, shard_dim in enumerate(in_shard_dims):
-                if shard_dim >= 0:
+                if shard_dim is not None:
                     if inputs[i].shape[shard_dim] % num_shards != 0:
                         break
                     new_inputs.append(get_tile(inputs[i], shard_dim, num_shards))
                 else:
                     new_inputs.append(inputs[i])
             if len(new_inputs) < len(inputs):
-                continue
+                continue  # Illegal sharding, skip
             outputs = op.reforward(new_inputs)
         except (ValueError, RuntimeError, AssertionError, IndexError):
             continue
@@ -192,21 +193,27 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
         # for each output tensor, there should be at most one dimension being sharded
         out_shard_dims = []
         for i, out in enumerate(outputs):
-            shard_dim = -1
-            origin_shape = op.outputs[i].shape
+            origin_shape = list(op.outputs[i].shape)
+            if list(out.shape) == origin_shape:
+                out_shard_dims.append(None)
+                continue
+            shard_dim = None
+            # None means invalid or not found here, since 'not to shard' is handled above
             for dim in range(len(out.shape)):
                 if out.shape[dim] == origin_shape[dim] // num_shards:
-                    if shard_dim != -1:
-                        shard_dim = None  # invalid output shape
-                        # Because there should be at most one sharded dimension
-                    else:
+                    if shard_dim is None:
                         shard_dim = dim
+                    else:  # which means we have already found sharded dim
+                        shard_dim = None
+                        break  # Because there should be at most one sharded dimension
                 elif out.shape[dim] != origin_shape[dim]:
-                    shard_dim = None  # invalid output shape
-            if shard_dim is not None:  # output is invalid result of a sharding
-                out_shard_dims.append(shard_dim)
-            else:
+                    # there should not be any shape other than unsharded and sharded
+                    shard_dim = None
+                    break
+            if shard_dim is None:
                 break
+            # output is a valid result of a sharding
+            out_shard_dims.append(shard_dim)
 
         if len(out_shard_dims) == len(outputs):  # shape analysis valid
             # data dependency analysis

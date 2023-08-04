@@ -29,16 +29,13 @@ class TensorShardSpec:
 
     It also accept a single-value parameter, which will be viewed as a single-layer mesh hierarchy.
 
-    None or negative numbers will be treated as not to shard on this dimension
+    None means not to shard on this dimension
     """
 
     def __init__(self, ndim: int, sharded_dim_per_axis: Union[Optional[int], Sequence[Optional[int]]] = None):
         self.ndim: int = ndim
         if not isinstance(sharded_dim_per_axis, Sequence):
             sharded_dim_per_axis = [sharded_dim_per_axis]
-        for i in range(len(sharded_dim_per_axis)):
-            if sharded_dim_per_axis[i] is not None and sharded_dim_per_axis[i] < 0:
-                sharded_dim_per_axis[i] = None
         self.sharded_dim_per_axis: List[Optional[int]] = list(sharded_dim_per_axis)
         self.num_mesh_axis: int = len(sharded_dim_per_axis)
 
@@ -154,11 +151,9 @@ class OpShardSpec:
 
 def node_comm_cost(node: Operator, spec: OpShardSpec) -> int:
     assert len(node.outputs) == len(spec.output_specs)
-    cost = 0
-    for tensor, reduce_fn in zip(node.outputs, spec.reduce_fn):
-        if reduce_fn is not None:
-            cost += reduce_fn.cost(tensor)
-    return cost
+    return sum(
+        (reduce_fn.cost(tensor) for tensor, reduce_fn in zip(node.outputs, spec.reduce_fn) if reduce_fn is not None)
+    )
 
 
 def _gather(tensor: Tensor, num_shards: int, shard_dim: int) -> Tensor:
@@ -186,6 +181,8 @@ def _gather(tensor: Tensor, num_shards: int, shard_dim: int) -> Tensor:
 
 class ReshardFunction:
     def __init__(self, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec):
+        if not produce_spec.is_single_layer_hierarchy() or not consume_spec.is_single_layer_hierarchy():
+            raise NotImplementedError("Only support 1-D sharding now")
         self.produce_spec: TensorShardSpec = produce_spec
         self.consume_spec: TensorShardSpec = consume_spec
 
@@ -226,7 +223,8 @@ class ReshardGatherSlice(ReshardFunction):
 
 
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
-    # Only supports 1D partition now
+    if not produce_spec.is_single_layer_hierarchy() or not consume_spec.is_single_layer_hierarchy():
+        raise NotImplementedError("Only support 1-D sharding now")
     if produce_spec == consume_spec:
         return (None, 0)
     if produce_spec.is_full():
