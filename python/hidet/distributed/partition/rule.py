@@ -27,7 +27,7 @@ class IndexRewriter(ExprRewriter, ComputeRewriter):
     def __init__(self):
         super().__init__()
         self.var2idx: Dict[Var, Expr] = {}
-        self.input_accessed_indices: Dict[TensorInput, List[Expr]] = {}
+        self.input_accessed_indices: Dict[TensorInput, List[List[Expr]]] = {}
         self.reduce_axis_shapes: Dict[Var, Expr] = {}
 
     def visit_Var(self, e: Var):
@@ -68,14 +68,10 @@ class DataDependencyAnalyzer:
         self.num_shards: int = num_shards
 
         index_rewriter = IndexRewriter()
-        for o in self.op.task.outputs:
-            if not isinstance(o, GridCompute):
-                self.valid = False
-                return  # we don't support scalar output
-            index_rewriter.visit(o)
+        index_rewriter.visit(self.op.task.outputs)
+        self.valid = all(isinstance(out, GridCompute) for out in self.op.task.outputs)
         self.input_accessed_indices = index_rewriter.input_accessed_indices
         self.reduce_axis_shapes = index_rewriter.reduce_axis_shapes
-        self.valid = True
 
     def check(self, in_shard_dim: List[int], out_shard_dim: List[int], shard_reduce: bool = False):
         # Now only supports 1D partition
