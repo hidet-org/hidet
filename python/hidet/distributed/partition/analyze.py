@@ -11,12 +11,10 @@
 # limitations under the License.
 
 from typing import Dict, List, Set, Tuple
-from itertools import product
 import tqdm
 
 from mip import Model, BINARY, xsum, minimize, OptimizationStatus
 
-import hidet
 from hidet.graph import FlowGraph, Operator, Tensor
 
 from .rule import op_shard_rule_search
@@ -51,7 +49,7 @@ def generate_rules(g: FlowGraph, num_shards: int) -> Dict[Operator, List[OpShard
 
 
 def search_strategy(
-    g: FlowGraph, num_shards: int, mem_budget: int, verbose=0, max_seconds=None
+    g: FlowGraph, num_shards: int, mem_budget: int, verbose=0, max_seconds=float('inf')
 ) -> Tuple[Dict[Operator, OpShardSpec], Dict[Tensor, TensorShardSpec]]:
     # Only suport 1D partition
     m = Model()
@@ -80,7 +78,7 @@ def search_strategy(
     node_cost = 0
     for node in g.nodes:
         assert len(op_rules[node]) > 0
-        rule_cost = [node_comm_cost(node.outputs, rule) for rule in op_rules[node]]
+        rule_cost = [node_comm_cost(node, rule) for rule in op_rules[node]]
         node_vars[node] = [m.add_var(var_type=BINARY) for _ in op_rules[node]]
         node_cost += xsum(c * v for c, v in zip(rule_cost, node_vars[node]))
         for rid, rule in enumerate(op_rules[node]):
@@ -124,12 +122,11 @@ def search_strategy(
                         v_spec = v_rule.input_specs[input_idx]
                         edge_cost += var * connect(input_tensor, u_spec, v_spec)[1]
                 m += xsum(uv_vars) == 1
-    
 
     m.objective = minimize(node_cost + edge_cost)
     print("Solving...")
     status = m.optimize(max_seconds=max_seconds)
-    assert status in (OptimizationStatus.OPTIMAL, OptimizationStatus.FEASIBLE)
+    assert status in (OptimizationStatus.OPTIMAL, OptimizationStatus.FEASIBLE), status
     print(f"Minimal cost: {m.objective.x}")
     print(f"Paramater Size: {param_mem.x / 1024**3} GiB")
 

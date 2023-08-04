@@ -68,7 +68,7 @@ class TensorShardSpec:
         assert isinstance(other, TensorShardSpec)
         if self.ndim != other.ndim:
             return False
-        return self._sharded_dim == other._sharded_dim
+        return self.sharded_dim_per_axis == other.sharded_dim_per_axis
 
 
 def get_tile(
@@ -220,7 +220,6 @@ class ReshardGatherSlice(ReshardFunction):
         shard_dim = self.produce_spec.sharded_dim()
         gathered_tensor = _gather(tensor, num_shards, shard_dim)
         return get_tile(gathered_tensor, self.consume_spec.sharded_dim(), num_shards, rank)
-
 
 
 def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:

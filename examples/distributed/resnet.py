@@ -28,7 +28,7 @@ def run(world_size, rank, out_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("out_dir", type=str)
+    parser.add_argument("--out_dir", type=str, default='resnet-parts')
     parser.add_argument("--recompile", action='store_true')
     args = parser.parse_args()
     world_size = int(os.environ['WORLD_SIZE'])
@@ -41,6 +41,7 @@ if __name__ == '__main__':
         print(y_truth)
         x = hidet.symbol([32, 3, 224, 224])
         flow_graph = hidet.trace_from(model(x))
-        hidet.distributed.partition(flow_graph, {'ngpus': world_size, 'mem_budget': 24 * 1024 * 1024, 'search_max_seconds': 300}, args.out_dir)
+        hidet.distributed.partition(flow_graph, {'ngpus': world_size, 'mem_budget': 24 * 1024 * 1024}, args.out_dir)
+        # Set the memory budge to 24MiB, less than the model parameter size, to test tensor parallelism
 
     run(world_size, rank, args.out_dir)

@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Union, Dict
 import os
 
 import hidet
@@ -20,9 +21,11 @@ from hidet.runtime.device import Device, instantiate_device
 
 class GraphMover(GraphCloneRewriter):
     def __init__(self, device: Device):
-        self.device = device
-        self.current_device = None
-        self.memo = {}
+        super().__init__()
+        self.device: Device = device
+        self.current_device: Device = None
+        self.input_map: Dict[Tensor, Tensor] = {}
+        self.memo: Dict[Tensor, Tensor] = {}
 
     def visit_FlowGraph(self, graph: FlowGraph):
         self.current_device = None
@@ -31,8 +34,6 @@ class GraphMover(GraphCloneRewriter):
         outputs = [self.visit(output) for output in graph.outputs]
         inputs = [self.input_map[i] for i in graph.inputs]
         return FlowGraph(outputs, inputs)
-
-    # full, ones, zeros, etc...
 
     def visit_Tensor(self, tensor: Tensor):
         if self.current_device is None:
@@ -52,12 +53,12 @@ class GraphMover(GraphCloneRewriter):
         return self.memo[tensor]
 
 
-def copy_flowgraph_to(graph: FlowGraph, device):
+def copy_flowgraph_to(graph: FlowGraph, device: Union[str, Device]) -> FlowGraph:
     device = instantiate_device(device)
     mover = GraphMover(device)
     return mover(graph)
 
 
-def load_partition(out_dir: str, rank: int, device='cuda'):
+def load_partition(out_dir: str, rank: int, device: Union[str, Device]='cuda'):
     graph = hidet.load_graph(os.path.join(out_dir, f"part{rank}.graph"))
     return copy_flowgraph_to(graph, device)

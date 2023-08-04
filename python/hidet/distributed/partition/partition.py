@@ -14,7 +14,6 @@ from typing import List, Dict
 import os
 import pickle
 
-import hidet
 from hidet.graph import FlowGraph, Operator, Tensor
 from hidet.graph.graph_utils.functors import GraphCloneRewriter
 
@@ -33,17 +32,17 @@ class CommunicationInjection(GraphCloneRewriter):
         param_specs: Dict[Tensor, TensorShardSpec],
     ):
         super().__init__()
-        self.g = g
-        self.num_shards = num_shards
-        self.op_specs = op_specs
-        self.param_specs = param_specs
-        self.rank = rank
+        self.g: FlowGraph = g
+        self.num_shards: int = num_shards
+        self.op_specs: OpShardSpec = op_specs
+        self.param_specs: Dict[Tensor, TensorShardSpec] = param_specs
+        self.rank: int = rank
 
     def _tensor_spec(self, tensor: Tensor):
         if tensor.op is not None:
             op = tensor.op
             return self.op_specs[op].output_specs[op.outputs.index(tensor)]
-        elif not tensor.is_symbolic(): # parameter
+        elif not tensor.is_symbolic():  # parameter
             return self.param_specs[tensor]
         else:  # input. We assume input is not sharded
             assert tensor in self.g.inputs
@@ -63,7 +62,7 @@ class CommunicationInjection(GraphCloneRewriter):
     def visit_Operator(self, op: Operator):
         inputs_from_pred = [self(x) for x in op.inputs]
         given_specs = [self._tensor_spec(x) for x in op.inputs]
-        op_spec = self.op_specs[op] 
+        op_spec = self.op_specs[op]
         required_specs = op_spec.input_specs
 
         # align pred_specs and in_specs
@@ -95,7 +94,7 @@ class CommunicationInjection(GraphCloneRewriter):
                 if not spec.is_full():
                     shard_dim = spec.sharded_dim()
                     assert tensor.shape[shard_dim] % self.num_shards == 0
-                    self.memo[tensor] = get_tile(tensor, self.num_shards, shard_dim, self.rank)
+                    self.memo[tensor] = get_tile(tensor, shard_dim, self.num_shards, self.rank)
                     return self.memo[tensor]
             return tensor
         else:
@@ -106,15 +105,16 @@ class CommunicationInjection(GraphCloneRewriter):
 def partition(g: FlowGraph, distributed_config: dict, out_dir: str) -> None:
     n_shards = distributed_config['ngpus']
     mem_budget = distributed_config['mem_budget']
-    max_seconds = distributed_config.get('search_max_seconds', 0)
+    max_seconds = distributed_config.get('search_max_seconds', float('inf'))
     solver_verbose = distributed_config.get('solver_verbose', 0)
 
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, f"origin_graph.txt"), 'w') as f:
+    with open(os.path.join(out_dir, "origin_graph.txt"), 'w') as f:
         print(g, file=f)
 
     op_specs, param_specs = search_strategy(g, n_shards, mem_budget, max_seconds=max_seconds, verbose=solver_verbose)
-    pickle.dump((op_specs, param_specs), open(os.path.join(out_dir, "op_param_shard.data"), "wb"))
+    with open(os.path.join(out_dir, "op_param_shard.data"), "wb") as f:
+        pickle.dump((op_specs, param_specs), f)
     parts, op_specs, param_specs = _partition(g, n_shards, op_specs, param_specs)
     for rank, part in enumerate(parts):
         part.save(os.path.join(out_dir, f"part{rank}.graph"))
@@ -123,7 +123,7 @@ def partition(g: FlowGraph, distributed_config: dict, out_dir: str) -> None:
         with open(os.path.join(out_dir, f"part{rank}.txt"), 'w') as f:
             print(part, file=f)
 
-    with open(os.path.join(out_dir, f"scheme.txt"), 'w') as f:
+    with open(os.path.join(out_dir, "scheme.txt"), 'w') as f:
         for node in g.nodes:
             print(node, op_specs[node], file=f)
 
@@ -138,4 +138,4 @@ def _partition(
         comm_inject = CommunicationInjection(g, num_shards, rank, op_specs, param_specs)
         part = comm_inject(g)
         parts.append(part)
-    return parts, op_specs, param_specs # for debugging
+    return parts, op_specs, param_specs  # for debugging
