@@ -131,7 +131,7 @@ class OpShardSpec:
         self,
         input_specs: Sequence[TensorShardSpec],
         output_specs: Sequence[TensorShardSpec],
-        reduce_fn: Optional[List[ReduceFunction]] = None,
+        reduce_fn: Optional[Sequence[Optional[ReduceFunction]]] = None,
     ):
         self.input_specs: List[TensorShardSpec] = list(input_specs)
         self.output_specs: List[TensorShardSpec] = list(output_specs)
@@ -163,6 +163,8 @@ def node_comm_cost(node: Operator, spec: OpShardSpec) -> int:
 
 def _gather(tensor: Tensor, num_shards: int, shard_dim: int) -> Tensor:
     """
+    Only works for 1-D partition
+
     Assuming the i-th device has a tensor t_i,  `hidet.ops.distributed.all_gather` will return a
     tensor [t_0, t_1, ..., t_n]. However, the tensor is not always sharded along the first
     dimension, therefore we need to rearrange the tensor.
@@ -196,6 +198,7 @@ class ReshardSlice(ReshardFunction):
         return 'reshard_slice'
 
     def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
+        # Only works for 1-D partition
         shard_dim = self.consume_spec.sharded_dim()
         assert self.produce_spec.is_full()
         return get_tile(tensor, shard_dim, num_shards, rank)
@@ -206,6 +209,7 @@ class ReshardGather(ReshardFunction):
         return 'reshard_gather'
 
     def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
+        # Only works for 1-D partition
         shard_dim = self.produce_spec.sharded_dim()
         return _gather(tensor, num_shards, shard_dim)
 
@@ -215,6 +219,7 @@ class ReshardGatherSlice(ReshardFunction):
         return 'reshard_gather_slice'
 
     def __call__(self, tensor: Tensor, num_shards: int, rank: int) -> Tensor:
+        # Only works for 1-D partition
         shard_dim = self.produce_spec.sharded_dim()
         gathered_tensor = _gather(tensor, num_shards, shard_dim)
         return get_tile(gathered_tensor, self.consume_spec.sharded_dim(), num_shards, rank)
