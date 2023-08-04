@@ -36,3 +36,6 @@ cuda-python
 filelock
 
 requests
+
+# for auto-parallelization
+mip

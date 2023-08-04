@@ -16,7 +16,7 @@ from datetime import timedelta
 from hidet.graph import Tensor
 from hidet.cuda.nccl import nccl_available
 from .store import Store, FileStore
-from .group import create_nccl_group, ProcessGroup
+from .group import create_nccl_group, ProcessGroup, set_nccl_comms
 
 
 DEFAULT_TIMEOUT = timedelta(seconds=1800)
@@ -67,6 +67,7 @@ def init_process_group(
         if not is_nccl_available():
             raise RuntimeError("NCCL is not found.")
         DEFAULT_GROUP = create_nccl_group(store, world_size, rank)
+        set_nccl_comms()
     else:
         raise ValueError(f"Backend {backend} is not supported.")
 

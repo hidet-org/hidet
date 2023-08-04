@@ -15,7 +15,7 @@ import hidet
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.ops.special import BarrierOp
 from hidet.graph.ops.transfer import TransferOp
-from hidet.graph.ops.distributed import AllReduceOp
+from hidet.graph.ops.distributed import AllReduceOp, AllGatherOp, ReduceScatterOp
 from hidet.graph.graph_utils.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
@@ -25,7 +25,7 @@ from hidet.utils.py import unique
 
 
 # the following operators are not fusible
-NOT_FUSIBLE = {BarrierOp, TransferOp, AllReduceOp}
+NOT_FUSIBLE = {BarrierOp, TransferOp, AllReduceOp, AllGatherOp, ReduceScatterOp}
 
 
 class FusibleGraph:

@@ -469,7 +469,7 @@ class StridedSliceOp(Operator):
                 i = i if i is not None else 0
                 j = j if j is not None else n
                 if is_constant(i, j, n) and not (-n <= i <= n and -n <= j):
-                    raise IndexError('Invalid slice')
+                    raise IndexError(f'Invalid slice {data_shape}, {starts}, {ends}, {axes}, {strides}')
                 j = if_then_else(j < n, j, n)
                 if is_constant(i) and i < 0:
                     i = i + n

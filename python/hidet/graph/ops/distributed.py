@@ -145,20 +145,20 @@ class ReduceScatterOp(Operator):
 
 
 def all_reduce(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
-    if x.device.kind != 'cuda':
-        raise RuntimeError("NCCL only supports CUDA tensors")
+    # if x.device.kind != 'cuda':
+    # raise RuntimeError("NCCL only supports CUDA tensors")
     return AllReduceOp(x, op, comm_id).outputs[0]
 
 
 def all_gather(x: Tensor, nranks: int, comm_id: int = 0) -> Tensor:
-    if x.device.kind != 'cuda':
-        raise RuntimeError("NCCL only supports CUDA tensors")
+    # if x.device.kind != 'cuda':
+    # raise RuntimeError("NCCL only supports CUDA tensors")
     return AllGatherOp(x, nranks, comm_id).outputs[0]
 
 
 def reduce_scatter(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
-    if x.device.kind != 'cuda':
-        raise RuntimeError("NCCL only supports CUDA tensors")
+    # # if x.device.kind != 'cuda':
+    #     raise RuntimeError("NCCL only supports CUDA tensors")
     return ReduceScatterOp(x, op, comm_id).outputs[0]
 
 

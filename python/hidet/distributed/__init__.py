@@ -27,3 +27,5 @@ from .distributed import (
 )
 from .group import set_nccl_comms
 from .store import FileStore
+from .partition import partition
+from .utils import load_partition
