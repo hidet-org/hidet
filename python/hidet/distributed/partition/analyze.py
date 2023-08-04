@@ -21,7 +21,7 @@ from .rule import op_shard_rule_search
 from .shard import OpShardSpec, TensorShardSpec, connect, node_comm_cost
 
 # I copied it from compiled_graph.py
-def get_graph_weights(graph):
+def get_graph_weights(graph: FlowGraph) -> List[Tensor]:
     """
     Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
     graph, are considered as weights.
@@ -54,7 +54,7 @@ def search_strategy(
     # Only suport 1D partition
     m = Model()
     m.verbose = verbose
-    m.threads = -1
+    m.threads = -1 # Use all available CPU cores
     print("Generating rules for each op...")
     op_rules = generate_rules(g, num_shards)
 
@@ -64,8 +64,9 @@ def search_strategy(
     param_mem = 0
     param_tot = 0
     for p in parameters:
+        # Decision variables of which dimension should be sharded.
         p_vars = [m.add_var(var_type=BINARY) for _ in p.shape]
-        m += xsum(p_vars) <= 1
+        m += xsum(p_vars) <= 1 # At most one dimension whill be sharded.
         param_vars[p] = p_vars
         sharded = xsum(p_vars)
         param_mem += (num_shards - ((num_shards - 1) * sharded)) * (p.nbytes // num_shards)
@@ -88,7 +89,9 @@ def search_strategy(
                     p_vars = param_vars[in_tensor]
                     if spec.is_full():
                         m += xsum(p_vars) + rule_var <= 1  # If full parameter is required, do not shard
-                    else:
+                    else: 
+                        # If the parameter is sharded, make sure the sharded dimension is which the operator needs.
+                        # We don't want to reorganize parameters
                         shard_dim = spec.sharded_dim()
                         for i in range(len(in_tensor.shape)):
                             if i == shard_dim:
@@ -102,7 +105,7 @@ def search_strategy(
     edge_cost = 0
     for v in g.nodes:
         # allow multiple edges. one edge represents one tensor.
-        # u -> v
+        # u (producer) -> v (consumer)
         for input_idx, input_tensor in enumerate(v.inputs):
             if input_tensor.op is not None:
                 u = input_tensor.op
@@ -114,6 +117,8 @@ def search_strategy(
                     for j, v_rule in enumerate(v_rules):
                         var = m.add_var(var_type=BINARY)
                         uv_vars.append(var)
+                        # Linearization of the quadratic form
+                        # Equivalent with var == node_vars[u][i] * node_vars[v][j]
                         m += var <= node_vars[u][i]
                         m += var <= node_vars[v][j]
                         m += var >= node_vars[u][i] + node_vars[v][j] - 1
@@ -142,8 +147,7 @@ def search_strategy(
         for i, v in enumerate(param_vars[param]):
             if v.x >= 0.99:
                 param_specs[param] = TensorShardSpec(len(param.shape), i)
-                break
         if param not in param_specs:
-            param_specs[param] = TensorShardSpec(len(param.shape))
+            param_specs[param] = TensorShardSpec(len(param.shape)) # not sharded
 
     return op_specs, param_specs
