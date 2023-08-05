@@ -334,10 +334,14 @@ class SoftmaxTask(Task):
                                                                      sum_exp_vec))
                             tail_no_end_idx = spatial(*tail_no_end).map(kk)
                             max_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[end_size % 8])
+                            for j in range(end_size % 8):
+                                max_arr[j] = 0.0
                             for p in range(axis_size):
                                 for j in range(end_size % 8):
                                     max_arr[j] = prim.max(max_arr[j], x[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j])  # TODO: index
                             sum_exp_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[end_size % 8])
+                            for j in range(end_size % 8):
+                                sum_exp_arr[j] = 0.0
                             for p in range(axis_size):
                                 for j in range(end_size % 8):
                                     out[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] = prim.exp(x[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] - max_arr[j])
