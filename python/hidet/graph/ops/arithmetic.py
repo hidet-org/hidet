@@ -20,7 +20,8 @@ from hidet.ir.tools import rewrite
 from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
-from .utils import broadcast_shape, broadcast_shapes, broadcast_indices, normalize_slice
+from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
+from .utils import normalize_slice, normalize_dim
 from hidet.ir.expr import is_constant
 
 PyScalar = Union[int, float, bool]
@@ -237,7 +238,12 @@ class RollTask(Task):
             for axis, index in enumerate(indices):
                 if axis in dims:
                     i = dims.index(axis)
-                    data_indices.append(if_then_else(index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]))
+                    if shifts[i] > 0:
+                        data_indices.append(if_then_else(
+                            index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]))
+                    else:
+                        data_indices.append(if_then_else(
+                            index - shifts[i] < output_shape[axis], index - shifts[i], index - output_shape[axis] - shifts[i]))
                 else:
                     data_indices.append(index)
             return x[data_indices]
@@ -1037,6 +1043,7 @@ def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence
         from .transform import flatten, reshape
         shape = x.shape
         return reshape(RollOp(flatten(x), shifts, dims=[0]).outputs[0], shape)
+    dims = normalize_dim(dims, len(x.shape))
     return RollOp(x, shifts, dims).outputs[0]
 
 
