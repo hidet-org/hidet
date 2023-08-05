@@ -400,8 +400,10 @@ class NormalizeTask(Task):
                             mean_vec = avx_f32x8_add(mean_vec, avx_f32x8_divide(delta, n_vec))
                             delta2 = avx_f32x8_subtract(data_vec, mean_vec)
                             M2_vec = avx_f32x8_add(M2_vec, avx_f32x8_multiply(delta, delta2))
+
                         # welford combine
                         # TODO: case for numerical stability? (number too high for large matrix)
+                        # TODO: look at the cascade thing in pytorch github
                         mean_combined = avx_f32x8_find_sum(mean_vec) / 8
                         mean_combined_vec = avx_f32x8_broadcast(~mean_combined)
                         delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
@@ -409,11 +411,13 @@ class NormalizeTask(Task):
                             * (tail_size // 8)
                     mean_tail = 0.0
                     M2_tail = 0.0
+                    # welford on remaining parts past 8
                     for i in range(tail_size % 8):
                         delta_tail = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
                         mean_tail += delta_tail / cast(i+1, float32)
                         delta_tail2 = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
                         M2_tail += delta_tail * delta_tail2
+                    # welford combine vectorized and unvectorized
                     delta_end = mean_tail - mean_combined
                     mean = (mean_combined * (tail_size - tail_size % 8) + mean_tail * (tail_size % 8)) / tail_size
                     var = (M2_combined + M2_tail + delta_end * delta_end * (tail_size - tail_size % 8) * (tail_size % 8)
@@ -422,6 +426,7 @@ class NormalizeTask(Task):
                     var_vec = avx_f32x8_broadcast(~var)
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
+                            # norm calculation
                             avx_f32x8_store(out + offset + i * 8,
                                             avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
