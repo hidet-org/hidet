@@ -32,7 +32,7 @@ from .arithmetic import floor, ceil, round, trunc, sqrt, rsqrt, pow, abs
 from .arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
 from .arithmetic import bitwise_right_shift, bitwise_left_shift, bitwise_and, bitwise_invert, bitwise_or
 from .arithmetic import bitwise_xor, maximum, minimum, clamp
-from .arithmetic import isfinite, isinf, isnan, sign, where, set_strided_slice
+from .arithmetic import isfinite, isinf, isnan, sign, where, set_strided_slice, roll
 from .arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, atan2
 from .complex import real, imag, conj, make_complex
 from .compare import equal, not_equal, less, greater, less_equal, greater_equal

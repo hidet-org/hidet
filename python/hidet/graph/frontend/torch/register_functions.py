@@ -1195,5 +1195,4 @@ def pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', va
 
 @register_function(torch.roll)
 def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
-    print("in roll")
-    return x
+    return ops.roll(x, shifts, dims)

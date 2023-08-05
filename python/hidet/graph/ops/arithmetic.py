@@ -227,6 +227,24 @@ class SetStridedSliceTask(Task):
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
         super().__init__(name='set_slice', inputs=[data], outputs=[out])
 
+class RollTask(Task):
+    def __init__(
+        self, x: TensorNode, shifts: Sequence[int], dims: Sequence[int]
+    ):
+        output_shape = list(x.shape)
+        def fmap(indices):
+            data_indices = []
+            for axis, index in enumerate(indices):
+                if axis in dims:
+                    i = dims.index(axis)
+                    data_indices.append(if_then_else(index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]))
+                else:
+                    data_indices.append(index)
+            return x[data_indices]
+
+        out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
+        super().__init__(name='roll', inputs=[x], outputs=[out])
+
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
         if attributes is None:
@@ -679,6 +697,17 @@ class SetStridedSliceOp(Operator):
             inputs=[data], attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue}, task=task
         )
 
+class RollOp(Operator):
+    def __init__(
+        self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]
+    ) -> Tensor:
+        if not len(shifts) == len(dims):
+            raise ValueError('Roll must have same size shifts and dims, got {} and {}'.format(len(shifts), len(dims)))
+        task = RollTask(input_like(x, 'x'), shifts, dims)
+        super().__init__(
+            inputs=[x], attributes={'shifts': shifts, 'dims': dims}, task=task
+        )
+
 
 Scalar = Union[Expr, float, int, complex]
 
@@ -998,6 +1027,17 @@ def trunc(x: Tensor) -> Tensor:
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     max_val = maximum(x, y)
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
+
+def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None) -> Tensor:
+    if isinstance(shifts, int):
+        shifts = [shifts]
+    if isinstance(dims, int):
+        dims = [dims]
+    if dims is None:
+        from .transform import flatten, reshape
+        shape = x.shape
+        return reshape(RollOp(flatten(x), shifts, dims=[0]).outputs[0], shape)
+    return RollOp(x, shifts, dims).outputs[0]
 
 
 # out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
