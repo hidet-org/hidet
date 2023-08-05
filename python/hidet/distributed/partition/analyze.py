@@ -54,7 +54,7 @@ def search_strategy(
     # Only suport 1D partition
     m = Model()
     m.verbose = verbose
-    m.threads = -1 # Use all available CPU cores
+    m.threads = -1  # Use all available CPU cores
     print("Generating rules for each op...")
     op_rules = generate_rules(g, num_shards)
 
@@ -66,7 +66,7 @@ def search_strategy(
     for p in parameters:
         # Decision variables of which dimension should be sharded.
         p_vars = [m.add_var(var_type=BINARY) for _ in p.shape]
-        m += xsum(p_vars) <= 1 # At most one dimension whill be sharded.
+        m += xsum(p_vars) <= 1  # At most one dimension whill be sharded.
         param_vars[p] = p_vars
         sharded = xsum(p_vars)
         param_mem += (num_shards - ((num_shards - 1) * sharded)) * (p.nbytes // num_shards)
@@ -89,7 +89,7 @@ def search_strategy(
                     p_vars = param_vars[in_tensor]
                     if spec.is_full():
                         m += xsum(p_vars) + rule_var <= 1  # If full parameter is required, do not shard
-                    else: 
+                    else:
                         # If the parameter is sharded, make sure the sharded dimension is which the operator needs.
                         # We don't want to reorganize parameters
                         shard_dim = spec.sharded_dim()
@@ -148,6 +148,6 @@ def search_strategy(
             if v.x >= 0.99:
                 param_specs[param] = TensorShardSpec(len(param.shape), i)
         if param not in param_specs:
-            param_specs[param] = TensorShardSpec(len(param.shape)) # not sharded
+            param_specs[param] = TensorShardSpec(len(param.shape))  # not sharded
 
     return op_specs, param_specs

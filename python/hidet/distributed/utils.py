@@ -59,6 +59,6 @@ def copy_flowgraph_to(graph: FlowGraph, device: Union[str, Device]) -> FlowGraph
     return mover(graph)
 
 
-def load_partition(out_dir: str, rank: int, device: Union[str, Device]='cuda'):
+def load_partition(out_dir: str, rank: int, device: Union[str, Device] = 'cuda'):
     graph = hidet.load_graph(os.path.join(out_dir, f"part{rank}.graph"))
     return copy_flowgraph_to(graph, device)
