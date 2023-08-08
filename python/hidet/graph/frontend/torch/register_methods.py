@@ -90,6 +90,11 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
             if self.is_symbolic() and instantiate_device(device_from_torch(arg)) != self.device:
                 raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg
+        elif isinstance(arg, Tensor):
+            dtype = arg.dtype
+            if self.is_symbolic() and arg.device!= self.device:
+                raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
+            device = arg.device
         else:
             raise ValueError(f'Unsupported argument type: {type(arg)}')
 
@@ -222,7 +227,10 @@ def tensor_type(self: Tensor, dtype: Union[str, torch.dtype], non_blocking: bool
 
 @register_method(torch.Tensor.expand)
 def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
-    sizes: List[int] = list(sizes)
+    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
+        sizes = sizes[0]
+    else:
+        sizes: List[int] = list(sizes)
     assert len(sizes) >= len(self.shape)
     for i in range(len(sizes)):
         if sizes[i] == -1:

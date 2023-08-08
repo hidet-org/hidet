@@ -397,7 +397,7 @@ class AttnTask(Task):
             def copy_k_g2s_sm80(
                 k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
             ):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
@@ -411,7 +411,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_v_g2s_sm80(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j_seg in v_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
@@ -421,7 +421,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_q_g2s_sm80(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
                 for i, j_seg in q_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
@@ -433,7 +433,7 @@ class AttnTask(Task):
             def copy_k_g2s_sm75(
                 k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
             ):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j in k_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < k_g2s_layout_sm75.num_workers and i < smem_k_type.shape[0]:
@@ -444,7 +444,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_v_g2s_sm75(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j in v_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < v_g2s_layout_sm75.num_workers and i < smem_v_type.shape[0]:
@@ -455,7 +455,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_q_g2s_sm75(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
                 for i, j in q_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < q_g2s_layout_sm75.num_workers and i < smem_q_type.shape[0]:
@@ -488,7 +488,7 @@ class AttnTask(Task):
             @hidet.script
             def copy_o_r2g(o: f16[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                o_head_index = spatial(*o_head).map(blockIdx.y)
+                o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_o = o[o_head_index][offset_i:, :]
                 for k_round in range(warp_count_k):
                     for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
@@ -652,12 +652,12 @@ class AttnTask(Task):
                 v: f16[v_head + [n_kv_size, d_size]],
                 o: f16[o_head + [n_size, d_size]],
             ):
-                attrs.cuda.grid_dim = (i_split, bs)
+                attrs.cuda.grid_dim = (i_split * bs)
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
 
-                offset_i = blockIdx.x * i_rows_per_tb
+                offset_i = (blockIdx.x % i_split) * i_rows_per_tb
 
                 smem_q = tensor_pointer('float16', shape=smem_q_type.shape, layout=smem_q_type.layout)
                 smem_k = tensor_pointer('float16', shape=smem_k_db_type.shape, layout=smem_k_db_type.layout)
@@ -702,7 +702,7 @@ class AttnTask(Task):
 
                 j_tiles = cdiv(n_kv_size, block_j)
                 if is_causal:
-                    j_tiles = min(cdiv((blockIdx.x + 1) * block_i, block_j), j_tiles)
+                    j_tiles = min(cdiv(((blockIdx.x % i_split) + 1) * block_i, block_j), j_tiles)
                 for j in range(j_tiles):
                     offset_j = block_j * j
 
