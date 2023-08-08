@@ -652,7 +652,7 @@ class AttnTask(Task):
                 v: f16[v_head + [n_kv_size, d_size]],
                 o: f16[o_head + [n_size, d_size]],
             ):
-                attrs.cuda.grid_dim = (i_split * bs)
+                attrs.cuda.grid_dim = i_split * bs
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes

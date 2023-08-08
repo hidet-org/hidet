@@ -92,7 +92,7 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
             device = arg
         elif isinstance(arg, Tensor):
             dtype = arg.dtype
-            if self.is_symbolic() and arg.device!= self.device:
+            if self.is_symbolic() and arg.device != self.device:
                 raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg.device
         else:
