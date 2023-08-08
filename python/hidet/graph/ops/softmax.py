@@ -185,12 +185,9 @@ class SoftmaxTask(Task):
         # axis = self.axis if self.axis > 0 else len(shape) + self.axis
         head = shape[:self.axis]
         tail = shape[self.axis:] if self.axis == len(shape) - 1 else shape[self.axis + 1:]
-        tail_no_end = tail[:-1]
-        tail_no_end_size = prod(tail_no_end)
         head_size = prod(head)
         tail_size = prod(tail)
         axis_size = int(shape[self.axis])
-        end_size = shape[-1]
 
         with hidet.script_module() as module:
 
@@ -309,49 +306,50 @@ class SoftmaxTask(Task):
                                 out[head_idx][tail_size - tail_size % 8 + i] / sum_value
                     else:  # not last dim
                         offset = k * tail_size * axis_size
-                        for kk in range(tail_no_end_size):  # leftovers should be dealt with here
-                            for g in range(end_size // 8):
-                                tail_offset = (kk * (end_size // 8) + g) * 8
-                                # TODO: need to check for leftover/cannot fit 8, ie on the last dim
-                                max_vec = avx_f32x8_load(x + offset + tail_offset)
-                                for i in range(axis_size):  # softmax over this guy
-                                    data_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)  # TODO: prob not right
-                                    max_vec = avx_f32x8_max(max_vec, data_vec)
-                                sum_exp_vec = avx_f32x8_setzero()
-                                for i in range(axis_size):
-                                    val_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)
-                                    val_vec = avx_f32x8_subtract(val_vec, max_vec)
-                                    arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
-                                    avx_f32x8_store(arr, val_vec)
-                                    for n in range(8):
-                                        arr[n] = prim.exp(arr[n])
-                                    val_vec = avx_f32x8_load(arr)
-                                    avx_f32x8_store(out + offset + tail_offset + tail_size * i, val_vec)
-                                    sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
-                                for i in range(axis_size):
-                                    avx_f32x8_store(out + offset + tail_offset + tail_size * i,
-                                                    avx_f32x8_divide(avx_f32x8_load(out + offset + tail_offset + tail_size * i),
-                                                                     sum_exp_vec))
-                            tail_no_end_idx = spatial(*tail_no_end).map(kk)
-                            max_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[end_size % 8])
-                            for j in range(end_size % 8):
-                                max_arr[j] = 0.0
-                            for p in range(axis_size):
-                                for j in range(end_size % 8):
-                                    max_arr[j] = prim.max(max_arr[j], x[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j])  # TODO: index
-                            sum_exp_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[end_size % 8])
-                            for j in range(end_size % 8):
-                                sum_exp_arr[j] = 0.0
-                            for p in range(axis_size):
-                                for j in range(end_size % 8):
-                                    out[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] = prim.exp(x[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] - max_arr[j])
-                                    sum_exp_arr[j] += out[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j]
-                            for p in range(axis_size):
-                                for j in range(end_size % 8):
-                                    out[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] = out[head_idx][p][tail_no_end_idx][end_size - end_size % 8 + j] / sum_exp_arr[j]
+                        for g in range(tail_size // 8):
+                            tail_offset = g * 8
+                            # TODO: problem is that the avx is going consecutive but needs to skip rows
+                            max_vec = avx_f32x8_load(x + offset + tail_offset)
+                            for i in range(axis_size):  # softmax over this guy
+                                data_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)
+                                max_vec = avx_f32x8_max(max_vec, data_vec)
+                            sum_exp_vec = avx_f32x8_setzero()
+                            for i in range(axis_size):
+                                val_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)
+                                val_vec = avx_f32x8_subtract(val_vec, max_vec)
+                                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
+                                avx_f32x8_store(arr, val_vec)
+                                for n in range(8):
+                                    arr[n] = prim.exp(arr[n])
+                                val_vec = avx_f32x8_load(arr)
+                                avx_f32x8_store(out + offset + tail_offset + tail_size * i, val_vec)
+                                sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
+                            for i in range(axis_size):
+                                avx_f32x8_store(out + offset + tail_offset + tail_size * i,
+                                                avx_f32x8_divide(avx_f32x8_load(out + offset + tail_offset + tail_size * i),
+                                                                 sum_exp_vec))
+                        max_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[tail_size % 8])
+                        for j in range(tail_size % 8):
+                            max_arr[j] = 0.0
+                        for p in range(axis_size):
+                            for j in range(tail_size % 8):
+                                last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
+                                max_arr[j] = prim.max(max_arr[j], x[head_idx][p][last_idx])  # TODO: index
+                        sum_exp_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[tail_size % 8])
+                        for j in range(tail_size % 8):
+                            sum_exp_arr[j] = 0.0
+                        for p in range(axis_size):
+                            for j in range(tail_size % 8):
+                                last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
+                                out[head_idx][p][last_idx] = prim.exp(x[head_idx][p][last_idx] - max_arr[j])
+                                sum_exp_arr[j] += out[head_idx][p][last_idx]
+                        for p in range(axis_size):
+                            for j in range(tail_size % 8):
+                                last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
+                                out[head_idx][p][last_idx] = out[head_idx][p][last_idx] / sum_exp_arr[j]
 
 
-                            # for j in range(end_size % 8):
+                            # for j in range(tail_size % 8):
                             #     max_val =
                             #     for p in range(axis_size):  # TODO: also try this approach and compare speed
                             #         max_val = x[]
