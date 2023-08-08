@@ -160,8 +160,6 @@ class SoftmaxTask(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         if not all(is_constant(dim) for dim in self.inputs[0].shape)\
                 or self.inputs[0].type.dtype != float32:
-                # or (self.axis != len(self.x_shape) - 1 and self.axis != -1):
-                # not row-major, avx no good not fp32, need diff intrinsics
             return NotImplemented  # use auto-scheduler
         return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
@@ -170,11 +168,9 @@ class SoftmaxTask(Task):
     def schedule_softmax_cpu(self, nthreads='') -> IRModule:
         import hidet
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
-            avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last, \
-            avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
-            avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
-            avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
-            avx_f32x8_find_sum, avx_f32x8_find_max
+            avx_f32x8_add, avx_f32x8_max, avx_f32x8_set1, avx_f32x8_divide, avx_f32x8_to_i32x8,\
+            avx_i32x8_to_f32x8, avx_i32x8_set1, avx_i32x8_add, avx_i32x8_bitwiseand, avx_f32x8_fmadd,\
+            avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, avx_f32x8_find_sum, avx_f32x8_find_max
         from hidet.ir.dtypes import float32x8
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
@@ -182,7 +178,6 @@ class SoftmaxTask(Task):
         from hidet.lang.mapping import spatial
         from hidet.utils import prod
         shape = self.inputs[0].shape
-        # axis = self.axis if self.axis > 0 else len(shape) + self.axis
         head = shape[:self.axis]
         tail = shape[self.axis:] if self.axis == len(shape) - 1 else shape[self.axis + 1:]
         head_size = prod(head)
@@ -190,64 +185,6 @@ class SoftmaxTask(Task):
         axis_size = int(shape[self.axis])
 
         with hidet.script_module() as module:
-
-            @hidet.script
-            def avx_poly_eval_7(x: float32x8, c0: float32x8, c1: float32x8, c2: float32x8, c3: float32x8, c4: float32x8,
-                                c5: float32x8, c6: float32x8, c7: float32x8):
-                x2 = avx_f32x8_multiply(x, x)
-                x4 = avx_f32x8_multiply(x2, x2)
-                return avx_f32x8_fmadd(avx_f32x8_fmadd(avx_f32x8_fmadd(c7, x, c6), x2, avx_f32x8_fmadd(c5, x, c4)), x4,
-                                       avx_f32x8_fmadd(avx_f32x8_fmadd(c3, x, c2), x2, avx_f32x8_fmadd(c1, x, c0)))
-
-            @hidet.script
-            def avx_exp(x: float32x8) -> float32x8:
-                MASK = avx_i32x8_broadcast(0x7FFFFFFF)
-                ARG_MAX = avx_i32x8_broadcast(0x42AE0000)
-                tbl_ln2 = float.fromhex('0x1.71547652b82fep+0')
-                TBL_LN2 = avx_f32x8_broadcast(~tbl_ln2)
-                exp_huge = float.fromhex('0x1.8p+23')
-                EXP_HUGE = avx_f32x8_broadcast(~exp_huge)
-                ln2_tbl_h = float.fromhex('0x1.63p-1')
-                LN2_TBL_H = avx_f32x8_broadcast(~ln2_tbl_h)
-                ln2_tbl_t = float.fromhex('-0x1.bd0104p-13')
-                LN2_TBL_T = avx_f32x8_broadcast(~ln2_tbl_t)
-                EXPF_BIAS = avx_i32x8_broadcast(127)
-
-                c0 = float.fromhex("0x1p0")
-                C0 = avx_f32x8_broadcast(~c0)
-                c1 = float.fromhex("0x1p-1")
-                C1 = avx_f32x8_broadcast(~c1)
-                c2 = float.fromhex("0x1.555554p-3")
-                C2 = avx_f32x8_broadcast(~c2)
-                c3 = float.fromhex("0x1.555468p-5")
-                C3 = avx_f32x8_broadcast(~c3)
-                c4 = float.fromhex("0x1.1112fap-7")
-                C4 = avx_f32x8_broadcast(~c4)
-                c5 = float.fromhex("0x1.6da4acp-10")
-                C5 = avx_f32x8_broadcast(~c5)
-                c6 = float.fromhex("0x1.9eb724p-13")
-                C6 = avx_f32x8_broadcast(~c6)
-
-                vx = avx_f32x8_to_i32x8(x)
-                vx = avx_i32x8_bitwiseand(vx, MASK)
-                cond = avx_i32x8_greaterthan(vx, ARG_MAX)
-                # if cond != 0:
-                    # scalar exp
-                z = avx_f32x8_multiply(x, TBL_LN2)
-                dn = avx_f32x8_add(z, EXP_HUGE)
-                n = avx_f32x8_to_i32x8(dn)
-                r1 = avx_f32x8_subtract(x, (avx_f32x8_multiply(dn, LN2_TBL_H)))
-                r2 = avx_f32x8_multiply(dn, LN2_TBL_T)
-                r = avx_f32x8_subtract(r1, r2)
-                m = avx_i32x8_leftshift_imm(avx_i32x8_add(n, EXPF_BIAS), 23)  # implement bitshift
-                r2 = avx_f32x8_multiply(r, r)
-                r4 = avx_f32x8_multiply(r2, r2)
-                poly = avx_f32x8_fmadd(avx_f32x8_fmadd(avx_f32x8_fmadd(C6, r, C5), r2, avx_f32x8_fmadd(C4, r, C3)), r4,
-                                       avx_f32x8_fmadd(avx_f32x8_fmadd(C2, r, C1), r2, avx_f32x8_fmadd(C0, r, C0)))
-                result = avx_f32x8_multiply(poly, avx_i32x8_to_f32x8(m))
-
-                return result
-
             @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 # can pass shape = x.shape, float32[shape]
@@ -273,7 +210,7 @@ class SoftmaxTask(Task):
                         sum_value = 0.0
                         if tail_size >= 8:
                             sum_exp_vec = avx_f32x8_setzero()
-                            max_vec = avx_f32x8_broadcast(~max_val)
+                            max_vec = avx_f32x8_set1(max_val)
                             for i in range(tail_size // 8):
                                 val_vec = avx_f32x8_load(x + offset + i * 8)
                                 val_vec = avx_f32x8_subtract(val_vec, max_vec)
@@ -295,7 +232,7 @@ class SoftmaxTask(Task):
                         # divide by exp sum
                         if tail_size >= 8:
                             # divide
-                            sum_vec8 = avx_f32x8_broadcast(~sum_value)
+                            sum_vec8 = avx_f32x8_set1(sum_value)
                             # avx_exp(sum_vec8)
                             for i in range(tail_size // 8):
                                 avx_f32x8_store(out + offset + i * 8,
@@ -348,87 +285,10 @@ class SoftmaxTask(Task):
                                 last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
                                 out[head_idx][p][last_idx] = out[head_idx][p][last_idx] / sum_exp_arr[j]
 
-
-                            # for j in range(tail_size % 8):
-                            #     max_val =
-                            #     for p in range(axis_size):  # TODO: also try this approach and compare speed
-                            #         max_val = x[]
-                            #     for p in range
-
             softmax_cpu_kernel.kind = "cpu_kernel"
             # avx_exp.kind = "cpu_internal"
             # avx_poly_eval_7.kind = "cpu_internal"
             assert isinstance(softmax_cpu_kernel, hidet.ir.Function)
             ir_module = module.ir_module()
             return ir_module
-
-# sum = _mm_add_ps(_mm256_extractf128_ps(vector, 0), _mm256_extractf128_ps(vector, 1));
-# sum = _mm_hadd_ps(sum, sum);
-# sum = _mm_hadd_ps(sum, sum);
-# return _mm_cvtss_f32(sum);
-
-# __m256 y = _mm256_permute2f128_ps(x, x, 1); // 8 5 3 6 8 5 3 6
-# __m256 m1 = _mm256_max_ps(x, y); // 8 7 3 6 8 5 3 6
-# __m256 m2 = _mm256_permute_ps(m1, 0b01001110); // swap 2, 3 and 0, 1, 3 6 8 7 8 5 3 6
-# __m256 m3 = _mm256_max_ps(m1, m2); // 8 7 8 7 8 5 3 6
-# __m256 m4 = _mm256_permute_ps(m3, 0b10110001); // 7 8 8 7 8 5 3 6
-# __m256 m = _mm256_max_ps(m3, m4); // max elem will be available in all elements of m
-
-
-
-            # @hidet.script
-            # def avx_poly_eval_7(x: float32x8, c0: float32x8, c1: float32x8, c2: float32x8, c3: float32x8, c4: float32x8,
-            #                     c5: float32x8, c6: float32x8, c7: float32x8):
-            #     x2 = avx_f32x8_multiply(x, x)
-            #     x4 = avx_f32x8_multiply(x2, x2)
-            #     return avx_f32x8_fmadd(avx_f32x8_fmadd(avx_f32x8_fmadd(c7, x, c6), x2, avx_f32x8_fmadd(c5, x, c4)), x4,
-            #                            avx_f32x8_fmadd(avx_f32x8_fmadd(c3, x, c2), x2, avx_f32x8_fmadd(c1, x, c0)))
-            #
-            # @hidet.script
-            # def avx_exp(x: float32x8) -> float32x8:
-            #     MASK = avx_i32x8_broadcast(0x7FFFFFFF)
-            #     ARG_MAX = avx_i32x8_broadcast(0x42AE0000)
-            #     tbl_ln2 = float.fromhex('0x1.71547652b82fep+0')
-            #     TBL_LN2 = avx_f32x8_broadcast(~tbl_ln2)
-            #     exp_huge = float.fromhex('0x1.8p+23')
-            #     EXP_HUGE = avx_f32x8_broadcast(~exp_huge)
-            #     ln2_tbl_h = float.fromhex('0x1.63p-1')
-            #     LN2_TBL_H = avx_f32x8_broadcast(~ln2_tbl_h)
-            #     ln2_tbl_t = float.fromhex('-0x1.bd0104p-13')
-            #     LN2_TBL_T = avx_f32x8_broadcast(~ln2_tbl_t)
-            #     EXPF_BIAS = avx_i32x8_broadcast(127)
-            #
-            #     c0 = float.fromhex("0x1p0")
-            #     C0 = avx_f32x8_broadcast(~c0)
-            #     c1 = float.fromhex("0x1p-1")
-            #     C1 = avx_f32x8_broadcast(~c1)
-            #     c2 = float.fromhex("0x1.555554p-3")
-            #     C2 = avx_f32x8_broadcast(~c2)
-            #     c3 = float.fromhex("0x1.555468p-5")
-            #     C3 = avx_f32x8_broadcast(~c3)
-            #     c4 = float.fromhex("0x1.1112fap-7")
-            #     C4 = avx_f32x8_broadcast(~c4)
-            #     c5 = float.fromhex("0x1.6da4acp-10")
-            #     C5 = avx_f32x8_broadcast(~c5)
-            #     c6 = float.fromhex("0x1.9eb724p-13")
-            #     C6 = avx_f32x8_broadcast(~c6)
-            #
-            #     vx = avx_f32x8_to_i32x8(x)
-            #     vx = avx_i32x8_bitwiseand(vx, MASK)
-            #     cond = avx_i32x8_greaterthan(vx, ARG_MAX)
-            #     if cond != 0:
-            #         # scalar exp
-            #     z = avx_f32x8_multiply(x, TBL_LN2)
-            #     dn = avx_f32x8_add(z, EXP_HUGE)
-            #     n = avx_f32x8_to_i32x8(dn)
-            #     r1 = avx_f32x8_subtract(x, (avx_f32x8_multiply(dn, LN2_TBL_H)))
-            #     r2 = avx_f32x8_multiply(dn, LN2_TBL_T)
-            #     r = avx_f32x8_subtract(r1, r2)
-            #     m = avx_i32x8_leftshift_imm(avx_i32x8_add(n, EXPF_BIAS), 23)  # implement bitshift
-            #     r2 = avx_f32x8_multiply(r, r)
-            #     r4 = avx_f32x8_multiply(r2, r2)
-            #     poly = avx_f32x8_fmadd(avx_f32x8_fmadd(avx_f32x8_fmadd(C6, r, C5), r2, avx_f32x8_fmadd(C4, r, C3)), r4,
-            #                            avx_f32x8_fmadd(avx_f32x8_fmadd(C2, r, C1), r2, avx_f32x8_fmadd(C0, r, C0)))
-            #     result = avx_f32x8_multiply(poly, avx_i32x8_to_f32x8(m))
-            #
-            #     return result
+        
