@@ -23,9 +23,10 @@ from collections import defaultdict
 from hidet.ir import SeqStmt
 from hidet.ir.expr import Expr, Var, Address, Reference
 from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, AsmStmt
-from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import collect
+from hidet.transforms.base import Pass, FunctionPass
 
 
 class DeclareToLetRewriter(IRRewriter):
@@ -79,10 +80,10 @@ class DeclareToLetRewriter(IRRewriter):
             return SeqStmt(seq)
 
 
-class DeclareToLetPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class DeclareToLetPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         rewriter = DeclareToLetRewriter()
-        return rewriter.rewrite(stmt)
+        return rewriter.rewrite(func)
 
 
 def declare_to_let_pass() -> Pass:

@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Optional, Sequence
+from typing import Union, Sequence
 
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForMappingStmt, ForStmtAttr
 from hidet.ir.expr import Expr, Var, var, convert
@@ -65,10 +65,10 @@ class StmtBuilder:
         seq_let_stmt = LetStmt(bind_vars, bind_values, body=1)
         return StmtScope(self, stmts=seq_let_stmt, ret=bind_vars)
 
-    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], unroll: Optional[bool] = None) -> StmtScope:
+    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], attr: str = '.') -> StmtScope:
         if isinstance(v, str):
             v = var(v)
-        return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr(unroll)), ret=v)
+        return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr.parse(attr, num_loops=1)[0]), ret=v)
 
     def if_then(self, cond: Union[bool, Expr]) -> StmtScope:
         return StmtScope(self, stmts=[IfStmt(cond)], ret=None)

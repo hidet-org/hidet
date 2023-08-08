@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Union
 import zipfile
 import os
 import json
@@ -28,7 +28,8 @@ from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
-from hidet.utils import prod
+from hidet.utils.py import prod, median
+from hidet.utils.trace_utils import TraceEventEmitter
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
@@ -91,15 +92,13 @@ class CompiledGraph:
         self.graph_execution: GraphExecution = graph_execution
         self.graph_string: str = graph_string
 
-        # derived properties
+        # derived properties (will be initialized in _init_compiled_graph at the end of this constructor)
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
-        for tensor_index, sig in enumerate(self.meta.inputs):
-            for dim_index, dim in enumerate(sig.shape):
-                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
-                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
-        self.is_dynamic: bool = len(self.dynamic_dims) > 0
+        self.is_dynamic: bool = False
+        self.constant_outputs: List[Union[None, Tensor]] = []
 
         # runtime state
+        self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
@@ -137,6 +136,21 @@ class CompiledGraph:
             return outs
 
     def _init_compiled_graph(self):
+        # initialize the derived properties
+        for tensor_index, sig in enumerate(self.meta.inputs):
+            for dim_index, dim in enumerate(sig.shape):
+                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
+                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
+        if len(self.dynamic_dims) > 0 or any(isinstance(dim, str) for sig in self.meta.outputs for dim in sig.shape):
+            self.is_dynamic = True
+        else:
+            self.is_dynamic = False
+        for out_idx in self.graph_execution.outputs_index:
+            if out_idx in self.graph_execution.weights_index:
+                self.constant_outputs.append(self.weights[self.graph_execution.weights_index.index(out_idx)])
+            else:
+                self.constant_outputs.append(None)
+
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
         for i in range(len(self.weights)):
@@ -199,14 +213,16 @@ class CompiledGraph:
         from hidet.graph.tensor import empty
 
         outputs = []
-        if self.is_dynamic:
-            for output_index, sig in enumerate(self.meta.outputs):
-                shape_buffer = Array(i32, len(sig.shape))
-                self._get_output_shape(output_index, shape_buffer)
-                outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
-        else:
-            for sig in self.meta.outputs:
-                outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
+        for output_index, (sig, const_out) in enumerate(zip(self.meta.outputs, self.constant_outputs)):
+            if const_out is not None:
+                outputs.append(const_out)
+            else:
+                if self.is_dynamic:
+                    shape_buffer = Array(i32, len(sig.shape))
+                    self._get_output_shape(output_index, shape_buffer)
+                    outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
+                else:
+                    outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
         return outputs
 
     def _prepare_workspace(self):
@@ -244,22 +260,48 @@ class CompiledGraph:
             index2tensor[exe.inputs_index[i]] = inputs[i]
         for i in range(len(self.weights)):
             index2tensor[exe.weights_index[i]] = self.weights[i]
+
         best_candidates = [-1 for _ in range(len(self.compiled_tasks))]
+        trace_emitter = TraceEventEmitter({'graph': self.graph_string})
         for inst in exe.instructions:
+            # prepare inputs and kernel
             node_inputs = [index2tensor[i] for i in inst.inputs]
             node_kernel: CompiledTask = self.compiled_tasks[inst.task_idx]
+
+            # run the kernel
             node_outputs = node_kernel.run_async(node_inputs)
+
+            # record outputs
             for i, output_index in enumerate(inst.outputs):
                 index2tensor[output_index] = node_outputs[i]
 
+            # record best candidate for this kernel
             best_candidates[inst.task_idx] = node_kernel.pick_best_candidate(node_inputs, node_outputs)
 
+            # record trace events
+            trace_emitter.append(
+                name=node_kernel.meta_data.name,
+                duration_us=int(median(node_kernel.profile(*node_inputs, *node_outputs)) * 1000),
+                args={
+                    'name': node_kernel.meta_data.name,
+                    'inputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.inputs],
+                    'outputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.outputs],
+                },
+            )
+
+            # free tensors that are no longer needed
             for idx in inst.free:
                 del index2tensor[idx]
 
         outputs = [index2tensor[i] for i in exe.outputs_index]
 
+        # update the dispatch table
         self._update_symbol_table(symbol_dims, best_candidates)
+
+        # save the trace
+        trace_filename = 'trace{}.json'.format('_'.join(str(x) for x in symbol_dims))
+        with open(os.path.join(self.working_dir, trace_filename), 'w') as f:
+            trace_emitter.save(f)
 
         return outputs
 
@@ -299,7 +341,7 @@ class CompiledGraph:
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
         from hidet.graph.tensor import Tensor, randn, zeros, empty
 
-        for x in self.meta.inputs:
+        for x in self.meta.inputs + self.meta.outputs:
             if x.device == 'cpu':
                 raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with CPU inputs:\n {x}')
             for d in x.shape:
@@ -307,6 +349,9 @@ class CompiledGraph:
                     raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with dynamic inputs:\n {x}')
         if any(device == 'cpu' for device in self.graph_execution.tensor_device):
             raise CudaGraphCreationError('Cannot create CUDA graph for a model with CPU tensors.')
+        for ctask in self.compiled_tasks:
+            if len(ctask.meta_data.symbols) > 0:
+                raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
             dummy_inputs = []

@@ -175,6 +175,8 @@ class MatmulResolveRule(ResolveRule):
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
         if op.attrs['require_prologue']:
             return None
+        # if op.task.has_symbolic_shape():
+        #     return None
 
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -192,7 +194,9 @@ class MatmulResolveRule(ResolveRule):
             return None
 
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
-        if isinstance(parallel_k, str):
+        if op.task.has_symbolic_shape():
+            k_parts = 1
+        elif isinstance(parallel_k, str):
             if parallel_k == 'default':
                 batch_size, m_size, n_size, k_size = prod(c.shape[:-2]), c.shape[-2], c.shape[-1], a.shape[-1]
                 if is_constant(batch_size, m_size):

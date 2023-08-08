@@ -10,10 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.expr import Let
-from hidet.ir.stmt import Stmt, LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
+from hidet.ir.stmt import LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt
+from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
-from hidet.transforms import Pass, FunctionBodyPass
+from hidet.transforms import Pass, FunctionPass
 
 
 def wrapper(stmt_visitor):
@@ -39,10 +40,6 @@ class LetExprExpander(IRRewriter):
     def __init__(self):
         super().__init__()
         self.stmt_stack = []
-
-    def expand(self, stmt):
-        assert isinstance(stmt, Stmt)
-        return self.visit(stmt)
 
     def visit_Let(self, e: Let):
         var = self(e.var)
@@ -87,11 +84,10 @@ class LetExprExpander(IRRewriter):
         return IRRewriter.visit_BlackBoxStmt(self, stmt)
 
 
-class ExpandLetExprPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class ExpandLetExprPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         expander = LetExprExpander()
-        stmt = expander.expand(stmt)
-        return stmt
+        return expander.visit(func)
 
 
 def expand_let_expr_pass() -> Pass:

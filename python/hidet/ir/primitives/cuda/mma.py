@@ -87,6 +87,18 @@ class MmaConfig:
         return mma_configs['m16n8k8_tf32_f32']
 
     @staticmethod
+    def m8n8k16_i8_i32():
+        return mma_configs['m8n8k16_i8_i32']
+
+    @staticmethod
+    def m16n8k16_i8_i32():
+        return mma_configs['m16n8k16_i8_i32']
+
+    @staticmethod
+    def m16n8k32_i8_i32():
+        return mma_configs['m16n8k32_i8_i32']
+
+    @staticmethod
     def all():
         return list(mma_configs.values())
 
@@ -124,6 +136,49 @@ def register_mma_configs():
                     b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     required_arch=(8, 0),
+                ),
+            }
+        )
+
+    # int8
+    # TODO: maybe add {.satfinite} identifier. But probably not necessary
+    # Since the output dtype is s32, which I assume to be int32, and the maximum K dimension is 32,
+    # so the maximum possible value is 32 * 255 * 255, well below the maximum representable value for int 32.
+    for input_type in ['int8', 'uint8']:
+        mma_configs.update(
+            {
+                f'm8n8k16_{input_type}_i32': MmaConfig(
+                    m=8,
+                    n=8,
+                    k=16,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                    c_store_map=row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(7, 5),
+                ),
+                f'm16n8k16_{input_type}_i32': MmaConfig(
+                    m=16,
+                    n=8,
+                    k=16,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(7, 5),
+                ),
+                f'm16n8k32_{input_type}_i32': MmaConfig(
+                    m=16,
+                    n=8,
+                    k=32,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                    b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(7, 5),
                 ),
             }
         )
@@ -302,8 +357,8 @@ def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id:
         if msg:
             with sb.if_then(worker_id == 0):
                 sb += printf(f'{msg}\\n')
-        with sb.for_loop('i', mapping.task_shape[0], unroll=False) as i:
-            with sb.for_loop('j', mapping.task_shape[1], unroll=False) as j:
+        with sb.for_loop('i', mapping.task_shape[0]) as i:
+            with sb.for_loop('j', mapping.task_shape[1]) as j:
                 p = var('p', int32)
                 sb += DeclareStmt(p, int32(0))
                 with sb.for_mapping(['ii', 'jj'], mapping, worker_id) as (ii, jj):

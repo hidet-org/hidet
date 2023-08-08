@@ -13,12 +13,55 @@
 from typing import List, Callable, Any, Union, Optional, Dict
 
 from hidet.ir import primitives
-from hidet.ir import expr, dtypes
+from hidet.ir import Var, expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Constant, if_then_else
+from hidet.ir.tools import rewrite
+from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
+
+PyScalar = Union[int, float, bool]
+
+
+# In order for the subgraph rewrite of Composite Elementwise Operator to work,
+# we need to store the callable in an Operator object. But lambda cannot be pickled,
+# so we define auxiliary classes UnaryElementwiseOperation and BinaryElementwiseOperation
+# below which can be saved to disk and can act as a callable to construct the task.
+class UnaryElementwiseOperation:
+    def __init__(self, x, y, name, attributes, task_attributes):
+        self.x: Var = x
+        self.y: Expr = y
+        self.attributes = attributes
+        self.task_attributes = task_attributes
+        self.name: str = name
+
+    def __call__(self, x):
+        return rewrite(self.y, {self.x: x})
+
+    @staticmethod
+    def from_callable(op: Callable[[Any], Any], name, attributes, task_attributes):
+        x = expr.var('x')
+        y = op(x)
+        return UnaryElementwiseOperation(x, y, name, attributes, task_attributes)
+
+
+class BinaryElementwiseOperation:
+    def __init__(self, left_operand, right_operand, out, name):
+        self.left_operand: Var = left_operand
+        self.right_operand: Var = right_operand
+        self.out: Expr = out
+        self.name: str = name
+
+    def __call__(self, left_operand, right_operand):
+        return rewrite(self.out, {self.left_operand: left_operand, self.right_operand: right_operand})
+
+    @staticmethod
+    def from_callable(op: Callable[[Any, Any], Any], name):
+        left_operand = expr.var('left_operand')
+        right_operand = expr.var('right_operand')
+        out = op(left_operand, right_operand)
+        return BinaryElementwiseOperation(left_operand, right_operand, out, name)
 
 
 class UnaryElementwiseTask(Task):
@@ -77,8 +120,42 @@ class VariadicElementwiseTask(Task):
             inverse_map={
                 v: InverseMap.identity(len(v_shape))
                 for v, v_shape in zip(args, shapes)
-                if prod(v_shape) == prod(out_shape)
+                if is_true(prod(v_shape) == prod(out_shape)) and len(v_shape) == len(out_shape)
             },
+        )
+
+
+class CompositeElementwiseTask(Task):
+    def __init__(
+        self,
+        name: str,
+        x: TensorNode,
+        left_unary_op: Callable[[Any], Any],
+        right_unary_op: Callable[[Any], Any],
+        binary_op: Callable[[Any, Any], Any],
+        attrs=None,
+    ):
+        def composite_op(binary_op, left_unary_op, right_unary_op, x):
+            if left_unary_op is None:
+                left_unary_op = lambda x: x
+            if right_unary_op is None:
+                right_unary_op = lambda x: x
+            return binary_op(left_unary_op(x), right_unary_op(x))
+
+        shape = x.shape
+
+        z = compute(
+            name='z',
+            shape=shape,
+            fcompute=lambda *indices: composite_op(binary_op, left_unary_op, right_unary_op, x.__getitem__(indices)),
+        )
+
+        super().__init__(
+            name=name,
+            inputs=[x],
+            outputs=[z],
+            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
+            attributes={} if attrs is None else attrs,
         )
 
 
@@ -115,6 +192,7 @@ class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
         if attributes is None:
             attributes = {}
+        self.op = UnaryElementwiseOperation.from_callable(op, name, attributes, task_attributes)
         super().__init__(
             inputs=[x],
             attributes=attributes,
@@ -124,10 +202,40 @@ class UnaryElementwiseOp(Operator):
 
 class BinaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, y: Tensor, op, name: str):
+        self.op = BinaryElementwiseOperation.from_callable(op, name)
         super().__init__(
             inputs=[x, y],
             attributes={},
             task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op),
+        )
+
+
+def get_dtype(scalar: Expr):
+    from hidet.ir.tools import infer_type
+
+    inferred_type = infer_type(scalar)
+    if not isinstance(inferred_type, DataType):
+        raise TypeError(f'Expected scalar to be of type DataType, got {type(inferred_type)}')
+    return inferred_type
+
+
+class CompositeElementwiseOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        left_unary_op: UnaryElementwiseOperation,
+        right_unary_op: UnaryElementwiseOperation,
+        binary_op: BinaryElementwiseOperation,
+    ):
+        name = 'composite'
+        for op in [left_unary_op, right_unary_op, binary_op]:
+            if op is not None:
+                name += '_' + op.name
+        attributes = {'left_unary_op': left_unary_op, 'right_unary_op': right_unary_op, 'binary_op': binary_op}
+        super().__init__(
+            inputs=[x],
+            attributes=attributes,
+            task=CompositeElementwiseTask(name, input_like(x, 'x'), left_unary_op, right_unary_op, binary_op),
         )
 
 
@@ -141,38 +249,38 @@ def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
 
 
 class AddScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: v + dtype(scalar), attributes={'scalar': scalar}, name='adds')
 
 
 class SubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: v - dtype(scalar), attributes={'scalar': scalar}, name='subs')
 
 
 class RSubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: dtype(scalar) - v, attributes={'scalar': scalar}, name='rsubs')
 
 
 class MultiplyScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: v * dtype(scalar), attributes={'scalar': scalar}, name='muls')
 
 
 class DivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: v / dtype(scalar), attributes={'scalar': scalar}, name='divs')
 
 
 class RDivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
-        dtype = resolve_dtype(x.dtype, scalar.type)
+    def __init__(self, x: Tensor, scalar: Expr):
+        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
         super().__init__(x, op=lambda v: dtype(scalar) / v, attributes={'scalar': scalar}, name='rdivs')
 
 
@@ -382,6 +490,19 @@ class SignOp(UnaryElementwiseOp):
         )
 
 
+class ClampOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor, min_value: Union[int, float], max_value: Union[int, float]):
+        assert isinstance(min_value, (int, float))
+        assert isinstance(max_value, (int, float))
+        min_value = x.dtype(min_value)
+        max_value = x.dtype(max_value)
+        super().__init__(
+            x,
+            op=lambda a: if_then_else(a < min_value, min_value, if_then_else(a > max_value, max_value, a)),
+            name='clamp',
+        )
+
+
 class RightShiftOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, op=lambda a, b: expr.RightShift(a, b), name='rightshift')
@@ -426,6 +547,47 @@ class WhereOp(Operator):
         )
 
 
+class WhereScalarScalarOp(Operator):
+    def __init__(self, cond: Tensor, x: PyScalar, y: PyScalar):
+        if isinstance(x, int) and isinstance(y, int):
+            dtype = dtypes.default_int_dtype
+        elif isinstance(x, float) or isinstance(y, float):
+            dtype = dtypes.default_float_dtype
+        else:
+            raise ValueError(f'Unsupported scalar type: {type(x)}')
+        x, y = dtype(x), dtype(y)
+        super().__init__(
+            inputs=[cond],
+            attributes={'x': x, 'y': y},
+            task=UnaryElementwiseTask(name='where', x=input_like(cond, 'cond'), op=lambda a: if_then_else(a, x, y)),
+        )
+
+
+class WhereScalarTensorOp(Operator):
+    def __init__(self, cond: Tensor, y: Tensor, x: PyScalar):
+        dtype = y.dtype
+        x = dtype(x)
+        super().__init__(
+            inputs=[cond, y],
+            attributes={'x': x},
+            task=BinaryElementwiseTask(
+                name='where', x=input_like(cond, 'cond'), y=input_like(y, 'y'), op=lambda a, b: if_then_else(a, x, b)
+            ),
+        )
+
+
+class WhereTensorScalarOp(Operator):
+    def __init__(self, cond: Tensor, x: Tensor, y: PyScalar):
+        y = x.dtype(y)
+        super().__init__(
+            inputs=[cond, x],
+            attributes={'y': y},
+            task=BinaryElementwiseTask(
+                name='where', x=input_like(cond, 'cond'), y=input_like(x, 'x'), op=lambda a, b: if_then_else(a, b, y)
+            ),
+        )
+
+
 class MaxOp(Operator):
     def __init__(self, *tensors: Tensor):
         def scalar_max(args: List[expr.Expr]):
@@ -464,56 +626,64 @@ class MinOp(Operator):
         )
 
 
+Scalar = Union[Expr, float, int, complex]
+
+
 def binary_arithmetic(
-    x: Union[Tensor, Constant, complex, float, int],
-    y: Union[Tensor, Constant, complex, float, int],
-    tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
-    scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
+    x: Union[Tensor, Scalar],
+    y: Union[Tensor, Scalar],
+    tensor_scalar_op: Callable[[Tensor, Scalar], Tensor],
+    scalar_tensor_op: Callable[[Scalar, Tensor], Tensor],
     tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
+    scalar_scalar_op: Callable[[Scalar, Scalar], Scalar],
 ) -> Union[Tensor, float, int]:
-    if not (
-        isinstance(x, (Tensor, complex, float, int, Constant))
-        and isinstance(y, (Tensor, complex, float, int, Constant))
-    ):
+    if not (isinstance(x, (Tensor, Expr, complex, float, int)) and isinstance(y, (Tensor, Expr, complex, float, int))):
         raise ValueError(
-            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Constant. got {} and {}'.format(
+            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Expr. got {} and {}'.format(
                 type(x), type(y)
             )
         )
-    if not isinstance(x, Tensor) and not isinstance(y, Tensor):
-        raise ValueError('One of x and y must be a Tensor')
 
-    if isinstance(x, Tensor) and isinstance(y, Tensor) and len(x.shape) == len(y.shape) == 0:
-        return tensor_tensor_op(x, y)
-
-    if isinstance(x, int):
-        x = dtypes.int32(x)
-    elif isinstance(x, float):
-        x = dtypes.float32(x)
-    elif isinstance(x, complex):
-        x = dtypes.complex64(x)
-    elif isinstance(x, Tensor) and len(x.shape) == 0:
-        if x.trace is None and x.storage is not None:
-            x = x.dtype(x.item())
-
-    if isinstance(y, int):
-        y = dtypes.int32(y)
-    elif isinstance(y, float):
-        y = dtypes.float32(y)
-    elif isinstance(y, complex):
-        y = dtypes.complex64(y)
-    elif isinstance(y, Tensor) and len(y.shape) == 0:
-        if y.trace is None and y.storage is not None:
-            y = y.dtype(y.item())
+    def normalize_scalar(v):
+        if isinstance(v, Expr):
+            return v
+        elif isinstance(v, bool):
+            return dtypes.boolean(v)
+        elif isinstance(v, int):
+            return dtypes.int32(v)
+        elif isinstance(v, float):
+            return dtypes.float32(v)
+        elif isinstance(v, complex):
+            return dtypes.complex64(v)
+        else:
+            raise RuntimeError('Unsupported type {}'.format(type(v)))
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
+        if x.device != y.device:
+            # normalize to the same device
+            if x.device.is_cpu() and len(x.shape) == 0:
+                x = x.to(device=y.device)
+                return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+            if y.device.is_cpu() and len(y.shape) == 0:
+                y = y.to(device=x.device)
+                return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+        # simplify the tensor vs tensor case where one tensor is a scalar
+        if len(x.shape) == 0 and x.storage:
+            x = x.dtype(x.item())
+            return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+        if len(y.shape) == 0 and y.storage:
+            y = y.dtype(y.item())
+            return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
         return tensor_tensor_op(x, y)
     elif isinstance(x, Tensor):
-        return tensor_scalar_op(x, y)
+        return tensor_scalar_op(x, normalize_scalar(y))
     elif isinstance(y, Tensor):
-        return scalar_tensor_op(x, y)
+        return scalar_tensor_op(normalize_scalar(x), y)
     else:
-        assert False
+        if isinstance(x, Expr) or isinstance(y, Expr):
+            return scalar_scalar_op(normalize_scalar(x), normalize_scalar(y))
+        else:
+            return scalar_scalar_op(x, y)
 
 
 def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
@@ -523,6 +693,7 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
         lambda a, b: AddScalarOp(a, b).outputs[0],
         lambda a, b: AddScalarOp(b, a).outputs[0],
         lambda a, b: AddOp(a, b).outputs[0],
+        lambda a, b: a + b,
     )
 
 
@@ -533,6 +704,7 @@ def subtract(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: SubScalarOp(a, b).outputs[0],
         lambda a, b: RSubScalarOp(b, a).outputs[0],
         lambda a, b: SubtractOp(a, b).outputs[0],
+        lambda a, b: a - b,
     )
 
 
@@ -543,6 +715,7 @@ def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: MultiplyScalarOp(a, b).outputs[0],
         lambda a, b: MultiplyScalarOp(b, a).outputs[0],
         lambda a, b: MultiplyOp(a, b).outputs[0],
+        lambda a, b: a * b,
     )
 
 
@@ -553,6 +726,7 @@ def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor
         lambda a, b: DivideScalarOp(a, b).outputs[0],
         lambda a, b: RDivideScalarOp(b, a).outputs[0],
         lambda a, b: DivideOp(a, b).outputs[0],
+        lambda a, b: a / b,
     )
 
 
@@ -684,10 +858,25 @@ def sign(x: Tensor) -> Tensor:
     return SignOp(x).outputs[0]
 
 
-def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
+def clamp(x: Tensor, min: Union[Tensor, float, int], max: Union[Tensor, float, int]) -> Tensor:
+    if isinstance(min, Tensor) or isinstance(max, Tensor):
+        raise NotImplementedError('clamp with tensor min/max is not implemented yet')
+    return ClampOp(x, min, max).outputs[0]
+
+
+def where(cond: Tensor, x: Union[Tensor, PyScalar], y: Union[Tensor, PyScalar]) -> Tensor:
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
-    return WhereOp(cond, x, y).outputs[0]
+    if isinstance(x, Tensor) and isinstance(y, Tensor):
+        return WhereOp(cond, x, y).outputs[0]
+    elif isinstance(x, Tensor) and isinstance(y, (int, float, complex)):
+        return WhereTensorScalarOp(cond, x=x, y=y).outputs[0]
+    elif isinstance(x, (int, float, complex)) and isinstance(y, Tensor):
+        return WhereScalarTensorOp(cond, x=x, y=y).outputs[0]
+    elif isinstance(x, (int, float, complex)) and isinstance(y, (int, float, complex)):
+        return WhereScalarScalarOp(cond, x=x, y=y).outputs[0]
+    else:
+        raise ValueError('Invalid arguments for where: x={}, y={}'.format(x, y))
 
 
 def maximum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
@@ -704,7 +893,8 @@ def mod(x: Tensor, y: Tensor) -> Tensor:
     return ModOp(x, y).outputs[0]
 
 
-remainder = mod
+def remainder(x: Tensor, y: Tensor) -> Tensor:
+    return mod(x, y)
 
 
 def abs(x: Tensor) -> Tensor:
@@ -754,3 +944,13 @@ def trunc(x: Tensor) -> Tensor:
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     max_val = maximum(x, y)
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
+
+
+# out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
+def composite_elementwise(
+    x: Tensor,
+    left_unary_op: UnaryElementwiseOperation,
+    right_unary_op: UnaryElementwiseOperation,
+    binary_op: BinaryElementwiseOperation,
+) -> Tensor:
+    return CompositeElementwiseOp(x, left_unary_op, right_unary_op, binary_op).outputs[0]

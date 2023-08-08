@@ -18,7 +18,7 @@ import hidet
 @pytest.mark.parametrize('batch_size', [1])
 @pytest.mark.parametrize('seq_length', [128])
 @pytest.mark.parametrize('use_fp16,use_tensor_core', [(False, False), (False, True), (True, True)])
-@pytest.mark.parametrize('dynamic', [False, True])
+@pytest.mark.parametrize('dynamic', [False])  # TODO: enable dynamic when torch dynamo is fixed
 def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core, dynamic):
     tokens_tensor = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
     segments_tensors = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')

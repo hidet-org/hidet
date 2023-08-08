@@ -56,7 +56,7 @@ class ReduceTask(Task):
     def allow_prologue(self) -> bool:
         return False
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         rank = len(self.inputs[0].shape)
         if rank - 1 in self.dims:
             return tune.extract_ir_modules(self.cuda_schedule_reduce_by_warp)
@@ -80,7 +80,7 @@ class ReduceTask(Task):
         xdtype = x.type.dtype
         shape: List[Int] = list(x.shape)
         lanes = 1
-        vtype: DataType = xdtype
+        vtype: Union[DataType, VectorType] = xdtype
         if xdtype.nbytes < 4:
             num_eles: int = 4 // xdtype.nbytes
             if is_constant(shape[-1]) and shape[-1] % num_eles == 0:
@@ -168,6 +168,8 @@ class ReduceTask(Task):
                 rv = shfl_sync(mask, rv, 0, 32)
 
                 # write to staging area
+                if perform_atomic_reduce:
+                    syncthreads()
                 if threadIdx.x % 32 == 0:
                     if perform_atomic_reduce:
                         ro.atomic_combine(~smem_staging[0], cast(rv, accumulate_dtype))
@@ -202,7 +204,7 @@ class ReduceTask(Task):
         shape: List[Int] = list(x.shape)
 
         lanes = 1
-        vtype: DataType = xdtype
+        vtype: Union[VectorType, DataType] = xdtype
         if xdtype.nbytes < 4:
             num_eles: int = 4 // xdtype.nbytes
             if shape[-1] % num_eles == 0:

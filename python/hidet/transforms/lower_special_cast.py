@@ -42,12 +42,11 @@ to
 """
 from typing import Optional
 from hidet.ir.type import DataType
-from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Cast, Expr
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import TypeInfer
-from hidet.transforms.base import FunctionBodyPass
+from hidet.transforms.base import FunctionPass
 from hidet.ir.primitives.math import MathFunctionSet, registered_math_function_sets
 
 
@@ -79,7 +78,7 @@ class LowerCastRewriter(IRRewriter):
         return IRRewriter.visit_Cast(self, e)
 
 
-class LowerSpecialCastPass(FunctionBodyPass):
+class LowerSpecialCastPass(FunctionPass):
     def __init__(self):
         super().__init__()
         self.device: Optional[str] = None
@@ -93,11 +92,8 @@ class LowerSpecialCastPass(FunctionBodyPass):
             'public': 'cpu',
         }
         self.device = func_kind_to_device[func.kind]
-        return FunctionBodyPass.process_func(self, func)
-
-    def process_body(self, stmt: Stmt) -> Stmt:
         rewriter = LowerCastRewriter(self.device)
-        return rewriter.rewrite(stmt)
+        return rewriter.rewrite(func)
 
 
 def lower_special_cast_pass():

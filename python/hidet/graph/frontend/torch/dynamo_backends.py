@@ -14,15 +14,15 @@ from typing import List, Callable, Sequence, Union
 import logging
 import torch
 import hidet.option
-from hidet.ir.type import data_type
-from hidet.ir.expr import is_constant
+from hidet.ir.type import DataType
+from hidet.ir.expr import SymbolVar
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.runtime import CompiledGraph
 from hidet.cuda.graph import CudaGraphCreationError
+from hidet.ir import dtypes
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .dynamo_config import dynamo_config
-from .interpreter import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         torch_inputs: List[torch.Tensor] = []
         for x in inputs:
             if not x.is_contiguous():
-                warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
+                # warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
                 x = x.contiguous()
             torch_inputs.append(x)
         hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
@@ -98,71 +98,82 @@ def hidet_backend(graph_module, example_inputs):
     logger.debug('graph: %s', graph_module.graph)
 
     if dynamo_config['print_input_graph']:
+        graph_module.print_readable()
+        print('---')
         graph_module.graph.print_tabular()
 
     # get the interpreter for the subgraph
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
-    inputs: List[Union[Tensor, int, bool, float]] = []  # for flow graph construction
+    inputs: List[Union[Tensor, SymbolVar, int, bool, float]] = []  # for flow graph construction
     for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
             inputs.append(symbolic_input)
         elif isinstance(example_input, (int, bool, float)):
-            inputs.append(symbolic_input)
+            inputs.append(example_input)
         elif isinstance(example_input, torch.SymInt):
+            from torch.fx.experimental.symbolic_shapes import SymNode
+
+            node: SymNode = example_input.node
             try:
-                inputs.append(int(example_input))
-            except Exception as e:
-                raise ValueError(f"hidet_backend: free symbolic example input {example_input}") from e
+                inputs.append(node.pytype(example_input))
+            except RuntimeError:
+                # is a symbolic scalar input
+                pytype2dtype = {int: dtypes.int32, float: dtypes.float32, bool: dtypes.boolean}
+                inputs.append(hidet.symbol_var(name=str(example_input), dtype=pytype2dtype[node.pytype]))
         else:
             raise ValueError(f'hidet_backend: unexpected example input {example_input}, type {type(example_input)}')
 
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
-        logger.info('start to check correctness')
-        # there exist some symbolic shapes, currently we don't support this option
-        #   as there is no way to principly get concrete shapes at this stage from symbolic shapes
-        #   since some models like resnet requires the image to be above a certain size.
-        if any(not all(is_constant(s) for s in t.shape) for t in inputs if isinstance(t, hidet.Tensor)):
-            raise ValueError("hidet_backend: cannot print correctness report with dynamic=True")
-        dummy_inputs = []  # for correctness check
+        def wrapper(*args):
+            report, output = interpreter.forward_with_check(*args)
+            logger.info('finish checking correctness')
+            print(report)
+            return output
+
+        return wrapper
+    else:
+        logger.info('hidet:   inputs: ')
         for arg in inputs:
             if isinstance(arg, hidet.Tensor):
-                if data_type(arg.dtype).is_integer():
-                    dummy_input = hidet.zeros_like(arg)
-                else:
-                    dummy_input = hidet.randn_like(arg)
+                logger.info('hidet:   %s', arg.signature())
             else:
-                dummy_input = arg
-            dummy_inputs.append(dummy_input)
-        report: str = interpreter.forward_with_check(*dummy_inputs)
-        logger.info('finish checking correctness')
-        print(report)
+                logger.info('hidet:   %s', arg)
 
-    logger.info('hidet:   inputs: ')
-    for arg in inputs:
-        if isinstance(arg, hidet.Tensor):
-            logger.info('hidet:   %s', arg.signature())
-        else:
-            logger.info('hidet:   %s', arg)
+        # symbolic run to get flow graph
+        output = interpreter(*inputs)
+        output_format, output_tensors = serialize_output(output)
+        input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
+        flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
 
-    # symbolic run to get flow graph
-    output = interpreter(*inputs)
-    output_format, output_tensors = serialize_output(output)
-    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
-    input_tensor_indices = [i for (i, x) in enumerate(inputs) if isinstance(x, hidet.Tensor)]
-    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
+        executor = generate_executor(flow_graph)
 
-    executor = generate_executor(flow_graph)
+        def wrapper(*args: Tensor):
+            tensor_args = []
+            for param, arg in zip(inputs, args):
+                if isinstance(param, Tensor):
+                    tensor_args.append(arg)
+                elif isinstance(param, SymbolVar):
+                    dtype = param.type
+                    assert isinstance(dtype, DataType)
+                    if dtype.name == 'int32':
+                        from hidet.ffi import runtime_api
 
-    def wrapper(*args: Tensor):
-        args = [args[i] for i in input_tensor_indices]
-        outputs: Sequence[torch.Tensor] = executor(*args)
-        ret = deserialize_output(output_format, outputs)
-        return ret
+                        runtime_api.set_symbol_value(param.name, int(arg))
+                    else:
+                        raise ValueError(
+                            f'hidet_backend: unsupported symbolic dtype {dtype}. We only support int32 now.'
+                        )
+                else:
+                    # ignore constant
+                    pass
+            outputs: Sequence[torch.Tensor] = executor(*tensor_args)
+            ret = deserialize_output(output_format, outputs)
+            return ret
 
-    logger.info('finish generating the executor')
+        logger.info('finish generating the executor')
 
-    return wrapper
+        return wrapper

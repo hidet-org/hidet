@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
-# pylint: disable=useless-super-delegation
+# pylint: disable=useless-super-delegation, protected-access
 from __future__ import annotations
 from typing import Optional, Union, Sequence, Tuple, Dict, Type, Callable
 import string
@@ -815,6 +815,11 @@ def logical_not(a: Union[Expr, PyScalar]):
     return Expr._unary(LogicalNot, a)
 
 
+def bitwise_not(a: Union[Expr, PyScalar]):
+    a = convert(a)
+    return Expr._unary(BitwiseNot, a)
+
+
 def equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
     a = convert(a)
     b = convert(b)
@@ -963,6 +968,8 @@ def constant(value, const_type: Union[str, BaseType]) -> Constant:
 def symbol_var(name: str, dtype='int32') -> SymbolVar:
     dtype = data_type(dtype)
     if name not in SymbolVar.name2symbol:
+        if not name.isidentifier():
+            raise ValueError('Invalid symbol name "{}", must be a valid identifier'.format(name))
         SymbolVar.name2symbol[name] = SymbolVar(name, dtype)
     else:
         if SymbolVar.name2symbol[name].type != dtype:
