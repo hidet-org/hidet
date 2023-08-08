@@ -21,7 +21,7 @@ from hidet.ir.primitives.func import call_primitive_func
 @initialize()
 def register_primitive_functions():
     functions = [
-        ('avx_x86_int32x8_broadcast', '_mm256_set1_epi32', FuncType(['int32'], 'int32x8')),
+        ('avx_x86_int32x8_set1', '_mm256_set1_epi32', FuncType(['int32'], 'int32x8')),
         ('avx_x86_int32x8_bitwiseand', '_mm256_and_si256', FuncType(['int32x8', 'int32x8'], 'int32x8')),
         ('avx_x86_int32x8_leftshift_immediate', '_mm256_slli_epi32', FuncType(['int32x8', 'int8'], 'int32x8')),
         ('avx_x86_int32x8_greaterthan', '_mm256_cmpgt_epi32', FuncType(['int32x8', 'int32x8'], 'int32x8')),
@@ -34,6 +34,7 @@ def register_primitive_functions():
         ('avx_x86_float32x4_store', '_mm_storeu_ps', FuncType([PointerType('float32'), 'float32x4'], VoidType())),
         ('avx_x86_float32x4_setzero', '_mm_setzero_ps', FuncType([], 'float32x4')),
         ('avx_x86_float32x4_extract_last', '_mm_cvtss_f32', FuncType(['float32x4'], 'float32')),
+        ('avx_x86_float32x8_set1', '_mm256_set1_ps', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_broadcast', '_mm256_broadcast_ss', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_fmadd', '_mm256_fmadd_ps', FuncType(['float32x8', 'float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_load', '_mm256_loadu_ps', FuncType([PointerType('float32')], 'float32x8')),
@@ -135,8 +136,12 @@ def avx_f32x8_setzero() -> Call:
     return call_primitive_func('avx_x86_float32x8_setzero', [])
 
 
-def avx_i32x8_broadcast(a: int) -> Call:
-    return call_primitive_func('avx_x86_int32x8_broadcast', [a])
+def avx_i32x8_set1(a: int) -> Call:
+    return call_primitive_func('avx_x86_int32x8_set1', [a])
+
+
+def avx_f32x8_set1(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_set1', [a])
 
 
 def avx_i32x8_bitwiseand(a: Expr, b: Expr) -> Call:
