@@ -26,6 +26,7 @@ from hidet.lang.cuda import dynamic_shared_memory, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_dim
 from hidet.utils import prod
+from hidet.lang import float32
 
 
 class NormalizeTask(Task):
@@ -353,16 +354,16 @@ class NormalizeTask(Task):
         return ir_module
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        if self.dims[-1] != len(self.inputs[0].shape) - 1:  # not layernorm
+        if self.dims[-1] != len(self.inputs[0].shape) - 1 or self.inputs[0].type.dtype != float32:
             return NotImplemented
-        return tune.extract_ir_modules(self.schedule_layer_norm_cpu)
+        return tune.extract_ir_modules(self.schedule_norm_cpu)
 
     @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=['', 8, 16])
-    def schedule_layer_norm_cpu(self, nthreads='') -> IRModule:
+    def schedule_norm_cpu(self, nthreads='') -> IRModule:
         import hidet
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
-            avx_f32x8_add, avx_f32x8_broadcast, avx_f32x8_divide, avx_f32x8_multiply, avx_f32x8_find_sum, avx_f32x8_sqrt
+            avx_f32x8_add, avx_f32x8_set1, avx_f32x8_divide, avx_f32x8_multiply, avx_f32x8_find_sum, avx_f32x8_sqrt
         from hidet.ir.dtypes import float32
         from hidet.utils import prod
 
@@ -375,7 +376,7 @@ class NormalizeTask(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
+            def norm_cpu_kernel(x: float32[shape], out: float32[shape]):
                 para = "p" + str(nthreads)
                 for k in grid(head_size, attrs=para):
                     pre_tail_idx = spatial(*pre_tail).map(pre_tail_size) 
@@ -385,16 +386,14 @@ class NormalizeTask(Task):
                     
                     mean_vec = avx_f32x8_setzero()
                     M2_vec = avx_f32x8_setzero()
-                    eps = self.attrs['epsilon']
-                    epsilon_vec = avx_f32x8_broadcast(~eps)
+                    epsilon_vec = avx_f32x8_set1(self.attrs['epsilon'])
 
                     mean_combined = 0.0
                     M2_combined = 0.0
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
                             # welford algorithm
-                            i_float = cast(i + 1, float32)
-                            n_vec = avx_f32x8_broadcast(~i_float)
+                            n_vec = avx_f32x8_set1(cast(i + 1, float32))
                             data_vec = avx_f32x8_load(x + offset + i * 8)
                             delta = avx_f32x8_subtract(data_vec, mean_vec)
                             mean_vec = avx_f32x8_add(mean_vec, avx_f32x8_divide(delta, n_vec))
@@ -405,7 +404,7 @@ class NormalizeTask(Task):
                         # TODO: case for numerical stability? (number too high for large matrix)
                         # TODO: look at the cascade thing in pytorch github
                         mean_combined = avx_f32x8_find_sum(mean_vec) / 8
-                        mean_combined_vec = avx_f32x8_broadcast(~mean_combined)
+                        mean_combined_vec = avx_f32x8_set1(mean_combined)
                         delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
                         M2_combined = avx_f32x8_find_sum(M2_vec) + avx_f32x8_find_sum(avx_f32x8_multiply(delta_vec, delta_vec)) \
                             * (tail_size // 8)
@@ -422,8 +421,8 @@ class NormalizeTask(Task):
                     mean = (mean_combined * (tail_size - tail_size % 8) + mean_tail * (tail_size % 8)) / tail_size
                     var = (M2_combined + M2_tail + delta_end * delta_end * (tail_size - tail_size % 8) * (tail_size % 8)
                            / tail_size) / tail_size
-                    mean_vec = avx_f32x8_broadcast(~mean)
-                    var_vec = avx_f32x8_broadcast(~var)
+                    mean_vec = avx_f32x8_set1(mean)
+                    var_vec = avx_f32x8_set1(var)
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
                             # norm calculation
@@ -431,15 +430,14 @@ class NormalizeTask(Task):
                                             avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
                                                 avx_f32x8_sqrt(avx_f32x8_add(var_vec, epsilon_vec))))
-                            # TODO: rsqrt is fast but inaccurate to 1.5x2^(-12)
                     for i in range(tail_size % 8):
                         out[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] =\
                             (x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean) *\
                             prim.rsqrt(var + self.attrs['epsilon'])
 
-        layer_norm_cpu_kernel.kind = "cpu_kernel"
+        norm_cpu_kernel.kind = "cpu_kernel"
         avx_f32x8_find_sum.kind = "cpu_internal"
-        assert isinstance(layer_norm_cpu_kernel, hidet.ir.Function)
+        assert isinstance(norm_cpu_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
         return ir_module
 
