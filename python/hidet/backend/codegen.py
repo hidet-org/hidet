@@ -682,7 +682,6 @@ class CUDACodegen(Codegen):
 
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
-            doc += Text('#include <hidet/runtime/cpu/avx_helper.h>') + NewLine()
         if self.require_fp16:
             doc += Text('#include <cuda_fp16.h>') + NewLine()
         if self.require_bf16:
@@ -771,7 +770,6 @@ class CPUCodegen(Codegen):
         doc += Text('#include <math.h>') + NewLine()
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
-            doc += Text('#include <hidet/runtime/cpu/avx_helper.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()

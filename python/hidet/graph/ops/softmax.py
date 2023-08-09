@@ -168,10 +168,7 @@ class SoftmaxTask(Task):
     def schedule_softmax_cpu(self, nthreads='') -> IRModule:
         import hidet
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
-            avx_f32x8_add, avx_f32x8_max, avx_f32x8_set1, avx_f32x8_divide, avx_f32x8_to_i32x8,\
-            avx_i32x8_to_f32x8, avx_i32x8_set1, avx_i32x8_add, avx_i32x8_bitwiseand, avx_f32x8_fmadd,\
-            avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, avx_f32x8_find_sum, avx_f32x8_find_max
-        from hidet.ir.dtypes import float32x8
+            avx_f32x8_add, avx_f32x8_max, avx_f32x8_set1, avx_f32x8_divide, avx_f32x8_find_sum, avx_f32x8_find_max
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
         from hidet.lang import grid
@@ -187,7 +184,6 @@ class SoftmaxTask(Task):
         with hidet.script_module() as module:
             @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
-                # can pass shape = x.shape, float32[shape]
                 para = 'p' + str(nthreads)
                 for k in grid(head_size, attrs=para):
                     head_idx = spatial(*head).map(k)
@@ -243,11 +239,11 @@ class SoftmaxTask(Task):
                                 out[head_idx][tail_size - tail_size % 8 + i] / sum_value
                     else:  # not last dim
                         offset = k * tail_size * axis_size
+                        # vectorized operations across all contiguous memory for relevant axis
                         for g in range(tail_size // 8):
                             tail_offset = g * 8
-                            # TODO: problem is that the avx is going consecutive but needs to skip rows
                             max_vec = avx_f32x8_load(x + offset + tail_offset)
-                            for i in range(axis_size):  # softmax over this guy
+                            for i in range(axis_size):
                                 data_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)
                                 max_vec = avx_f32x8_max(max_vec, data_vec)
                             sum_exp_vec = avx_f32x8_setzero()
@@ -265,6 +261,7 @@ class SoftmaxTask(Task):
                                 avx_f32x8_store(out + offset + tail_offset + tail_size * i,
                                                 avx_f32x8_divide(avx_f32x8_load(out + offset + tail_offset + tail_size * i),
                                                                  sum_exp_vec))
+                        # unvectorized operations for the remaining elements
                         max_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[tail_size % 8])
                         for j in range(tail_size % 8):
                             max_arr[j] = 0.0
@@ -286,9 +283,6 @@ class SoftmaxTask(Task):
                                 out[head_idx][p][last_idx] = out[head_idx][p][last_idx] / sum_exp_arr[j]
 
             softmax_cpu_kernel.kind = "cpu_kernel"
-            # avx_exp.kind = "cpu_internal"
-            # avx_poly_eval_7.kind = "cpu_internal"
             assert isinstance(softmax_cpu_kernel, hidet.ir.Function)
             ir_module = module.ir_module()
             return ir_module
-        
