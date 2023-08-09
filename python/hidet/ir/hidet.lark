@@ -1,0 +1,53 @@
+
+module : "module" IDENT "{" [(attribute | function)]* "}"
+
+function : "def" fn_name "(" fn_args ")" "->" fn_return_type "{" [attribute]* "}"
+
+fn_name : IDENT
+fn_args : [type_annotation ("," type_annotation)*]
+fn_return_type : type
+
+type_annotation : IDENT ":" type
+
+// expressions
+expr : unary_op
+
+!_unary_op : "-" | "!"
+!_arith_binop : "+" | "-" | "*" | "/" | "//" | "%" | "**"
+!_bitwise_binop : "&" | "|" | "^" | "<<" | ">>"
+!_comparison_binop : "<" | ">" | "<=" | ">=" | "==" | "!="
+!_logical_binop : "&&" | "||"
+
+
+// Types
+?type : data_type | tensor_type | ptr_type
+
+ptr_type : "~" type
+tensor_type : data_type "<" [SIGNED_NUMBER ("," SIGNED_NUMBER)*] ";" [attribute_name] ">"
+!data_type : "i1"  | "i8" | "i16" | "i32" | "i64" | "u1" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
+
+// attributes
+attribute_name : "#" IDENT
+attribute : attribute_name "=" dict ";"
+
+// python objects (or constants)
+?value: dict
+        | list
+        | tuple
+        | string
+        | SIGNED_NUMBER      -> number
+        | "true"             -> true
+        | "false"            -> false
+        | "null"             -> null
+
+pair : string ":" value
+dict : "{" [pair ("," pair)*] "}"
+list : "[" [value ("," value)*] "]"
+tuple : "(" [value ("," value)*] ")"
+string : ESCAPED_STRING
+
+IDENT : /[^\W\d]\w*/
+%import common.ESCAPED_STRING
+%import common.SIGNED_NUMBER
+%import common.WS
+%ignore WS
