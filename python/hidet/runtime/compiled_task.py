@@ -31,6 +31,7 @@ class TensorSignature:
 
 @dataclass
 class TaskMetaData:
+    name: str
     symbols: List[str]
     inputs: List[TensorSignature]
     outputs: List[TensorSignature]

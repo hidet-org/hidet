@@ -1,10 +1,21 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from typing import List
 
 import hidet
 from hidet.ir.type import DataType, TensorType, tensor_type, tensor_pointer_type
 from hidet.ir.dtypes import vectorize, i32
 from hidet.ir.expr import Expr, is_true
-from hidet.ir.layout import row_major, data_layout, local_layout
+from hidet.ir.layout import row_major, strided_layout, local_layout
 from hidet.ir.library import tune
 from hidet.ir.library.utils import get_tensor_type
 from hidet.ir.primitives.runtime import request_cuda_workspace
@@ -157,8 +168,8 @@ def matmul_simt(
     # prepare data layout
     tune.check(block_k % lanes == 0)
     block_k_vectors = block_k // lanes
-    smem_a_layout = data_layout([2, block_k_vectors, block_m + 1])
-    smem_b_layout = data_layout([2, block_k_vectors, block_n + 1])
+    smem_a_layout = strided_layout([2, block_k_vectors, block_m + 1])
+    smem_b_layout = strided_layout([2, block_k_vectors, block_n + 1])
     regs_a_layout = (  # 2 x block_m
         row_major(2, 1)
         .local(1, block_warps[0])

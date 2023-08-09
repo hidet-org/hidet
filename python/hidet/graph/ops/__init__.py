@@ -13,15 +13,8 @@
 from .matmul import batch_matmul, matmul, matmul_x86
 from .conv1d import conv1d, conv1d_gemm
 from .conv1d_transpose import conv1d_transpose
-from .conv2d import (
-    conv2d,
-    conv2d_channel_last,
-    conv2d_winograd,
-    conv2d_gemm,
-    conv2d_gemm_fp16,
-    conv2d_gemm_fp16_channel_last,
-    conv2d_gemm_image_transform,
-)
+from .conv2d import conv2d, conv2d_channel_last, conv2d_winograd, conv2d_gemm, conv2d_gemm_fp16
+from .conv2d import conv2d_gemm_fp16_channel_last, conv2d_gemm_image_transform
 from .conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 from .conv3d import conv3d, conv3d_gemm
 from .conv3d_transpose import conv3d_transpose
@@ -38,7 +31,7 @@ from .arithmetic import add, subtract, multiply, divide, mod, remainder, negativ
 from .arithmetic import floor, ceil, round, trunc, sqrt, rsqrt, pow, abs
 from .arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
 from .arithmetic import bitwise_right_shift, bitwise_left_shift, bitwise_and, bitwise_invert, bitwise_or
-from .arithmetic import bitwise_xor, maximum, minimum
+from .arithmetic import bitwise_xor, maximum, minimum, clamp
 from .arithmetic import isfinite, isinf, isnan, sign, where
 from .arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, atan2
 from .complex import real, imag, conj, make_complex

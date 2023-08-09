@@ -255,3 +255,13 @@ def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
 @register_method(torch.Tensor.detach)
 def tensor_detach(self: Tensor) -> Tensor:
     return self
+
+
+@register_method(torch.Tensor.any)
+def tensor_any(self: Tensor, dim=None, keepdim=False) -> Tensor:
+    return ops.any(self, axis=dim, keepdims=keepdim)
+
+
+@register_method(torch.Tensor.all)
+def tensor_all(self: Tensor, dim=None, keepdim=False) -> Tensor:
+    return ops.all(self, axis=dim, keepdims=keepdim)
