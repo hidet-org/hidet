@@ -1,30 +1,114 @@
 
-module : "module" IDENT "{" [(attribute | function)]* "}"
+// statements
+top_level : [(attribute | module)]*
 
-function : "def" fn_name "(" fn_args ")" "->" fn_return_type "{" [attribute]* "}"
+module : "module" [IDENT] [attribute_name] "{" [(attribute | function | declare_stmt)]* "}"
+
+function : "def" fn_name "(" fn_args ")" "->" fn_return_type [attribute_name] "{" fn_body "}"
 
 fn_name : IDENT
 fn_args : [type_annotation ("," type_annotation)*]
 fn_return_type : type
-
 type_annotation : IDENT ":" type
 
+fn_body : [(attribute | stmt)]*
+
+?stmt : declare_stmt
+        | buffer_store_stmt
+        | assign_stmt
+        | return_stmt
+        | let_stmt
+        | for_stmt
+        | while_stmt
+        | break_stmt
+        | continue_stmt
+        | if_stmt
+        | assert_stmt
+        | black_box_stmt
+        | asm_stmt
+
+declare_stmt : "decl" type_annotation ["=" expr] ";"
+buffer_store_stmt : get_item_expr "=" expr ";"
+assign_stmt : IDENT "=" expr ";"
+return_stmt : "return" expr ";"
+let_stmt : "let" "(" type_annotation "=" expr ")" ["in" "(" stmt* ")"] ";"
+for_stmt : "for" (IDENT | "(" IDENT ["," IDENT]* ")") "in" mapping [attribute_name] "{" stmt* "}"
+while_stmt : "while" expr "{" stmt* "}"
+break_stmt : "break" ";"
+continue_stmt : "continue" ";"
+if_stmt : "if" expr "{" stmt* "}" ["else" "{" stmt* "}"]
+assert_stmt : "assert" "(" expr ")" ";"
+black_box_stmt : "blackbox" "{" string "}" ";"
+asm_stmt : ["volatile"] "asm" "{" "{" string "}" "{" [IDENT ("," IDENT)*] "}" "{" [IDENT ("," IDENT)*] "}" "}" ";"
+
+
+// mappings
+mapping : spatial_mapping | repeat_mapping | composed_mapping
+spatial_mapping : "@spatial" "(" "shape" "=" int_list "," "ranks" "=" int_list ")"
+repeat_mapping : "@repeat" "(" "shape" "=" int_list "," "ranks" "=" int_list ["," attribute_name]")"
+composed_mapping : "@compose" "(" mapping "," mapping ")"
+int_list : "[" SIGNED_NUMBER ("," SIGNED_NUMBER)* "]"
+
 // expressions
-expr : unary_op
+expr : short_circuit_or_expr
 
-!_unary_op : "-" | "!"
-!_arith_binop : "+" | "-" | "*" | "/" | "%" | "**"
-!_bitwise_binop : "&" | "|" | "^" | "<<" | ">>"
-!_comparison_binop : "<" | ">" | "<=" | ">=" | "==" | "!="
-!_logical_binop : "&&" | "||"
+?short_circuit_or_expr : short_circuit_and_expr ("||" short_circuit_and_expr)*
+?short_circuit_and_expr : not_expr ("&&" not_expr)*
+?comp_expr : not_expr (comp_op not_expr)*
+?not_expr : "!" or_expr | or_expr
+?or_expr: xor_expr ("|" xor_expr)*
+?xor_expr: and_expr ("^" and_expr)*
+?and_expr: shift_expr ("&" shift_expr)*
+?shift_expr: arith_expr (_shift_op arith_expr)*
+?arith_expr: term (_add_op term)*
+?term: factor (_mul_op factor)*
+?factor: _unary_op factor | power
+?power: fn_call_expr ("**" factor)?
 
+!_unary_op: "+"|"-"
+!_add_op: "+"|"-"
+!_shift_op: "<<"|">>"
+!_mul_op: "*"|"/"|"%"
+!comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
+
+?fn_call_expr : tensor_slice_expr 
+        | get_item_expr 
+        | call_expr 
+        | cast_expr 
+        | deref_expr 
+        | addr_expr 
+        | let_expr 
+        | if_then_else_expr 
+        | atom
+
+tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
+slice : [expr] ":" [expr]
+get_item_expr : expr "[" [expr ("," expr)*] "]"
+call_expr : expr "(" [expr ("," expr)*] ")"
+cast_expr : "cast" "<" type ">" "(" expr ")"
+deref_expr : "deref" "(" expr ")"
+addr_expr : "addr" "(" expr ")"
+
+let_expr : "let" "(" type_annotation "=" expr ")" "in" "(" expr ")"
+if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
+
+?atom : "(" expr ")"
+        | get_attr
+        | "true" -> true
+        | "false" -> false
+        | "null" -> null
+        | IDENT -> var
+        | SIGNED_NUMBER -> number
+        | string -> string
+
+get_attr : expr "." IDENT
 
 // Types
 ?type : data_type | tensor_type | ptr_type
 
 ptr_type : "~" type
-tensor_type : data_type "<" [SIGNED_NUMBER ("," SIGNED_NUMBER)*] ";" [attribute_name] ">"
-!data_type : "i1"  | "i8" | "i16" | "i32" | "i64" | "u1" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
+tensor_type : data_type "<" [SIGNED_NUMBER ("," SIGNED_NUMBER)*] [";" attribute_name] ">"
+!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
 
 // attributes
 attribute_name : "#" IDENT

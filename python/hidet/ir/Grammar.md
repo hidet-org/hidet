@@ -62,7 +62,7 @@ BreakStmt := `break` `;`
 ContinueStmt := `continue` `;`
 IfStmt := `if` Expr `{` Stmt* `}` ( `else` `{` Stmt* `}` | $\epsilon$ )
 AssertStmt := `assert` Expr `;`
-BlackBoxStmt := `BlackBox` `{` STRING `}`
+BlackBoxStmt := `BlackBox` `{` STRING `}` `;`
 AsmStmt := ( `volatile` | $\epsilon$ ) `asm` `{` `{` STRING `}` `{` IDENT (`,` IDENT) `}` `{` IDENT (`,` IDENT) `}` `}`
 
 
@@ -88,8 +88,7 @@ ShiftOp := `<<` | `>>`
 MulOP := `*` | `/` | `%`
 CompOp := `<` | `>` | `==` | `>=` | `<=` | `!=`
 
-FnCall := Atom
-		| Slice
+FnCall := Slice
 		| TensorSlice
 		| GetItem
 		| Call
@@ -97,6 +96,7 @@ FnCall := Atom
 		| Dereference
 		| Address
 		| Reference
+		| Atom
 
 GetItem := Expr `[` Expr `]`
 Slice := ( Expr | $\epsilon$ ) `:` ( Expr | $\epsilon$ )
