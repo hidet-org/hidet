@@ -348,6 +348,7 @@ class Tensor:
             if not item.dtype.is_integer():
                 raise TypeError("Tensor indexing via Tensor requires integer index tensor")
             from .ops import take
+
             return take(self, item, axis=0)
 
         if isinstance(item, list):

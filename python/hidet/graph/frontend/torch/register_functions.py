@@ -20,7 +20,7 @@ from hidet.utils import same_list
 from hidet.ir.type import DataType
 from hidet.ir import expr
 from hidet.ir.dtypes import promote_type
-from hidet.ir.expr import Expr, Int, Constant, is_constant
+from hidet.ir.expr import Expr, Int, is_constant
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
@@ -95,9 +95,11 @@ def conv3d_transpose(
 def adaptive_avg_pool2d(x: Tensor, output_size):
     return ops.adaptive_avg_pool2d(x, output_size)
 
+
 @register_function(torch.nn.functional.adaptive_avg_pool3d)
 def adaptive_avg_pool3d(x: Tensor, output_size):
     return ops.adaptive_avg_pool3d(x, output_size)
+
 
 @register_function(torch.nn.functional.relu)
 def relu(x: Tensor, inplace: bool):
@@ -233,6 +235,7 @@ def flatten(x: Tensor, start_dim: int, end_dim: int = -1):
 def getitem(x: Tensor, index):
     return x[index]
 
+
 @register_function(operator.setitem)
 def setitem(x: Tensor, item, setvalue):
 
@@ -268,9 +271,7 @@ def setitem(x: Tensor, item, setvalue):
             if v < 0:
                 v = v + x.shape[i]
             if is_constant(v, x.shape[i]) and (v < 0 or v >= x.shape[i]):
-                raise IndexError(
-                    'index {} is out of bound for dimension {} with size {}'.format(v, i, x.shape[i])
-                )
+                raise IndexError('index {} is out of bound for dimension {} with size {}'.format(v, i, x.shape[i]))
             normalized_item.append(v)
         elif v is not None:
             # None affects getitem, but is ignored in setitem
@@ -1010,6 +1011,7 @@ def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
 def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     if isinstance(a, Tensor) or isinstance(b, Tensor):
         from hidet.graph.ops.utils import convert_to_tensor
+
         if isinstance(a, Tensor):
             return ops.equal(a, convert_to_tensor(b, a))
         else:
@@ -1188,11 +1190,12 @@ def clamp(
 def isinf(x: Tensor) -> Tensor:
     return ops.isinf(x)
 @register_function(torch.nn.functional.pad)
-def pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
+def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
     if isinstance(pad, tuple):
         pad = list(pad)
     return ops.pad(x, pads=pad, mode=mode, value=value)
 
+
 @register_function(torch.roll)
-def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
+def torch_roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
     return ops.roll(x, shifts, dims)

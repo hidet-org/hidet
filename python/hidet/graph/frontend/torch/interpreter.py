@@ -360,6 +360,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = exec_func(*hidet_args, **hidet_kwargs)
                     from .register_functions import setitem
+
                     if exec_func.functions[0] is setitem:
                         hidet_env[str(node.args[0])] = hidet_env[node.name]
                 except Exception as e:
@@ -452,6 +453,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                     from .register_functions import setitem
+
                     if hidet_func.functions[0] is setitem:
                         hidet_env[str(node.args[0])] = hidet_env[node.name]
                 except Exception as e:

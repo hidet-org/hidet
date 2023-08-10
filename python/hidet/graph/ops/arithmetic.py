@@ -15,14 +15,13 @@ from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 from hidet.ir import primitives
 from hidet.ir import Var, expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Expr, Var, if_then_else, logical_or
+from hidet.ir.expr import Expr, Var, if_then_else, logical_or, is_constant
 from hidet.ir.tools import rewrite
 from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from .utils import normalize_slice, normalize_dim
-from hidet.ir.expr import is_constant
 
 PyScalar = Union[int, float, bool]
 
@@ -190,6 +189,7 @@ class WhereTask(Task):
             },
         )
 
+
 class SetStridedSliceTask(Task):
     def __init__(
         self,
@@ -222,34 +222,45 @@ class SetStridedSliceTask(Task):
             ret = data.type.dtype(setvalue)
             for axis, index in enumerate(indices):
                 start, end, stride = axis2info[axis]
-                ret = if_then_else(logical_or(index < start, index >= end, (index - start) % stride != 0), data[indices], ret)
+                ret = if_then_else(
+                    logical_or(index < start, index >= end, (index - start) % stride != 0), data[indices], ret
+                )
             return ret
 
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
         super().__init__(name='set_slice', inputs=[data], outputs=[out])
 
+
 class RollTask(Task):
-    def __init__(
-        self, x: TensorNode, shifts: Sequence[int], dims: Sequence[int]
-    ):
+    def __init__(self, x: TensorNode, shifts: Sequence[int], dims: Sequence[int]):
         output_shape = list(x.shape)
+
         def fmap(indices):
             data_indices = []
             for axis, index in enumerate(indices):
                 if axis in dims:
                     i = dims.index(axis)
                     if shifts[i] > 0:
-                        data_indices.append(if_then_else(
-                            index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]))
+                        data_indices.append(
+                            if_then_else(
+                                index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]
+                            )
+                        )
                     else:
-                        data_indices.append(if_then_else(
-                            index - shifts[i] < output_shape[axis], index - shifts[i], index - output_shape[axis] - shifts[i]))
+                        data_indices.append(
+                            if_then_else(
+                                index - shifts[i] < output_shape[axis],
+                                index - shifts[i],
+                                index - output_shape[axis] - shifts[i],
+                            )
+                        )
                 else:
                     data_indices.append(index)
             return x[data_indices]
 
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
         super().__init__(name='roll', inputs=[x], outputs=[out])
+
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
@@ -688,6 +699,7 @@ class MinOp(Operator):
             ),
         )
 
+
 class SetStridedSliceOp(Operator):
     def __init__(
         self,
@@ -700,19 +712,18 @@ class SetStridedSliceOp(Operator):
         starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes=None, strides=strides)
         task = SetStridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides, setvalue)
         super().__init__(
-            inputs=[data], attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue}, task=task
+            inputs=[data],
+            attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue},
+            task=task,
         )
 
+
 class RollOp(Operator):
-    def __init__(
-        self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]
-    ) -> Tensor:
+    def __init__(self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]) -> Tensor:
         if not len(shifts) == len(dims):
             raise ValueError('Roll must have same size shifts and dims, got {} and {}'.format(len(shifts), len(dims)))
         task = RollTask(input_like(x, 'x'), shifts, dims)
-        super().__init__(
-            inputs=[x], attributes={'shifts': shifts, 'dims': dims}, task=task
-        )
+        super().__init__(inputs=[x], attributes={'shifts': shifts, 'dims': dims}, task=task)
 
 
 Scalar = Union[Expr, float, int, complex]
@@ -1034,6 +1045,7 @@ def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     max_val = maximum(x, y)
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
 
+
 def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None) -> Tensor:
     if isinstance(shifts, int):
         shifts = [shifts]
@@ -1041,6 +1053,7 @@ def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence
         dims = [dims]
     if dims is None:
         from .transform import flatten, reshape
+
         shape = x.shape
         return reshape(RollOp(flatten(x), shifts, dims=[0]).outputs[0], shape)
     dims = normalize_dim(dims, len(x.shape))

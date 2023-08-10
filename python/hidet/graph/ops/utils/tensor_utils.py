@@ -160,6 +160,7 @@ def convert_to_tensor(value: Union[int, float, bool, complex, Tensor], involved_
     else:
         raise ValueError('Can not recognize dtype {}'.format(involved_tensor.dtype))
 
+
 def normalize_slice(data_shape, starts, ends, axes: Optional[List[int]], strides: Optional[List[Optional[int]]]):
     # follow: https://data-apis.org/array-api/latest/API_specification/indexing.html
     if axes is None:

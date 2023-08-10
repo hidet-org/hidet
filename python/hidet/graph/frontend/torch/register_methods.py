@@ -271,6 +271,7 @@ def tensor_detach(self: Tensor, other: Tensor) -> Tensor:
 def tensor_matmul(self: Tensor, other: Tensor) -> Tensor:
     return ops.matmul(self, other)
 
+
 @register_method(torch.Tensor.new_zeros)
 def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
     if layout is not None:
