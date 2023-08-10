@@ -2,7 +2,7 @@
 import sys
 from lark import Lark, Transformer
 
-
+# %%
 with open('hidet/python/hidet/ir/hidet.lark') as f:
     hidet_grammar = f.read()
 
@@ -15,7 +15,31 @@ with open('test.txt') as f:
 # %%
 
 grammar = """
-    expr: expr "+" expr | SIGNED_NUMBER
+    expr: or_expr
+    
+    ?or_expr: xor_expr ("|" xor_expr)*
+    ?xor_expr: and_expr ("^" and_expr)*
+    ?and_expr: shift_expr ("&" shift_expr)*
+    ?shift_expr: arith_expr (_shift_op arith_expr)*
+    ?arith_expr: term (_add_op term)*
+    ?term: factor (_mul_op factor)*
+    ?factor: _unary_op factor | power
+    ?power: atom ("**" factor)?
+
+    ?atom: "(" expr ")" 
+        | "True"    -> const_true
+        | "False"   -> const_false
+        | SIGNED_NUMBER -> number
+        | IDENT -> ident
+
+    !_unary_op: "+"|"-"
+    !_add_op: "+"|"-"
+    !_shift_op: "<<"|">>"
+    !_mul_op: "*"|"/"|"%"
+    !comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
+
+    IDENT : /[^\W\d]\w*/
+
     %import common.SIGNED_NUMBER
     %import common.WS
     %ignore WS
@@ -23,5 +47,7 @@ grammar = """
 
 parser = Lark(grammar, start="expr")
 
-tree = parser.parse("42 + 3 + 4")
+tree = parser.parse("(42 + 3) * 4")
 print(tree.pretty())
+# %%
+ 

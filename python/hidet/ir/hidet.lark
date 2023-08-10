@@ -13,7 +13,7 @@ type_annotation : IDENT ":" type
 expr : unary_op
 
 !_unary_op : "-" | "!"
-!_arith_binop : "+" | "-" | "*" | "/" | "//" | "%" | "**"
+!_arith_binop : "+" | "-" | "*" | "/" | "%" | "**"
 !_bitwise_binop : "&" | "|" | "^" | "<<" | ">>"
 !_comparison_binop : "<" | ">" | "<=" | ">=" | "==" | "!="
 !_logical_binop : "&&" | "||"
