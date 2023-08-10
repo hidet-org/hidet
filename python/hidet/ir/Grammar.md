@@ -66,36 +66,55 @@ BlackBoxStmt := `BlackBox` `{` STRING `}`
 AsmStmt := ( `volatile` | $\epsilon$ ) `asm` `{` `{` STRING `}` `{` IDENT (`,` IDENT) `}` `{` IDENT (`,` IDENT) `}` `}`
 
 
-BinaryOp := `+` | `*` | `-` | `/` | `%` | `**` | `^` | `<<` | `>>` | `||` | `&&` | `==` | `!=` | `<` | `>` | `<=` | `>=`
-UnaryOp := `-` | `!` 
-Expr := `(` Expr BinaryOp Expr `)`
-		| `(` UnaryOp Expr `)`
-		| GetItem
+Expr := CompExpr | Let | IfThenElse
+
+Let := `let` `(` IDENT `:` Type `=` Expr `)` `in` `(` Expr `)`
+IfThenElse := `if` Expr `then` `{` Expr `}` `else` `{` Expr `}`
+
+CompExpr := NotExpr (CompOp NotExpr)\*
+NotExpr := OrExpr (`!` OrExpr)\*
+OrExpr := XorExpr (`|` XorExpr)\*
+XorExpr := AndExpr ( `^` AndExpr)\*
+AndExpr := ShiftExpr (`&` ShiftExpr)\*
+ShiftExpr := ArithExpr (ShiftOp ArithExpr)\*
+ArithExpr := Term (AddOp Term)\*
+Term := Factor (MulOp Factor)\*
+Factor := UnaryOp Factor | Power
+Power := FnCall (`**` Factor)\*
+
+UnaryOp := `+` | `-`
+AddOp := `+` | `-`
+ShiftOp := `<<` | `>>`
+MulOP := `*` | `/` | `%`
+CompOp := `<` | `>` | `==` | `>=` | `<=` | `!=`
+
+FnCall := Atom
+		| Slice
 		| TensorSlice
+		| GetItem
 		| Call
-		| Let
 		| Cast
-		| Constant
-		| IfThenElse
 		| Dereference
 		| Address
 		| Reference
-		| IDENT
 
 GetItem := Expr `[` Expr `]`
 Slice := ( Expr | $\epsilon$ ) `:` ( Expr | $\epsilon$ )
 TensorSlice := Expr `[` Slice (`,` Slice)\* `]`
 Call := IDENT `(` ( Expr | $\epsilon$ ) (`,` Expr)\* `)`
-Let := `let` `(` IDENT `:` Type `=` Expr `)` `in` `(` Expr `)`
-Cast := IDENT `as` Type
-Constant := BOOl | INT | FLOAT
-IfThenElse := `if` Expr `then` `{` Expr `}` `else` `{` Expr `}`
-Dereference := `deref` Expr
-Address := `addr` Expr
-Reference := `ref` Expr
+Cast := `cast` `(` Expr  `,` Type `)`
+Dereference := `deref` `(` Expr `)`
+Address := `addr` `(` Expr `)`
+Reference := `ref` `(` Expr `)`
+
+Atom := `(` Expr `)`
+	| BOOL
+	| NUMBER
+	| STRING
+	| IDENT
+
 
 Mapping := SpatialTaskMapping | RepeatTaskMapping | ComposedTaskMapping
 SpatialTaskMapping := `@spatial` `(` `shape` `=` `[` INT (`,` INT)\* `]` `,` `ranks` `=` `[` INT (`,` INT)\* `]` `)`
 RepeatTaskMapping := `@repeat` `(` `shape` `=` `[` INT (`,` INT)\* `]` `,` `ranks` `=` `[` INT (`,` INT)\* `]` (`,` AttributeName | $\epsilon$ ) `)`
 ComposedTaskMapping := `@compose` `(` Mapping `,` Mapping `)`
-
