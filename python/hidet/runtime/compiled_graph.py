@@ -95,7 +95,6 @@ class CompiledGraph:
         # derived properties (will be initialized in _init_compiled_graph at the end of this constructor)
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
         self.is_dynamic: bool = False
-        self.constant_outputs: List[Union[None, Tensor]] = []
 
         # runtime state
         self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
@@ -145,11 +144,6 @@ class CompiledGraph:
             self.is_dynamic = True
         else:
             self.is_dynamic = False
-        for out_idx in self.graph_execution.outputs_index:
-            if out_idx in self.graph_execution.weights_index:
-                self.constant_outputs.append(self.weights[self.graph_execution.weights_index.index(out_idx)])
-            else:
-                self.constant_outputs.append(None)
 
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
@@ -209,13 +203,15 @@ class CompiledGraph:
             runtime_api.set_symbol_value(name, symbol_dims[-1])
         return tuple(symbol_dims)
 
-    def _create_outputs(self):
+    def _create_outputs(self, inputs):
         from hidet.graph.tensor import empty
 
         outputs = []
-        for output_index, (sig, const_out) in enumerate(zip(self.meta.outputs, self.constant_outputs)):
-            if const_out is not None:
-                outputs.append(const_out)
+        for output_index, (exec_idx, sig) in enumerate(zip(self.graph_execution.outputs_index, self.meta.outputs)):
+            if exec_idx in self.graph_execution.inputs_index:
+                outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
+            elif exec_idx in self.graph_execution.weights_index:
+                outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
             else:
                 if self.is_dynamic:
                     shape_buffer = Array(i32, len(sig.shape))
@@ -240,7 +236,7 @@ class CompiledGraph:
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...]):
         # create output tensors
-        outputs = self._create_outputs()
+        outputs = self._create_outputs(inputs)
 
         # prepare workspace
         self._prepare_workspace()
