@@ -96,7 +96,6 @@ FnCall := Atom
 		| Cast
 		| Dereference
 		| Address
-		| Reference
 
 GetItem := Expr `[` Expr `]`
 Slice := ( Expr | $\epsilon$ ) `:` ( Expr | $\epsilon$ )
@@ -105,7 +104,6 @@ Call := IDENT `(` ( Expr | $\epsilon$ ) (`,` Expr)\* `)`
 Cast := `cast` `(` Expr  `,` Type `)`
 Dereference := `deref` `(` Expr `)`
 Address := `addr` `(` Expr `)`
-Reference := `ref` `(` Expr `)`
 
 Atom := `(` Expr `)`
 	| BOOL
