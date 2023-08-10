@@ -20,10 +20,10 @@ $\epsilon$ : Null
 
 ## Grammar
 Value := STRING | INT | FLOAT | Dict | List | Tuple
-Pair := STRING `:` Value
+DictItem := STRING `:` Value
 Tuple := `(` ( Value | $\epsilon$ ) (`,` Value)\* `)`
 List := `[` ( Value | $\epsilon$ ) (`,` Value)\* `]`
-Dict := `{` ( Pair | $\epsilon$ ) (`,` Pair)\* `}`
+Dict := `{` ( DictItem | $\epsilon$ ) (`,` DictItem)\* `}`
 
 AttributeName := `#` IDENT
 Attribute := AttributeName `=` Dict `;`
@@ -35,7 +35,7 @@ TensorPtrType := `~`TensorType
 Type := DataType | PtrType | TensorType | TensorPtrType
 
 Module := `{` ( Function | Attribute )\* `}` 
-Function := `def` IDENT `(` ( Arg`:` Type | $\epsilon$ ) (`,` Arg`:` Type)\*` )` `->` Type `{` Stmt* `}`
+Function := `def` IDENT `(` ( Arg`:` Type | $\epsilon$ ) (`,` Arg`:` Type)\* `)` `->` Type `{` Stmt* `}`
 Stmt := CoreStmt ( AttributeName `;` | $\epsilon$ )
 CoreStmt := DeclareStmt 
 		| BufferStoreStmt 
@@ -63,10 +63,10 @@ ContinueStmt := `continue` `;`
 IfStmt := `if` Expr `{` Stmt* `}` ( `else` `{` Stmt* `}` | $\epsilon$ )
 AssertStmt := `assert` Expr `;`
 BlackBoxStmt := `BlackBox` `{` STRING `}`
-AsmStmt := ( `volatile` | $\epsilon$ ) `asm` `{ in {` IDENT (`,` IDENT) `}` `out` `{` IDENT (`,` IDENT) `}` `{` STRING `}` `}`
+AsmStmt := ( `volatile` | $\epsilon$ ) `asm` `{` `{` STRING `}` `{` IDENT (`,` IDENT) `}` `{` IDENT (`,` IDENT) `}` `}`
 
 
-BinaryOp := `+` | `*` | `-` | `/` | `//` | `%` | `**` | `^` | `<<` | `>>` | `||` | `&&` | `==` | `!=` | `<` | `>` | `<=` | `>=`
+BinaryOp := `+` | `*` | `-` | `/` | `%` | `**` | `^` | `<<` | `>>` | `||` | `&&` | `==` | `!=` | `<` | `>` | `<=` | `>=`
 UnaryOp := `-` | `!` 
 Expr := `(` Expr BinaryOp Expr `)`
 		| `(` UnaryOp Expr `)`
