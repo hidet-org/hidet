@@ -15,9 +15,8 @@ from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 from hidet.ir import primitives
 from hidet.ir import Var, expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Expr, Var, if_then_else, logical_or, is_constant
+from hidet.ir.expr import Expr, if_then_else, logical_or, is_constant, is_true
 from hidet.ir.tools import rewrite
-from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
