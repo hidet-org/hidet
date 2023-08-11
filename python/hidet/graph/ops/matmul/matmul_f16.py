@@ -1,3 +1,4 @@
+# %%
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -366,3 +367,41 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return MatmulF16Op(a, b, parallel_k_parts).outputs[0]
+
+# %%
+
+if __name__ == '__main__':
+    import hidet
+    from hidet.ir.type import tensor_type
+    from hidet.lang import attrs, f16, tensor_pointer
+    from hidet.lang.layout import row_major
+    from hidet.lang.cuda import dynamic_shared_memory, threadIdx
+
+    asym = hidet.symbol_var('a', 'int32')
+    test_layout = row_major(64, asym)
+
+    smem_a_type = tensor_type(
+            'float16', shape=[64, asym], layout=test_layout
+        )
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def test_fn(a: smem_a_type):
+            a[threadIdx.x, threadIdx.y] += 1
+        
+        @hidet.script
+        def main(a: ~f16):
+            attrs.cuda.grid_dim = 1
+            attrs.cuda.block_dim = 32
+            # the second 2 means '2 bytes per float16'
+            attrs.cuda.dynamic_smem_bytes = 64 * asym
+            smem_a = tensor_pointer(
+                'float16', shape=[64, asym], layout=test_layout
+            )
+            smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
+            test_fn(smem_a)
+
+    ir_module = module.ir_module()
+    # print(ir_module)
+    tst = ir_module.build()
+    tst.functions

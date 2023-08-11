@@ -99,14 +99,43 @@ class IRPrinter(IRFunctor):
     
     def format_attr_name(self, name: str) -> str:
         return f"#{name}"
+    
+    def get_unique_attr_name(self, name: str) -> str:
+        i = 1
+        while name + str(i) in self.attr_table:
+            i += 1
+        return name + str(i)
+
+    def add_attr_if_needed(self, name: str, d: Dict) -> Tuple[str, Optional[str]]:
+        """
+        Each attribute name references to a unique attribute somewhere higher.
+        If the name does not exist yet, the create a new attribute,
+        if the name exists and the attributes are not equal, create a new attribute with a new name.
+        If the name exists and the attributes are equal, just refer to the existing attribute.
+        """
+        if name not in self.attr_table:
+            return self.format_attr_name(name), self.format_attr_dict(name, d)
+        else:
+            if self.attr_table[name] == d:
+                return self.format_attr_name(name), None
+            else:
+                new_name = self.get_unique_attr_name(name)
+                return self.format_attr_name(new_name), self.format_attr_dict(new_name, d)
 
     def visit_Function(self, func: Function):
         self.namer.clear()
 
         # parameters
-        fn_attrs = f'{func.name}_attrs'
+        fn_attrs = f'{func.name}'
+        if len(func.attrs) > 0:
+            fn_attr_name, fn_attr_doc = self.add_attr_if_needed(fn_attrs, func.attrs)
+        else:
+            fn_attr_name = ''
+            fn_attr_doc = None
+
         head_doc = Doc()
-        head_doc += self.format_attr_dict(fn_attrs, func.attrs) + NewLine()
+        if fn_attr_doc is not None:
+            head_doc += fn_attr_doc + NewLine()
         head_doc += Text('def ') + func.name + '('
         for i, param in enumerate(func.params):
             head_doc += (NewLine() + self(param) + ': ' + self(param.type)).indent(4)
@@ -115,7 +144,7 @@ class IRPrinter(IRFunctor):
             else:
                 head_doc += NewLine()
         head_doc += ')'
-        head_doc += ' -> ' + self(func.ret_type) + self.format_attr_name(fn_attrs) + '{'
+        head_doc += ' -> ' + self(func.ret_type) + fn_attr_name + '{'
 
         # body
         body_doc = self(func.body).indent(4)
@@ -128,17 +157,457 @@ class IRPrinter(IRFunctor):
 
         ir_module_attrs = {"link_lib": ir_module.linking_libs, "external_object": ir_module.object_files, "namespace": ir_module.namespace,
                            "include_header": ir_module.include_headers}
-        attr_name = "module_attrs"
-        doc += self.format_attr_dict(attr_name, ir_module_attrs) + NewLine()
+        attr_name = "mod_attr"
+        mod_attr_name, mod_attr_doc = self.add_attr_if_needed(attr_name, ir_module_attrs)
+        if mod_attr_doc is not None:
+            doc += self.format_attr_dict(attr_name, ir_module_attrs) + NewLine()
 
+        doc += Text("module ") + mod_attr_name + " {" + NewLine()
+
+        mod_body = Doc()
         for name, var in ir_module.global_vars.items():
             if name in ir_module.functions:
                 continue
-            doc += Text('decl ') + self(var) + Text(': ') + self(var.type) + ";" + NewLine() + NewLine()
+            mod_body += Text('decl ') + self(var) + Text(': ') + self(var.type) + ";" + NewLine() + NewLine()
         for func in ir_module.functions.values():
-            doc += self(func) + NewLine()
+            mod_body += self(func) + NewLine()
+        doc += mod_body.indent(4)
+        doc += NewLine() + "}" + NewLine()
         return doc
 
+    def visit_TensorElement(self, e: TensorElement):
+        # TODO: 
+        if e.protected:
+            doc = self(e.base) + '.protect_read([' + self(e.indices) + '])'
+        else:
+            doc = self(e.base) + '[' + self(e.indices) + ']'
+        return doc
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        subscriptions = []
+        for index, start, end in zip(e.indices, e.starts, e.ends):
+            if index is not None:
+                subscriptions.append(self(index))
+            else:
+                doc = Doc()
+                if start is not None:
+                    doc += self(start)
+                doc += ':'
+                if end is not None:
+                    doc += self(end)
+                subscriptions.append(doc)
+        return self(e.base) + '[' + doc_join(subscriptions, ', ') + ']'
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        return " if " + self(e.cond) + " then {" + self(e.then_expr) + "} else {" + self(e.else_expr) + "}"
+
+    def visit_Call(self, e: Call):
+        doc = Doc()
+        func_name = e.func_var.name if e.func_var.name else e.func_var.hint
+        # name
+        doc += func_name
+        # launch
+        if self.ir_module and func_name in self.ir_module.functions:
+            func = self.ir_module.functions[func_name]
+            if func.kind == 'cuda_kernel':
+                doc += '<<<' + self(func.attrs['cuda.grid_dim']) + ', ' + self(func.attrs['cuda.block_dim']) + '>>>'
+        # params
+        doc += '(' + self(e.args) + ')'
+        return doc
+
+    def visit_Let(self, e: Let):
+        return Text('let(') + self(e.var) + ": " + self(e.var.type) + '=' + self(e.value) + ') in (' + self(e.body) + ')'
+
+    def visit_Cast(self, e: Cast):
+        return Text('cast<') + self(e.target_type) + '>(' + self(e.expr) + ')'
+
+    # def visit_Reference(self, e: Reference):
+    #     return Text('Ref(') + self(e.expr) + ')'
+
+    def visit_Dereference(self, e: Dereference):
+        return Text('deref(') + self(e.expr) + ')'
+
+    def visit_Address(self, e: Address):
+        return Text('addr(') + self(e.expr) + ')'
+
+    def visit_Var(self, e: Var):
+        # if self.show_var_id:
+        #     return Text('{}@{}'.format(self.namer.get_name(e), e.id))
+        return Text(self.namer.get_name(e))
+
+    def visit_Constant(self, e: Constant):
+        if e.value is None:
+            return self('Constant(None, ') + self(e.type) + ')'
+        if e.is_tensor():
+            return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
+        elif e.is_string():
+            return Text('"{}"'.format(str(e.value)))
+        elif e.is_scalar():
+            dtype = e.type.name
+            if dtype == 'float32':
+                ret = '{}'.format(float(e.value))
+            elif dtype == 'float16':
+                ret = 'half({})'.format(float(e.value))
+            elif dtype == 'int32':
+                ret = '{}'.format(int(e.value))
+            elif dtype == 'bool':
+                ret = 'true' if e.value else 'false'
+            else:
+                ret = '{}({})'.format(dtype, e.value)
+            return Text(ret)
+        elif isinstance(e.type, PointerType):
+            return Text('cast<{}>({})'.format(self(e.type), self(e.value)))
+        else:
+            raise NotImplementedError("Unknown constant type: {}".format(e.type))
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        doc = NewLine()
+        if stmt.is_static:
+            doc += ' static '
+        if stmt.scope != DeclareScope.Default:
+            doc += ' {}'.format(stmt.scope)
+        doc += Text('decl ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
+
+        if stmt.init is not None:
+            doc += ' = ' + self(stmt.init) + ';'
+        return doc
+
+    # def visit_EvaluateStmt(self, stmt: EvaluateStmt):
+    #     return NewLine() + self(stmt.expr)
+
+    def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
+        doc = NewLine()
+        if stmt.protected:
+            doc += ' protected '
+        doc += self(stmt.buf)
+        doc += '[' + self(stmt.indices) + ']'
+        doc += ' = ' + self(stmt.value) + ';'
+        return doc
+
+    def visit_AssignStmt(self, stmt: AssignStmt):
+        return NewLine() + self(stmt.var) + ' = ' + self(stmt.value) + ';'
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        doc = Doc()
+        doc += NewLine() + Text('let(')
+        doc_stmt = Doc()
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            doc_stmt += NewLine() + self(bind_var) + ': ' + self(bind_var.type) + ' = ' + self(bind_value) + ';'
+        doc += doc_stmt.indent(4)
+        doc += NewLine() + ') in ('
+        doc += self(stmt.body).indent()
+        doc += NewLine() + ')'
+        # doc += self(stmt.body).indent()
+        return doc
+            
+
+    def visit_ForStmt(self, stmt: ForStmt):
+        for_stmt_attr = {}
+        if stmt.attr.unroll or stmt.attr.parallel:
+            if stmt.attr.unroll:
+                for_stmt_attr['unroll'] = True
+                for_stmt_attr['extent'] = stmt.extent
+                for_stmt_attr['factor'] = stmt.attr.unroll_factor
+            elif stmt.attr.parallel:
+                for_stmt_attr['parallel'] = True
+                for_stmt_attr['threads'] = stmt.attr.parallel_threads
+        
+        if len(for_stmt_attr) > 0:
+            attr_name, attr_doc = self.add_attr_if_needed('u', for_stmt_attr)
+        else:
+            attr_name = ''
+            attr_doc = None
+        
+        rng = Text('range(') + self(stmt.extent) + ') '
+        doc = NewLine()
+        if attr_doc is not None:
+            doc += attr_doc
+        doc += NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng + attr_name + ' {'
+        doc += self(stmt.body).indent(4)
+        return doc
+
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
+        doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
+        doc += self(stmt.body).indent(4)
+        doc += NewLine() + '}'
+        return doc
+
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        doc = NewLine() + 'while ' + self(stmt.cond) + ' {'
+        doc += self(stmt.body).indent(4)
+        doc += NewLine() + '}'
+        return doc
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        return NewLine() + 'break;'
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
+        return NewLine() + 'continue;'
+
+    def visit_IfStmt(self, stmt: IfStmt):
+        doc = NewLine() + Text('if ') + self(stmt.cond) + ' {'
+        doc += self(stmt.then_body).indent(4)
+        doc += NewLine() + '}'
+
+        if stmt.else_body:
+            doc += Text('else {')
+            doc += self(stmt.else_body).indent(4)
+            doc += NewLine() + '}'
+        return doc
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        doc = NewLine() + Text('return')
+        if stmt.ret_value is not None:
+            doc += ' ' + self(stmt.ret_value)
+        doc += ';'
+        return doc
+
+    def visit_AssertStmt(self, stmt: AssertStmt):
+        if stmt.msg:
+            return NewLine() + 'assert(' + self(stmt.cond) + ', ' + repr(stmt.msg) + ');'
+        else:
+            return NewLine() + 'assert(' + self(stmt.cond) + ');'
+
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        volatile_doc = 'volatile ' if stmt.is_volatile else ''
+        template_doc = '"' + Text(stmt.template_string) + '"'
+        output_docs = []
+        for label, expr in zip(stmt.output_labels, stmt.output_exprs):
+            output_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
+        input_docs = []
+        for label, expr in zip(stmt.input_labels, stmt.input_exprs):
+            input_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
+        return (
+            NewLine()
+            + volatile_doc
+            + 'asm '
+            + '('
+            + template_doc
+            + ' { '
+            + doc_join(output_docs, ', ')
+            + ' } { '
+            + doc_join(input_docs, ', ')
+            + '});'
+        )
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        return NewLine() + Text("{}<<<({}, {}, {}), ({}, {}, {}), {}>>>({});").format(
+            self(stmt.func_var),
+            self(stmt.grid_dim[0]),
+            self(stmt.grid_dim[1]),
+            self(stmt.grid_dim[2]),
+            self(stmt.block_dim[0]),
+            self(stmt.block_dim[1]),
+            self(stmt.block_dim[2]),
+            self(stmt.shared_mem_bytes),
+            self(stmt.args),
+        )
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
+        expr_docs = [str(self(e)) for e in stmt.exprs]
+        if len(expr_docs) > 0:
+            stmt_string: str = stmt.template_string.format(*expr_docs)
+        else:
+            stmt_string: str = stmt.template_string
+        lines = stmt_string.split('\n')
+        doc = Text('blackbox {')
+        inner = Text('')
+        for line in lines:
+            inner += NewLine() + line
+        doc += inner.indent(4) + NewLine() + '}'
+        return doc
+
+    def visit_SeqStmt(self, stmt: SeqStmt):
+        doc = Doc()
+        for s in stmt.seq:
+            doc += self(s)
+        return Text('{') + NewLine() + doc.indent(4) + NewLine() + '}'
+
+    def visit_DataType(self, t: DataType):
+        return Text('{}'.format(t.name))
+
+    def _tensor_type(self, t: TensorType):
+        layout = ' ;'
+        if isinstance(t.layout, RowMajorLayout) or t.layout is None:
+            # default layout, do not print
+            pass
+        else:
+            layout += self(t.layout)
+        layout = self(t.dtype) + '<' + ','.join(self(t.shape)) + layout + '>'
+        return layout
+
+    def visit_TensorType(self, t: TensorType):
+        return Text(self._tensor_type(t))
+
+    # def visit_ArrayType(self, t: ArrayType):
+    #     return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
+
+    def visit_StringType(self, t: StringType):
+        return Text('str')
+
+    def visit_PointerType(self, t: PointerType):
+        # if isinstance(t.base_type, VoidType):
+        #     return Text('~void')
+        # if isinstance(t.base_type, (DataType, PointerType)):
+        #     return '~' +self(t.base_type)
+        return Text('~') + self(t.base_type)
+
+    def visit_TensorPointerType(self, t: TensorPointerType):
+        return Text('~') + self._tensor_type(t.tensor_type)
+
+    def visit_ReferenceType(self, t: ReferenceType):
+        return Text('~') + self(t.base_type)
+
+    def visit_VoidType(self, t: VoidType):
+        return Text('void')
+
+    # def visit_FuncType(self, t: FuncType):
+    #     if t.type_infer_func is not None:
+    #         return Text('FuncType[type_infer_func]')
+    #     else:
+    #         return Text('FuncType(params={}, ret={})'.format(self(t.param_types), self(t.ret_type)))
+
+    # def visit_PlaceholderExpr(self, e: PlaceholderExpr):
+    #     if e.required_type:
+    #         type_doc = self(e.required_type) + '_'
+    #     else:
+    #         type_doc = ''
+
+    #     if e.require_const:
+    #         base = 'const'
+    #     elif e.require_non_const:
+    #         base = 'expr'
+    #     else:
+    #         base = 'any'
+
+    #     return Text(type_doc + base)
+
+    # def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
+    #     from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel
+    #     from hidet.utils.structure import DirectedGraph
+
+    #     if exclude_nodes is None:
+    #         exclude_nodes = []
+    #     nodes: List[TensorNode] = collect(nodes, TensorNode)
+    #     dag = DirectedGraph()
+    #     for node in nodes:
+    #         dag.add_node(node)
+    #         if isinstance(node, GridCompute):
+    #             depends = collect(node.value, TensorNode, stop_when_found=True)
+    #         elif isinstance(node, TensorInput):
+    #             depends = []
+    #         else:
+    #             raise NotImplementedError()
+    #         for depend_node in depends:
+    #             dag.add_edge(src=depend_node, dst=node)
+    #     order = dag.topological_order()
+
+    #     doc = Doc()
+    #     for node in order:
+    #         if node in exclude_nodes:
+    #             continue
+    #         if isinstance(node, TensorInput):
+    #             pass
+    #         elif isinstance(node, GridCompute):
+    #             # example
+    #             # y: float32[10, 10] where y[i, j] = x[i, j] + 1
+    #             doc += NewLine()
+    #             doc += self(node) + ': ' + self(node.type.dtype) + '[' + self(node.type.shape) + ']'
+    #             doc += Text(' where ') + self(node) + '[' + self(node.axes) + '] = ' + self(node.value)
+    #         else:
+    #             raise NotImplementedError()
+    #     return doc
+
+    # def visit_Task(self, e: Task):
+    #     lines = [
+    #         Text('name: ') + e.name,
+    #         Text('parameters: ')
+    #         + (
+    #             NewLine()
+    #             + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.params], NewLine())
+    #         ).indent(),
+    #         Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
+    #         Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
+    #         Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
+    #         Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
+    #     ]
+    #     if len(e.assertions) > 0:  # between computations and attributes
+    #         lines.append(
+    #             Text('assertions: ')
+    #             + (
+    #                 NewLine()  # self.assertions: List[Tuple[Expr, str]]
+    #                 + doc_join(['assert {}'.format(str(self.visit(v[0]))) for v in e.assertions], NewLine())
+    #             ).indent()
+    #         )
+    #     front_part = doc_join(lines, NewLine())
+    #     inverse_map_doc = Doc()
+    #     if e.inverse_map:
+    #         inverse_map_doc += NewLine() + Text('inverse_map:')
+    #         for tensor, inverse_map in e.inverse_map.items():
+    #             inverse_map_body = 'InverseMap([' + self(inverse_map.axes) + '] => [' + self(inverse_map.indices) + '])'
+    #             inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + inverse_map_body).indent()
+    #     return Text('Task(') + (NewLine() + front_part + inverse_map_doc).indent() + NewLine() + ')'
+
+    # def visit_TensorNode(self, e: TensorNode):
+    #     return self.namer.get_name(e)
+
+    # def visit_ScalarInput(self, node: ScalarInput):
+    #     return self.namer.get_name(node)
+
+    # def visit_TensorInput(self, node: TensorInput):
+    #     return self.namer.get_name(node)
+
+    # def visit_GridCompute(self, c: GridCompute):
+    #     return self.namer.get_name(c)
+
+    # def visit_ReduceCompute(self, c: ReduceCompute):
+    #     items = ['[' + self(c.shape) + ']', '(' + self(c.axes) + ') => ' + self(c.value), str(c.reduce_operation)]
+    #     return 'reduce(' + doc_join(items, ', ') + ')'
+
+    # def visit_ArgReduceCompute(self, c: ArgReduceCompute):
+    #     items = ['[' + self(c.extent) + ']', self(c.axis) + ' => ' + self(c.value), str(c.reduce_operation)]
+    #     return 'arg_reduce(' + doc_join(items, ', ') + ')'
+
+    def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
+        items = [self(mapping.task_shape)]
+        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+            items.append('ranks=[' + self(mapping.ranks) + ']')
+        return 'spatial_map(' + doc_join(items, ', ') + ')'
+
+    def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
+        items = [self(mapping.task_shape)]
+        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+            items.append('ranks=[' + self(mapping.ranks) + ']')
+        return 'repeat_map(' + doc_join(items, ', ') + ')'
+
+    def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
+        return 'compose_map(' + self(mapping.outer) + ',' + self(mapping.inner) + ')'
+
+    def visit_StridesLayout(self, layout: StridesLayout):
+        if isinstance(layout, RowMajorLayout):
+            return Text('row(') + self(layout.shape) + ')'
+        elif isinstance(layout, ColumnMajorLayout):
+            return Text('column(') + self(layout.shape) + ')'
+        else:
+            return Text('strides(') + self(layout.strides) + ')'
+    
+    # def get_strides_layout_attr
+
+    def visit_SwizzleLayout(self, layout: SwizzleLayout):
+        items = [self(layout.base), Text('dim=') + self(layout.dim), Text('regards=') + self(layout.regards_dim)]
+        if layout.log_step != 0:
+            items.append(Text('log_step=') + self(layout.log_step))
+        return Text('swizzle(') + doc_join(items, ', ') + ')'
+
+    def visit_LocalLayout(self, layout: LocalLayout):
+        return Text('local(') + self(layout.shape) + ')'
+
+    def visit_ComposedLayout(self, layout: ComposedLayout):
+        return self(layout.outer) + ' * ' + self(layout.inner)
+
+    def visit_ConcatLayout(self, layout: ConcatLayout):
+        return Text('concat(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
+    
     def visit_Add(self, e: Add):
         return Text('(') + self(e.a) + ' + ' + self(e.b) + ')'
 
@@ -198,402 +667,6 @@ class IRPrinter(IRFunctor):
 
     def visit_RightShift(self, e: RightShift):
         return '(' + self(e.a) + ' >> ' + self(e.b) + ')'
-
-    def visit_TensorElement(self, e: TensorElement):
-        if e.protected:
-            doc = self(e.base) + '.protect_read([' + self(e.indices) + '])'
-        else:
-            doc = self(e.base) + '[' + self(e.indices) + ']'
-        return doc
-
-    def visit_TensorSlice(self, e: TensorSlice):
-        subscriptions = []
-        for index, start, end in zip(e.indices, e.starts, e.ends):
-            if index is not None:
-                subscriptions.append(self(index))
-            else:
-                doc = Doc()
-                if start is not None:
-                    doc += self(start)
-                doc += ':'
-                if end is not None:
-                    doc += self(end)
-                subscriptions.append(doc)
-        return self(e.base) + '[' + doc_join(subscriptions, ', ') + ']'
-
-    def visit_IfThenElse(self, e: IfThenElse):
-        return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
-
-    def visit_Call(self, e: Call):
-        doc = Doc()
-        func_name = e.func_var.name if e.func_var.name else e.func_var.hint
-        # name
-        doc += func_name
-        # launch
-        if self.ir_module and func_name in self.ir_module.functions:
-            func = self.ir_module.functions[func_name]
-            if func.kind == 'cuda_kernel':
-                doc += '<<<' + self(func.attrs['cuda.grid_dim']) + ', ' + self(func.attrs['cuda.block_dim']) + '>>>'
-        # params
-        doc += '(' + self(e.args) + ')'
-        return doc
-
-    def visit_Let(self, e: Let):
-        return Text('let(') + self(e.var) + '=' + self(e.value) + ': ' + self(e.body) + ')'
-
-    def visit_Cast(self, e: Cast):
-        return Text('cast(') + self(e.target_type) + ', ' + self(e.expr) + ')'
-
-    def visit_Reference(self, e: Reference):
-        return Text('Ref(') + self(e.expr) + ')'
-
-    def visit_Dereference(self, e: Dereference):
-        return Text('*') + self(e.expr)
-
-    def visit_Address(self, e: Address):
-        return Text('&') + self(e.expr)
-
-    def visit_Var(self, e: Var):
-        if self.show_var_id:
-            return Text('{}@{}'.format(self.namer.get_name(e), e.id))
-        return Text(self.namer.get_name(e))
-
-    def visit_Constant(self, e: Constant):
-        if e.value is None:
-            return self('Constant(None, type=') + self(e.type) + ')'
-        if e.is_tensor():
-            return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
-        elif e.is_string():
-            return Text('"{}"'.format(str(e.value)))
-        elif e.is_scalar():
-            dtype = e.type.name
-            if dtype == 'float32':
-                ret = '{}f'.format(float(e.value))
-            elif dtype == 'float16':
-                ret = 'half({})'.format(float(e.value))
-            elif dtype == 'int32':
-                ret = '{}'.format(int(e.value))
-            elif dtype == 'bool':
-                ret = 'true' if e.value else 'false'
-            else:
-                ret = '{}({})'.format(dtype, e.value)
-            return Text(ret)
-        elif isinstance(e.type, PointerType):
-            return Text('({}){}'.format(self(e.type), self(e.value)))
-        else:
-            raise NotImplementedError("Unknown constant type: {}".format(e.type))
-
-    def visit_DeclareStmt(self, stmt: DeclareStmt):
-        doc = NewLine() + Text('declare ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
-        if stmt.init is not None:
-            doc += ' = ' + self(stmt.init)
-        if stmt.is_static:
-            doc += ' [static]'
-        if stmt.scope != DeclareScope.Default:
-            doc += ' [{}]'.format(stmt.scope)
-        return doc
-
-    def visit_EvaluateStmt(self, stmt: EvaluateStmt):
-        return NewLine() + self(stmt.expr)
-
-    def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
-        doc = NewLine()
-        doc += self(stmt.buf)
-        doc += '[' + self(stmt.indices) + ']'
-        doc += ' = ' + self(stmt.value)
-        if stmt.protected:
-            doc += '  [protected write]'
-        return doc
-
-    def visit_AssignStmt(self, stmt: AssignStmt):
-        return NewLine() + self(stmt.var) + ' = ' + self(stmt.value)
-
-    def visit_LetStmt(self, stmt: LetStmt):
-        doc = Doc()
-        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            doc += NewLine() + 'let ' + self(bind_var) + ': ' + self(bind_var.type) + ' = ' + self(bind_value)
-        doc += self(stmt.body)
-        # doc += self(stmt.body).indent()
-        return doc
-
-    def visit_ForStmt(self, stmt: ForStmt):
-        rng = Text('range(') + self(stmt.extent) + ')'
-        doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
-        if stmt.attr.unroll or stmt.attr.parallel:
-            doc += '  # ' + str(stmt.attr)
-        doc += self(stmt.body).indent(4)
-        return doc
-
-    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on ' + self(stmt.worker)
-        doc += self(stmt.body).indent(4)
-        return doc
-
-    def visit_WhileStmt(self, stmt: WhileStmt):
-        doc = NewLine() + 'while ' + self(stmt.cond)
-        doc += self(stmt.body).indent(4)
-        return doc
-
-    def visit_BreakStmt(self, stmt: BreakStmt):
-        return NewLine() + 'break'
-
-    def visit_ContinueStmt(self, stmt: ContinueStmt):
-        return NewLine() + 'continue'
-
-    def visit_IfStmt(self, stmt: IfStmt):
-        doc = NewLine() + Text('if ') + self(stmt.cond)
-        doc += self(stmt.then_body).indent(4)
-        if stmt.else_body:
-            doc += NewLine() + Text('else')
-            doc += self(stmt.else_body).indent(4)
-        return doc
-
-    def visit_ReturnStmt(self, stmt: ReturnStmt):
-        doc = NewLine() + Text('return')
-        if stmt.ret_value is not None:
-            doc += ' ' + self(stmt.ret_value)
-        return doc
-
-    def visit_AssertStmt(self, stmt: AssertStmt):
-        if stmt.msg:
-            return NewLine() + 'assert(' + self(stmt.cond) + ', ' + repr(stmt.msg) + ')'
-        else:
-            return NewLine() + 'assert(' + self(stmt.cond) + ')'
-
-    def visit_AsmStmt(self, stmt: AsmStmt):
-        volatile_doc = 'volatile ' if stmt.is_volatile else ''
-        template_doc = '"' + Text(stmt.template_string) + '"'
-        output_docs = []
-        for label, expr in zip(stmt.output_labels, stmt.output_exprs):
-            output_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
-        input_docs = []
-        for label, expr in zip(stmt.input_labels, stmt.input_exprs):
-            input_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
-        return (
-            NewLine()
-            + 'asm '
-            + volatile_doc
-            + '('
-            + template_doc
-            + ' : '
-            + doc_join(output_docs, ', ')
-            + ' : '
-            + doc_join(input_docs, ', ')
-            + ');'
-        )
-
-    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
-        return NewLine() + Text("{}<<<dim3({}, {}, {}), dim3({}, {}, {}), {}>>>({});").format(
-            self(stmt.func_var),
-            self(stmt.grid_dim[0]),
-            self(stmt.grid_dim[1]),
-            self(stmt.grid_dim[2]),
-            self(stmt.block_dim[0]),
-            self(stmt.block_dim[1]),
-            self(stmt.block_dim[2]),
-            self(stmt.shared_mem_bytes),
-            self(stmt.args),
-        )
-
-    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        expr_docs = [str(self(e)) for e in stmt.exprs]
-        if len(expr_docs) > 0:
-            stmt_string: str = stmt.template_string.format(*expr_docs)
-        else:
-            stmt_string: str = stmt.template_string
-        lines = stmt_string.split('\n')
-        doc = Text('')
-        for line in lines:
-            doc += NewLine() + line
-        return doc
-
-    def visit_SeqStmt(self, stmt: SeqStmt):
-        doc = Doc()
-        for s in stmt.seq:
-            doc += self(s)
-        return doc
-
-    def visit_DataType(self, t: DataType):
-        return Text('{}'.format(t.name))
-
-    def _tensor_type(self, t: TensorType):
-        items = [self(t.dtype), '[' + self(t.shape) + ']']
-        if isinstance(t.layout, RowMajorLayout) or t.layout is None:
-            # default layout, do not print
-            pass
-        else:
-            items.append(self(t.layout))
-        return doc_join(items, ', ')
-
-    def visit_TensorType(self, t: TensorType):
-        return Text('tensor(') + self._tensor_type(t) + ')'
-
-    def visit_ArrayType(self, t: ArrayType):
-        return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
-
-    def visit_StringType(self, t: StringType):
-        return Text('char*')
-
-    def visit_PointerType(self, t: PointerType):
-        if isinstance(t.base_type, VoidType):
-            return Text('void*')
-        if isinstance(t.base_type, (DataType, PointerType)):
-            return self(t.base_type) + '*'
-        return Text('*') + self(t.base_type) + ')'
-
-    def visit_TensorPointerType(self, t: TensorPointerType):
-        return Text('tensor_pointer(') + self._tensor_type(t.tensor_type) + ')'
-
-    def visit_ReferenceType(self, t: ReferenceType):
-        return Text('ReferenceType(') + self(t.base_type) + ')'
-
-    def visit_VoidType(self, t: VoidType):
-        return Text('VoidType')
-
-    def visit_FuncType(self, t: FuncType):
-        if t.type_infer_func is not None:
-            return Text('FuncType[type_infer_func]')
-        else:
-            return Text('FuncType(params={}, ret={})'.format(self(t.param_types), self(t.ret_type)))
-
-    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
-        if e.required_type:
-            type_doc = self(e.required_type) + '_'
-        else:
-            type_doc = ''
-
-        if e.require_const:
-            base = 'const'
-        elif e.require_non_const:
-            base = 'expr'
-        else:
-            base = 'any'
-
-        return Text(type_doc + base)
-
-    def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
-        from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel
-        from hidet.utils.structure import DirectedGraph
-
-        if exclude_nodes is None:
-            exclude_nodes = []
-        nodes: List[TensorNode] = collect(nodes, TensorNode)
-        dag = DirectedGraph()
-        for node in nodes:
-            dag.add_node(node)
-            if isinstance(node, GridCompute):
-                depends = collect(node.value, TensorNode, stop_when_found=True)
-            elif isinstance(node, TensorInput):
-                depends = []
-            else:
-                raise NotImplementedError()
-            for depend_node in depends:
-                dag.add_edge(src=depend_node, dst=node)
-        order = dag.topological_order()
-
-        doc = Doc()
-        for node in order:
-            if node in exclude_nodes:
-                continue
-            if isinstance(node, TensorInput):
-                pass
-            elif isinstance(node, GridCompute):
-                # example
-                # y: float32[10, 10] where y[i, j] = x[i, j] + 1
-                doc += NewLine()
-                doc += self(node) + ': ' + self(node.type.dtype) + '[' + self(node.type.shape) + ']'
-                doc += Text(' where ') + self(node) + '[' + self(node.axes) + '] = ' + self(node.value)
-            else:
-                raise NotImplementedError()
-        return doc
-
-    def visit_Task(self, e: Task):
-        lines = [
-            Text('name: ') + e.name,
-            Text('parameters: ')
-            + (
-                NewLine()
-                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.params], NewLine())
-            ).indent(),
-            Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
-            Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
-            Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
-            Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
-        ]
-        if len(e.assertions) > 0:  # between computations and attributes
-            lines.append(
-                Text('assertions: ')
-                + (
-                    NewLine()  # self.assertions: List[Tuple[Expr, str]]
-                    + doc_join(['assert {}'.format(str(self.visit(v[0]))) for v in e.assertions], NewLine())
-                ).indent()
-            )
-        front_part = doc_join(lines, NewLine())
-        inverse_map_doc = Doc()
-        if e.inverse_map:
-            inverse_map_doc += NewLine() + Text('inverse_map:')
-            for tensor, inverse_map in e.inverse_map.items():
-                inverse_map_body = 'InverseMap([' + self(inverse_map.axes) + '] => [' + self(inverse_map.indices) + '])'
-                inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + inverse_map_body).indent()
-        return Text('Task(') + (NewLine() + front_part + inverse_map_doc).indent() + NewLine() + ')'
-
-    def visit_TensorNode(self, e: TensorNode):
-        return self.namer.get_name(e)
-
-    def visit_ScalarInput(self, node: ScalarInput):
-        return self.namer.get_name(node)
-
-    def visit_TensorInput(self, node: TensorInput):
-        return self.namer.get_name(node)
-
-    def visit_GridCompute(self, c: GridCompute):
-        return self.namer.get_name(c)
-
-    def visit_ReduceCompute(self, c: ReduceCompute):
-        items = ['[' + self(c.shape) + ']', '(' + self(c.axes) + ') => ' + self(c.value), str(c.reduce_operation)]
-        return 'reduce(' + doc_join(items, ', ') + ')'
-
-    def visit_ArgReduceCompute(self, c: ArgReduceCompute):
-        items = ['[' + self(c.extent) + ']', self(c.axis) + ' => ' + self(c.value), str(c.reduce_operation)]
-        return 'arg_reduce(' + doc_join(items, ', ') + ')'
-
-    def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
-        items = [self(mapping.task_shape)]
-        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
-            items.append('ranks=[' + self(mapping.ranks) + ']')
-        return 'spatial(' + doc_join(items, ', ') + ')'
-
-    def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
-        items = [self(mapping.task_shape)]
-        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
-            items.append('ranks=[' + self(mapping.ranks) + ']')
-        return 'repeat(' + doc_join(items, ', ') + ')'
-
-    def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
-        return self(mapping.outer) + '.' + self(mapping.inner)
-
-    def visit_StridesLayout(self, layout: StridesLayout):
-        if isinstance(layout, RowMajorLayout):
-            return Text('row(') + self(layout.shape) + ')'
-        elif isinstance(layout, ColumnMajorLayout):
-            return Text('column(') + self(layout.shape) + ')'
-        else:
-            return Text('strides(') + self(layout.strides) + ')'
-
-    def visit_SwizzleLayout(self, layout: SwizzleLayout):
-        items = [self(layout.base), Text('dim=') + self(layout.dim), Text('regards=') + self(layout.regards_dim)]
-        if layout.log_step != 0:
-            items.append(Text('log_step=') + self(layout.log_step))
-        return Text('swizzle(') + doc_join(items, ', ') + ')'
-
-    def visit_LocalLayout(self, layout: LocalLayout):
-        return Text('local(') + self(layout.shape) + ')'
-
-    def visit_ComposedLayout(self, layout: ComposedLayout):
-        return self(layout.outer) + ' * ' + self(layout.inner)
-
-    def visit_ConcatLayout(self, layout: ConcatLayout):
-        return Text('concat(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
 
 
 def astext(obj: Node) -> str:

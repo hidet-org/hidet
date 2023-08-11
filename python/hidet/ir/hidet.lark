@@ -26,13 +26,16 @@ fn_body : [(attribute | stmt)]*
         | assert_stmt
         | black_box_stmt
         | asm_stmt
+        | launch_kernel_stmt
+        | seq_stmt
 
-declare_stmt : "decl" type_annotation ["=" expr] ";"
-buffer_store_stmt : get_item_expr "=" expr ";"
+declare_stmt : ["static"] [declare_scope] "decl" type_annotation ["=" expr] ";"
+declare_scope : "global" | "shared" | "register"
+buffer_store_stmt : ["protected"] get_item_expr "=" expr ";"
 assign_stmt : IDENT "=" expr ";"
 return_stmt : "return" expr ";"
-let_stmt : "let" "(" type_annotation "=" expr ")" ["in" "(" stmt* ")"] ";"
-for_stmt : "for" (IDENT | "(" IDENT ["," IDENT]* ")") "in" mapping [attribute_name] "{" stmt* "}"
+let_stmt : "let" "(" (type_annotation "=" expr ";")+ ")" ["in" "(" stmt* ")"] ";"
+for_stmt : "for" (IDENT | "(" IDENT ["," IDENT]* ")") "in" call_expr ([attribute_name] | ["on" "(" expr ")"]) "{" stmt* "}"
 while_stmt : "while" expr "{" stmt* "}"
 break_stmt : "break" ";"
 continue_stmt : "continue" ";"
@@ -40,14 +43,16 @@ if_stmt : "if" expr "{" stmt* "}" ["else" "{" stmt* "}"]
 assert_stmt : "assert" "(" expr ")" ";"
 black_box_stmt : "blackbox" "{" string "}" ";"
 asm_stmt : ["volatile"] "asm" "{" "{" string "}" "{" [IDENT ("," IDENT)*] "}" "{" [IDENT ("," IDENT)*] "}" "}" ";"
-
+launch_kernel_stmt : IDENT "<<<" dim3 "," dim3 "," [SIGNED_NUMBER] ">>>" "(" [expr ("," expr)*] ")" ";"
+dim3 : "(" expr "," expr "," expr ")"
+seq_stmt : "{" stmt* "}"
 
 // mappings
-mapping : spatial_mapping | repeat_mapping | composed_mapping
-spatial_mapping : "@spatial" "(" "shape" "=" int_list "," "ranks" "=" int_list ")"
-repeat_mapping : "@repeat" "(" "shape" "=" int_list "," "ranks" "=" int_list ["," attribute_name]")"
-composed_mapping : "@compose" "(" mapping "," mapping ")"
-int_list : "[" SIGNED_NUMBER ("," SIGNED_NUMBER)* "]"
+// mapping : spatial_mapping | repeat_mapping | composed_mapping
+// spatial_mapping : "@spatial" "(" "shape" "=" int_list "," "ranks" "=" int_list ")"
+// repeat_mapping : "@repeat" "(" "shape" "=" int_list "," "ranks" "=" int_list ["," attribute_name]")"
+// composed_mapping : "@compose" "(" mapping "," mapping ")"
+// int_list : "[" SIGNED_NUMBER ("," SIGNED_NUMBER)* "]"
 
 // expressions
 expr : short_circuit_or_expr
@@ -73,10 +78,10 @@ expr : short_circuit_or_expr
 
 ?fn_call_expr : tensor_slice_expr 
         | get_item_expr 
-        | call_expr 
         | cast_expr 
         | deref_expr 
         | addr_expr 
+        | call_expr 
         | let_expr 
         | if_then_else_expr 
         | atom
@@ -84,7 +89,8 @@ expr : short_circuit_or_expr
 tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
 slice : [expr] ":" [expr]
 get_item_expr : expr "[" [expr ("," expr)*] "]"
-call_expr : expr "(" [expr ("," expr)*] ")"
+call_expr : expr "(" [expr ("," expr)*] [keyword_arg ("," keyword_arg)*] ")"
+keyword_arg : IDENT "=" expr
 cast_expr : "cast" "<" type ">" "(" expr ")"
 deref_expr : "deref" "(" expr ")"
 addr_expr : "addr" "(" expr ")"
