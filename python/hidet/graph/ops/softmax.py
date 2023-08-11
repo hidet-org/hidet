@@ -158,8 +158,8 @@ class SoftmaxTask(Task):
         return ir_module
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        if not all(is_constant(dim) for dim in self.inputs[0].shape)\
-                or self.inputs[0].type.dtype != float32:
+        # if not all(is_constant(dim) for dim in self.inputs[0].shape)\
+        if self.inputs[0].type.dtype != float32:
             return NotImplemented  # use auto-scheduler
         return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
@@ -174,14 +174,23 @@ class SoftmaxTask(Task):
         from hidet.lang import grid
         from hidet.lang.mapping import spatial
         from hidet.utils import prod
+        from hidet.ir.dtypes import float32x8
         shape = self.inputs[0].shape
         head = shape[:self.axis]
         tail = shape[self.axis:] if self.axis == len(shape) - 1 else shape[self.axis + 1:]
         head_size = prod(head)
         tail_size = prod(tail)
-        axis_size = int(shape[self.axis])
+        axis_size = shape[self.axis]
 
         with hidet.script_module() as module:
+            @hidet.script
+            def apply_exponent(x: float32x8) -> float32x8:
+                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
+                avx_f32x8_store(arr, x)
+                for n in range(8):
+                    arr[n] = prim.exp(arr[n])
+                return avx_f32x8_load(arr)
+
             @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 para = 'p' + str(nthreads)
@@ -210,12 +219,7 @@ class SoftmaxTask(Task):
                             for i in range(tail_size // 8):
                                 val_vec = avx_f32x8_load(x + offset + i * 8)
                                 val_vec = avx_f32x8_subtract(val_vec, max_vec)
-                                # apply exponent val_vec = avxexponent
-                                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
-                                avx_f32x8_store(arr, val_vec)
-                                for n in range(8):
-                                    arr[n] = prim.exp(arr[n])
-                                val_vec = avx_f32x8_load(arr)
+                                val_vec = apply_exponent(val_vec)
                                 # val_vec = avx_exp(val_vec)  # TODO: look into avx exp
                                 avx_f32x8_store(out + offset + i * 8, val_vec)
                                 sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
@@ -250,11 +254,7 @@ class SoftmaxTask(Task):
                             for i in range(axis_size):
                                 val_vec = avx_f32x8_load(x + offset + tail_offset + tail_size * i)
                                 val_vec = avx_f32x8_subtract(val_vec, max_vec)
-                                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
-                                avx_f32x8_store(arr, val_vec)
-                                for n in range(8):
-                                    arr[n] = prim.exp(arr[n])
-                                val_vec = avx_f32x8_load(arr)
+                                val_vec = apply_exponent(val_vec)
                                 avx_f32x8_store(out + offset + tail_offset + tail_size * i, val_vec)
                                 sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
                             for i in range(axis_size):
@@ -283,6 +283,7 @@ class SoftmaxTask(Task):
                                 out[head_idx][p][last_idx] = out[head_idx][p][last_idx] / sum_exp_arr[j]
 
             softmax_cpu_kernel.kind = "cpu_kernel"
+            apply_exponent.kind = "cpu_internal"
             assert isinstance(softmax_cpu_kernel, hidet.ir.Function)
             ir_module = module.ir_module()
             return ir_module

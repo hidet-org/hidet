@@ -439,6 +439,10 @@ class Call(Expr):
         self.func_var: Var = func_var
         self.args: Tuple[Expr, ...] = args
 
+        if not (isinstance(func_var, Var) and isinstance(args, tuple)):
+            print(func_var, args)
+            print(type(args[0]))
+            print(type(func_var), type(args))
         assert isinstance(func_var, Var) and isinstance(args, tuple)
         for arg in args:
             assert isinstance(arg, Expr)
