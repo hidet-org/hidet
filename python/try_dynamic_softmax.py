@@ -35,6 +35,10 @@ shapes = [([1, ("x", 1000), ('y', 1), 1], 1), ([1, ("x", 1000)], 1), ([("x", 16)
           ([("x", 16), ("y", 1000), ("z", 1), ("w", 1)], 1), ([1, ("x", 128), ("y", 128), ("z", 128)], 2)]
 # hidet.option.runtime_check(False)
 hidetvspt = []
+def numpy_softmax(data, axis):
+    data = np.exp(data - np.max(data, axis, keepdims=True))
+    data = data / np.sum(data, axis, keepdims=True)
+    return data
 for shape, axis in shapes:
     shapec = shape
     shape = [(i if isinstance(i, int) else i[0]) for i in shape]
@@ -42,16 +46,20 @@ for shape, axis in shapes:
     dtype = "float32"
     device = "cpu"
     from hidet.graph.tensor import asarray
-    data = np.array(np.random.randn(*concrete_shape)).astype(dtype)
+    data = 10+3*np.array(np.random.randn(*concrete_shape)).astype(dtype)
+    data = np.clip(data, a_min=0, a_max=None)
     hidet_data = asarray(data).to(device=device)
     m = nn.Softmax(dim=axis)
     res = m(torch.from_numpy(data))
     sym = hidet.symbol(shape, dtype=dtype, device=device)
-    out = softmax(sym)
+    out = softmax(sym, axis=axis)
+    op: hidet.Operator = out.op
     func = hidet.trace_from(out, sym).build()
-    hidet_res = func(hidet_data).numpy()
-    np.testing.assert_allclose(actual=hidet_res, desired=res, atol=1e-8, rtol=1e-5)
-    print("here")
+    hidet_res = func(hidet_data).to(device="cpu").numpy()
+    np_res = numpy_softmax(data, axis=axis)
+    np.testing.assert_allclose(actual=res, desired=np_res, atol=1e-8, rtol=1e-5)
+    np.testing.assert_allclose(actual=hidet_res, desired=np_res, atol=1e-8, rtol=1e-5)
+    print("success on", shape, "axis", axis)
 
     # a = hidet.randn(shape, device="cpu")
     # xx = hidet.symbol(shape, dtype="float32", device="cpu")
@@ -74,14 +82,14 @@ for shape, axis in shapes:
     #     data = data / np.sum(data, axis_, keepdims=True)
     #     return data
 
-    hidet_latency = hidet.utils.benchmark_func(lambda: func(hidet_data), warmup=10, repeat=50)
-    pt_latency = hidet.utils.benchmark_func(lambda: m(torch.from_numpy(data)), warmup=10, repeat=50)
-    print("shape", shape, "and axis", axis, "hidet:", hidet_latency, "pytorch:", pt_latency)
-    print("fastest is:", ["hidet", "pytorch"][np.argmin([hidet_latency, pt_latency])], "\n")
-    hidetvspt.append((shape, axis if axis >= 0 else len(shape) + axis, pt_latency/hidet_latency))
-    # print(b, m(a_torch))
-for shape, axis, speed in hidetvspt:
-    print("shape:", shape, "axis:", axis, "hidet vs pt speed:", speed)
+#     hidet_latency = hidet.utils.benchmark_func(lambda: func(hidet_data), warmup=10, repeat=50)
+#     pt_latency = hidet.utils.benchmark_func(lambda: m(torch.from_numpy(data)), warmup=10, repeat=50)
+#     print("shape", shape, "and axis", axis, "hidet:", hidet_latency, "pytorch:", pt_latency)
+#     print("fastest is:", ["hidet", "pytorch"][np.argmin([hidet_latency, pt_latency])], "\n")
+#     hidetvspt.append((shape, axis if axis >= 0 else len(shape) + axis, pt_latency/hidet_latency))
+#     # print(b, m(a_torch))
+# for shape, axis, speed in hidetvspt:
+#     print("shape:", shape, "axis:", axis, "hidet vs pt speed:", speed)
 # softmax([bs, 1000], axis=1)  # bs = 1, 2, 4, 8
 # softmax([heads, seq, seq], axis=2)  # heads=32, seq = 128, 512, 1024
 
