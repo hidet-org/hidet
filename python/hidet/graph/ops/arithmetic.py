@@ -10,16 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict
+from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 
 from hidet.ir import primitives
 from hidet.ir import Var, expr, dtypes
 from hidet.ir.type import DataType
+from hidet.ir.expr import Expr, if_then_else, logical_or, is_constant, is_true
 from hidet.ir.tools import rewrite
-from hidet.ir.expr import Expr, if_then_else, is_true
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
+from .utils import normalize_slice, normalize_dim
 
 PyScalar = Union[int, float, bool]
 
@@ -186,6 +187,78 @@ class WhereTask(Task):
                 if prod(v_shape) == prod(z_shape) and len(v_shape) == len(z_shape)
             },
         )
+
+
+class SetStridedSliceTask(Task):
+    def __init__(
+        self,
+        data: TensorNode,
+        starts: List[Optional[int]],
+        ends: List[Optional[int]],
+        axes: List[int],
+        strides: List[int],
+        setvalue: [Union[int, float]],
+    ):
+        assert len(starts) == len(ends) == len(axes) == len(strides)
+        if len(axes) != len(set(axes)):
+            raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
+        output_shape = list(data.shape)
+        axis2info = {}
+        for axis, start, end, stride in zip(axes, starts, ends, strides):
+            if stride == 0:
+                raise NotImplementedError(
+                    'Stride can not be 0 in slicing: '
+                    'starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides)
+                )
+            if is_constant(output_shape[axis]) and output_shape[axis] < 0:
+                raise NotImplementedError(
+                    'Slice result can not be: '
+                    'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides)
+                )
+            axis2info[axis] = (start, end, stride)
+
+        def fmap(indices):
+            ret = data.type.dtype(setvalue)
+            for axis, index in enumerate(indices):
+                start, end, stride = axis2info[axis]
+                ret = if_then_else(
+                    logical_or(index < start, index >= end, (index - start) % stride != 0), data[indices], ret
+                )
+            return ret
+
+        out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
+        super().__init__(name='set_slice', inputs=[data], outputs=[out])
+
+
+class RollTask(Task):
+    def __init__(self, x: TensorNode, shifts: Sequence[int], dims: Sequence[int]):
+        output_shape = list(x.shape)
+
+        def fmap(indices):
+            data_indices = []
+            for axis, index in enumerate(indices):
+                if axis in dims:
+                    i = dims.index(axis)
+                    if shifts[i] > 0:
+                        data_indices.append(
+                            if_then_else(
+                                index - shifts[i] >= 0, index - shifts[i], index + output_shape[axis] - shifts[i]
+                            )
+                        )
+                    else:
+                        data_indices.append(
+                            if_then_else(
+                                index - shifts[i] < output_shape[axis],
+                                index - shifts[i],
+                                index - output_shape[axis] - shifts[i],
+                            )
+                        )
+                else:
+                    data_indices.append(index)
+            return x[data_indices]
+
+        out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
+        super().__init__(name='roll', inputs=[x], outputs=[out])
 
 
 class UnaryElementwiseOp(Operator):
@@ -626,6 +699,32 @@ class MinOp(Operator):
         )
 
 
+class SetStridedSliceOp(Operator):
+    def __init__(
+        self,
+        data: Tensor,
+        starts: Sequence[Optional[int]],
+        ends: Sequence[Optional[int]],
+        strides: Optional[Sequence[Optional[int]]] = None,
+        setvalue: Optional[Union[int, float]] = 0.0,
+    ):
+        starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes=None, strides=strides)
+        task = SetStridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides, setvalue)
+        super().__init__(
+            inputs=[data],
+            attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue},
+            task=task,
+        )
+
+
+class RollOp(Operator):
+    def __init__(self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]) -> Tensor:
+        if not len(shifts) == len(dims):
+            raise ValueError('Roll must have same size shifts and dims, got {} and {}'.format(len(shifts), len(dims)))
+        task = RollTask(input_like(x, 'x'), shifts, dims)
+        super().__init__(inputs=[x], attributes={'shifts': shifts, 'dims': dims}, task=task)
+
+
 Scalar = Union[Expr, float, int, complex]
 
 
@@ -946,6 +1045,20 @@ def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
 
 
+def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None) -> Tensor:
+    if isinstance(shifts, int):
+        shifts = [shifts]
+    if isinstance(dims, int):
+        dims = [dims]
+    if dims is None:
+        from .transform import flatten, reshape
+
+        shape = x.shape
+        return reshape(RollOp(flatten(x), shifts, dims=[0]).outputs[0], shape)
+    dims = normalize_dim(dims, len(x.shape))
+    return RollOp(x, shifts, dims).outputs[0]
+
+
 # out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
 def composite_elementwise(
     x: Tensor,
@@ -954,3 +1067,13 @@ def composite_elementwise(
     binary_op: BinaryElementwiseOperation,
 ) -> Tensor:
     return CompositeElementwiseOp(x, left_unary_op, right_unary_op, binary_op).outputs[0]
+
+
+def set_strided_slice(
+    data: Tensor,
+    starts: Sequence[Optional[int]],
+    ends: Sequence[Optional[int]],
+    strides: Optional[Sequence[Optional[int]]] = None,
+    setvalue: Optional[Union[int, float]] = 0.0,
+) -> Tensor:
+    return SetStridedSliceOp(data, starts, ends, strides, setvalue).outputs[0]
