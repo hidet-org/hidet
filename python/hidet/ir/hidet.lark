@@ -2,7 +2,7 @@
 // statements
 top_level : [(attribute | module)]*
 
-module : "module" [IDENT] [attribute_name] "{" [(attribute | function | declare_stmt)]* "}"
+module : "module" [attribute_name] "{" [(function | declare_stmt)]* "}"
 
 function : "def" fn_name "(" fn_args ")" "->" fn_return_type [attribute_name] "{" fn_body "}"
 
@@ -27,25 +27,27 @@ fn_body : [(attribute | stmt)]*
         | black_box_stmt
         | asm_stmt
         | launch_kernel_stmt
-        | seq_stmt
+        | evaluate_stmt
+        // | seq_stmt
 
-declare_stmt : ["static"] [declare_scope] "decl" type_annotation ["=" expr] ";"
-declare_scope : "global" | "shared" | "register"
+declare_stmt : ["static"] "decl" type_annotation ["=" expr] ";" [attribute_name]
 buffer_store_stmt : ["protected"] get_item_expr "=" expr ";"
 assign_stmt : IDENT "=" expr ";"
 return_stmt : "return" expr ";"
 let_stmt : "let" "(" (type_annotation "=" expr ";")+ ")" ["in" "(" stmt* ")"] ";"
-for_stmt : "for" (IDENT | "(" IDENT ["," IDENT]* ")") "in" call_expr ([attribute_name] | ["on" "(" expr ")"]) "{" stmt* "}"
+for_stmt : "for" "(" IDENT ["," IDENT]* ")" "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt* "}"
+task_mapping : "on" "(" expr ")"
 while_stmt : "while" expr "{" stmt* "}"
 break_stmt : "break" ";"
 continue_stmt : "continue" ";"
 if_stmt : "if" expr "{" stmt* "}" ["else" "{" stmt* "}"]
 assert_stmt : "assert" "(" expr ")" ";"
-black_box_stmt : "blackbox" "{" string "}" ";"
-asm_stmt : ["volatile"] "asm" "{" "{" string "}" "{" [IDENT ("," IDENT)*] "}" "{" [IDENT ("," IDENT)*] "}" "}" ";"
+black_box_stmt : "blackbox" "{" ESCAPED_STRING "}" ";"
+asm_stmt : ["volatile"] "asm" "{" "{" ESCAPED_STRING "}" "{" [IDENT ("," IDENT)*] "}" "{" [IDENT ("," IDENT)*] "}" "}" ";"
 launch_kernel_stmt : IDENT "<<<" dim3 "," dim3 "," [SIGNED_NUMBER] ">>>" "(" [expr ("," expr)*] ")" ";"
 dim3 : "(" expr "," expr "," expr ")"
-seq_stmt : "{" stmt* "}"
+// seq_stmt : "{" stmt* "}"
+evaluate_stmt : expr ";"
 
 // mappings
 // mapping : spatial_mapping | repeat_mapping | composed_mapping
@@ -55,10 +57,10 @@ seq_stmt : "{" stmt* "}"
 // int_list : "[" SIGNED_NUMBER ("," SIGNED_NUMBER)* "]"
 
 // expressions
-expr : short_circuit_or_expr
+?expr : short_circuit_or_expr
 
 ?short_circuit_or_expr : short_circuit_and_expr ("||" short_circuit_and_expr)*
-?short_circuit_and_expr : not_expr ("&&" not_expr)*
+?short_circuit_and_expr : comp_expr ("&&" comp_expr)*
 ?comp_expr : not_expr (comp_op not_expr)*
 ?not_expr : "!" or_expr | or_expr
 ?or_expr: xor_expr ("|" xor_expr)*
@@ -76,8 +78,7 @@ expr : short_circuit_or_expr
 !_mul_op: "*"|"/"|"%"
 !comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
 
-?fn_call_expr : tensor_slice_expr 
-        | get_item_expr 
+?fn_call_expr : get_item_expr 
         | cast_expr 
         | deref_expr 
         | addr_expr 
@@ -86,10 +87,10 @@ expr : short_circuit_or_expr
         | if_then_else_expr 
         | atom
 
-tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
+// tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
+get_item_expr : expr "[" [(expr | slice) ("," (expr | slice))*] "]"
 slice : [expr] ":" [expr]
-get_item_expr : expr "[" [expr ("," expr)*] "]"
-call_expr : expr "(" [expr ("," expr)*] [keyword_arg ("," keyword_arg)*] ")"
+call_expr : expr "(" [expr ("," expr)*] [("," keyword_arg)*] ")"
 keyword_arg : IDENT "=" expr
 cast_expr : "cast" "<" type ">" "(" expr ")"
 deref_expr : "deref" "(" expr ")"
@@ -102,10 +103,12 @@ if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
         | get_attr
         | "true" -> true
         | "false" -> false
-        | "null" -> null
+        | "none" -> none
+        | symbol_var
         | IDENT -> var
-        | SIGNED_NUMBER -> number
-        | string -> string
+        | ESCAPED_STRING
+        | INT
+        | SIGNED_NUMBER
 
 get_attr : expr "." IDENT
 
@@ -113,7 +116,9 @@ get_attr : expr "." IDENT
 ?type : data_type | tensor_type | ptr_type
 
 ptr_type : "~" type
-tensor_type : data_type "<" [SIGNED_NUMBER ("," SIGNED_NUMBER)*] [";" attribute_name] ">"
+tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
+?tensor_tt_shape : INT | symbol_var
+tensor_layout : ";" expr
 !data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
 
 // attributes
@@ -123,21 +128,25 @@ attribute : attribute_name "=" dict ";"
 // python objects (or constants)
 ?value: dict
         | list
-        | tuple
-        | string
-        | SIGNED_NUMBER      -> number
+        // | tuple
+        | ESCAPED_STRING
+        | INT
+        | SIGNED_NUMBER
         | "true"             -> true
         | "false"            -> false
-        | "null"             -> null
+        | "none"             -> none
+        | expr
 
-pair : string ":" value
+pair : ESCAPED_STRING ":" value
 dict : "{" [pair ("," pair)*] "}"
 list : "[" [value ("," value)*] "]"
-tuple : "(" [value ("," value)*] ")"
-string : ESCAPED_STRING
+// tuple : "(" value "," (value ",")* ")"
+
+symbol_var : "@" IDENT
 
 IDENT : /[^\W\d]\w*/
 %import common.ESCAPED_STRING
 %import common.SIGNED_NUMBER
+%import common.INT
 %import common.WS
 %ignore WS

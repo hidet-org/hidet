@@ -9,10 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# %%
 from typing import Optional, List, Union, Dict, Tuple, Any
 
 import hidet.utils.structure
 from hidet.ir.node import Node
+from hidet.ir.expr import Expr, SymbolVar
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
@@ -37,13 +39,14 @@ from hidet.utils.namer import Namer
 from hidet.ir.functors import IRFunctor
 
 
-class IRPrinter(IRFunctor):
+class IRDumper(IRFunctor):
     def __init__(self):
         super().__init__(use_memo=False)
         self.namer = Namer()
         self.ir_module: Optional[IRModule] = None
-        self.show_var_id = hidet.option.get_option('debug_show_var_id')
         self.attr_table: Dict[str, Any] = {}
+        self.module_headers: List[str] = []
+        self.global_symbolvars = set()
 
     def __call__(self, node):
         return self.visit(node)
@@ -75,7 +78,9 @@ class IRPrinter(IRFunctor):
             elif isinstance(d, (list, tuple)):
                 for it in d:
                     check_attr(it)
-            elif isinstance(d, (int, float, str, bool)):
+            elif isinstance(d, (int, float, str, bool, Constant, Expr)):
+                pass
+            elif d is None:
                 pass
             else:
                 raise ValueError("Unexpected type {} in attribute dict".format(type(d)))
@@ -92,6 +97,10 @@ class IRPrinter(IRFunctor):
                 return '[' + ', '.join([format_str(it) for it in d]) + ']'
             elif isinstance(d, str):
                 return '"{}"'.format(d)
+            elif isinstance(d, Expr):
+                return str(self(d))
+            elif d is None:
+                return 'none'
             else:
                 return str(d)
 
@@ -106,7 +115,7 @@ class IRPrinter(IRFunctor):
             i += 1
         return name + str(i)
 
-    def add_attr_if_needed(self, name: str, d: Dict) -> Tuple[str, Optional[str]]:
+    def add_attr(self, name: str, d: Dict) -> Tuple[str, Optional[str]]:
         """
         Each attribute name references to a unique attribute somewhere higher.
         If the name does not exist yet, the create a new attribute,
@@ -114,28 +123,27 @@ class IRPrinter(IRFunctor):
         If the name exists and the attributes are equal, just refer to the existing attribute.
         """
         if name not in self.attr_table:
-            return self.format_attr_name(name), self.format_attr_dict(name, d)
+            # do this to preserve the order of defined attributes
+            self.module_headers.append(self.format_attr_dict(name, d))
+            return self.format_attr_name(name)
         else:
             if self.attr_table[name] == d:
-                return self.format_attr_name(name), None
+                return self.format_attr_name(name)
             else:
                 new_name = self.get_unique_attr_name(name)
-                return self.format_attr_name(new_name), self.format_attr_dict(new_name, d)
+                self.module_headers.append(self.format_attr_dict(new_name, d))
+                return self.format_attr_name(new_name)
 
     def visit_Function(self, func: Function):
         self.namer.clear()
 
         # parameters
-        fn_attrs = f'{func.name}'
         if len(func.attrs) > 0:
-            fn_attr_name, fn_attr_doc = self.add_attr_if_needed(fn_attrs, func.attrs)
+            fn_attr_name = self.add_attr('f', func.attrs)
         else:
             fn_attr_name = ''
-            fn_attr_doc = None
 
-        head_doc = Doc()
-        if fn_attr_doc is not None:
-            head_doc += fn_attr_doc + NewLine()
+        head_doc = NewLine()
         head_doc += Text('def ') + func.name + '('
         for i, param in enumerate(func.params):
             head_doc += (NewLine() + self(param) + ': ' + self(param.type)).indent(4)
@@ -144,7 +152,7 @@ class IRPrinter(IRFunctor):
             else:
                 head_doc += NewLine()
         head_doc += ')'
-        head_doc += ' -> ' + self(func.ret_type) + fn_attr_name + '{'
+        head_doc += ' -> ' + self(func.ret_type) + ' ' + fn_attr_name + ' {'
 
         # body
         body_doc = self(func.body).indent(4)
@@ -157,12 +165,8 @@ class IRPrinter(IRFunctor):
 
         ir_module_attrs = {"link_lib": ir_module.linking_libs, "external_object": ir_module.object_files, "namespace": ir_module.namespace,
                            "include_header": ir_module.include_headers}
-        attr_name = "mod_attr"
-        mod_attr_name, mod_attr_doc = self.add_attr_if_needed(attr_name, ir_module_attrs)
-        if mod_attr_doc is not None:
-            doc += self.format_attr_dict(attr_name, ir_module_attrs) + NewLine()
-
-        doc += Text("module ") + mod_attr_name + " {" + NewLine()
+        mod_attr_name =  self.get_unique_attr_name('m')
+        doc += Text("module #") + mod_attr_name + " {" + NewLine()
 
         mod_body = Doc()
         for name, var in ir_module.global_vars.items():
@@ -173,12 +177,20 @@ class IRPrinter(IRFunctor):
             mod_body += self(func) + NewLine()
         doc += mod_body.indent(4)
         doc += NewLine() + "}" + NewLine()
-        return doc
+
+        ir_module_attrs['symbols'] = list(self.global_symbolvars)
+
+        self.add_attr(mod_attr_name, ir_module_attrs)
+        headers = Doc()
+        for i in self.module_headers:
+            headers += i + NewLine()
+        
+        return headers + doc
 
     def visit_TensorElement(self, e: TensorElement):
         # TODO: 
         if e.protected:
-            doc = self(e.base) + '.protect_read([' + self(e.indices) + '])'
+            doc = NewLine() + "protected " + self(e.base) + '[' + self(e.indices) + ']'
         else:
             doc = self(e.base) + '[' + self(e.indices) + ']'
         return doc
@@ -233,6 +245,9 @@ class IRPrinter(IRFunctor):
     def visit_Var(self, e: Var):
         # if self.show_var_id:
         #     return Text('{}@{}'.format(self.namer.get_name(e), e.id))
+        if isinstance(e, SymbolVar):
+            self.global_symbolvars.add(e)
+            return Text('@' + self.namer.get_name(e))
         return Text(self.namer.get_name(e))
 
     def visit_Constant(self, e: Constant):
@@ -263,17 +278,19 @@ class IRPrinter(IRFunctor):
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         doc = NewLine()
         if stmt.is_static:
-            doc += ' static '
+            doc += 'static '
         if stmt.scope != DeclareScope.Default:
-            doc += ' {}'.format(stmt.scope)
+            attr = ' ' + self.add_attr("d", {"scope": str(stmt.scope)})
+        else:
+            attr = ''
         doc += Text('decl ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
 
         if stmt.init is not None:
-            doc += ' = ' + self(stmt.init) + ';'
-        return doc
+            doc += ' = ' + self(stmt.init)
+        return doc + ';' + attr
 
-    # def visit_EvaluateStmt(self, stmt: EvaluateStmt):
-    #     return NewLine() + self(stmt.expr)
+    def visit_EvaluateStmt(self, stmt: EvaluateStmt):
+        return NewLine() + self(stmt.expr) + ';'
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         doc = NewLine()
@@ -288,15 +305,15 @@ class IRPrinter(IRFunctor):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value) + ';'
 
     def visit_LetStmt(self, stmt: LetStmt):
-        doc = Doc()
+        doc = NewLine()
         doc += NewLine() + Text('let(')
         doc_stmt = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             doc_stmt += NewLine() + self(bind_var) + ': ' + self(bind_var.type) + ' = ' + self(bind_value) + ';'
         doc += doc_stmt.indent(4)
         doc += NewLine() + ') in ('
-        doc += self(stmt.body).indent()
-        doc += NewLine() + ')'
+        doc += self(stmt.body).indent(4)
+        doc += NewLine() + ');'
         # doc += self(stmt.body).indent()
         return doc
             
@@ -313,21 +330,19 @@ class IRPrinter(IRFunctor):
                 for_stmt_attr['threads'] = stmt.attr.parallel_threads
         
         if len(for_stmt_attr) > 0:
-            attr_name, attr_doc = self.add_attr_if_needed('u', for_stmt_attr)
+            attr_name = self.add_attr('u', for_stmt_attr)
         else:
             attr_name = ''
-            attr_doc = None
         
         rng = Text('range(') + self(stmt.extent) + ') '
         doc = NewLine()
-        if attr_doc is not None:
-            doc += attr_doc
-        doc += NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng + attr_name + ' {'
+        doc += NewLine() + Text('for (') + self(stmt.loop_var) + ') in ' + rng + attr_name + ' {'
         doc += self(stmt.body).indent(4)
+        doc += NewLine() + '}'
         return doc
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
+        doc = NewLine() + NewLine() + Text('for (') + self(stmt.loop_vars) + ') in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
         doc += self(stmt.body).indent(4)
         doc += NewLine() + '}'
         return doc
@@ -410,7 +425,7 @@ class IRPrinter(IRFunctor):
         else:
             stmt_string: str = stmt.template_string
         lines = stmt_string.split('\n')
-        doc = Text('blackbox {')
+        doc = NewLine() + Text('blackbox {')
         inner = Text('')
         for line in lines:
             inner += NewLine() + line
@@ -421,23 +436,24 @@ class IRPrinter(IRFunctor):
         doc = Doc()
         for s in stmt.seq:
             doc += self(s)
-        return Text('{') + NewLine() + doc.indent(4) + NewLine() + '}'
+        # return NewLine() + Text('{') + doc.indent(4) + NewLine() + '}'
+        return doc
 
     def visit_DataType(self, t: DataType):
-        return Text('{}'.format(t.name))
+        return Text('{}'.format(t.short_name))
 
     def _tensor_type(self, t: TensorType):
-        layout = ' ;'
+        layout = ''
         if isinstance(t.layout, RowMajorLayout) or t.layout is None:
             # default layout, do not print
             pass
         else:
-            layout += self(t.layout)
-        layout = self(t.dtype) + '<' + ','.join(self(t.shape)) + layout + '>'
+            layout += '; ' + self(t.layout)
+        layout = self(t.dtype) + '<' + self(t.shape) + layout + '>'
         return layout
 
     def visit_TensorType(self, t: TensorType):
-        return Text(self._tensor_type(t))
+        return self._tensor_type(t)
 
     # def visit_ArrayType(self, t: ArrayType):
     #     return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
@@ -603,7 +619,7 @@ class IRPrinter(IRFunctor):
         return Text('local(') + self(layout.shape) + ')'
 
     def visit_ComposedLayout(self, layout: ComposedLayout):
-        return self(layout.outer) + ' * ' + self(layout.inner)
+        return Text('compose(') + self(layout.outer) + ', ' + self(layout.inner) + ')'
 
     def visit_ConcatLayout(self, layout: ConcatLayout):
         return Text('concat(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
@@ -671,7 +687,174 @@ class IRPrinter(IRFunctor):
 
 def astext(obj: Node) -> str:
     if isinstance(obj, Node):
-        printer = IRPrinter()
+        printer = IRDumper()
         return str(printer(obj))
     else:
         raise ValueError()
+
+
+from hidet.transforms.unify_global_objects import unify_global_objects_pass
+from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
+from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
+from hidet.transforms.generate_launch_func import generate_launch_func_pass
+from hidet.transforms.explicit_unroll import explicit_unroll_pass
+from hidet.transforms.import_primitive_functions import import_primitive_functions_pass
+from hidet.transforms.simplify_stmt import simplify_stmt_pass
+from hidet.transforms.expand_let_expr import expand_let_expr_pass
+from hidet.transforms.instantiate_symbols import instantiate_symbols_pass
+from hidet.transforms.resolve_generic_primitive_function import resolve_primitive_func_pass
+from hidet.transforms.inline_function import inline_function_pass
+from hidet.transforms.add_explicit_cast import add_explicit_cast_pass
+from hidet.transforms.inline_let_stmt import inline_let_stmt_pass
+from hidet.transforms.rule_based_simplifier import rule_based_simplify_pass
+from hidet.transforms.normalize_const_tensor import normalize_const_tensor_pass
+from hidet.transforms.lower_task_mapping import lower_task_mapping_pass
+from hidet.transforms.lower_protect_access import lower_protect_access_pass
+from hidet.transforms.declare_to_let import declare_to_let_pass
+from hidet.transforms.propagate_launch_bound import propagate_launch_bound_pass
+from hidet.transforms.check_launch_configuration import check_launch_configuration_pass
+from hidet.transforms.lower_special_cast import lower_special_cast_pass
+from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
+
+# from hidet.graph.ops.softmax import SoftmaxTask
+from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
+from hidet.graph.ops.utils import input_like, tensor_input
+from hidet import symbol_var
+
+s = symbol_var('s')
+a = tensor_input('a', 'float16', [s, 256])
+b = tensor_input('b', 'float16', [256, 512])
+task = MatmulF16Task(a, b)
+mods = task.implement_cuda('.')
+mod = mods[0]
+
+transforms = [
+        # necessary passes
+        unify_global_objects_pass(),
+        generate_launch_func_pass(),
+        flatten_tensor_slice_pass(),
+        lower_protect_access_pass(),
+        lower_task_mapping_pass(),
+        normalize_const_tensor_pass(),
+        declare_to_let_pass(),
+        rule_based_simplify_pass(),  # make ir more readable
+        flatten_tensor_index_pass(),
+        lower_special_cast_pass(),
+        inline_function_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        propagate_launch_bound_pass(),
+        add_explicit_cast_pass(),
+        declare_to_let_pass(),
+        instantiate_symbols_pass(),
+        check_launch_configuration_pass(),
+        # simplification
+        expand_let_expr_pass(),
+        inline_let_stmt_pass(),
+        explicit_unroll_pass(),
+        rule_based_simplify_pass(),
+        inline_let_stmt_pass(),
+        simplify_stmt_pass(),
+        annotate_header_and_libs_pass(),
+    ]
+# for t in transforms:
+#     mod = t(mod)
+
+text = astext(mod)
+print(text)
+
+import sys
+from lark import Lark, Transformer, Token, Tree
+
+with open('hidet/python/hidet/ir/hidet.lark') as f:
+    hidet_grammar = f.read()
+
+parser = Lark(hidet_grammar, start='top_level')
+tree = parser.parse(text)
+print(tree.pretty())
+
+# %%
+class IRConstructor:
+    def __init__(self, pass_through=True):
+        self.attributes = {}
+        self.pass_through = pass_through
+    
+    def visit(self, node) -> Node:
+        if isinstance(node, Tree):
+            if isinstance(node.data, str):
+                # alias
+                method_name = 'visit_' + node.data
+            else:
+                # rule
+                assert node.data.type == 'RULE'
+                method_name = 'visit_' + node.data.value
+            method = getattr(self, method_name, None)
+            if method is None:
+                if not self.pass_through:
+                    raise NotImplementedError("No method {} for {}".format(method_name, node.data))
+                children = [self.visit(child) for child in node.children]
+                return Tree(node.data, children, meta=node.meta)
+            else:
+                return method(node.children)
+
+        elif isinstance(node, Token):
+            method_name = 'visit_' + node.type
+            method = getattr(self, method_name, None)
+            if method is None:
+                if not self.pass_through:
+                    raise NotImplementedError("No method {} for {}".format(method_name, node.type))
+                return node
+            else:
+                return method(node.value)
+        else:
+            if not self.pass_through:
+                raise NotImplementedError("Unknown node type: {}".format(type(node)))
+            else:
+                print(type(node))
+    
+    def visit_ESCAPED_STRING(self, value):
+        return str(value[1:-1])
+
+    def visit_INT(self, value):
+        return int(value)
+
+    def visit_SIGNED_NUMBER(self, value):
+        return float(value)
+    
+    def visit_true(self, value):
+        return True
+    
+    def visit_false(self, value):
+        return False
+    
+    def visit_none(self, value):
+        return None
+    
+    def visit_pair(self, node):
+        return self.visit(node[0]), self.visit(node[1])
+    
+    def visit_dict(self, node):
+        pairs = [self.visit(child) for child in node]
+        return {key: value for key, value in pairs}
+    
+    def visit_list(self, node):
+        return [self.visit(child) for child in node]
+    
+    def visit_attribute(self, attribute):
+        ident = attribute[0].children[0].value
+        body = self.visit(attribute[1])
+
+        self.attributes[ident] = body
+
+    def visit_top_level(self, children):
+        for child in children[:-1]:
+            if child.data.value == 'attribute':
+                self.visit(child)
+            
+        return self.visit(children[-1])
+
+const = IRConstructor()
+new_tree = const.visit(tree)
+print(new_tree)

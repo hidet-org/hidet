@@ -373,11 +373,12 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
 if __name__ == '__main__':
     import hidet
     from hidet.ir.type import tensor_type
-    from hidet.lang import attrs, f16, tensor_pointer
+    from hidet.lang import attrs, f16, i32, tensor_pointer
     from hidet.lang.layout import row_major
     from hidet.lang.cuda import dynamic_shared_memory, threadIdx
 
     asym = hidet.symbol_var('a', 'int32')
+    asym = asym * 2 + asym % 2
     test_layout = row_major(64, asym)
 
     smem_a_type = tensor_type(
@@ -386,11 +387,16 @@ if __name__ == '__main__':
 
     with hidet.script_module() as module:
         @hidet.script
-        def test_fn(a: smem_a_type):
+        def test_fn(a: smem_a_type, i: i32):
+            global smem_a_type
+            smem_a_type = tensor_type(
+                'float16', shape=[i, asym], layout=row_major(i, asym)
+            )
+
             a[threadIdx.x, threadIdx.y] += 1
         
         @hidet.script
-        def main(a: ~f16):
+        def main(a: ~smem_a_type):
             attrs.cuda.grid_dim = 1
             attrs.cuda.block_dim = 32
             # the second 2 means '2 bytes per float16'
@@ -399,7 +405,7 @@ if __name__ == '__main__':
                 'float16', shape=[64, asym], layout=test_layout
             )
             smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
-            test_fn(smem_a)
+            test_fn(smem_a, threadIdx.x)
 
     ir_module = module.ir_module()
     # print(ir_module)
