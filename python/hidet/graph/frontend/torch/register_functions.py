@@ -1066,6 +1066,28 @@ def torch_mean(
     return output
 
 
+@register_function(torch.sum)
+@register_method(torch.Tensor.sum)
+def torch_sum(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
+    if dtype:
+        x = x.astype(dtype_from_torch(dtype))
+    output = ops.sum(x, dims=list(range(len(x.shape))), keep_dim=True)
+    return output
+
+
+@register_function(torch.sum)
+@register_method(torch.Tensor.sum)
+def torch_sum(
+    x: Tensor, dim, keepdim=False, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None
+) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.sum(..., out=...)")
+    if dtype:
+        x = x.astype(dtype_from_torch(dtype))
+    output = ops.sum(x, dims=dim, keep_dim=keepdim)
+    return output
+
+
 @register_function(torch.cumsum)
 def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
