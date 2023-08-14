@@ -24,7 +24,7 @@ from .activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, pre
 from .activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink
 from .activation import softshrink, softmax, softmin, hardtanh
 from .attention import attention
-from .normalize import batch_norm_infer, instance_norm, layer_norm, group_norm
+from .normalize import batch_norm_infer, instance_norm, layer_norm, group_norm, lp_norm
 from .image import resize2d
 from .create import full, arange, linspace, tri
 from .arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square

@@ -718,7 +718,7 @@ class SetStridedSliceOp(Operator):
 
 
 class RollOp(Operator):
-    def __init__(self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]) -> Tensor:
+    def __init__(self, x: Tensor, shifts: Sequence[int], dims: Sequence[int]):
         if not len(shifts) == len(dims):
             raise ValueError('Roll must have same size shifts and dims, got {} and {}'.format(len(shifts), len(dims)))
         task = RollTask(input_like(x, 'x'), shifts, dims)

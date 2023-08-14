@@ -9,6 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .layers import batch_norm_infer, layer_norm, instance_norm, group_norm
-from .lp import lp_norm
-from . import resolve
+
+def lp_norm():
+    pass

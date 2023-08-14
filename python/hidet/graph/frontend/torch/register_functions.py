@@ -1223,3 +1223,9 @@ def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constan
 @register_function(torch.roll)
 def torch_roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
     return ops.roll(x, shifts, dims)
+
+@register_function(torch.nn.functional.normalize)
+def torch_normalize(x: Tensor, p=2.0, dim=1, eps=1e-12, out=None):
+    if out is not None:
+        raise NotImplementedError("out is not None")
+    return ops.lp_norm(x, p, dim, eps)
