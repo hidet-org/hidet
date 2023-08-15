@@ -1,17 +1,15 @@
 
 // statements
-top_level : [(attribute | module)]*
+top_level : attribute module
 
-module : "module" [attribute_name] "{" [(function | declare_stmt)]* "}"
+module : "module" attribute_name "{" [attribute*] [(function | declare_stmt)*] "}"
 
-function : "def" fn_name "(" fn_args ")" "->" fn_return_type [attribute_name] "{" fn_body "}"
+function : "def" name "(" fn_args ")" "->" type [attribute_name] "{" stmt_body "}"
 
-fn_name : IDENT
 fn_args : [type_annotation ("," type_annotation)*]
-fn_return_type : type
-type_annotation : IDENT ":" type
+type_annotation : var ":" type
 
-fn_body : [(attribute | stmt)]*
+stmt_body : [stmt*]
 
 ?stmt : declare_stmt
         | buffer_store_stmt
@@ -28,23 +26,26 @@ fn_body : [(attribute | stmt)]*
         | asm_stmt
         | launch_kernel_stmt
         | evaluate_stmt
-        // | seq_stmt
+
 
 declare_stmt : ["static"] "decl" type_annotation ["=" expr] ";" [attribute_name]
 buffer_store_stmt : ["protected"] get_item_expr "=" expr ";"
-assign_stmt : IDENT "=" expr ";"
+assign_stmt : var "=" expr ";"
 return_stmt : "return" expr ";"
-let_stmt : "let" "(" (type_annotation "=" expr ";")+ ")" ["in" "(" stmt* ")"] ";"
-for_stmt : "for" "(" IDENT ["," IDENT]* ")" "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt* "}"
+let_stmt : "let" "(" (type_annotation "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
+for_stmt : "for" "(" var [("," var)*] ")" "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
 task_mapping : "on" "(" expr ")"
-while_stmt : "while" expr "{" stmt* "}"
+while_stmt : "while" expr "{" stmt_body "}"
 break_stmt : "break" ";"
 continue_stmt : "continue" ";"
-if_stmt : "if" expr "{" stmt* "}" ["else" "{" stmt* "}"]
-assert_stmt : "assert" "(" expr ")" ";"
-black_box_stmt : "blackbox" "{" ESCAPED_STRING "}" ";"
-asm_stmt : ["volatile"] "asm" "{" "{" ESCAPED_STRING "}" "{" [IDENT ("," IDENT)*] "}" "{" [IDENT ("," IDENT)*] "}" "}" ";"
-launch_kernel_stmt : IDENT "<<<" dim3 "," dim3 "," [SIGNED_NUMBER] ">>>" "(" [expr ("," expr)*] ")" ";"
+if_stmt : "if" expr "{" stmt_body "}" ["else" "{" stmt_body "}"]
+assert_stmt : "assert" "(" expr ["," STRING] ")" ";"
+black_box_stmt : "blackbox" "(" [expr ("," expr)*] ")" "{" "$" ANYWILDCARD "$" "}" ";"
+
+
+asm_stmt : ["volatile"] "asm" "{" STRING "{" [asm_label ("," asm_label)*] "}" "{" [asm_label ("," asm_label)*] "}" "}" ";"
+asm_label : STRING "(" expr ")"
+launch_kernel_stmt : fn_name "<<<" dim3 "," dim3 "," [INT] ">>>" "(" [expr ("," expr)*] ")" ";"
 dim3 : "(" expr "," expr "," expr ")"
 // seq_stmt : "{" stmt* "}"
 evaluate_stmt : expr ";"
@@ -57,26 +58,32 @@ evaluate_stmt : expr ";"
 // int_list : "[" SIGNED_NUMBER ("," SIGNED_NUMBER)* "]"
 
 // expressions
-?expr : short_circuit_or_expr
+// ?expr : short_circuit_or_expr
 
-?short_circuit_or_expr : short_circuit_and_expr ("||" short_circuit_and_expr)*
-?short_circuit_and_expr : comp_expr ("&&" comp_expr)*
-?comp_expr : not_expr (comp_op not_expr)*
-?not_expr : "!" or_expr | or_expr
-?or_expr: xor_expr ("|" xor_expr)*
-?xor_expr: and_expr ("^" and_expr)*
-?and_expr: shift_expr ("&" shift_expr)*
-?shift_expr: arith_expr (_shift_op arith_expr)*
-?arith_expr: term (_add_op term)*
-?term: factor (_mul_op factor)*
-?factor: _unary_op factor | power
-?power: fn_call_expr ("**" factor)?
+// ?short_circuit_or_expr : short_circuit_and_expr ("||" short_circuit_and_expr)*
+// ?short_circuit_and_expr : comp_expr ("&&" comp_expr)*
+// ?comp_expr : not_expr (comp_op not_expr)*
+// ?not_expr : "!" or_expr | or_expr
+// ?or_expr: xor_expr ("|" xor_expr)*
+// ?xor_expr: and_expr ("^" and_expr)*
+// ?and_expr: shift_expr ("&" shift_expr)*
+// ?shift_expr: arith_expr (_shift_op arith_expr)*
+// ?arith_expr: term (_add_op term)*
+// ?term: factor (_mul_op factor)*
+// ?factor: _unary_op factor | power
+// ?power: fn_call_expr ("**" factor)?
 
-!_unary_op: "+"|"-"
-!_add_op: "+"|"-"
-!_shift_op: "<<"|">>"
-!_mul_op: "*"|"/"|"%"
-!comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
+// !_unary_op: "+"|"-"
+// !_add_op: "+"|"-"
+// !_shift_op: "<<"|">>"
+// !_mul_op: "*"|"/"|"%"
+// !comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
+
+?expr : "(" _unary_op expr ")"  -> unary_op
+        | "(" expr _binary_op expr ")" -> binary_op
+        | fn_call_expr 
+!_unary_op: "+"|"-"| "!"
+!_binary_op: "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "**" | "^" | "|" | "&"
 
 ?fn_call_expr : get_item_expr 
         | cast_expr 
@@ -90,9 +97,9 @@ evaluate_stmt : expr ";"
 // tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
 get_item_expr : expr "[" [(expr | slice) ("," (expr | slice))*] "]"
 slice : [expr] ":" [expr]
-call_expr : expr "(" [expr ("," expr)*] [("," keyword_arg)*] ")"
-keyword_arg : IDENT "=" expr
-cast_expr : "cast" "<" type ">" "(" expr ")"
+call_expr : fn_name "(" [expr ("," expr)*] [("," keyword_arg)*] ")"
+keyword_arg : var "=" expr
+cast_expr : "cast" "(" expr "as" type ")"
 deref_expr : "deref" "(" expr ")"
 addr_expr : "addr" "(" expr ")"
 
@@ -105,19 +112,19 @@ if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
         | "false" -> false
         | "none" -> none
         | symbol_var
-        | IDENT -> var
-        | ESCAPED_STRING
+        | var
+        | STRING
         | INT
-        | SIGNED_NUMBER
+        | SIGNED_FLOAT
 
-get_attr : expr "." IDENT
+get_attr : expr "." name
 
 // Types
 ?type : data_type | tensor_type | ptr_type
 
 ptr_type : "~" type
 tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
-?tensor_tt_shape : INT | symbol_var
+?tensor_tt_shape : expr
 tensor_layout : ";" expr
 !data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
 
@@ -128,25 +135,24 @@ attribute : attribute_name "=" dict ";"
 // python objects (or constants)
 ?value: dict
         | list
-        // | tuple
-        | ESCAPED_STRING
-        | INT
-        | SIGNED_NUMBER
-        | "true"             -> true
-        | "false"            -> false
-        | "none"             -> none
         | expr
 
-pair : ESCAPED_STRING ":" value
-dict : "{" [pair ("," pair)*] "}"
-list : "[" [value ("," value)*] "]"
+pair : STRING ":" value
+dict : "dict" "(" (pair ("," pair)*)? ")"
+list : "list" "(" (value ("," value)*)? ")"
 // tuple : "(" value "," (value ",")* ")"
 
 symbol_var : "@" IDENT
+var : IDENT
+name : IDENT
+fn_name : IDENT [attribute_name]
 
 IDENT : /[^\W\d]\w*/
-%import common.ESCAPED_STRING
-%import common.SIGNED_NUMBER
+ANYWILDCARD : /[^\$]+/
+STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+SIGNED_FLOAT : ["+" | "-"] FLOAT
+
+%import common.FLOAT
 %import common.INT
 %import common.WS
 %ignore WS
