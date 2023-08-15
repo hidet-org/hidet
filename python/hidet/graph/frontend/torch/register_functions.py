@@ -1240,21 +1240,26 @@ def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constan
 def torch_roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
     return ops.roll(x, shifts, dims)
 
+
 @register_function(torch.nn.functional.normalize)
 def torch_normalize(x: Tensor, p=2.0, dim=1, eps=1e-12, out=None):
     if out is not None:
         raise NotImplementedError("out is not None")
     return ops.lp_norm(x, p, dim, eps)
 
+
 @register_function(torch.clone)
 @register_method(torch.Tensor.clone)
 def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
     if memory_format is not torch.preserve_format:
-        warnings.warn_once("torch.clone got memory_format not torch.preserve_format, treating it as torch.preserve_format")
+        warnings.warn_once(
+            "torch.clone got memory_format not torch.preserve_format, treating it as torch.preserve_format"
+        )
     if x.is_symbolic():
         return x
     else:
         return x.copy()
+
 
 @register_function(torch.chunk)
 def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
