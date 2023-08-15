@@ -1265,6 +1265,7 @@ def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
 def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
     return ops.split(x, parts_or_sections=chunks, axis=dim)
 
+
 @register_function(torch.einsum)
 def torch_einsum(equation, *operands):
     return ops.einsum(equation, operands)

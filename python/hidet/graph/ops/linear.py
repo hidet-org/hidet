@@ -9,16 +9,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Sequence
-from hidet.ir import primitives
-from hidet.ir import Var, expr, dtypes
-from hidet.ir.type import DataType
-from hidet.ir.expr import Expr, if_then_else, logical_or, is_constant, is_true
-from hidet.ir.tools import rewrite
-from hidet.utils import prod, same_list
-from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
-from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
-from .utils import normalize_slice, normalize_dim
+from typing import Sequence
+from .utils import Tensor
 from .matmul import matmul
 
 # ToDo: Actually fully implement einsum, supporting same usage as Numpy and Torch
@@ -45,7 +37,7 @@ def einsum(equation: str, operands: Sequence[Tensor]):
 
     if a_batch != b_batch or a_batch != c_batch:
         raise NotImplementedError('einsum currently only supports batched matmul')
-    
+
     if a_dims[1] == b_dims[0]:
         c = matmul(a, b)
     elif a_dims[1] == b_dims[1]:
@@ -56,9 +48,10 @@ def einsum(equation: str, operands: Sequence[Tensor]):
         c = matmul(a.transpose(-1, -2), b.transpose(-1, -2))
     else:
         raise NotImplementedError('einsum currently only supports batched matmul')
-    
+
     transpose_c = (c_dims[0] == b_dims[0] or c_dims[0] == b_dims[1]) and (
-        c_dims[1] == a_dims[0] or c_dims[1] == a_dims[1])
+        c_dims[1] == a_dims[0] or c_dims[1] == a_dims[1]
+    )
 
     if transpose_c:
         return c.transpose(-1, -2)
