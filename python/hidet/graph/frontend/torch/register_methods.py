@@ -297,3 +297,8 @@ def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, 
     _ = requires_grad
 
     return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)
+
+
+@register_method(torch.Tensor.zero_)
+def tensor_zero_(self: Tensor):
+    return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)

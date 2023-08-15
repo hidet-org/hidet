@@ -19,14 +19,18 @@ from ..transforms import ResolveRule, register_resolve_rule
 
 
 class Pool2dTask(Task):
-    def __init__(self, x: TensorNode, kernel, strides, padding, reduce_type: str):
+    def __init__(self, x: TensorNode, kernel, strides, padding, ceil_mode: bool, reduce_type: str):
         assert reduce_type in ['max', 'avg']
         kernel = normalize_kernel(kernel)
         strides = normalize_stride(strides)
         padding = normalize_padding(padding)
         batch_size, channels, height, width = x.shape
-        out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
-        out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
+        if ceil_mode:
+            out_height = (height + padding[0] + padding[2] - kernel[0] + strides[0] - 1) // strides[0] + 1
+            out_width = (width + padding[1] + padding[3] - kernel[1] + strides[1] - 1) // strides[1] + 1
+        else:
+            out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
+            out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
         pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.type.dtype)
         pad = compute(
             name='pad',
@@ -145,11 +149,12 @@ class MaxPool2dOp(Operator):
         kernel: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]],
         padding: Union[int, Sequence[int]],
+        ceil_mode: bool,
     ):
         super().__init__(
             inputs=[x],
-            attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
-            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
+            attributes={'kernel': kernel, 'stride': stride, 'padding': padding, 'ceil_mode': ceil_mode},
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='max'),
         )
 
 
@@ -175,11 +180,12 @@ class AvgPool2dOp(Operator):
         kernel: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]],
         padding: Union[int, Sequence[int]],
+        ceil_mode: bool,
     ):
         super().__init__(
             inputs=[x],
-            attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
-            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
+            attributes={'kernel': kernel, 'stride': stride, 'padding': padding, 'ceil_mode': ceil_mode},
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='avg'),
         )
 
 
@@ -245,16 +251,16 @@ class AdaptiveMaxPool3dOp(AdaptivePoolOp):
         super().__init__(x, output_size, reduce_type='max', attrs={'output_size': output_size}, spatial_ndim=3)
 
 
-def max_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return MaxPool2dOp(x, kernel, stride, padding).outputs[0]
+def max_pool2d(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
+    return MaxPool2dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
 
 def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return MaxPool3dOp(x, kernel, stride, padding).outputs[0]
 
 
-def avg_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return AvgPool2dOp(x, kernel, stride, padding).outputs[0]
+def avg_pool2d(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
+    return AvgPool2dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
 
 def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:

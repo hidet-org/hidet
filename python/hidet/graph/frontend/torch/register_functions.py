@@ -113,11 +113,9 @@ def relu(x: Tensor, inplace: bool):
 def max_pool2d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=False, return_indices=False):
     if dilation != 1 and not same_list(dilation, [1, 1]):
         raise NotImplementedError("dilation != 1")
-    if ceil_mode:
-        raise NotImplementedError("ceil_mode=True")
     if return_indices:
         raise NotImplementedError("return_indices=True")
-    y = ops.max_pool2d(x, kernel_size, stride, padding)
+    y = ops.max_pool2d(x, kernel_size, stride, padding, ceil_mode=ceil_mode)
     return y
 
 
@@ -594,6 +592,7 @@ def permute(x: Tensor, *args):
     return ops.transpose(x, dims)
 
 
+@register_function(torch.swapaxes)
 @register_function(torch.transpose)
 @register_method(torch.Tensor.transpose)
 def transpose(x: Tensor, dim0: int, dim1: int):
@@ -775,6 +774,7 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.exp)
+@register_method(torch.Tensor.exp)
 def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
@@ -1217,9 +1217,50 @@ def isinf(x: Tensor) -> Tensor:
 def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
     if isinstance(pad, tuple):
         pad = list(pad)
+    # Torch's pad list has form [p2left, p2right, p1left, p1right, p0left, p0right]
+    # Hidet's pad list has form [p0left, p1left, p2left, p0right, p1right, p2right]
+    left = []
+    right = []
+    for i, p in enumerate(pad):
+        if i % 2 == 0:
+            left.append(p)
+        else:
+            right.append(p)
+    left.reverse()
+    right.reverse()
+    pad = []
+    for p in left:
+        pad.append(p)
+    for p in right:
+        pad.append(p)
     return ops.pad(x, pads=pad, mode=mode, value=value)
 
 
 @register_function(torch.roll)
 def torch_roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
     return ops.roll(x, shifts, dims)
+
+
+@register_function(torch.nn.functional.normalize)
+def torch_normalize(x: Tensor, p=2.0, dim=1, eps=1e-12, out=None):
+    if out is not None:
+        raise NotImplementedError("out is not None")
+    return ops.lp_norm(x, p, dim, eps)
+
+
+@register_function(torch.clone)
+@register_method(torch.Tensor.clone)
+def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
+    if memory_format is not torch.preserve_format:
+        warnings.warn_once(
+            "torch.clone got memory_format not torch.preserve_format, treating it as torch.preserve_format"
+        )
+    if x.is_symbolic():
+        return x
+    else:
+        return x.copy()
+
+
+@register_function(torch.chunk)
+def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
+    return ops.split(x, parts_or_sections=chunks, axis=dim)

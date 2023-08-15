@@ -125,7 +125,7 @@ class ThreeConv2dFusionPattern(SubgraphRewriteRule):
                     x,
                     w,
                     stride=op1.attrs['stride'],
-                    dilations=op1.attrs['dilation'],
+                    dilations=op1.attrs['dilations'],
                     groups=1,
                     padding=op1.attrs['padding'],
                 )
