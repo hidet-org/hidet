@@ -1217,6 +1217,22 @@ def isinf(x: Tensor) -> Tensor:
 def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
     if isinstance(pad, tuple):
         pad = list(pad)
+    # Torch's pad list has form [p2left, p2right, p1left, p1right, p0left, p0right]
+    # Hidet's pad list has form [p0left, p1left, p2left, p0right, p1right, p2right]
+    left = []
+    right = []
+    for i, p in enumerate(pad):
+        if i % 2 == 0:
+            left.append(p)
+        else:
+            right.append(p)
+    left.reverse()
+    right.reverse()
+    pad = []
+    for p in left:
+        pad.append(p)
+    for p in right:
+        pad.append(p)
     return ops.pad(x, pads=pad, mode=mode, value=value)
 
 
