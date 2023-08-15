@@ -1239,3 +1239,7 @@ def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
         return x
     else:
         return x.copy()
+
+@register_function(torch.chunk)
+def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
+    return ops.split(x, parts_or_sections=chunks, axis=dim)
