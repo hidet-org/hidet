@@ -112,4 +112,6 @@ def lp_norm(x: Tensor, p=2.0, dim=1, eps=1e-12):
     ret: Tensor
         The normalized tensor.
     """
+    # Normalize dim
+    dim = normalize_dim(dim, rank=len(x.shape))
     return LpNormOp(x, p, dim, eps).outputs[0]
