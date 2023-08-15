@@ -592,6 +592,7 @@ def permute(x: Tensor, *args):
     return ops.transpose(x, dims)
 
 
+@register_function(torch.swapaxes)
 @register_function(torch.transpose)
 @register_method(torch.Tensor.transpose)
 def transpose(x: Tensor, dim0: int, dim1: int):
