@@ -1236,7 +1236,7 @@ def torch_normalize(x: Tensor, p=2.0, dim=1, eps=1e-12, out=None):
 def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
     if memory_format is not torch.preserve_format:
         warnings.warn_once("torch.clone got memory_format not torch.preserve_format, treating it as torch.preserve_format")
-    if x.storage:
-        return x.copy()
-    else:
+    if x.is_symbolic():
         return x
+    else:
+        return x.copy()
