@@ -775,6 +775,7 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.exp)
+@register_method(torch.Tensor.exp)
 def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
@@ -1229,3 +1230,13 @@ def torch_normalize(x: Tensor, p=2.0, dim=1, eps=1e-12, out=None):
     if out is not None:
         raise NotImplementedError("out is not None")
     return ops.lp_norm(x, p, dim, eps)
+
+@register_function(torch.clone)
+@register_method(torch.Tensor.clone)
+def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
+    if memory_format is not torch.preserve_format:
+        warnings.warn_once("torch.clone got memory_format not torch.preserve_format, treating it as torch.preserve_format")
+    if x.storage:
+        return x.copy()
+    else:
+        return x
