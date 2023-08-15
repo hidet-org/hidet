@@ -113,11 +113,9 @@ def relu(x: Tensor, inplace: bool):
 def max_pool2d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=False, return_indices=False):
     if dilation != 1 and not same_list(dilation, [1, 1]):
         raise NotImplementedError("dilation != 1")
-    if ceil_mode:
-        raise NotImplementedError("ceil_mode=True")
     if return_indices:
         raise NotImplementedError("return_indices=True")
-    y = ops.max_pool2d(x, kernel_size, stride, padding)
+    y = ops.max_pool2d(x, kernel_size, stride, padding, ceil_mode=ceil_mode)
     return y
 
 
