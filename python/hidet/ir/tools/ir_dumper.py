@@ -11,6 +11,7 @@
 # limitations under the License.
 # %%
 from typing import Optional, List, Union, Dict, Tuple, Any, Set
+import types
 
 import hidet.utils.structure
 from hidet import ir
@@ -647,17 +648,17 @@ class IRDumper(IRFunctor):
         attr = self.add_attr("c", {"fn_type": "Layout"})
 
         if isinstance(layout, RowMajorLayout):
-            return Text(f'row{attr}(') + self(layout.shape) + ')'
+            return Text(f'row{attr}(list(') + self(layout.shape) + '))'
         elif isinstance(layout, ColumnMajorLayout):
-            return Text(f'column{attr}(') + self(layout.shape) + ')'
+            return Text(f'column{attr}(list(') + self(layout.shape) + '))'
         else:
-            return Text(f'strides{attr}(') + self(layout.strides) + ')'
+            return Text(f'strides{attr}(list(') + self(layout.shape) + '),' + 'list(' + self(layout.strides) + '))'
     
     # def get_strides_layout_attr
 
     def visit_SwizzleLayout(self, layout: SwizzleLayout):
         attr = self.add_attr("c", {"fn_type": "Layout"})
-        items = [self(layout.base), Text('dim=') + self(layout.dim), Text('regards=') + self(layout.regards_dim)]
+        items = [self(layout.base), Text('dim=') + self(layout.dim), Text('regards_dim=') + self(layout.regards_dim)]
         if layout.log_step != 0:
             items.append(Text('log_step=') + self(layout.log_step))
         return Text(f'swizzle{attr}(') + doc_join(items, ', ') + ')'
@@ -874,7 +875,7 @@ import logging
 from lark import Lark, logger
 logger.setLevel(logging.DEBUG)
 
-with open('../hidet.lark') as f:
+with open('hidet/python/hidet/ir/hidet.lark') as f:
     hidet_grammar = f.read()
 
 parser = Lark(hidet_grammar, start='top_level', debug=True, parser='lalr')
@@ -1021,6 +1022,7 @@ class IRConstructor(Transformer):
     def top_level(self, node):
         return node[1]
 
+from hidet.lang.transpiler import ScopeStack
 class IRConstructor:
     def __init__(self, preprocessor: PreProcessTree, pass_through=True):
         self.pass_through = pass_through
@@ -1028,9 +1030,15 @@ class IRConstructor:
         self.symboltable = preprocessor.symbols
         self.attributes = preprocessor.attributes
         self.funcs = preprocessor.funcs
+        # self.scope_stack = ScopeStack()
 
+        # a property of the ir is that every name to a variable is unique
+        # so we don't need to worry about the scope, shadowing, etc.
         self.var_table: Dict[str, Var] = {}
-
+    
+    # def scope(self) -> ScopeStack:
+    #     return self.scope_stack
+    
     def __call__(self, node) -> Node:
         return self.visit(node)
     
@@ -1115,7 +1123,49 @@ class IRConstructor:
             return hidet.ir.type.void
         
         return ir.data_type(type_name)
+
+    def visit_tensor_type(self, node):
+        dtype = self(node[0])
+        shape = [self(v)  for v in node[1:-1]]
+        layout = self(node[-1])
+        return ir.tensor_type(dtype, shape, layout)
     
+    def visit_tensor_layout(self, node):
+        return self(node[0])
+
+    def visit_call_expr(self, node):
+        from hidet.ir.primitives.func import PrimitiveFunctionRegistry
+        func = self(node[0])
+        args = []
+        kwargs = {}
+        i = len(node) - 1
+        while i > 0:
+            if isinstance(node[i], Tree) and hasattr(node[i], 'data') and node[i].data.value == 'keyword_arg':
+                key, value = self(node[i])
+                kwargs[key] = value
+                i -= 1
+            else:
+                break
+        for arg in node[1:i+1]:
+            args.append(self(arg))
+
+        # print(type(func))
+        # print(type(func.var))
+        if isinstance(func, PrimitiveFunctionRegistry):
+            return func.var(*args, **kwargs)
+        elif callable(func):
+            return func(*args, **kwargs)
+        else:
+            raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
+    
+    def visit_keyword_arg(self, node):
+        name = self(node[0])
+        value = self(node[1])
+        return name, value
+    
+    def visit_name(self, node):
+        return str(node[0])
+
     def visit_unary_op(self, node):
         op, expr = node
         try:
@@ -1163,10 +1213,32 @@ class IRConstructor:
             return lookup_primitive_function(name)
         if name in self.var_table:
             return self.var_table[name]
-        if name in __builtins__:
-            return __builtins__[name]
+        if name == 'list':
+            return lambda *x: list(x)
+        if name in self.funcs:
+            # TODO: temporary hack
+            return lambda *x, **y: name
         
         raise RuntimeError(f"cannot find function {name}")
+    
+    def visit_function(self, node):
+        name = self(node[0])
+        args = self(node[1])
+        returns = self(node[2])
+        attrs = self(node[3])
+
+    def visit_def_var(self, node):
+        name = str(node[0])
+            
+    
+    def visit_symbol_var(self, node):
+        name = str(node[0])
+        assert name in self.symboltable, "cannot find symbolvar {}".format(name)
+        return self.symboltable[name]
+    
+    def visit_for_stmt(self, node):
+        # print(node)
+        pass
     
     def visit_name(self, name):
         return str(name[0])
@@ -1179,7 +1251,7 @@ class IRConstructor:
 symbol_table = construct_symbols(preprocess_symbolvar(tree))
 preprocess = PreProcessTree(symbol_table)
 preprocess.visit(tree)
-IRConstructor(preprocess)(tree)
+new_tree = IRConstructor(preprocess)(tree)
 
-
+print(new_tree)
 # %%

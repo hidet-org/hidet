@@ -6,8 +6,8 @@ module : "module" attribute_name "{" [attribute*] [(function | declare_stmt)*] "
 
 function : "def" name "(" fn_args ")" "->" type [attribute_name] "{" stmt_body "}"
 
-fn_args : [type_annotation ("," type_annotation)*]
-type_annotation : var ":" type
+fn_args : [var_def ("," var_def)*]
+var_def : name ":" type
 
 stmt_body : [stmt*]
 
@@ -28,12 +28,14 @@ stmt_body : [stmt*]
         | evaluate_stmt
 
 
-declare_stmt : ["static"] "decl" type_annotation ["=" expr] ";" [attribute_name]
+declare_stmt : ["static"] "decl" var_def ["=" expr] ";" [attribute_name]
 buffer_store_stmt : ["protected"] get_item_expr "=" expr ";"
 assign_stmt : var "=" expr ";"
 return_stmt : "return" expr ";"
-let_stmt : "let" "(" (type_annotation "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
-for_stmt : "for" "(" var [("," var)*] ")" "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
+let_stmt : "let" "(" (var_def "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
+for_stmt : "for" def_var_group "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
+def_var_group : "(" def_var [("," def_var)*] ")"
+
 task_mapping : "on" "(" expr ")"
 while_stmt : "while" expr "{" stmt_body "}"
 break_stmt : "break" ";"
@@ -97,8 +99,10 @@ evaluate_stmt : expr ";"
 // tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
 get_item_expr : expr "[" [(expr | slice) ("," (expr | slice))*] "]"
 slice : [expr] ":" [expr]
-call_expr : fn_name "(" [expr ("," expr)*] [("," keyword_arg)*] ")"
-keyword_arg : var "=" expr
+call_expr : fn_name "(" ([expr ("," expr)*] | [expr ("," expr)*] [("," keyword_arg)*]) ")"
+keyword_arg : name "=" expr
+
+
 cast_expr : "cast" "(" expr "as" type ")"
 deref_expr : "deref" "(" expr ")"
 addr_expr : "addr" "(" expr ")"
@@ -143,7 +147,8 @@ list : "list" "(" (value ("," value)*)? ")"
 // tuple : "(" value "," (value ",")* ")"
 
 symbol_var : "@" IDENT
-var : IDENT
+var : IDENT // var appearance in definitions
+def_var : IDENT // var appearance in definitions to define a new var
 name : IDENT
 fn_name : IDENT [attribute_name]
 
