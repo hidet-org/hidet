@@ -4,10 +4,9 @@ top_level : attribute module
 
 module : "module" attribute_name "{" [attribute*] [(function | declare_stmt)*] "}"
 
-function : "def" name "(" fn_args ")" "->" type [attribute_name] "{" stmt_body "}"
+function : "def" name "(" [fn_args] ")" "->" type [attribute_name] "{" stmt_body "}"
 
-fn_args : [var_def ("," var_def)*]
-var_def : name ":" type
+fn_args : def_var ("," def_var)*
 
 stmt_body : [stmt*]
 
@@ -28,15 +27,18 @@ stmt_body : [stmt*]
         | evaluate_stmt
 
 
-declare_stmt : ["static"] "decl" var_def ["=" expr] ";" [attribute_name]
-buffer_store_stmt : ["protected"] get_item_expr "=" expr ";"
+declare_stmt : [static_decl] "decl" def_var ["=" expr] ";" [attribute_name]
+static_decl : "static"
+buffer_store_stmt : [protected] get_item_expr "=" expr ";"
+protected : "protected"
+
 assign_stmt : var "=" expr ";"
 return_stmt : "return" expr ";"
-let_stmt : "let" "(" (var_def "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
-for_stmt : "for" def_var_group "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
-def_var_group : "(" def_var [("," def_var)*] ")"
-
+let_stmt : "let" "(" (def_var "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
+for_stmt : "for" for_ind_var "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
+for_ind_var : "(" def_var [("," def_var)*] ")"
 task_mapping : "on" "(" expr ")"
+
 while_stmt : "while" expr "{" stmt_body "}"
 break_stmt : "break" ";"
 continue_stmt : "continue" ";"
@@ -45,12 +47,99 @@ assert_stmt : "assert" "(" expr ["," STRING] ")" ";"
 black_box_stmt : "blackbox" "(" [expr ("," expr)*] ")" "{" "$" ANYWILDCARD "$" "}" ";"
 
 
-asm_stmt : ["volatile"] "asm" "{" STRING "{" [asm_label ("," asm_label)*] "}" "{" [asm_label ("," asm_label)*] "}" "}" ";"
+asm_stmt : [volatile] "asm" "{" STRING "{" [asm_group] "}" "{" [asm_group] "}" "}" ";"
+volatile : "volatile"
 asm_label : STRING "(" expr ")"
-launch_kernel_stmt : fn_name "<<<" dim3 "," dim3 "," [INT] ">>>" "(" [expr ("," expr)*] ")" ";"
+asm_group : asm_label ("," asm_label)*
+
+launch_kernel_stmt : fn_name "<<<" dim3 "," dim3 "," [INT] ">>>" "(" expr ("," expr)* ")" ";" // TODO: shared_mem may not be constant
 dim3 : "(" expr "," expr "," expr ")"
 // seq_stmt : "{" stmt* "}"
 evaluate_stmt : expr ";"
+
+?expr : "(" _unary_op expr ")"  -> unary_op
+        | "(" expr _binary_op expr ")" -> binary_op
+        | fn_call_expr 
+!_unary_op: "+"|"-"| "!"
+!_binary_op: "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "**" | "^" | "|" | "&"
+
+?fn_call_expr : get_item_expr 
+        | cast_expr 
+        | deref_expr 
+        | addr_expr 
+        | call_expr 
+        | let_expr 
+        | if_then_else_expr 
+        | atom
+
+// tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
+get_item_expr : expr "[" (expr | slice) ("," (expr | slice))* "]"
+slice : [expr] ":" [expr]
+call_expr : fn_name "(" [call_args] ")"
+call_args : expr ("," expr)* | keyword_arg ("," keyword_arg)* | expr ("," expr)* ("," keyword_arg)*
+keyword_arg : name "=" expr
+
+
+cast_expr : "cast" "(" expr "as" type ")"
+deref_expr : "deref" "(" expr ")"
+addr_expr : "addr" "(" expr ")"
+
+let_expr : "let" "(" def_var "=" expr ")" "in" "(" expr ")"
+if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
+
+?atom : "(" expr ")"
+        | get_attr
+        | "true" -> true
+        | "false" -> false
+        | "none" -> none
+        | symbol_var
+        | var
+        | STRING
+        | INT
+        | SIGNED_FLOAT
+
+get_attr : expr "." name
+
+// Types
+?type : data_type | tensor_type | ptr_type | fn_type
+
+fn_type : "(" [type ("," type)*] ")" "->" type
+ptr_type : "~" type
+tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
+?tensor_tt_shape : expr
+tensor_layout : ";" expr
+!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
+
+// attributes
+attribute_name : "#" IDENT
+attribute : attribute_name "=" dict ";"
+
+// python objects (or constants)
+?value: dict
+        | list
+        | expr
+        | type
+
+pair : STRING ":" value
+dict : "dict" "(" (pair ("," pair)*)? ")"
+list : "list" "(" (value ("," value)*)? ")"
+// tuple : "(" value "," (value ",")* ")"
+
+symbol_var : "@" IDENT
+var : IDENT // var appearance in definitions
+def_var : name ":" type // var appearance in definitions to define a new var
+name : IDENT
+fn_name : IDENT [attribute_name]
+
+IDENT : /[^\W\d]\w*/
+ANYWILDCARD : /[^\$]+/
+STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+SIGNED_FLOAT : ["+" | "-"] FLOAT
+
+%import common.FLOAT
+%import common.INT
+%import common.WS
+%ignore WS
 
 // mappings
 // mapping : spatial_mapping | repeat_mapping | composed_mapping
@@ -80,84 +169,3 @@ evaluate_stmt : expr ";"
 // !_shift_op: "<<"|">>"
 // !_mul_op: "*"|"/"|"%"
 // !comp_op: "<"|">"|"=="|">="|"<="|"<>"|"!="
-
-?expr : "(" _unary_op expr ")"  -> unary_op
-        | "(" expr _binary_op expr ")" -> binary_op
-        | fn_call_expr 
-!_unary_op: "+"|"-"| "!"
-!_binary_op: "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "**" | "^" | "|" | "&"
-
-?fn_call_expr : get_item_expr 
-        | cast_expr 
-        | deref_expr 
-        | addr_expr 
-        | call_expr 
-        | let_expr 
-        | if_then_else_expr 
-        | atom
-
-// tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
-get_item_expr : expr "[" [(expr | slice) ("," (expr | slice))*] "]"
-slice : [expr] ":" [expr]
-call_expr : fn_name "(" ([expr ("," expr)*] | [expr ("," expr)*] [("," keyword_arg)*]) ")"
-keyword_arg : name "=" expr
-
-
-cast_expr : "cast" "(" expr "as" type ")"
-deref_expr : "deref" "(" expr ")"
-addr_expr : "addr" "(" expr ")"
-
-let_expr : "let" "(" type_annotation "=" expr ")" "in" "(" expr ")"
-if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
-
-?atom : "(" expr ")"
-        | get_attr
-        | "true" -> true
-        | "false" -> false
-        | "none" -> none
-        | symbol_var
-        | var
-        | STRING
-        | INT
-        | SIGNED_FLOAT
-
-get_attr : expr "." name
-
-// Types
-?type : data_type | tensor_type | ptr_type
-
-ptr_type : "~" type
-tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
-?tensor_tt_shape : expr
-tensor_layout : ";" expr
-!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
-
-// attributes
-attribute_name : "#" IDENT
-attribute : attribute_name "=" dict ";"
-
-// python objects (or constants)
-?value: dict
-        | list
-        | expr
-
-pair : STRING ":" value
-dict : "dict" "(" (pair ("," pair)*)? ")"
-list : "list" "(" (value ("," value)*)? ")"
-// tuple : "(" value "," (value ",")* ")"
-
-symbol_var : "@" IDENT
-var : IDENT // var appearance in definitions
-def_var : IDENT // var appearance in definitions to define a new var
-name : IDENT
-fn_name : IDENT [attribute_name]
-
-IDENT : /[^\W\d]\w*/
-ANYWILDCARD : /[^\$]+/
-STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
-SIGNED_FLOAT : ["+" | "-"] FLOAT
-
-%import common.FLOAT
-%import common.INT
-%import common.WS
-%ignore WS

@@ -1,3 +1,4 @@
+# %%
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -9,23 +10,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# %%
 from typing import Optional, List, Union, Dict, Tuple, Any, Set
 import types
 
 import hidet.utils.structure
+from hidet import symbol_var
 from hidet import ir
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, SymbolVar
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
-from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
+from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType, void, void_p
 from hidet.ir.type import ArrayType, StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, ForStmtAttr, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForMappingStmt, WhileStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt, ContinueStmt
 from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLayout, ComposedLayout, RowMajorLayout
@@ -172,7 +173,7 @@ class IRDumper(IRFunctor):
 
     def visit_Function(self, func: Function):
         self.namer.clear()
-
+        print(func)
         # parameters
         if len(func.attrs) > 0:
             fn_attr_name = self.add_attr('f', func.attrs)
@@ -199,8 +200,12 @@ class IRDumper(IRFunctor):
         doc = Doc()
         self.ir_module = ir_module
 
-        ir_module_attrs = {"link_lib": ir_module.linking_libs, "external_object": ir_module.object_files, "namespace": ir_module.namespace,
-                           "include_header": ir_module.include_headers}
+        ir_module_attrs = {"linking_libs": ir_module.linking_libs, 
+                           "linking_dirs": ir_module.linking_dirs,
+                           "object_files": ir_module.object_files, 
+                           "namespace": ir_module.namespace,
+                           "include_headers": ir_module.include_headers,
+                           "extern_functions": {k: self(v.type) for k, v in ir_module.extern_functions.items()}}
         mod_attr_name =  self.get_unique_attr_name('m')
         doc += Text("module #") + mod_attr_name + " {" + NewLine()
 
@@ -259,7 +264,7 @@ class IRDumper(IRFunctor):
 
     def visit_Call(self, e: Call):
         doc = Doc()
-        print(e.func_var.__module__)
+        # print(e.func_var.__module__)
         func_name = e.func_var.name if e.func_var.name else e.func_var.hint
         # name
         doc += func_name
@@ -365,18 +370,21 @@ class IRDumper(IRFunctor):
         doc += NewLine() + ');'
         # doc += self(stmt.body).indent()
         return doc
-            
+    
+    def for_ind_var(self, vars: List[Var]):
+        return doc_join([self(v) + ":" + self(v.type) for v in vars], ",")
+    
+    def format_for_attr(self, attr: ForStmtAttr):
+        for_stmt_attr = {}
+        for_stmt_attr['unroll'] = attr.unroll
+        for_stmt_attr['factor'] = attr.unroll_factor
+        for_stmt_attr['explicit'] = attr.unroll_explicit
+        for_stmt_attr['parallel'] = attr.parallel
+        for_stmt_attr['threads'] = attr.parallel_threads
+        return for_stmt_attr
 
     def visit_ForStmt(self, stmt: ForStmt):
-        for_stmt_attr = {}
-        if stmt.attr.unroll or stmt.attr.parallel:
-            if stmt.attr.unroll:
-                for_stmt_attr['unroll'] = True
-                for_stmt_attr['extent'] = stmt.extent
-                for_stmt_attr['factor'] = stmt.attr.unroll_factor
-            elif stmt.attr.parallel:
-                for_stmt_attr['parallel'] = True
-                for_stmt_attr['threads'] = stmt.attr.parallel_threads
+        for_stmt_attr = self.format_for_attr(stmt.attr)
         
         if len(for_stmt_attr) > 0:
             attr_name = self.add_attr('u', for_stmt_attr)
@@ -385,13 +393,13 @@ class IRDumper(IRFunctor):
         
         rng = Text('range(') + self(stmt.extent) + ') '
         doc = NewLine()
-        doc += NewLine() + Text('for (') + self(stmt.loop_var) + ') in ' + rng + attr_name + ' {'
+        doc += NewLine() + Text('for (') + self.for_ind_var([stmt.loop_var]) + ') in ' + rng + attr_name + ' {'
         doc += self(stmt.body).indent(4)
         doc += NewLine() + '}'
         return doc
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        doc = NewLine() + NewLine() + Text('for (') + self(stmt.loop_vars) + ') in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
+        doc = NewLine() + NewLine() + Text('for (') + self.for_ind_var(stmt.loop_vars) + ') in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
         doc += self(stmt.body).indent(4)
         doc += NewLine() + '}'
         return doc
@@ -496,6 +504,9 @@ class IRDumper(IRFunctor):
 
     def visit_TensorType(self, t: TensorType):
         return self._tensor_type(t)
+    
+    def visit_FuncType(self, t: FuncType):
+        return Text('(') + self(t.param_types) + ') -> ' + self(t.ret_type)
 
     # def visit_ArrayType(self, t: ArrayType):
     #     return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
@@ -627,17 +638,18 @@ class IRDumper(IRFunctor):
     #     return 'arg_reduce(' + doc_join(items, ', ') + ')'
 
     def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
-        items = [self(mapping.task_shape)]
-        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
-            items.append('ranks=[' + self(mapping.ranks) + ']')
+        items = ['task_shape=list(' + self(mapping.task_shape) + ')']
+        # if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+        items.append('ranks=list(' + self(mapping.ranks) + ')')
+
         attr = self.add_attr("c", {"fn_type": "TaskMapping"})
         return f'spatial_map{attr}(' + doc_join(items, ', ') + ')'
 
     def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
-        items = [self(mapping.task_shape)]
-        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
-            items.append('ranks=[' + self(mapping.ranks) + ']')
-        attr = self.add_attr("c", {"fn_type": "TaskMapping"})
+        items = ['task_shape=list(' + self(mapping.task_shape) + ')']
+        # if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+        items.append('ranks=list(' + self(mapping.ranks) + ')')
+        attr = self.add_attr("c", {"fn_type": "TaskMapping", "attrs": [self.format_for_attr(a) for a in mapping.attrs]})
         return f'repeat_map{attr}(' + doc_join(items, ', ') + ')'
 
     def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
@@ -665,7 +677,7 @@ class IRDumper(IRFunctor):
 
     def visit_LocalLayout(self, layout: LocalLayout):
         attr = self.add_attr("c", {"fn_type": "Layout"})
-        return Text(f'local{attr}(') + self(layout.shape) + ')'
+        return Text(f'local{attr}(list(') + self(layout.shape) + '))'
 
     def visit_ComposedLayout(self, layout: ComposedLayout):
         attr = self.add_attr("c", {"fn_type": "Layout"})
@@ -744,146 +756,9 @@ def astext(obj: Node) -> str:
         raise ValueError()
 
 
-from hidet.transforms.unify_global_objects import unify_global_objects_pass
-from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
-from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
-from hidet.transforms.generate_launch_func import generate_launch_func_pass
-from hidet.transforms.explicit_unroll import explicit_unroll_pass
-from hidet.transforms.import_primitive_functions import import_primitive_functions_pass
-from hidet.transforms.simplify_stmt import simplify_stmt_pass
-from hidet.transforms.expand_let_expr import expand_let_expr_pass
-from hidet.transforms.instantiate_symbols import instantiate_symbols_pass
-from hidet.transforms.resolve_generic_primitive_function import resolve_primitive_func_pass
-from hidet.transforms.inline_function import inline_function_pass
-from hidet.transforms.add_explicit_cast import add_explicit_cast_pass
-from hidet.transforms.inline_let_stmt import inline_let_stmt_pass
-from hidet.transforms.rule_based_simplifier import rule_based_simplify_pass
-from hidet.transforms.normalize_const_tensor import normalize_const_tensor_pass
-from hidet.transforms.lower_task_mapping import lower_task_mapping_pass
-from hidet.transforms.lower_protect_access import lower_protect_access_pass
-from hidet.transforms.declare_to_let import declare_to_let_pass
-from hidet.transforms.propagate_launch_bound import propagate_launch_bound_pass
-from hidet.transforms.check_launch_configuration import check_launch_configuration_pass
-from hidet.transforms.lower_special_cast import lower_special_cast_pass
-from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
-
-# from hidet.graph.ops.softmax import SoftmaxTask
-from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
-from hidet.graph.ops.matmul.batch_matmul import BatchMatmulTask
-from hidet.graph.ops.softmax import SoftmaxTask
-from hidet.graph.ops.attention.attention import AttnTask
-from hidet.graph.ops.utils import input_like, tensor_input
-from hidet import symbol_var
-
-def get_matmul_task():
-    s = symbol_var('s')
-    a = tensor_input('a', 'float16', [s, 256])
-    b = tensor_input('b', 'float16', [256, 512])
-    task = MatmulF16Task(a, b)
-    mods = task.implement_cuda('.')
-    mod = mods[0]
-    return mod
-
-def get_bmatmul_task(mma_str='simt'):
-    s = symbol_var('s')
-    a = tensor_input('a', 'float16', [1, s, 256])
-    b = tensor_input('b', 'float16', [1, 256, 256])
-    task = BatchMatmulTask(a, b, mma_str)
-    mods = task.implement_cuda('.')
-    mod = mods[0]
-    return mod
-
-def get_softmax_task():
-    a = tensor_input('a', 'float16', [1, 256])
-    task = SoftmaxTask(a, 1)
-    mod = task.implement_cuda('.')
-    return mod
-
-def get_attn_task():
-    s = symbol_var('s')
-    h = symbol_var('h')
-    q = tensor_input('q', 'float16', [1, h, s, 64])
-    k = tensor_input('k', 'float16', [1, h, s, 64])
-    v = tensor_input('v', 'float16', [1, h, s, 64])
-    task = AttnTask('attn', q, k, v, False)
-    mod = task.implement_cuda('.')
-    return mod[0]
-
-def test_parser():
-    from lark import Lark
-    transforms = [
-        # necessary passes
-        lambda x: x,
-        unify_global_objects_pass(),
-        generate_launch_func_pass(),
-        flatten_tensor_slice_pass(),
-        lower_protect_access_pass(),
-        lower_task_mapping_pass(),
-        normalize_const_tensor_pass(),
-        declare_to_let_pass(),
-        rule_based_simplify_pass(),  # make ir more readable
-        flatten_tensor_index_pass(),
-        lower_special_cast_pass(),
-        inline_function_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
-        add_explicit_cast_pass(),
-        declare_to_let_pass(),
-        instantiate_symbols_pass(),
-        check_launch_configuration_pass(),
-        # simplification
-        expand_let_expr_pass(),
-        inline_let_stmt_pass(),
-        explicit_unroll_pass(),
-        rule_based_simplify_pass(),
-        inline_let_stmt_pass(),
-        simplify_stmt_pass(),
-        annotate_header_and_libs_pass(),
-    ]
-
-    with open('../hidet.lark') as f:
-        hidet_grammar = f.read()
-    parser = Lark(hidet_grammar, start='top_level', parser='lalr')
-
-    for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
-        for t in transforms:
-        
-            mod = t(mod)
-            text = astext(mod)
-            print(text)
-            try:
-                tree = parser.parse(text)
-                print(tree.pretty())
-            except Exception as e:
-                print(text)
-                raise e
-
-
-# test_parser()
-mod = get_matmul_task()
-text = astext(mod)
-print(text)
-# print(astext(mod))
-
-
-import sys
 from lark import Lark, Transformer, Token, Tree, Visitor
 import logging
-from lark import Lark, logger
-logger.setLevel(logging.DEBUG)
 
-with open('hidet/python/hidet/ir/hidet.lark') as f:
-    hidet_grammar = f.read()
-
-parser = Lark(hidet_grammar, start='top_level', debug=True, parser='lalr')
-tree = parser.parse(text)
-print(tree.pretty())
-
-
-# %%
 
 def construct_pair(tree):
     assert tree.data.value == 'pair'
@@ -914,15 +789,22 @@ class PreProcessTree(Visitor):
     def __init__(self, symbols: Dict[str, SymbolVar]):
         self.attributes: Dict[str, dict] = {}
         self.symbols: Dict[str, SymbolVar] = symbols
-        self.funcs: Set[str] = set()
+        self.funcs: Dict[str, Tree] = {}
     
     def attribute(self, tree):
         name = tree.children[0].children[0]
         value = tree.children[1]
         self.attributes[str(name)] = AttrConstructor(self.symbols).transform(value)
     
-    def fn_name(self, name):
-        self.funcs.add(str(name.children[0]))
+    def module(self, mod):
+        # add user defined functions to self.funcs
+        for child in mod.children:
+            if isinstance(child, Tree) and isinstance(child.data, Token):
+                if child.data.value == 'function':
+                    name = str(child.children[0].children[0])
+                    if name in self.funcs:
+                        raise ValueError(f"Function {name} already exists.")
+                    self.funcs[name] = child
 
 def resolve_binary_op(op, a, b):
     if op == '&&':
@@ -976,53 +858,6 @@ class AttrConstructor(Transformer):
     true = lambda self, _: True
     false = lambda self, _: False
 
-class IRConstructor(Transformer):
-    def __init__(self, preprocessor: PreProcessTree):
-        super().__init__()
-        self.preprocessor = preprocessor
-        self.symboltable = preprocessor.symbols
-        self.attributes = preprocessor.attributes
-        self.funcs = preprocessor.funcs
-
-    def STRING(self, s):
-        # (s,) = s
-        return s[1:-1]
-    
-    def INT(self, n):
-        # (n,) = n
-        return int(n)
-    
-    def SIGNED_NUMBER(self, n):
-        # (n,) = n
-        return float(n)
-    
-    def IDENT(self, var):
-        # (var,) = var
-        var = str(var)
-
-        return var
-    
-    def symbol_var(self, var):
-        (var,) = var
-        return self.symboltable[var]
-    
-    def binary_op(self, op):
-        a, op, b = op
-        print(a, b)
-        return resolve_binary_op(op, a, b)
-    
-    def unary_op(self, op):
-        op, a = op
-        return resolve_unary_op(op, a)
-    
-    def if_then_else_expr(self, expr):
-        cond, then_expr, else_expr = expr
-        return ir.expr.if_then_else(cond, then_expr, else_expr)
-    
-    def top_level(self, node):
-        return node[1]
-
-from hidet.lang.transpiler import ScopeStack
 class IRConstructor:
     def __init__(self, preprocessor: PreProcessTree, pass_through=True):
         self.pass_through = pass_through
@@ -1035,6 +870,11 @@ class IRConstructor:
         # a property of the ir is that every name to a variable is unique
         # so we don't need to worry about the scope, shadowing, etc.
         self.var_table: Dict[str, Var] = {}
+        self.global_var_table: Dict[str, Var] = {}
+        self.func_var_table: Dict[str, Var] = {}
+        self.functions: Dict[str, Function] = {}
+
+        self.visited_user_funcs: Set[str] = set()
     
     # def scope(self) -> ScopeStack:
     #     return self.scope_stack
@@ -1100,19 +940,58 @@ class IRConstructor:
     def visit_pair(self, node):
         return self.visit(node[0]), self.visit(node[1])
     
+    
     def visit_dict(self, node):
         pairs = [self.visit(child) for child in node]
         return {key: value for key, value in pairs}
     
     def visit_list(self, node):
         return [self.visit(child) for child in node]
+    
+    def visit_name(self, name):
+        return str(name[0])
+
+    def visit_def_var(self, node):
+        name = self(node[0])
+        type = self(node[1])
+        var = Var(hint=name, type=type)
+        assert name not in self.var_table, f"variable {name} already defined"
+
+        self.var_table[name] = var
+        return var
+    
+    def visit_var(self, node):
+        from hidet.lang.cuda import threadIdx, blockIdx, blockDim, gridDim
+        name = str(node[0])
+        if name == 'threadIdx':
+            return threadIdx
+        elif name == 'blockIdx':
+            return blockIdx
+        elif name == 'blockDim':
+            return blockDim
+        elif name == 'gridDim':
+            return gridDim
+        if name in self.var_table:
+            return self.var_table[name]
+        if name in self.global_var_table:
+            return self.global_var_table[name]
+        if name in self.func_var_table:
+            return self.func_var_table[name]
+        raise RuntimeError("Cannot find variable {}".format(name))
+    
+    def visit_get_attr(self, node):
+        expr = self(node[0])
+        name = self(node[1])
+        assert hasattr(expr, name), f"expr of type {type(expr)} does not have attribute {name}"
+        return getattr(expr, name)
+    
+    def visit_symbol_var(self, node):
+        name = str(node[0])
+        assert name in self.symboltable, "cannot find symbolvar {}".format(name)
+        return self.symboltable[name]
 
     def visit_top_level(self, children):
-        # for child in children[:-1]:
-        #     if child.data.value == 'attribute':
-        #         self.visit(child)
-            
-        return self.visit(children[-1])
+        return self(children[-1])
     
     def visit_attribute_name(self, name):
         return str(name[0])
@@ -1123,45 +1002,28 @@ class IRConstructor:
             return hidet.ir.type.void
         
         return ir.data_type(type_name)
+    
+    def visit_ptr_type(self, node):
+        t = self(node[0])
+        if isinstance(t, TensorType):
+            return ir.TensorPointerType(t)
+        elif isinstance(t, DataType):
+            return ir.PointerType(t)
+        elif isinstance(t, VoidType):
+            return void_p
+        raise RuntimeError("Unknown type {}".format(t))
+    
+    def visit_addr_expr(self, node):
+        return ~self(node[0])
+
+    def visit_tensor_layout(self, node):
+        return self(node[0])
 
     def visit_tensor_type(self, node):
         dtype = self(node[0])
         shape = [self(v)  for v in node[1:-1]]
         layout = self(node[-1])
         return ir.tensor_type(dtype, shape, layout)
-    
-    def visit_tensor_layout(self, node):
-        return self(node[0])
-
-    def visit_call_expr(self, node):
-        from hidet.ir.primitives.func import PrimitiveFunctionRegistry
-        func = self(node[0])
-        args = []
-        kwargs = {}
-        i = len(node) - 1
-        while i > 0:
-            if isinstance(node[i], Tree) and hasattr(node[i], 'data') and node[i].data.value == 'keyword_arg':
-                key, value = self(node[i])
-                kwargs[key] = value
-                i -= 1
-            else:
-                break
-        for arg in node[1:i+1]:
-            args.append(self(arg))
-
-        # print(type(func))
-        # print(type(func.var))
-        if isinstance(func, PrimitiveFunctionRegistry):
-            return func.var(*args, **kwargs)
-        elif callable(func):
-            return func(*args, **kwargs)
-        else:
-            raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
-    
-    def visit_keyword_arg(self, node):
-        name = self(node[0])
-        value = self(node[1])
-        return name, value
     
     def visit_name(self, node):
         return str(node[0])
@@ -1179,6 +1041,59 @@ class IRConstructor:
             return resolve_binary_op(op, self.visit(a), self.visit(b))
         except Exception as e:
             return node
+    
+    def visit_keyword_arg(self, node):
+        name = self(node[0])
+        value = self(node[1])
+        return name, value
+    
+    def visit_call_args(self, node):
+        args = []
+        kwargs = {}
+        i = len(node) - 1
+        while i > -1:
+            cur_arg = node[i]
+            if isinstance(cur_arg, Tree) and hasattr(cur_arg, 'data'):
+                arg_data = cur_arg.data
+                if hasattr(arg_data, 'value') and arg_data.value == 'keyword_arg':
+                    key, value = self(node[i])
+                    kwargs[key] = value
+                    i -= 1
+                else:
+                    break
+            else:
+                break
+        for arg in node[0:i+1]:
+            args.append(self(arg))
+        return args, kwargs
+
+    def visit_call_expr(self, node):
+        from hidet.ir.primitives.func import PrimitiveFunctionRegistry
+        func = self(node[0])
+        call_args = self(node[1])
+        if call_args is None:
+            args = []
+            kwargs = {}
+        else:
+            args, kwargs = call_args
+
+        # print(type(func))
+        # print(type(func.var))
+        if isinstance(func, PrimitiveFunctionRegistry):
+            return func.var(*args, **kwargs)
+        elif callable(func):
+            return func(*args, **kwargs)
+        else:
+            raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
+    
+    def reconstruct_for_attr(self, d: Dict[str, Any]):
+        return ForStmtAttr(
+            d['unroll'],
+            d['factor'],
+            d['explicit'],
+            d['parallel'],
+            d['threads']
+        )
     
     def visit_fn_name(self, node):
         name_to_taskmap = {
@@ -1204,54 +1119,449 @@ class IRConstructor:
             if "fn_type" in attr:
                 fn_type = attr["fn_type"]
                 if fn_type == "TaskMapping":
+                    if 'attrs' in attr:
+                        # repeat task mapping, got to reconstruct third argument
+                        for_stmt_attr = attr['attrs']
+                        for_stmt_attr = [self.reconstruct_for_attr(a) for a in for_stmt_attr]
+                        return lambda *args, **kwargs: RepeatTaskMapping(*args, **kwargs, attrs=for_stmt_attr)
                     return name_to_taskmap[name]
                 elif fn_type == "Layout":
                     return name_to_layout[name]
                 else:
                     raise RuntimeError(f"Unknown fn_type {fn_type}")
+
+        if name in self.funcs: # this is a user defined function, visit this one first
+            if name not in self.func_var_table:
+                if name in self.visited_user_funcs:
+                    raise RuntimeError(f"recursive/mutally recursive function {name} is not supported")
+                
+                self.visited_user_funcs.add(name)
+
+                # make the new construct inherit everything except for local variables
+                new_constructor = IRConstructor(self.preprocessor, self.pass_through)
+                new_constructor.global_var_table = self.global_var_table
+                new_constructor.func_var_table = self.func_var_table
+                new_constructor.visited_user_funcs = self.visited_user_funcs
+                new_constructor.functions = self.functions
+                return new_constructor(self.funcs[name])
+                
+            return self.func_var_table[name]
         if is_primitive_function(name):
             return lookup_primitive_function(name)
         if name in self.var_table:
             return self.var_table[name]
         if name == 'list':
             return lambda *x: list(x)
-        if name in self.funcs:
-            # TODO: temporary hack
-            return lambda *x, **y: name
+        
         
         raise RuntimeError(f"cannot find function {name}")
     
-    def visit_function(self, node):
-        name = self(node[0])
-        args = self(node[1])
-        returns = self(node[2])
-        attrs = self(node[3])
-
-    def visit_def_var(self, node):
-        name = str(node[0])
-            
+    def visit_stmt_body(self, node):
+        stmts = []
+        for stmt in node:
+            res = self(stmt)
+            assert isinstance(res, ir.stmt.Stmt)
+            stmts.append(res)
+        
+        return SeqStmt(stmts)
     
-    def visit_symbol_var(self, node):
-        name = str(node[0])
-        assert name in self.symboltable, "cannot find symbolvar {}".format(name)
-        return self.symboltable[name]
+    def visit_slice(self, node):
+        return slice(self(node[0]), self(node[1]))
+    
+    def visit_get_item_expr(self, node):
+        it = self(node[0])
+        slices = tuple(self(s) for s in node[1:])
+        return it[slices]
+
+    def visit_for_ind_var(self, node):
+        return [self(v) for v in node]
+    
+    def visit_task_mapping(self, node):
+        return self(node[0])
     
     def visit_for_stmt(self, node):
         # print(node)
-        pass
+        ind_vars = self(node[0])
+        attrs = self(node[2])
+        body = self(node[3])
+        if attrs is not None and node[2].data.value == 'task_mapping':
+            mapping = self(node[1])
+            return ForMappingStmt(ind_vars, mapping, attrs, body)
+        elif attrs is not None: # regular range for loop
+            rng = node[1]
+            assert isinstance(rng, Tree)
+            assert rng.data.value == 'call_expr'
+            assert str(rng.children[0].children[0]) == 'range'
+            args, kwargs = self(rng.children[1])
+            assert len(kwargs) == 0
+            assert len(args) == 1
+            for_attr = self.reconstruct_for_attr(self.attributes[attrs])
+        else:
+            for_attr = None
+        return ForStmt(ind_vars[0], args[0], body, attr=for_attr)
     
-    def visit_name(self, name):
-        return str(name[0])
+    def visit_cast_expr(self, node):
+        expr = self(node[0])
+        dtype = self(node[1])
+        return ir.expr.cast(expr, dtype)
     
+    def visit_if_then_else_expr(self, node):
+        cond = self(node[0])
+        then_expr = self(node[1])
+        else_expr = self(node[2])
+        return ir.expr.if_then_else(cond, then_expr, else_expr)
     
-    # def visit_module(self, children):
+    def visit_evaluate_stmt(self, node):
+        expr = self(node[0])
+        return EvaluateStmt(expr)
+    
+    def visit_buffer_store_stmt(self, node):
+        protected = self(node[0]) is not None
+        buffer_ind = self(node[1])
+        assert isinstance(buffer_ind, TensorElement)
 
-    #     return ir.Module(self.visit(children[0]), self.visit(children[1]))
+
+        var = buffer_ind.base
+        ind = buffer_ind.indices
+        value = self(node[2])
+        return BufferStoreStmt(var, ind, value, protected)
+    
+    def visit_assign_stmt(self, node):
+        var = self(node[0])
+        value = self(node[1])
+        return AssignStmt(var, value)
+    
+    def visit_return_stmt(self, node):
+        value = self(node[0])
+        return ReturnStmt(value)
+    
+    def visit_let_stmt(self, node):
+        bind_vars = [self(v) for v in node[0:-1:2]]
+        values = [self(v) for v in node[1:-1:2]]
+        body = self(node[-1])
+        return LetStmt(bind_vars, values, body)
+
+    def visit_while_stmt(self, node):
+        cond = self(node[0])
+        body = self(node[1])
+        return WhileStmt(cond, body)
+    
+    def visit_break_stmt(self, node):
+        return BreakStmt()
+    
+    def visit_continue_stmt(self, node):
+        return ContinueStmt()
+    
+    def visit_if_stmt(self, node):
+        cond = self(node[0])
+        then_body = self(node[1])
+        else_body = self(node[2])
+        return IfStmt(cond, then_body, else_body)
+    
+    def visit_assert_stmt(self, node):
+        cond = self(node[0])
+        msg = self(node[1])
+        return AssertStmt(cond, msg)
+    
+    def visit_black_box_stmt(self, node):
+        exprs = [self(v) for v in node[:-1]]
+        template_str = str(node[-1])
+        return BlackBoxStmt(template_str, *exprs)
+    
+    def visit_asm_label(self, node):
+        return self(node[0]), self(node[1])
+    
+    def visit_asm_group(self, node):
+        return [self(v) for v in node]
+    
+    def visit_asm_stmt(self, node):
+        volatile = self(node[0]) is not None
+        template_str = self(node[1])
+        outputs = self(node[2])
+        outputs = outputs if outputs is not None else []
+        inputs = self(node[3])
+        inputs = inputs if inputs is not None else []
+        return AsmStmt(template_str, outputs, inputs, volatile)
+    
+    def visit_dim3(self, node):
+        return (self(node[0]), self(node[1]), self(node[2]))
+    
+    def visit_launch_kernel_stmt(self, node):
+        fn_var = self(node[0])
+        grid_dim = self(node[1])
+        block_dim = self(node[2])
+        shared_smem = self(node[3])
+        
+        args = [self(v) for v in node[4:]]
+        return LaunchKernelStmt(fn_var, args, grid_dim, block_dim, shared_smem)
+    
+    def visit_let_expr(self, node):
+        return Let(self(node[0]), self(node[1]), self(node[2]))
+
+    def visit_declare_stmt(self, node):
+        is_static = self(node[0])
+        var = self(node[1])
+        value = self(node[2])
+        decl_attr = self(node[3])
+
+        if decl_attr is not None:
+            decl_attr = self.attributes[decl_attr]
+            assert 'scope' in decl_attr
+            scope = decl_attr['scope']
+            if scope == 'DeclareScope.Default':
+                scope = DeclareScope.Default
+            elif scope == 'DeclareScope.Global':
+                scope = DeclareScope.Global
+            elif scope == 'DeclareScope.Shared':
+                scope = DeclareScope.Shared
+            elif scope == 'DeclareScope.Register':
+                scope = DeclareScope.Register
+            else:
+                raise RuntimeError(f"Unknown scope {scope}")
+        else:
+            scope = None
+
+        return DeclareStmt(var, value, is_static is not None, scope=scope)
+
+    def visit_fn_args(self, node):
+        return [self(v) for v in node]
+
+    def visit_function(self, node):
+        name = self(node[0])
+        args = self(node[1])
+        args = args if args is not None else []
+        return_type = self(node[2])
+        attrs = self(node[3])
+        body = self(node[4])
+        
+        func_attrs = {}
+        if attrs in self.attributes:
+            func_attrs = self.attributes[attrs]
+        if 'func_kind' in func_attrs:
+                func_kind = func_attrs['func_kind']
+        elif 'cuda.grid_dim' in func_attrs or 'cuda.block_dim' in func_attrs:
+            if not all(name in func_attrs for name in ['cuda.grid_dim', 'cuda.block_dim']):
+                raise RuntimeError(
+                    name, 'CUDA kernel expects to have both attrs.cuda.grid_dim and attrs.cuda.block_dim.'
+                )
+            func_kind = 'cuda_kernel'
+        else:
+            func_kind = 'cuda_internal'
+        
+
+        ir_fn = ir.Function(name, args, body, return_type, func_kind, func_attrs)
+        func_var = Var(name, FuncType.from_func(ir_fn), name=name)
+        self.func_var_table[name] = func_var
+        self.functions[name] = ir_fn
+        return func_var
+    
+    def visit_module(self, children):
+        mod_attrs = self.attributes[self(children[0])]
+
+        for stmt in children[1:]:
+            assert isinstance(stmt, Tree)
+            if stmt.data.value == 'function':
+                self.var_table = {}  # clear the local variables
+                self(stmt)
+
+            elif stmt.data.value == 'declare_stmt':
+                vars = self.var_table
+                self.var_table = {}
+                self.visit(stmt)
+                self.var_table, vars = vars, self.var_table
+                self.global_var_table.update(vars)
+            elif stmt.data.value == 'attribute':
+                pass
+            else:
+                raise RuntimeError(f"Unknown stmt type {stmt.data.value}")
+        
+        extern_funcs = {k: Var(None, self(v), name=k) for k, v in mod_attrs["extern_functions"].items()}
+        mod_attrs = {
+            "linking_libs": mod_attrs["linking_libs"],
+            "object_files": mod_attrs["object_files"],
+            "namespace": mod_attrs["namespace"],
+            "include_headers": mod_attrs["include_headers"],
+            "linking_dirs": mod_attrs["linking_dirs"],
+            "extern_functions": extern_funcs
+        }
+
+        # maintain the same order of functions
+        # since python dicts preserve insertion order
+        functions = {}
+        for name in self.funcs:
+            functions[name] = self.functions[name]
+        
+        return IRModule(functions, self.global_var_table, **mod_attrs)
+
+
+def parse(text: str, parser: Lark) -> IRModule:
+    tree = parser.parse(text)
+    symbol_table = construct_symbols(preprocess_symbolvar(tree))
+    preprocess = PreProcessTree(symbol_table)
+    preprocess.visit(tree)
+    try:
+        ir_module = IRConstructor(preprocess)(tree)
+    except Exception as e:
+        print(text)
+        raise e
+    return ir_module
+
+
+from hidet.transforms.unify_global_objects import unify_global_objects_pass
+from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
+from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
+from hidet.transforms.generate_launch_func import generate_launch_func_pass
+from hidet.transforms.explicit_unroll import explicit_unroll_pass
+from hidet.transforms.import_primitive_functions import import_primitive_functions_pass
+from hidet.transforms.simplify_stmt import simplify_stmt_pass
+from hidet.transforms.expand_let_expr import expand_let_expr_pass
+from hidet.transforms.instantiate_symbols import instantiate_symbols_pass
+from hidet.transforms.resolve_generic_primitive_function import resolve_primitive_func_pass
+from hidet.transforms.inline_function import inline_function_pass
+from hidet.transforms.add_explicit_cast import add_explicit_cast_pass
+from hidet.transforms.inline_let_stmt import inline_let_stmt_pass
+from hidet.transforms.rule_based_simplifier import rule_based_simplify_pass
+from hidet.transforms.normalize_const_tensor import normalize_const_tensor_pass
+from hidet.transforms.lower_task_mapping import lower_task_mapping_pass
+from hidet.transforms.lower_protect_access import lower_protect_access_pass
+from hidet.transforms.declare_to_let import declare_to_let_pass
+from hidet.transforms.propagate_launch_bound import propagate_launch_bound_pass
+from hidet.transforms.check_launch_configuration import check_launch_configuration_pass
+from hidet.transforms.lower_special_cast import lower_special_cast_pass
+from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
+
+# from hidet.graph.ops.softmax import SoftmaxTask
+from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
+from hidet.graph.ops.matmul.batch_matmul import BatchMatmulTask
+from hidet.graph.ops.softmax import SoftmaxTask
+from hidet.graph.ops.attention.attention import AttnTask
+from hidet.graph.ops.utils import input_like, tensor_input
+
+def get_matmul_task():
+    s = symbol_var('s')
+    a = tensor_input('a', 'float16', [s, 256])
+    b = tensor_input('b', 'float16', [256, 512])
+    task = MatmulF16Task(a, b)
+    mods = task.implement_cuda('.')
+    mod = mods[0]
+    return mod
+
+def get_bmatmul_task(mma_str='simt'):
+    s = symbol_var('s')
+    a = tensor_input('a', 'float16', [1, s, 256])
+    b = tensor_input('b', 'float16', [1, 256, 256])
+    task = BatchMatmulTask(a, b, mma_str)
+    mods = task.implement_cuda('.')
+    mod = mods[0]
+    return mod
+
+def get_softmax_task():
+    a = tensor_input('a', 'float16', [1, 256])
+    task = SoftmaxTask(a, 1)
+    mod = task.implement_cuda('.')
+    return mod
+
+def get_attn_task():
+    s = symbol_var('s')
+    h = symbol_var('h')
+    q = tensor_input('q', 'float16', [1, h, s, 64])
+    k = tensor_input('k', 'float16', [1, h, s, 64])
+    v = tensor_input('v', 'float16', [1, h, s, 64])
+    task = AttnTask('attn', q, k, v, False)
+    mod = task.implement_cuda('.')
+    return mod[0]
+
+def test_parser(grammar):
+    from lark import Lark
+    transforms = [
+        # necessary passes
+        lambda x: x,
+        unify_global_objects_pass(),
+        generate_launch_func_pass(),
+        flatten_tensor_slice_pass(),
+        lower_protect_access_pass(),
+        lower_task_mapping_pass(),
+        normalize_const_tensor_pass(),
+        declare_to_let_pass(),
+        rule_based_simplify_pass(),  # make ir more readable
+        flatten_tensor_index_pass(),
+        lower_special_cast_pass(),
+        inline_function_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        propagate_launch_bound_pass(),
+        add_explicit_cast_pass(),
+        declare_to_let_pass(),
+        instantiate_symbols_pass(),
+        check_launch_configuration_pass(),
+        # simplification
+        expand_let_expr_pass(),
+        inline_let_stmt_pass(),
+        explicit_unroll_pass(),
+        rule_based_simplify_pass(),
+        inline_let_stmt_pass(),
+        simplify_stmt_pass(),
+        annotate_header_and_libs_pass(),
+    ]
+    import difflib
+
+    parser = Lark(grammar, start='top_level', parser='lalr')
+
+    for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
+        for t in transforms:
+            if hasattr(t, '__name__'):
+                print(t.__name__)
+            else:
+                print(t.__class__.__name__)
+            
+            mod = t(mod)
+            text = astext(mod)
+            ir_module = parse(text, parser)
+            new_text = astext(ir_module)
+            if text != new_text:
+                diff_text(text, new_text)
+                return
+
+def diff_text(old: str, new: str):
+    from hidet.utils.py import red, green
+    old_lines = old.split('\n')
+    new_lines = new.split('\n')
+    for oline, nline in zip(old_lines, new_lines):
+        if oline != nline:
+            print(green(oline))
+            print(red(nline))
+        else:
+            print(oline)
+        
+with open('/home/allan/Programs/hidet_repo/hidet/python/hidet/ir/hidet.lark') as f:
+    hidet_grammar = f.read()
+
+test_parser(hidet_grammar)
+# %%
+
+
+from lark import Lark, logger
+
+mod = get_softmax_task()
+text = astext(mod)
+# print(text)
+logger.setLevel(logging.DEBUG)
+
+
+parser = Lark(hidet_grammar, start='top_level', debug=True, parser='lalr')
+tree = parser.parse(text)
+# print(tree.pretty())
+
 
 symbol_table = construct_symbols(preprocess_symbolvar(tree))
 preprocess = PreProcessTree(symbol_table)
 preprocess.visit(tree)
 new_tree = IRConstructor(preprocess)(tree)
 
-print(new_tree)
-# %%
+# print(new_tree)
+
+new_text = astext(new_tree)
+
+print(new_text == text)

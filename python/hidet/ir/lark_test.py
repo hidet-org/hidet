@@ -2,16 +2,15 @@
 import sys
 from lark import Lark, Transformer
 
-with open('hidet.lark') as f:
-    hidet_grammar = f.read()
+# with open('hidet.lark') as f:
+#     hidet_grammar = f.read()
 
-json_parser = Lark(hidet_grammar, start='module')
+# json_parser = Lark(hidet_grammar, start='module')
 
-with open('test.txt') as f:
-    tree = json_parser.parse(f.read())
-    print(tree.pretty())
+# with open('test.txt') as f:
+#     tree = json_parser.parse(f.read())
+#     print(tree.pretty())
 
-# %%
 
 grammar = """
     expr: or_expr
@@ -44,9 +43,18 @@ grammar = """
     %ignore WS
 """
 
-parser = Lark(grammar, start="expr")
+grammar = """
+    start: [static] [expr ("," expr)*]
+    static: "static"
+    expr : "a"
 
-tree = parser.parse("(42 + 3) * 4")
+    %import common.WS
+    %ignore WS
+"""
+
+parser = Lark(grammar, start="start")
+
+tree = parser.parse("")
 print(tree.pretty())
 # %%
  
