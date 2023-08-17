@@ -15,18 +15,13 @@ from typing import List, Dict, Callable, Tuple, Iterable
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import GraphPass
-from hidet.graph.ops.conv2d import Conv2dOp
 from hidet.graph.graph_utils.functors import analyze_usage
 
-Usage = Dict[Tensor, Tuple[Operator, int]]
 
 class ConvChannelLastPass(GraphPass):
-    def predicate(self, graph: FlowGraph) -> bool:
-        # only return true if it has conv2d and not conv2d_last_channel
-        return True
 
     def span_from_nodes(
-        self, usage: Usage, seeds: List[Operator], f_cond: Callable[[Operator], bool]
+        self, usage: Dict[Tensor, List[Tuple[Operator, int]]], seeds: List[Operator],
     ) -> List[Operator]:
         # span from the seed operators, return all operators that connect to the seed operators through
         # the operators that satisfy the condition f_cond
@@ -40,16 +35,20 @@ class ConvChannelLastPass(GraphPass):
         pass
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
-        if not self.predicate(graph):
+        from hidet.graph.ops.conv2d import Conv2dOp
+        nodes: List[Operator] = graph.nodes
+        # Start from all conv2d operators as seeds
+        seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
+
+        # Only use this pass if there is convolution in the graph
+        if len(seeds) == 0:
             return graph
 
-        nodes: List[Operator] = graph.nodes
-        # [0, 1, 2, 3]
-        # [0, 2, 3, 1]
-
-        # determine
-        seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
-        scope_nodes = self.span_from_nodes(seeds, lambda node: isinstance(node, Conv2dOp))
+        # Get the usage of each Tensor
+        usage: Dict[Tensor, List[Tuple[Operator, int]]] = analyze_usage(graph)
+        # Use the usage to trace through all operators spanning from the seeds
+        scope_nodes = self.span_from_nodes(usage=usage, seeds=seeds)
+        return graph
 
         #
         perm: Dict[Tensor, List[int]] = {}
