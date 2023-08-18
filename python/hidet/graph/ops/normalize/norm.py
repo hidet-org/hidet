@@ -379,11 +379,6 @@ class NormalizeTask(Task):
             @hidet.script
             def norm_cpu_kernel(x: float32[shape], out: float32[shape]):
                 para = "p" + str(nthreads)
-                temp_out = tensor(dtype=float32, shape=shape)
-                for k in grid(total_size, attrs=para):
-                    total_idx = spatial(*shape).map(k)
-                    temp_out[total_idx] = out[total_idx]
-
                 for k in grid(head_size, attrs=para):
                     head_idx = spatial(*head).map(k)
 
@@ -430,20 +425,20 @@ class NormalizeTask(Task):
                     var_vec = avx_f32x8_set1(var)
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
-                            tail_idx = spatial(*tail).map(i * 8)
                             # norm calculation
-                            avx_f32x8_store(~temp_out[head_idx][tail_idx],
+                            tail_idx = spatial(*tail).map(i * 8)
+                            temp_out = tensor(dtype=float32, shape=[8])
+                            avx_f32x8_store(temp_out,
                                             avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
                                                 ~x[head_idx][tail_idx]), mean_vec),
                                                 avx_f32x8_sqrt(avx_f32x8_add(var_vec, epsilon_vec))))
+                            for j in range(8):
+                                tail_idx = spatial(*tail).map(i * 8 + j)
+                                out[head_idx][tail_idx] = temp_out[j]
                     for i in range(tail_size % 8):
                         tail_idx = spatial(*tail).map(tail_size - tail_size % 8 + i)
-                        temp_out[head_idx][tail_idx] = \
+                        out[head_idx][tail_idx] = \
                             (x[head_idx][tail_idx] - mean) * prim.rsqrt(var + self.attrs['epsilon'])
-
-                for k in grid(total_size, attrs=para):
-                    total_idx = spatial(*shape).map(k)
-                    out[total_idx] = temp_out[total_idx]
 
         norm_cpu_kernel.kind = "cpu_kernel"
         avx_f32x8_find_sum.kind = "cpu_internal"
