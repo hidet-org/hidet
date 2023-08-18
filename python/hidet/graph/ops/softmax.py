@@ -202,14 +202,10 @@ class SoftmaxTask(Task):
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 # x_ptr =
                 para = 'p' + str(nthreads)
-                temp_out = tensor(dtype=float32, shape=shape)
-                for k in grid(total_size, attrs=para):
-                    total_idx = spatial(*shape).map(k)
-                    temp_out[total_idx] = out[total_idx]
-
                 for k in grid(head_size, attrs=para):
                     head_idx = spatial(*head).map(k)
                     if self.axis == len(shape) - 1:  # last dim
+                        temp_exp = tensor(dtype=float32, shape=tail)
                         max_val = x[head_idx][0]
                         if tail_size >= 8:
                             # vectorized find max value
@@ -232,29 +228,30 @@ class SoftmaxTask(Task):
                                 val_vec = avx_f32x8_load(~x[head_idx][i * 8])
                                 val_vec = avx_f32x8_subtract(val_vec, max_vec)
                                 val_vec = apply_exponent(val_vec)
-                                avx_f32x8_store(~temp_out[head_idx][i * 8], val_vec)
+                                avx_f32x8_store(~temp_exp[i * 8], val_vec)
                                 sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
                             sum_value = avx_f32x8_find_sum(sum_exp_vec)
                         for i in range(tail_size % 8):
-                            temp_out[head_idx][tail_size - tail_size % 8 + i] = \
+                            temp_exp[tail_size - tail_size % 8 + i] = \
                                 prim.exp(x[head_idx][tail_size - tail_size % 8 + i] - max_val)
-                            sum_value += temp_out[head_idx][tail_size - tail_size % 8 + i]
+                            sum_value += temp_exp[tail_size - tail_size % 8 + i]
 
                         # divide by exp sum
                         if tail_size >= 8:
                             # divide
                             sum_vec8 = avx_f32x8_set1(sum_value)
                             for i in range(tail_size // 8):
-                                avx_f32x8_store(~temp_out[head_idx][i * 8],
-                                                avx_f32x8_divide(avx_f32x8_load(~temp_out[head_idx][i * 8]),
+                                avx_f32x8_store(~temp_exp[i * 8],
+                                                avx_f32x8_divide(avx_f32x8_load(~temp_exp[i * 8]),
                                                                  sum_vec8))
                         for i in range(tail_size % 8):
-                            temp_out[head_idx][tail_size - tail_size % 8 + i] /= sum_value
+                            temp_exp[tail_size - tail_size % 8 + i] /= sum_value
+                        for i in range(tail_size):
+                            out[head_idx][i] = temp_exp[i]
                     else:  # not last dim
-                        # offset = k * tail_size * axis_size
+                        temp_exp = tensor(dtype=float32, shape=[shape[self.axis]] + tail)
                         # vectorized operations across all contiguous memory for relevant axis
                         for g in range(tail_size // 8):
-                            # tail_offset = g * 8
                             tail_idx = spatial(*tail).map(g * 8)
                             max_vec = avx_f32x8_load(~x[head_idx][0][tail_idx])
                             for i in range(axis_size):
@@ -265,12 +262,15 @@ class SoftmaxTask(Task):
                                 val_vec = avx_f32x8_load(~x[head_idx][i][tail_idx])
                                 val_vec = avx_f32x8_subtract(val_vec, max_vec)
                                 val_vec = apply_exponent(val_vec)
-                                avx_f32x8_store(~temp_out[head_idx][i][tail_idx], val_vec)
+                                avx_f32x8_store(~temp_exp[i][tail_idx], val_vec)
                                 sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
                             for i in range(axis_size):
-                                avx_f32x8_store(~temp_out[head_idx][i][tail_idx],
-                                                avx_f32x8_divide(avx_f32x8_load(~temp_out[head_idx][i][tail_idx]),
+                                avx_f32x8_store(~temp_exp[i][tail_idx],
+                                                avx_f32x8_divide(avx_f32x8_load(~temp_exp[i][tail_idx]),
                                                                  sum_exp_vec))
+                                for j in range(8):
+                                    tail_end_idx = spatial(*tail).map(g * 8 + j)
+                                    out[head_idx][i][tail_end_idx] = temp_exp[i][tail_end_idx]
                         # unvectorized operations for the remaining elements
                         max_arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[tail_size % 8])
                         for j in range(tail_size % 8):
@@ -285,16 +285,12 @@ class SoftmaxTask(Task):
                         for p in range(axis_size):
                             for j in range(tail_size % 8):
                                 last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
-                                temp_out[head_idx][p][last_idx] = prim.exp(x[head_idx][p][last_idx] - max_arr[j])
-                                sum_exp_arr[j] += temp_out[head_idx][p][last_idx]
+                                out[head_idx][p][last_idx] = prim.exp(x[head_idx][p][last_idx] - max_arr[j])
+                                sum_exp_arr[j] += out[head_idx][p][last_idx]
                         for p in range(axis_size):
                             for j in range(tail_size % 8):
                                 last_idx = spatial(*tail).map(tail_size - tail_size % 8 + j)
-                                temp_out[head_idx][p][last_idx] = temp_out[head_idx][p][last_idx] / sum_exp_arr[j]
-
-                for k in grid(total_size, attrs=para):
-                    total_idx = spatial(*shape).map(k)
-                    out[total_idx] = temp_out[total_idx]
+                                out[head_idx][p][last_idx] = out[head_idx][p][last_idx] / sum_exp_arr[j]
 
             softmax_cpu_kernel.kind = "cpu_kernel"
             apply_exponent.kind = "cpu_internal"
