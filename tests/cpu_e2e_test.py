@@ -66,4 +66,12 @@ def test_gpt2(device: str, opt: bool):
 #     print(hidet.utils.benchmark_func(lambda: test_gpt2(device, opt), warmup=1, repeat=1))
 # test_gpt2("cuda", True)
 # test_gpt2("cpu", True)
-test_gpt2("cpu", False)
+test_gpt2("cpu", True)
+res = []
+for i in range(5):
+    hidet_latency = hidet.utils.benchmark_func(lambda: test_gpt2("cpu", False), warmup=0, number=1, repeat=1)
+    print(hidet_latency)
+    res.append(hidet_latency)
+with open("cpue2e.txt", "w+") as f:
+    f.write(str(res))
+    f.write("\n")

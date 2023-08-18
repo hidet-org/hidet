@@ -29,10 +29,17 @@ shapes.extend([
 # shapes=[([32, 512, 512], 1)]
 
 # shapes = [([4, 100], -1)]
-shapes = [([1, 1000], 1), ([16, 1000], 1), ([16, 1000, 1, 1], -1), ([1, 128, 128, 128], 2)]
+# shapes = [([1, 1000], 1), ([16, 1000], 1), ([16, 1000, 1, 1], -1), ([1, 128, 128, 128], 2)]
 hidet.option.search_space(0)
 # hidet.option.runtime_check(False)
 hidetvspt = []
+# t = hidet.randn([3, 3, 3],device="cpu")
+# from hidet.lang.mapping import spatial
+# idx = spatial(*[3, 3]).map(4)
+# print(idx)
+# print(t[idx+[1]])
+# print(t)
+# exit()
 for shape, axis in shapes:
     a = hidet.randn(shape, device="cpu")
     xx = hidet.symbol(shape, dtype="float32", device="cpu")

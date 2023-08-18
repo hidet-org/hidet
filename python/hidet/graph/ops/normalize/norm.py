@@ -105,12 +105,6 @@ class NormalizeTask(Task):
             attributes={'dims': dims, 'accumulate_dtype': accumulate_dtype, 'epsilon': epsilon},
         )
 
-    def allow_prologue(self) -> bool:
-        return False
-
-    def allow_epilogue(self) -> bool:
-        return True
-
     def implement_cuda(self, working_dir: str):
         return tune.extract_ir_modules(self.norm_by_warp)
 
@@ -358,6 +352,12 @@ class NormalizeTask(Task):
             return NotImplemented
         return tune.extract_ir_modules(self.schedule_norm_cpu)
 
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        return True
+
     @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=['', 8, 16])
     def schedule_norm_cpu(self, nthreads='') -> IRModule:
@@ -366,24 +366,27 @@ class NormalizeTask(Task):
             avx_f32x8_add, avx_f32x8_set1, avx_f32x8_divide, avx_f32x8_multiply, avx_f32x8_find_sum, avx_f32x8_sqrt
         from hidet.ir.dtypes import float32
         from hidet.utils import prod
+        from hidet.lang import tensor
 
         shape = self.inputs[0].shape
+        total_size = prod(shape)
         head = shape[:-len(self.dims)]
+        tail = shape[-len(self.dims):]
         head_size = prod(head)
-        tail_size = prod(shape[-len(self.dims):])
-        pre_tail = shape[-len(self.dims):-1]
-        pre_tail_size = prod(pre_tail)
+        tail_size = prod(tail)
         with hidet.script_module() as module:
 
             @hidet.script
             def norm_cpu_kernel(x: float32[shape], out: float32[shape]):
                 para = "p" + str(nthreads)
+                temp_out = tensor(dtype=float32, shape=shape)
+                for k in grid(total_size, attrs=para):
+                    total_idx = spatial(*shape).map(k)
+                    temp_out[total_idx] = out[total_idx]
+
                 for k in grid(head_size, attrs=para):
-                    pre_tail_idx = spatial(*pre_tail).map(pre_tail_size) 
-                    
-                    offset = k * tail_size
                     head_idx = spatial(*head).map(k)
-                    
+
                     mean_vec = avx_f32x8_setzero()
                     M2_vec = avx_f32x8_setzero()
                     epsilon_vec = avx_f32x8_set1(self.attrs['epsilon'])
@@ -392,9 +395,10 @@ class NormalizeTask(Task):
                     M2_combined = 0.0
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
+                            tail_idx = spatial(*tail).map(i * 8)
                             # welford algorithm
                             n_vec = avx_f32x8_set1(cast(i + 1, float32))
-                            data_vec = avx_f32x8_load(x + offset + i * 8)
+                            data_vec = avx_f32x8_load(~x[head_idx][tail_idx])
                             delta = avx_f32x8_subtract(data_vec, mean_vec)
                             mean_vec = avx_f32x8_add(mean_vec, avx_f32x8_divide(delta, n_vec))
                             delta2 = avx_f32x8_subtract(data_vec, mean_vec)
@@ -406,15 +410,16 @@ class NormalizeTask(Task):
                         mean_combined = avx_f32x8_find_sum(mean_vec) / 8
                         mean_combined_vec = avx_f32x8_set1(mean_combined)
                         delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
-                        M2_combined = avx_f32x8_find_sum(M2_vec) + avx_f32x8_find_sum(avx_f32x8_multiply(delta_vec, delta_vec)) \
-                            * (tail_size // 8)
+                        M2_combined = avx_f32x8_find_sum(M2_vec) + avx_f32x8_find_sum(
+                            avx_f32x8_multiply(delta_vec, delta_vec)) * (tail_size // 8)
                     mean_tail = 0.0
                     M2_tail = 0.0
                     # welford on remaining parts past 8
                     for i in range(tail_size % 8):
-                        delta_tail = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        tail_idx = spatial(*tail).map(tail_size - tail_size % 8 + i)
+                        delta_tail = x[head_idx][tail_idx] - mean_tail
                         mean_tail += delta_tail / cast(i+1, float32)
-                        delta_tail2 = x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        delta_tail2 = x[head_idx][tail_idx] - mean_tail
                         M2_tail += delta_tail * delta_tail2
                     # welford combine vectorized and unvectorized
                     delta_end = mean_tail - mean_combined
@@ -425,15 +430,20 @@ class NormalizeTask(Task):
                     var_vec = avx_f32x8_set1(var)
                     if tail_size >= 8:
                         for i in range(tail_size // 8):
+                            tail_idx = spatial(*tail).map(i * 8)
                             # norm calculation
-                            avx_f32x8_store(out + offset + i * 8,
+                            avx_f32x8_store(~temp_out[head_idx][tail_idx],
                                             avx_f32x8_divide(avx_f32x8_subtract(avx_f32x8_load(
-                                                x + offset + i * 8), mean_vec),
+                                                ~x[head_idx][tail_idx]), mean_vec),
                                                 avx_f32x8_sqrt(avx_f32x8_add(var_vec, epsilon_vec))))
                     for i in range(tail_size % 8):
-                        out[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] =\
-                            (x[head_idx][pre_tail_idx][tail_size - tail_size % 8 + i] - mean) *\
-                            prim.rsqrt(var + self.attrs['epsilon'])
+                        tail_idx = spatial(*tail).map(tail_size - tail_size % 8 + i)
+                        temp_out[head_idx][tail_idx] = \
+                            (x[head_idx][tail_idx] - mean) * prim.rsqrt(var + self.attrs['epsilon'])
+
+                for k in grid(total_size, attrs=para):
+                    total_idx = spatial(*shape).map(k)
+                    out[total_idx] = temp_out[total_idx]
 
         norm_cpu_kernel.kind = "cpu_kernel"
         avx_f32x8_find_sum.kind = "cpu_internal"
