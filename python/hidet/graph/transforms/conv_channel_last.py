@@ -35,6 +35,9 @@ class ConvChannelLastPass(GraphPass):
                and there exists another set of attributes P', such that 
                Op(x_chnlast, P')).transpose([0, 3, 1, 2]) == Op(x, P)
         """
+        from hidet.graph.ops.arithmetic import AddOp
+        if isinstance(op, AddOp):
+            return True
         return False
 
     def span_from_nodes(
@@ -99,17 +102,20 @@ class ConvChannelLastPass(GraphPass):
                         current_x, current_perm = tensor_map[x]
                         if current_perm is not None:
                             orig_perm = [current_perm.index(i) for i in range(len(current_perm))]
-                            x_orig_perm = x.transpose(orig_perm)
+                            new_x = current_x.transpose(orig_perm)
+                        else:
+                            new_x = current_x 
+                        new_inputs.append(new_x)
 
                     else:
                         new_inputs.append(x)
                 if need_to_reforward:
                     outputs = node.reforward(new_inputs, update_attributes)
                     for idx, y in enumerate(node.outputs):
-                        tensor_map[y] = outputs[idx]
+                        tensor_map[y] = (outputs[idx], None)
         
-        graph_inputs = [tensor_map[input_tensor] for input_tensor in graph.inputs]
-        graph_outputs = [tensor_map[output_tensor] for output_tensor in graph.outputs]
+        graph_inputs = [tensor_map[input_tensor][0] for input_tensor in graph.inputs]
+        graph_outputs = [tensor_map[output_tensor][0] for output_tensor in graph.outputs]
         return FlowGraph(graph_outputs, graph_inputs)
 
 
