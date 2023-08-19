@@ -63,6 +63,7 @@ class ConvChannelLastPass(GraphPass):
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         from hidet.graph.ops.conv2d import Conv2dOp
+        from hidet.graph.ops.transform import transpose
         nodes: List[Operator] = graph.nodes
         # Start from all conv2d operators as seeds
         seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
@@ -83,30 +84,46 @@ class ConvChannelLastPass(GraphPass):
         for node in nodes:
             if node in scope_nodes:
                 # prepare inputs
-                updated_inputs: List[Tensor] = []
+                new_inputs: List[Tensor] = []
+                update_attributes = {}
+                for x in node.inputs:
+                    if x in tensor_map:
+                        current_x, current_perm = tensor_map[x]
+                        if current_perm is not None:
+                            new_x = current_x
+                        else:
+                            new_perm = [0, 2, 3, 1]
+                            new_x = transpose(current_x, new_perm)
+                            tensor_map[x] = (new_x, new_perm)
+                        new_inputs.append(new_x)
+                    else:
+                        new_perm = [0, 2, 3, 1]
+                        new_x = transpose(x, new_perm)
+                        tensor_map[x] = (new_x, new_perm)
+                        new_inputs.append(new_x)
                 # op transform
                 # batch norm, activation, ...
                 # update tensor_map
-                updated_outputs = []
-                for original, updated in zip(node.outputs, updated_outputs):
-                    tensor_map[original] = updated
+                outputs = node.reforward(new_inputs, update_attributes)
+                for idx, y in enumerate(node.outputs):
+                    tensor_map[y] = (outputs[idx], new_perm)
             else:
                 # Node is not within scope. If its inputs are permuted,
                 # need to convert back, reforward, and update mappings
                 need_to_reforward = False
-                new_inputs = []
+                new_inputs: List[Tensor] = []
                 update_attributes = {}
                 for x in node.inputs:
                     if x in tensor_map:
                         need_to_reforward = True
                         current_x, current_perm = tensor_map[x]
                         if current_perm is not None:
-                            orig_perm = [current_perm.index(i) for i in range(len(current_perm))]
-                            new_x = current_x.transpose(orig_perm)
+                            to_orig_perm = [current_perm.index(i) for i in range(len(current_perm))]
+                            new_x = transpose(current_x, to_orig_perm)
                         else:
                             new_x = current_x 
+                        tensor_map[x] = (new_x, None)
                         new_inputs.append(new_x)
-
                     else:
                         new_inputs.append(x)
                 if need_to_reforward:
