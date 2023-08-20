@@ -21,6 +21,7 @@ def matmul_ansor(M, K, N, dtype):
         name='matmul_ansor',
         attrs={"layout_free_placeholders": [B],
                # Enable automatic layout transform for B}
+        }
     )
 
     return [A, B, rst]
