@@ -35,7 +35,7 @@ for m, n, k in [(384, 256, 256), (512, 512, 512), (1024, 1024, 1024)]:
     x1 = hidet.symbol_like(a)
     x2 = hidet.symbol_like(b)
     y = matmul_x86_refactored(x1, x2)
-    graph: hidet.FlowGraph = hidet.trace_from(
+    graph = hidet.trace_from(
         y, inputs=[x1, x2]
     )
     opt_graph = hidet.graph.optimize(graph)
