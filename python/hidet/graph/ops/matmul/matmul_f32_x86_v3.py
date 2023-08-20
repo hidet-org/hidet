@@ -729,7 +729,7 @@ class MatmulF32Taskx86_v2(Task):
                                 npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
                                 packeda_panel_stride = MR * loop3_partition_a_width
 
-                                # Get our position within the A panel
+                                # Get our position within the packed A global buffer
                                 packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
                                 packed_a_tensor = as_tensor_pointer(
                                     packed_a_buf,

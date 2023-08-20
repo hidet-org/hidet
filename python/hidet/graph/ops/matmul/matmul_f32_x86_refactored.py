@@ -25,7 +25,7 @@ from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.utils import broadcast_indices
 
 
-class MatmulF32Taskx86_v3(Task):
+class MatmulF32Taskx86_refactored(Task):
 
     def __init__(self, a: TensorNode, b: TensorNode):
         a_shape = a.const_shape
@@ -447,12 +447,7 @@ class MatmulF32Taskx86_v3(Task):
                 avx_f32x8_store(c_ptr + 5 * nsize, c5)
                 avx_f32x8_store(c_ptr + (5 * nsize + 8), c58)
 
-            @hidet.script
-            def macro_kernel(
-                    a: packed_a_type, b: packed_b_type, c_in_macro: float32[m_size, n_size], ib: int32, jb: int32,
-                    pb: int32
-            ):
-                return
+
 
             #### Some setup code ####
             packed_b_total_width = 0
@@ -497,15 +492,434 @@ class MatmulF32Taskx86_v3(Task):
 
 
             ##### Start of the loops around micro kernel #####
+            # gemm_macro(packed_a_buf,
+            #            packed_b,
+            #            c,
+            #            loop3_partition_a_height,
+            #            loop3_partition_b_width,
+            #            loop3_partition_a_width,
+            #            comm_id_macro,
+            #            work_id_macro
+            #            )
+            @hidet.script
+            def gemm_macro(
+                    packed_a: ~float32,
+                    packed_b: ~float32,
+                    c: float32[m_size, n_size],
+                    c_row_off: int32,
+                    c_col_off: int32,
+                    macro_m: int32,
+                    macro_n: int32,
+                    macro_k: int32,
+                    ps_packed_a,
+                    ps_packed_b,
+                    comm_id_macro: int32,
+                    work_id_macro: int32,
+                    is_first: bool
+            ):
+                comm_id_1st_loop = comm_id_macro % loop1_nthreads
+                work_id_1st_loop = comm_id_macro // (loop1_nthreads // loop1_nways)
+
+                n_iter = macro_n // NR
+                n_remainder = macro_n % NR
+                m_iter = macro_m // MR
+                m_remainder = macro_m % MR
+
+                if n_remainder > 0:
+                    n_iter += 1
+                if m_remainder > 0:
+                    m_iter += 1
+
+                jr_start = -1
+                jr_end = -1
+                ir_start = -1
+                ir_end = -1
+                jr_inc = -1
+                ir_inc = -1
+
+                thread_range_jrir(
+                    work_id_macro,
+                    macro_nways,
+                    n_iter,
+                    1,
+                    ~jr_start,
+                    ~jr_end,
+                    ~jr_inc
+                )
+
+                thread_range_jrir(
+                    work_id_1st_loop,
+                    m_iter,
+                    1,
+                    ~ir_start,
+                    ~ir_end,
+                    ~ir_inc
+                )
+
+                rs_packeda = 1
+                rstep_a = ps_packed_a
+                cstep_b = ps_packed_b
+
+                cstep_c = NR
+                rstep_c = n_size * MR
+
+                macro_c_cast = as_tensor_pointer(
+                    ~c[c_row_off, c_col_off],
+                    dtype=float32,
+                    shape=(m_size, n_size)
+                )
+                temp_c = tensor(scope=DeclareScope.Default,
+                                 dtype=float32,
+                                 layout=row_major(MR, NR),
+                                 is_static=True)
+                j = jr_start
+                while j < jr_end:
+                    b1 = packed_b + j * cstep_b
+                    c1 = macro_c_cast + j * cstep_c
+
+                    n_cur = NR if not_edge(j, n_iter, n_remainder) else n_remainder
+                    # Loop over the m dimension, MR rows at a time
+                    i = ir_start
+                    while i < ir_end:
+                        a1 = packed_a + i * rstep_a
+                        c11 = c1 + i * rstep_a
+                        m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
+
+                        if m_cur == MR and n_cur == NR:
+                            micro_kernel(a1, b1, c11, macro_k, macro_m, macro_n, is_first)
+                        else:
+                            for i, j in grid(MR, NR):
+                                temp_c[i, j] = 0.0
+                            micro_kernel(a1, b1, temp_c, macro_k, macro_m, macro_n, is_first)
+                            if not is_first:
+                                for mm, nn in grid(m_cur, n_cur):
+                                    c11[mm, nn] += temp_c[mm, nn]
+                            else:
+                                for mm, nn in grid(m_cur, n_cur):
+                                    c11[mm, nn] = temp_c[mm, nn]
+
+                        i += ir_inc
+                    j += jr_inc
+
+
+            @hidet.script
+            def gemm_3rd_loop(
+                    a: float32[m_size, k_size],
+                    packed_b: ~float32,
+                    c: float32[m_size, n_size],
+                    loop3_partition_a_start_col: int32,
+                    loop3_partition_b_start_col: int32,
+                    loop3_partition_a_width: int32,
+                    loop3_partition_b_width: int32,
+                    comm_id_3rd_loop: int32,
+                    work_id_3rd_loop: int32,
+                    is_first: bool
+            ):
+                comm_id_macro = work_id_3rd_loop % macro_nthreads
+                work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
+                comm_id_packa = comm_id_macro
+                work_id_packa = comm_id_macro
+                packa_nways = macro_nthreads
+
+                m_start_loop3 = 0
+                m_end_loop3 = 0
+                thread_range_sub(
+                    loop3_nways,
+                    work_id_3rd_loop,
+                    m_size,
+                    MR,
+                    ~m_start_loop3,
+                    ~m_end_loop3
+                )
+                ii = m_start_loop3
+                while ii < m_end_loop3:
+                    b_alg_loop3 = determine_blocksize_f_sub(
+                        ii, m_size, MC
+                    )
+                    # Acquire the partition at loop 3
+                    loop3_partition_a_start_row = ii
+                    loop3_partition_a_height = b_alg_loop3
+
+                    loop3_partition_a = a + (
+                        loop3_partition_a_start_row * k_size +
+                        loop3_partition_a_start_col
+                    )
+
+                    # Get our position within the packed A global buffer
+                    packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
+
+                    # TODO: If passed, see if this barrier is necessary
+                    thrcomm_barrier(
+                        comm_id_packa,
+                        ~packa_thrcomm_barrier_sense[work_id_3rd_loop],
+                        ~packa_thrcomm_threads_arrived[work_id_3rd_loop],
+                        packa_nthreads
+                    )
+
+                    gemm_pack_a(
+                        loop3_partition_a,
+                        loop3_partition_a_width,
+                        loop3_partition_a_height,
+                        packed_a_buf,
+                        comm_id_packa,
+                        work_id_packa,
+                        packa_nways
+                    )
+
+                    # This marks the end of the packing of A,
+                    # so a barrier is needed
+                    thrcomm_barrier(
+                        comm_id_packa,
+                        ~packa_thrcomm_barrier_sense[work_id_3rd_loop],
+                        ~packa_thrcomm_threads_arrived[work_id_3rd_loop],
+                        packa_nthreads
+                    )
+
+                    gemm_macro(packed_a_buf,
+                               packed_b,
+                               c,
+                               loop3_partition_a_start_row,
+                               loop3_partition_b_start_col,
+                               loop3_partition_a_height,
+                               loop3_partition_b_width,
+                               loop3_partition_a_width,
+                               MR * loop3_partition_a_width,
+                               packed_b_height * NR,
+                               comm_id_macro,
+                               work_id_macro,
+                               is_first
+                               )
+
+            @hidet.script
+            def gemm_pack_a(
+                    loop3_partition_a: ~float32,
+                    loop3_partition_a_width: int32,
+                    loop3_partition_a_height: int32,
+                    packed_a_buf: ~float32,
+                    comm_id_packa: int32,
+                    work_id_packa: int32,
+                    packa_nways: int32
+            ):
+                packed_a_tensor = as_tensor_pointer(
+                    packed_a_buf,
+                    float32,
+                    layout=row_major(packed_a_individual_height // MR, 1) *
+                            column_major(MR, packed_a_width)
+                )
+
+
+                npanels_full_a = loop3_partition_a_height // MR
+                panel_a_remainder = loop3_partition_a_height % MR
+
+                npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
+                for ii_panel in range(npanels_a):
+                    if ii_panel % packa_nways != work_id_packa % packa_nways:
+                        continue
+                    a_curr_panel_row_start = ii_panel * MR
+                    a_curr_panel_height = min(MR, loop3_partition_a_height - a_curr_panel_row_start)
+
+                    if a_curr_panel_height == MR:  # unroll the packing by 8
+                        k_iters = loop3_partition_a_width // 8
+                        k_remainder = loop3_partition_a_width % 8
+                        col = 0
+                        for k_iter in range(k_iters):
+                            col = k_iter * 8
+                            a_curr_panel_col = loop3_partition_a + (
+                                a_curr_panel_row_start * k_size + col
+                            )
+                            v0 = avx_f32x8_load(a_curr_panel_col)
+                            v1 = avx_f32x8_load(a_curr_panel_col * k_size)
+                            v2 = avx_f32x8_load(a_curr_panel_col + (2 * k_size))
+                            v3 = avx_f32x8_load(a_curr_panel_col + (3 * k_size))
+                            v4 = avx_f32x8_load(a_curr_panel_col + (4 * k_size))
+                            v5 = avx_f32x8_load(a_curr_panel_col + (5 * k_size))
+
+                            unpack0 = avx_f32x8_unpacklo(v0, v1)
+                            unpack1 = avx_f32x8_unpackhi(v0, v1)
+                            unpack2 = avx_f32x8_unpacklo(v2, v3)
+                            unpack3 = avx_f32x8_unpackhi(v2, v3)
+                            unpack4 = avx_f32x8_unpacklo(v4, v5)
+                            unpack5 = avx_f32x8_unpackhi(v4, v5)
+
+                            shf0 = avx_f32x8_shuffle(unpack0, unpack2, 0x44)
+                            shf1 = avx_f32x8_shuffle(unpack4, unpack0, 0xE4)
+                            shf2 = avx_f32x8_shuffle(unpack2, unpack4, 0xEE)
+                            shf3 = avx_f32x8_shuffle(unpack5, unpack1, 0xE4)
+                            shf4 = avx_f32x8_shuffle(unpack3, unpack5, 0xEE)
+                            shf5 = avx_f32x8_shuffle(unpack1, unpack3, 0x44)
+
+                            low_shf1 = avx_f32x8_cast_f32x4(shf1)
+                            res0 = avx_f32x8_insert_f32x4(shf0, low_shf1, 0x1)
+                            res1 = avx_f32x8_permute2f32x4(shf0, shf1, 0x31)
+
+                            low_shf5 = avx_f32x8_cast_f32x4(shf5)
+                            res2 = avx_f32x8_insert_f32x4(shf2, low_shf5, 0x1)
+                            res3 = avx_f32x8_permute2f32x4(shf2, shf5, 0x31)
+
+                            low_shf4 = avx_f32x8_cast_f32x4(shf4)
+                            res4 = avx_f32x8_insert_f32x4(shf3, low_shf4, 0x1)
+                            res5 = avx_f32x8_permute2f32x4(shf3, shf4, 0x31)
+
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start, col],
+                                res0
+                            )
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start + 2,
+                                                col + 1],
+                                res2
+                            )
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start + 4,
+                                                col + 2],
+                                res4)
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start,
+                                                col + 4],
+                                res1
+                            )
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start + 2,
+                                                col + 5],
+                                res3
+                            )
+                            avx_f32x8_store_aligned(
+                                ~packed_a_tensor[a_curr_panel_row_start + 4,
+                                                col + 6],
+                                res5
+                            )
+                        remaining_start_col = k_iters * 8
+                        for remain_off in range(k_remainder):
+                            curr_remain_col = remaining_start_col + remain_off
+                            for micropanel_row in range(MR):
+                                packed_a_tensor[a_curr_panel_row_start + micropanel_row,
+                                        curr_remain_col] = \
+                                loop3_partition_a[(micropanel_row + a_curr_panel_row_start) * k_size + curr_remain_col]
+                    else:
+                        remain_start_row = npanels_a * MR
+                        for remain_col in range(loop3_partition_a_width):
+                            for remain_row in range(panel_a_remainder):
+                                packed_a_tensor[remain_start_row + remain_row, remain_col] = \
+                                loop3_partition_a[(remain_row + remain_start_row) * k_size + remain_col]
+                            remain_row = panel_a_remainder
+                            while remain_row < MR:
+                                packed_a_tensor[remain_start_row + remain_row, remain_col] = 0
+                                remain_row += 1
+
+
             @hidet.script
             def gemm_pack_b(
                     loop4_partition_b: ~float32,
                     loop4_partition_b_width: int32,
                     loop4_partition_b_height: int32,
                     packed_b_buf: ~float32,
-                    comm_id_packb: int32, work_id_packb: int32
+                    comm_id_packb: int32, work_id_packb: int32,
+                    packb_nways: int32
             ):
+                npanels_full_b = loop4_partition_b_width // NR
+                npanels_b_remainder = loop4_partition_b_width % NR
 
+                npanels_b = npanels_full_b + (npanels_b_remainder != 0)
+                packedb_panel_stride = packed_b_height * NR
+
+                # Loop for the packing of B
+                for i_panel in range(npanels_b):
+                    if i_panel % packb_nways != work_id_packb % packb_nways:
+                        continue
+                    packed_b_buff_curr = packed_b_buf + (i_panel * packedb_panel_stride)
+                    curr_panel_start = i_panel * NR
+                    curr_panel_width = min(NR, loop4_partition_b_width - curr_panel_start)
+                    if curr_panel_width == NR:
+                        k_iters = loop4_partition_b_height // 8
+                        k_remainder = loop4_partition_b_height % 8
+                        row = 0
+                        for k_iter in range(k_iters):
+                            row = k_iter * 8
+                            b_panel = loop4_partition_b + (row * n_size + curr_panel_start)
+                            b00 = avx_f32x8_load(b_panel)
+                            b08 = avx_f32x8_load(b_panel + 8)
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
+                            packed_b_buff_curr += 16
+
+                            b10 = avx_f32x8_load(b_panel + n_size)
+                            b18 = avx_f32x8_load(b_panel + (n_size * 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b10)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b18)
+                            packed_b_buff_curr += 16
+
+                            b20 = avx_f32x8_load(b_panel + (2 * n_size))
+                            b28 = avx_f32x8_load(b_panel + (2 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b20)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b28)
+                            packed_b_buff_curr += 16
+
+                            b30 = avx_f32x8_load(b_panel + (3 * n_size))
+                            b38 = avx_f32x8_load(b_panel + (3 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b30)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b38)
+                            packed_b_buff_curr += 16
+
+                            b40 = avx_f32x8_load(b_panel + (4 * n_size))
+                            b48 = avx_f32x8_load(b_panel + (4 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b40)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b48)
+                            packed_b_buff_curr += 16
+
+                            b50 = avx_f32x8_load(b_panel + (5 * n_size))
+                            b58 = avx_f32x8_load(b_panel + (5 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b50)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b58)
+                            packed_b_buff_curr += 16
+
+                            b60 = avx_f32x8_load(b_panel + (6 * n_size))
+                            b68 = avx_f32x8_load(b_panel + (6 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b60)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b68)
+                            packed_b_buff_curr += 16
+
+                            b70 = avx_f32x8_load(b_panel + (7 * n_size))
+                            b78 = avx_f32x8_load(b_panel + (7 * n_size + 8))
+
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b70)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b78)
+
+                            packed_b_buff_curr += 16
+
+                        row = k_iters + 8
+                        for _ in range(k_remainder):
+                            b_panel = loop4_partition_b + (row * n_size + curr_panel_start)
+                            b00 = avx_f32x8_load(b_panel)
+                            b08 = avx_f32x8_load(b_panel + 8)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
+                            packed_b_buff_curr += 16
+                            row += 1
+
+                    else:
+                        packed_b_remaining_buf = packed_b_buf + (npanels_full_b * packedb_panel_stride)
+                        if npanels_b_remainder > 0:
+                            # TODO: I think this if should always be true if this is executed?
+                            remain_col_start = npanels_full_b * NR
+                            for remain_row in range(loop4_partition_b_height):
+                                packed_b_remaining_buf_curr = packed_b_remaining_buf + (remain_row * NR)
+                                for remain_col in range(npanels_b_remainder):
+                                    packed_b_remaining_buf_curr[0] = loop4_partition_b[
+                                        (remain_row * n_size) + (remain_col_start + remain_col)
+                                    ]
+                                    packed_b_remaining_buf_curr += 1
+                                zero_fill_col = npanels_b_remainder
+                                while zero_fill_col < NR:
+                                    packed_b_remaining_buf_curr[0] = 0.0
+                                    packed_b_remaining_buf_curr += 1
+                                    zero_fill_col += 1
 
 
             @hidet.script
@@ -553,19 +967,35 @@ class MatmulF32Taskx86_v3(Task):
                     )
 
                     # Start the packing of B
+                    # TODO: Check this assertion:
+                    # TODO: loop3_nthreads == packb_nthreads
                     gemm_pack_b(loop4_partition_b, loop4_partition_b_width,
                                 loop4_partition_b_height, packed_b_buf,
-                                comm_id_packb, work_id_packb)
+                                comm_id_packb, work_id_packb, loop3_nthreads)
 
 
 
-
+                    # The barrier at the end of the packing of B
                     thrcomm_barrier(
                         comm_id_packb,
                         ~packb_thrcomm_barrier_sense[work_id_4th_loop],
                         ~packb_thrcomm_barrier_threads_arrived[work_id_4th_loop],
                         packb_nthreads
                     )
+
+                    # TODO: The loop3 and beyond should start here?
+                    gemm_3rd_loop(
+                        a, packed_b_buf, c,
+                        loop4_partition_a_start_col,
+                        loop4_partition_b_start_col,
+                        loop4_partition_b_height,
+                        loop4_partition_b_width,
+                        comm_id_3rd_loop,
+                        work_id_3rd_loop,
+                        is_first
+                    )
+
+
                     i_loop4 += b_alg_loop4
 
 
@@ -616,18 +1046,20 @@ class MatmulF32Taskx86_v3(Task):
                     comm_id_5th_loop = tid_5th_loop
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
 
+            assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
+            matmul_kernel_x86_v3.kind = "cpu_kernel"
+            return module.ir_module()
+
+        # return ir_module
 
 
-        return ir_module
-
-
-class Matmulx86Op_v2(Operator):
+class Matmulx86Op_refactored(Operator):
     def __init__(self, a: Tensor, b: Tensor):
         if not (len(a.shape) == len(b.shape) == 2 and a.shape[1] == b.shape[0]):
             raise ValueError('Matrix multiplication: incompatible sizes: {} and {}'.format(a.shape, b.shape))
-        task = MatmulF32Taskx86_v2(input_like(a, 'a'), input_like(b, 'b'))
+        task = MatmulF32Taskx86_refactored(input_like(a, 'a'), input_like(b, 'b'))
         super().__init__(inputs=[a, b], attributes={}, task=task)
 
 
-def matmul_x86_v2(a: Tensor, b: Tensor) -> Tensor:
-    return Matmulx86Op_v2(a, b).outputs[0]
+def matmul_x86_refactored(a: Tensor, b: Tensor) -> Tensor:
+    return Matmulx86Op_refactored(a, b).outputs[0]
