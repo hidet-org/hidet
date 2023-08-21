@@ -213,10 +213,12 @@ class MatmulF32Taskx86_refactored(Task):
             @hidet.script
             def determine_blocksize_f_sub(i: int32, dim: int32, b_alg: int32) -> int32:
                 dim_left_now = dim - i
+                b_now = -1
                 if dim_left_now <= b_alg:
                     b_now = dim_left_now
                 else:
                     b_now = b_alg
+                assert b_now >= 0
                 return b_now
 
             @hidet.script
