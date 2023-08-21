@@ -48,7 +48,8 @@ def parallel_imap(func: Callable, jobs: Sequence[Any], num_workers: Optional[int
     if num_workers is None:
         num_workers = os.cpu_count()
 
-    with multiprocessing.Pool(num_workers) as pool:
+    ctx = multiprocessing.get_context('fork')
+    with ctx.Pool(num_workers) as pool:
         yield from pool.imap(_wrapped_func, range(len(jobs)))
 
     _job_queue = None
@@ -65,7 +66,8 @@ def parallel_map(func: Callable, jobs: Sequence[Any], num_workers: Optional[int]
     if num_workers is None:
         num_workers = os.cpu_count()
 
-    with multiprocessing.Pool(num_workers) as pool:
+    ctx = multiprocessing.get_context('fork')
+    with ctx.Pool(num_workers) as pool:
         ret = pool.map(_wrapped_func, range(len(jobs)))
 
     _job_queue = None

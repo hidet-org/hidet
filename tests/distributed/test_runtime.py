@@ -163,6 +163,33 @@ def test_send_recv(rank):
         assert numpy.array_equal(x.cpu().numpy(), [[1, 2], [3, 4]])
 
 
+def build_job():
+    import hidet
+
+    a = hidet.symbol([1, 2, 4], dtype='float16', device='cuda')
+    b = hidet.symbol([1, 4, 8], dtype='float16', device='cuda')
+    c = hidet.ops.matmul(a, b)
+    d = 2 * (c + c).reshape([1, 16])
+
+    flow_graph = hidet.trace_from(d, inputs=[a, b])
+    flow_graph = hidet.graph.optimize(flow_graph)
+    compiled_graph = flow_graph.build()
+
+
+@pytest.mark.parametrize("world_size", [2])
+def test_parallel_build(world_size):
+    import multiprocessing as mp
+
+    ctx = mp.get_context('spawn')
+    processes = [ctx.Process(target=build_job) for _ in range(world_size)]
+
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join(timeout=100)
+        assert p.exitcode == 0
+
+
 if __name__ == '__main__':
     test_all_reduce()
     test_broadcast()

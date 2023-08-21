@@ -24,7 +24,7 @@ from hidet.ir.expr import is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.task import Task
 from hidet.drivers.build_module import build_ir_module, build_ir_module_batch
-from hidet.drivers.utils import lazy_initialize_cuda
+from hidet.drivers.utils import lazy_initialize_cuda, CompileLock
 from hidet.runtime.compiled_module import compiled_module_exists
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, load_compiled_task, compiled_task_cache
 from hidet.runtime.device import Device
@@ -250,42 +250,43 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
         lib_path = os.path.join(task_dir, 'lib.so')
         version_path = os.path.join(task_dir, 'version.txt')
 
-        version_matched = False
-        if os.path.exists(version_path):
-            with open(version_path, 'r') as f:
-                version = f.read()
-                if version.strip() == hidet.__version__:
-                    version_matched = True
+        with CompileLock(os.path.join(task_dir, "compile.lock"), enabled=use_cache):
+            version_matched = False
+            if os.path.exists(version_path):
+                with open(version_path, 'r') as f:
+                    version = f.read()
+                    if version.strip() == hidet.__version__:
+                        version_matched = True
 
-        # use previously generated library when available
-        if use_cache and version_matched and compiled_module_exists(task_dir):
-            logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
-            if load:
-                compiled_task = load_compiled_task(task_dir)
-                compiled_task_cache.add(target, space_level, task_string, compiled_task)
-        else:
-            logger.info(f"Compiling {target} task {green(task.signature())}...")
+            # use previously generated library when available
+            if use_cache and version_matched and compiled_module_exists(task_dir):
+                logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
+                if load:
+                    compiled_task = load_compiled_task(task_dir)
+                    compiled_task_cache.add(target, space_level, task_string, compiled_task)
+            else:
+                logger.info(f"Compiling {target} task {green(task.signature())}...")
 
-            # build from scratch
-            os.makedirs(task_dir, exist_ok=True)
+                # build from scratch
+                os.makedirs(task_dir, exist_ok=True)
 
-            # write task
-            with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
-                f.write(task_string)
+                # write task
+                with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
+                    f.write(task_string)
 
-            # write version
-            with open(version_path, 'w') as f:
-                f.write(hidet.__version__)
+                # write version
+                with open(version_path, 'w') as f:
+                    f.write(hidet.__version__)
 
-            # implement task to IRModule, each task may produce multiple IRModules (candidates)
-            # they have the same functionality but different performance
-            candidates = task.implement(target=target, working_dir=task_dir)
+                # implement task to IRModule, each task may produce multiple IRModules (candidates)
+                # they have the same functionality but different performance
+                candidates = task.implement(target=target, working_dir=task_dir)
 
-            # generate meta data
-            generate_meta_data(task, task_dir, target, len(candidates))
+                # generate meta data
+                generate_meta_data(task, task_dir, target, len(candidates))
 
-            # construct the ir module for the task
-            build_task_module(task, candidates, task_dir, target)
+                # construct the ir module for the task
+                build_task_module(task, candidates, task_dir, target)
 
             if load:
                 compiled_task = load_compiled_task(task_dir)

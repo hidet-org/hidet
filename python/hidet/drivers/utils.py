@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import os
+from filelock import FileLock
 
 import hidet.cuda
 
@@ -36,3 +38,27 @@ def lazy_initialize_cuda():
         for i in range(hidet.cuda.device_count()):
             hidet.cuda.properties(i)
             hidet.cuda.compute_capability(i)
+
+
+class CompileLock:
+    # There are cases where multiple instances of the same task or IRModule will be built at the same time, especially
+    # in the cases of distributed inference. We use this lock to make sure that a single task is not built multiple
+    # times.
+
+    def __init__(self, lock_path: str, enabled=True):
+        self.enabled = enabled
+        self.lock_path = lock_path
+        self.lock = None
+
+    def __enter__(self):
+        if not self.enabled:
+            return None
+
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+        self.lock = FileLock(self.lock_path)
+        self.lock.acquire()
+        return self.lock
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        if self.lock:
+            self.lock.release()
