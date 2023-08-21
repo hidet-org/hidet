@@ -26,7 +26,6 @@ from .debug import printf
 from . import cpu
 from .cpu import avx_f32x4_store, avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_setzero
 from .cpu import avx_free, avx_malloc
-from .cpu import openmp_get_num_threads, openmp_get_thread_num
 
 # cuda primitive functions and variables
 from . import cuda
