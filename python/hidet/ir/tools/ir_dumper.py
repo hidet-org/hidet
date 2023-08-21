@@ -173,8 +173,10 @@ class IRDumper(IRFunctor):
 
     def visit_Function(self, func: Function):
         self.namer.clear()
-        print(func)
         # parameters
+        new_attrs = func.attrs.copy()
+        if 'func_kind' not in new_attrs:
+            new_attrs['func_kind'] = func.kind
         if len(func.attrs) > 0:
             fn_attr_name = self.add_attr('f', func.attrs)
         else:
@@ -1338,7 +1340,7 @@ class IRConstructor:
         if attrs in self.attributes:
             func_attrs = self.attributes[attrs]
         if 'func_kind' in func_attrs:
-                func_kind = func_attrs['func_kind']
+            func_kind = func_attrs['func_kind']
         elif 'cuda.grid_dim' in func_attrs or 'cuda.block_dim' in func_attrs:
             if not all(name in func_attrs for name in ['cuda.grid_dim', 'cuda.block_dim']):
                 raise RuntimeError(
@@ -1396,10 +1398,10 @@ class IRConstructor:
 
 def parse(text: str, parser: Lark) -> IRModule:
     tree = parser.parse(text)
-    symbol_table = construct_symbols(preprocess_symbolvar(tree))
-    preprocess = PreProcessTree(symbol_table)
-    preprocess.visit(tree)
     try:
+        symbol_table = construct_symbols(preprocess_symbolvar(tree))
+        preprocess = PreProcessTree(symbol_table)
+        preprocess.visit(tree)
         ir_module = IRConstructor(preprocess)(tree)
     except Exception as e:
         print(text)
@@ -1535,7 +1537,7 @@ def diff_text(old: str, new: str):
         else:
             print(oline)
         
-with open('/home/allan/Programs/hidet_repo/hidet/python/hidet/ir/hidet.lark') as f:
+with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') as f:
     hidet_grammar = f.read()
 
 test_parser(hidet_grammar)

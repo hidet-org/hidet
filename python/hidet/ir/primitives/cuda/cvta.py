@@ -35,6 +35,7 @@ def register_cvta_instructions():
             @script
             def cvta(src: PointerType(VoidType())) -> u32:
                 attrs.func_name = func_name
+                attrs.func_kind = 'cuda_internal'
                 ret: u32 = 0
                 asm(
                     template="{.reg.u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; cvt.u32.u64 %0, smem_ptr;}",
