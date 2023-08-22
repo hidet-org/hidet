@@ -56,7 +56,7 @@ class Conv2dResolveRule(ResolveRule):
 @register_resolve_rule(Conv2dChannelLastOp)
 class Conv2dChannelLastResolveRule(ResolveRule):
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
-        assert isinstance(op, Conv2dOp)
+        assert isinstance(op, Conv2dChannelLastOp)
         stride = ops.utils.normalize_stride(op.attrs['stride'])
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']

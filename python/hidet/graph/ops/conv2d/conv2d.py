@@ -13,6 +13,7 @@ from typing import List, Union, Sequence
 from hidet import ir
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
+from hidet.utils.py import cdiv
 
 
 # pylint: disable=too-many-locals
@@ -164,5 +165,20 @@ def conv2d_channel_last(
     stride: Union[int, Sequence[int]] = (1, 1),
     dilations: Union[int, Sequence[int]] = (1, 1),
     groups: int = 1,
+    padding: Sequence[int] = (0, 0),
 ) -> Tensor:
+    import hidet
+    _, _, _, c = data.shape
+    if groups == 1 and c % 8 != 0:
+        pad_channel = cdiv(c, 8) * 8 - c
+    else:
+        pad_channel = 0
+    if isinstance(padding, int):
+        pad_h = padding
+        pad_w = padding
+    else:
+        pad_h = padding[0]
+        pad_w = padding[1]
+    data = hidet.ops.pad(data, [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_channel])
+    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
     return Conv2dChannelLastOp(data, weight, stride, dilations, groups).outputs[0]

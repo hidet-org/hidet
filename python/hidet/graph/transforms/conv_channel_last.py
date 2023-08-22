@@ -31,18 +31,15 @@ class PermutedOp:
         for x in node.inputs:
             if x in tensor_map:
                 current_x, current_perm = tensor_map[x]
-                if current_perm is not None:
-                    new_x = current_x
-                else:
-                    new_perm = [0, 2, 3, 1]
-                    new_x = transpose(current_x, new_perm)
-                    tensor_map[x] = (new_x, new_perm)
-                new_inputs.append(new_x)
+            else:
+                current_x, current_perm = x, None
+            if current_perm is not None:
+                new_x = current_x
             else:
                 new_perm = [0, 2, 3, 1]
-                new_x = transpose(x, new_perm)
+                new_x = transpose(current_x, new_perm)
                 tensor_map[x] = (new_x, new_perm)
-                new_inputs.append(new_x)
+            new_inputs.append(new_x)
         outputs = node.reforward(new_inputs, update_attributes)
         for idx, y in enumerate(node.outputs):
             tensor_map[y] = (outputs[idx], new_perm)
@@ -65,27 +62,32 @@ class PermutedConv2dOp(PermutedOp):
     
     def reforward(self, tensor_map) -> None:
         from hidet.graph.ops.transform import transpose
+        from hidet.graph.ops.conv2d import conv2d_channel_last
         node = self.op
-        new_inputs: List[Tensor] = []
-        update_attributes = {}
-        for x in node.inputs:
-            if x in tensor_map:
-                current_x, current_perm = tensor_map[x]
-                if current_perm is not None:
-                    new_x = current_x
-                else:
-                    new_perm = [0, 2, 3, 1]
-                    new_x = transpose(current_x, new_perm)
-                    tensor_map[x] = (new_x, new_perm)
-                new_inputs.append(new_x)
-            else:
-                new_perm = [0, 2, 3, 1]
-                new_x = transpose(x, new_perm)
-                tensor_map[x] = (new_x, new_perm)
-                new_inputs.append(new_x)
-        outputs = node.reforward(new_inputs, update_attributes)
-        for idx, y in enumerate(node.outputs):
-            tensor_map[y] = (outputs[idx], new_perm)
+        padding = node.attrs['padding']
+        stride = node.attrs['stride']
+        groups = node.attrs['groups']
+        dilations = node.attrs['dilations']
+
+        # Prepare transformed inputs
+        x = node.inputs[0]
+        if x in tensor_map:
+            current_x, current_perm = tensor_map[x]
+        else:
+            current_x, current_perm = x, None
+        if current_perm is not None:
+            new_x = current_x
+            new_perm = current_perm
+        else:
+            new_perm = [0, 2, 3, 1]
+            new_x = transpose(current_x, new_perm)
+            tensor_map[x] = (new_x, new_perm)
+        w = node.inputs[1]
+        assert w not in tensor_map
+
+        # Run channel last conv2d and update tensor map
+        output = conv2d_channel_last(new_x, w, stride=stride, dilations=dilations, groups=groups, padding=padding)
+        tensor_map[node.outputs[0]] = (output, new_perm)
 
 
 class ConvChannelLastPass(GraphPass):
@@ -132,6 +134,7 @@ class ConvChannelLastPass(GraphPass):
         return scope_nodes
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
+        # TODO: Deal with FP16/FP32
         from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.transform import transpose
         nodes: List[Operator] = graph.nodes
@@ -180,12 +183,9 @@ class ConvChannelLastPass(GraphPass):
                     for idx, y in enumerate(node.outputs):
                         tensor_map[y] = (outputs[idx], None)
         
-        graph_inputs = [tensor_map[input_tensor][0]
-                        if input_tensor in tensor_map else input_tensor for input_tensor in graph.inputs]
         graph_outputs = [tensor_map[output_tensor][0]
                          if output_tensor in tensor_map else output_tensor for output_tensor in graph.outputs]
-        ret =  FlowGraph(graph_outputs, graph_inputs)
-        print(ret)
+        ret =  FlowGraph(graph_outputs, graph.inputs)
         return ret
 
 
