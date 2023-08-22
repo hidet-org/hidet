@@ -21,7 +21,8 @@ from hidet.graph.graph_utils.functors import analyze_usage
 class PermutedOp:
     from hidet.graph.ops.arithmetic import AddOp, MultiplyOp
     from hidet.graph.ops.activation import SigmoidOp
-    regular_operators = (AddOp, SigmoidOp, MultiplyOp)
+    from hidet.graph.ops.transform import ConcatOp
+    regular_operators = (AddOp, SigmoidOp, MultiplyOp, ConcatOp)
 
     def __init__(self, op: Operator) -> None:
         self.op = op
@@ -31,6 +32,7 @@ class PermutedOp:
         node = self.op
         new_inputs: List[Tensor] = []
         update_attributes = {}
+        new_perms = []
         for x in node.inputs:
             if x in tensor_map:
                 current_x, current_perm = tensor_map[x]
@@ -44,6 +46,11 @@ class PermutedOp:
                 new_x = transpose(current_x, new_perm)
                 tensor_map[x] = (new_x, new_perm)
             new_inputs.append(new_x)
+            new_perms.append(new_perm)
+        new_perm = new_perms[0]
+        assert all([p == new_perm for p in new_perms])
+        if 'axis' in node.attrs and isinstance(node.attrs['axis'], int):
+            update_attributes['axis'] = new_perm.index(node.attrs['axis'])
         outputs = node.reforward(new_inputs, update_attributes)
         for idx, y in enumerate(node.outputs):
             tensor_map[y] = (outputs[idx], new_perm)
