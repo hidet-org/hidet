@@ -18,6 +18,76 @@ from hidet.graph.transforms import GraphPass
 from hidet.graph.graph_utils.functors import analyze_usage
 
 
+class PermutedOp:
+    def __init__(self, op: Operator) -> None:
+        self.op = op
+
+    def reforward(self, tensor_map) -> None:
+        from hidet.graph.ops.conv2d import Conv2dOp
+        from hidet.graph.ops.transform import transpose
+        node = self.op
+        new_inputs: List[Tensor] = []
+        update_attributes = {}
+        for x in node.inputs:
+            if x in tensor_map:
+                current_x, current_perm = tensor_map[x]
+                if current_perm is not None:
+                    new_x = current_x
+                else:
+                    new_perm = [0, 2, 3, 1]
+                    new_x = transpose(current_x, new_perm)
+                    tensor_map[x] = (new_x, new_perm)
+                new_inputs.append(new_x)
+            else:
+                new_perm = [0, 2, 3, 1]
+                new_x = transpose(x, new_perm)
+                tensor_map[x] = (new_x, new_perm)
+                new_inputs.append(new_x)
+        outputs = node.reforward(new_inputs, update_attributes)
+        for idx, y in enumerate(node.outputs):
+            tensor_map[y] = (outputs[idx], new_perm)
+    
+    @staticmethod
+    def get_permuted_op(op: Operator):
+        from hidet.graph.ops.conv2d import Conv2dOp
+        from hidet.graph.ops.arithmetic import AddOp
+        if isinstance(op, Conv2dOp):
+            return PermutedConv2dOp(op)
+        elif isinstance(op, AddOp):
+            return PermutedOp(op)
+        else:
+            raise RuntimeError("PermutedOp.get_permuted_op() got invalid Operator.")
+
+
+class PermutedConv2dOp(PermutedOp):
+    def __init__(self, op: Operator) -> None:
+        super().__init__(op)
+    
+    def reforward(self, tensor_map) -> None:
+        from hidet.graph.ops.transform import transpose
+        node = self.op
+        new_inputs: List[Tensor] = []
+        update_attributes = {}
+        for x in node.inputs:
+            if x in tensor_map:
+                current_x, current_perm = tensor_map[x]
+                if current_perm is not None:
+                    new_x = current_x
+                else:
+                    new_perm = [0, 2, 3, 1]
+                    new_x = transpose(current_x, new_perm)
+                    tensor_map[x] = (new_x, new_perm)
+                new_inputs.append(new_x)
+            else:
+                new_perm = [0, 2, 3, 1]
+                new_x = transpose(x, new_perm)
+                tensor_map[x] = (new_x, new_perm)
+                new_inputs.append(new_x)
+        outputs = node.reforward(new_inputs, update_attributes)
+        for idx, y in enumerate(node.outputs):
+            tensor_map[y] = (outputs[idx], new_perm)
+
+
 class ConvChannelLastPass(GraphPass):
     """
     For a graph with convolution, convert all image tensors to channel last whereever possible.
@@ -83,30 +153,9 @@ class ConvChannelLastPass(GraphPass):
         # Iterate through nodes in topological order
         for node in nodes:
             if node in scope_nodes:
-                # prepare inputs
-                new_inputs: List[Tensor] = []
-                update_attributes = {}
-                for x in node.inputs:
-                    if x in tensor_map:
-                        current_x, current_perm = tensor_map[x]
-                        if current_perm is not None:
-                            new_x = current_x
-                        else:
-                            new_perm = [0, 2, 3, 1]
-                            new_x = transpose(current_x, new_perm)
-                            tensor_map[x] = (new_x, new_perm)
-                        new_inputs.append(new_x)
-                    else:
-                        new_perm = [0, 2, 3, 1]
-                        new_x = transpose(x, new_perm)
-                        tensor_map[x] = (new_x, new_perm)
-                        new_inputs.append(new_x)
-                # op transform
-                # batch norm, activation, ...
-                # update tensor_map
-                outputs = node.reforward(new_inputs, update_attributes)
-                for idx, y in enumerate(node.outputs):
-                    tensor_map[y] = (outputs[idx], new_perm)
+                # reforward node with op-specific changes and update tensor map
+                permuted_node = PermutedOp.get_permuted_op(node)
+                permuted_node.reforward(tensor_map)
             else:
                 # Node is not within scope. If its inputs are permuted,
                 # need to convert back, reforward, and update mappings
@@ -131,9 +180,13 @@ class ConvChannelLastPass(GraphPass):
                     for idx, y in enumerate(node.outputs):
                         tensor_map[y] = (outputs[idx], None)
         
-        graph_inputs = [tensor_map[input_tensor][0] for input_tensor in graph.inputs]
-        graph_outputs = [tensor_map[output_tensor][0] for output_tensor in graph.outputs]
-        return FlowGraph(graph_outputs, graph_inputs)
+        graph_inputs = [tensor_map[input_tensor][0]
+                        if input_tensor in tensor_map else input_tensor for input_tensor in graph.inputs]
+        graph_outputs = [tensor_map[output_tensor][0]
+                         if output_tensor in tensor_map else output_tensor for output_tensor in graph.outputs]
+        ret =  FlowGraph(graph_outputs, graph_inputs)
+        print(ret)
+        return ret
 
 
 def conv_channel_last_pass() -> GraphPass:
