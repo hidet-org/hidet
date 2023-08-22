@@ -12,6 +12,7 @@
 
 from typing import Dict, List, Set, Tuple
 import tqdm
+import logging
 
 from mip import Model, BINARY, xsum, minimize, OptimizationStatus
 
@@ -20,7 +21,10 @@ from hidet.graph import FlowGraph, Operator, Tensor
 from .rule import op_shard_rule_search
 from .shard import OpShardSpec, TensorShardSpec, connect, node_comm_cost
 
-# I copied it from compiled_graph.py
+logger = logging.Logger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
+
 def get_graph_weights(graph: FlowGraph) -> List[Tensor]:
     """
     Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
@@ -55,10 +59,10 @@ def search_strategy(
     m = Model()
     m.verbose = verbose
     m.threads = -1  # Use all available CPU cores
-    print("Generating rules for each op...")
+    logger.info("Generating rules for each op...")
     op_rules = generate_rules(g, num_shards)
 
-    print("Building ILP...")
+    logger.info("Building ILP...")
     parameters = get_graph_weights(g)
     param_vars = {}
     param_mem = 0
@@ -71,7 +75,7 @@ def search_strategy(
         sharded = xsum(p_vars)
         param_mem += (num_shards - ((num_shards - 1) * sharded)) * (p.nbytes // num_shards)
         param_tot += p.nbytes
-    print(f"Total paramter size: {param_tot/1024**3} GiB")
+    logger.info(f"Total paramter size: {param_tot/1024**3} GiB")
     m += param_mem <= mem_budget
 
     # node communication cost
@@ -129,11 +133,11 @@ def search_strategy(
                 m += xsum(uv_vars) == 1
 
     m.objective = minimize(node_cost + edge_cost)
-    print("Solving...")
+    logger.info("Solving...")
     status = m.optimize(max_seconds=max_seconds)
     assert status in (OptimizationStatus.OPTIMAL, OptimizationStatus.FEASIBLE), status
-    print(f"Minimal cost: {m.objective.x}")
-    print(f"Paramater Size: {param_mem.x / 1024**3} GiB")
+    logger.info(f"Minimal cost: {m.objective.x}")
+    logger.info(f"Paramater Size: {param_mem.x / 1024**3} GiB")
 
     op_specs = {}
     for node in g.nodes:

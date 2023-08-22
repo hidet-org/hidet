@@ -35,6 +35,9 @@ setup(
         "filelock",
         "cuda-python>=11.6.1; platform_system=='Linux'",
     ],
+    extras_require={
+        'distributed': ['filelock', 'mip'],
+    },
     platforms=["linux"],
     entry_points={
         'console_scripts': [
