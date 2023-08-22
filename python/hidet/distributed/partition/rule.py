@@ -12,6 +12,7 @@
 
 from typing import List, Dict
 from itertools import product, chain
+from functools import lru_cache
 
 from hidet.graph import Operator
 from hidet.ir import TensorElement, Var, Expr
@@ -140,7 +141,7 @@ class DataDependencyAnalyzer:
         else:
             return _check()
 
-
+@lru_cache
 def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     # Now we only search for 1D partition
     inputs = op.inputs

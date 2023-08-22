@@ -60,7 +60,7 @@ def search_strategy(
     m.verbose = verbose
     m.threads = -1  # Use all available CPU cores
     logger.info("Generating rules for each op...")
-    op_rules = generate_rules(g, num_shards)
+    op_rules = {node:op_shard_rule_search(node, num_shards) for node in tqdm.tqdm(g.nodes)}
 
     logger.info("Building ILP...")
     parameters = get_graph_weights(g)
