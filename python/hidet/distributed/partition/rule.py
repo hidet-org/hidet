@@ -141,6 +141,7 @@ class DataDependencyAnalyzer:
         else:
             return _check()
 
+
 @lru_cache
 def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     # Now we only search for 1D partition

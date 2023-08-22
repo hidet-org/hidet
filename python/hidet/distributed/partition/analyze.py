@@ -11,8 +11,8 @@
 # limitations under the License.
 
 from typing import Dict, List, Set, Tuple
-import tqdm
 import logging
+import tqdm
 
 from mip import Model, BINARY, xsum, minimize, OptimizationStatus
 
@@ -24,6 +24,7 @@ from .shard import OpShardSpec, TensorShardSpec, connect, node_comm_cost
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+
 
 def get_graph_weights(graph: FlowGraph) -> List[Tensor]:
     """
@@ -41,17 +42,6 @@ def get_graph_weights(graph: FlowGraph) -> List[Tensor]:
     return list(weights)
 
 
-def generate_rules(g: FlowGraph, num_shards: int) -> Dict[Operator, List[OpShardSpec]]:
-    cache = {}
-    ret = {}
-    for node in tqdm.tqdm(g.nodes):
-        node_str = str(node)
-        if node_str not in cache:
-            cache[node_str] = op_shard_rule_search(node, num_shards)
-        ret[node] = cache[node_str]
-    return ret
-
-
 def search_strategy(
     g: FlowGraph, num_shards: int, mem_budget: int, verbose=0, max_seconds=float('inf')
 ) -> Tuple[Dict[Operator, OpShardSpec], Dict[Tensor, TensorShardSpec]]:
@@ -60,7 +50,7 @@ def search_strategy(
     m.verbose = verbose
     m.threads = -1  # Use all available CPU cores
     logger.info("Generating rules for each op...")
-    op_rules = {node:op_shard_rule_search(node, num_shards) for node in tqdm.tqdm(g.nodes)}
+    op_rules = {node: op_shard_rule_search(node, num_shards) for node in tqdm.tqdm(g.nodes)}
 
     logger.info("Building ILP...")
     parameters = get_graph_weights(g)
