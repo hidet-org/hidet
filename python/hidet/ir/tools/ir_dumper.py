@@ -51,6 +51,7 @@ class IRDumper(IRFunctor):
         self.attr_table: Dict[str, Any] = {}
         self.module_headers: List[str] = []
         self.global_symbolvars: Set[SymbolVar] = set()
+        self.local_fn_vars: Set[Var] = set()
 
     def __call__(self, node):
         return self.visit(node)
@@ -178,7 +179,11 @@ class IRDumper(IRFunctor):
         if 'func_kind' not in new_attrs:
             new_attrs['func_kind'] = func.kind
         if len(func.attrs) > 0:
-            fn_attr_name = self.add_attr('f', func.attrs)
+            # We add an unique attribute dict to each function, if it needs one
+            # we do this as some attributes may refer to a local variable, eg {'cuda.block_dim': "s"}
+            # where `s` is defined in the function
+            # TODO: perhaps in the future it may be beneficial to make the symbol table a formal part of the grammar
+            fn_attr_name = self.add_attr(self.get_unique_attr_name('f'), func.attrs)
         else:
             fn_attr_name = ''
 
@@ -761,6 +766,11 @@ def astext(obj: Node) -> str:
 from lark import Lark, Transformer, Token, Tree, Visitor
 import logging
 
+# 1. Extract the global symbols from the module
+# 2. Extract the local variables from each function
+# 3. Compute the types of the local variables
+# 4. Compute the attributes of the module
+# 5. Preprocess the module
 
 def construct_pair(tree):
     assert tree.data.value == 'pair'
@@ -781,23 +791,50 @@ def preprocess_symbolvar(tree: Tree):
             return symbol_var
     return None
 
-def construct_symbols(d: Dict[str, str]) -> Dict[str, SymbolVar]:
+def construct_global_symbols(tree: Tree) -> Dict[str, SymbolVar]:
     symbols = {}
-    for k, v in d.items():
+    svars = preprocess_symbolvar(tree)
+    assert isinstance(svars, dict), "failed to get symbol vars"
+    for k, v in svars.items():
         symbols[k] = symbol_var(k, v)
     return symbols
 
-class PreProcessTree(Visitor):
-    def __init__(self, symbols: Dict[str, SymbolVar]):
-        self.attributes: Dict[str, dict] = {}
-        self.symbols: Dict[str, SymbolVar] = symbols
-        self.funcs: Dict[str, Tree] = {}
+
+class ExtractLocalFnVars(Visitor):
+    def __init__(self):
+        self.local_vars: Dict[str, Tree] = {}
     
+    def def_var(self, node):
+        name = str(node.children[0].children[0])
+        var = node.children[1]
+        self.local_vars[name] = var
+    
+class ExtractLocalVars(Visitor):
+    def __init__(self):
+        # {fn_name: {var_name: var_type}}
+        self.fn_vars: Dict[str, Dict[str, Tree]] = {}
+    
+    def function(self, node):
+        name = str(node.children[0].children[0])
+        visitor = ExtractLocalFnVars()
+        visitor.visit(node)
+        self.fn_vars[name] = visitor.local_vars
+
+class ExtractAttributes(Visitor):
+    def __init__(self):
+        self.attributes: Dict[str, Tree] = {}
+        
     def attribute(self, tree):
         name = tree.children[0].children[0]
         value = tree.children[1]
-        self.attributes[str(name)] = AttrConstructor(self.symbols).transform(value)
-    
+        self.attributes[str(name)] = value
+
+class ExtractFunctionNames(Visitor):
+    def __init__(self):
+        self.funcs: Dict[str, Tree] = {}
+        # maps function name to its attribute name
+        self.func_attrs: Dict[str, str] = {}
+
     def module(self, mod):
         # add user defined functions to self.funcs
         for child in mod.children:
@@ -807,6 +844,17 @@ class PreProcessTree(Visitor):
                     if name in self.funcs:
                         raise ValueError(f"Function {name} already exists.")
                     self.funcs[name] = child
+                    fn_attr = child.children[3]
+                    if fn_attr is not None:
+                        self.func_attrs[name] = str(fn_attr.children[0])
+
+
+def get_module_attribute_name(tree: Tree):
+    assert tree.data.value == 'top_level'
+    module = tree.children[1]
+    assert module.data.value == 'module'
+    attr = module.children[0].children[0]
+    return str(attr)
 
 def resolve_binary_op(op, a, b):
     if op == '&&':
@@ -820,58 +868,454 @@ def resolve_unary_op(op, a):
         return ir.logical_not(a)
     return eval(f'{op} a')
 
-class AttrConstructor(Transformer):
-    def __init__(self, symbolvar: Dict[str, SymbolVar]) -> None:
-        super().__init__()
-        self.symboltable = symbolvar
+class ParseTreeVisitor:
+    def __init__(self, pass_through=True):
+        self.pass_through = pass_through
+    
+    def __call__(self, node) -> Node:
+        return self.visit(node)
+    
+    def visit(self, node) -> Node:
+        if isinstance(node, Tree):
+            if isinstance(node.data, str):
+                # alias
+                method_name = 'visit_' + node.data
+            else:
+                # rule
+                assert node.data.type == 'RULE'
+                method_name = 'visit_' + node.data.value
+            method = getattr(self, method_name, None)
+            if method is None:
+                if not self.pass_through:
+                    raise NotImplementedError("No method {} for {}".format(method_name, node.data))
+                children = [self.visit(child) for child in node.children]
+                return Tree(node.data, children, meta=node.meta)
+            else:
+                return method(node.children)
 
-    def STRING(self, s):
-        # (s,) = s
-        return s[1:-1]
-    def INT(self, n):
-        # (n,) = n
-        return int(n)
+        elif isinstance(node, Token):
+            method_name = 'visit_' + node.type
+            method = getattr(self, method_name, None)
+            if method is None:
+                if not self.pass_through:
+                    raise NotImplementedError("No method {} for {}".format(method_name, node.type))
+                return node
+            else:
+                return method(node.value)
+        elif node is None:
+            return node
+        elif isinstance(node, (str, int, float, Node)):
+            return node
+        else:
+            if not self.pass_through:
+                raise NotImplementedError("Unknown node type: {}".format(type(node)))
+            else:
+                print(type(node), node)
+
+    def visit_STRING(self, value):
+        return str(value[1:-1])
+
+    def visit_INT(self, value):
+        return int(value)
+
+    def visit_SIGNED_FLOAT(self, value):
+        return float(value)
     
-    def SIGNED_NUMBER(self, n):
-        # (n,) = n
-        return float(n)
+    def visit_true(self, _):
+        return True
     
-    def symbol_var(self, var):
-        (var,) = var
-        return self.symboltable[var]
+    def visit_false(self, _):
+        return False
     
-    def binary_op(self, op):
-        a, op, b = op
-        return resolve_binary_op(op, a, b)
+    def visit_none(self, _):
+        return None
     
-    def unary_op(self, op):
-        op, a = op
-        return resolve_unary_op(op, a)
+    def visit_pair(self, node):
+        return self.visit(node[0]), self.visit(node[1])
     
-    def if_then_else_expr(self, expr):
-        cond, then_expr, else_expr = expr
+    def visit_dict(self, node):
+        pairs = [self.visit(child) for child in node]
+        return {key: value for key, value in pairs}
+    
+    def visit_list(self, node):
+        return [self.visit(child) for child in node]
+    
+    def visit_top_level(self, children):
+        return self(children[-1])
+    
+    def visit_attribute_name(self, name):
+        return str(name[0])
+
+    def visit_data_type(self, type):
+        type_name = str(type[0])
+        if type_name == 'void':
+            return hidet.ir.type.void
+        
+        return ir.data_type(type_name)
+    
+    def visit_ptr_type(self, node):
+        t = self(node[0])
+        if isinstance(t, TensorType):
+            return ir.TensorPointerType(t)
+        elif isinstance(t, DataType):
+            return ir.PointerType(t)
+        elif isinstance(t, VoidType):
+            return void_p
+        raise RuntimeError("Unknown type {}".format(t))
+    
+    def visit_addr_expr(self, node):
+        return ~self(node[0])
+
+    def visit_tensor_layout(self, node):
+        return self(node[0])
+
+    def visit_tensor_type(self, node):
+        dtype = self(node[0])
+        shape = [self(v)  for v in node[1:-1]]
+        layout = self(node[-1])
+        return ir.tensor_type(dtype, shape, layout)
+    
+    def visit_name(self, node):
+        return str(node[0])
+
+    def visit_unary_op(self, node):
+        op, expr = node
+        try:
+            return resolve_unary_op(op, self.visit(expr))
+        except Exception as e:
+            return node
+    
+    def visit_binary_op(self, node):
+        a, op, b = node
+        try:
+            return resolve_binary_op(op, self.visit(a), self.visit(b))
+        except Exception as e:
+            return node
+    
+    def visit_keyword_arg(self, node):
+        name = self(node[0])
+        value = self(node[1])
+        return name, value
+    
+    def visit_call_args(self, node):
+        args = []
+        kwargs = {}
+        i = len(node) - 1
+        while i > -1:
+            cur_arg = node[i]
+            if isinstance(cur_arg, Tree) and hasattr(cur_arg, 'data'):
+                arg_data = cur_arg.data
+                if hasattr(arg_data, 'value') and arg_data.value == 'keyword_arg':
+                    key, value = self(node[i])
+                    kwargs[key] = value
+                    i -= 1
+                else:
+                    break
+            else:
+                break
+        for arg in node[0:i+1]:
+            args.append(self(arg))
+        return args, kwargs
+
+    def visit_call_expr(self, node):
+        from hidet.ir.primitives.func import PrimitiveFunctionRegistry
+        func = self(node[0])
+        call_args = self(node[1])
+        if call_args is None:
+            args = []
+            kwargs = {}
+        else:
+            args, kwargs = call_args
+
+        # print(type(func))
+        # print(type(func.var))
+        if isinstance(func, PrimitiveFunctionRegistry):
+            return func.var(*args, **kwargs)
+        elif callable(func):
+            return func(*args, **kwargs)
+        else:
+            raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
+    
+    def visit_stmt_body(self, node):
+        stmts = []
+        for stmt in node:
+            res = self(stmt)
+            assert isinstance(res, ir.stmt.Stmt)
+            stmts.append(res)
+        
+        return SeqStmt(stmts)
+    
+    def visit_slice(self, node):
+        return slice(self(node[0]), self(node[1]))
+    
+    def visit_get_item_expr(self, node):
+        it = self(node[0])
+        slices = tuple(self(s) for s in node[1:])
+        return it[slices]
+
+    def visit_for_ind_var(self, node):
+        return [self(v) for v in node]
+    
+    def visit_task_mapping(self, node):
+        return self(node[0])
+    
+    def visit_cast_expr(self, node):
+        expr = self(node[0])
+        dtype = self(node[1])
+        return ir.expr.cast(expr, dtype)
+    
+    def visit_if_then_else_expr(self, node):
+        cond = self(node[0])
+        then_expr = self(node[1])
+        else_expr = self(node[2])
         return ir.expr.if_then_else(cond, then_expr, else_expr)
+    
+    def visit_evaluate_stmt(self, node):
+        expr = self(node[0])
+        return EvaluateStmt(expr)
+    
+    def visit_buffer_store_stmt(self, node):
+        protected = self(node[0]) is not None
+        buffer_ind = self(node[1])
+        assert isinstance(buffer_ind, TensorElement)
 
-    list = list
-    pair = tuple
-    dict = dict
 
-    none = lambda self, _: None
-    true = lambda self, _: True
-    false = lambda self, _: False
+        var = buffer_ind.base
+        ind = buffer_ind.indices
+        value = self(node[2])
+        return BufferStoreStmt(var, ind, value, protected)
+    
+    def visit_assign_stmt(self, node):
+        var = self(node[0])
+        value = self(node[1])
+        return AssignStmt(var, value)
+    
+    def visit_return_stmt(self, node):
+        value = self(node[0])
+        return ReturnStmt(value)
+    
+    def visit_let_stmt(self, node):
+        bind_vars = [self(v) for v in node[0:-1:2]]
+        values = [self(v) for v in node[1:-1:2]]
+        body = self(node[-1])
+        return LetStmt(bind_vars, values, body)
+
+    def visit_while_stmt(self, node):
+        cond = self(node[0])
+        body = self(node[1])
+        return WhileStmt(cond, body)
+    
+    def visit_break_stmt(self, node):
+        return BreakStmt()
+    
+    def visit_continue_stmt(self, node):
+        return ContinueStmt()
+    
+    def visit_if_stmt(self, node):
+        cond = self(node[0])
+        then_body = self(node[1])
+        else_body = self(node[2])
+        return IfStmt(cond, then_body, else_body)
+    
+    def visit_assert_stmt(self, node):
+        cond = self(node[0])
+        msg = self(node[1])
+        return AssertStmt(cond, msg)
+    
+    def visit_black_box_stmt(self, node):
+        v = self(node[0])
+        if len(node) == 2 and v is None:
+            exprs = []
+        else:
+            exprs = [v] + [self(v) for v in node[1:-1]]
+        template_str = str(node[-1])
+        return BlackBoxStmt(template_str, *exprs)
+    
+    def visit_asm_label(self, node):
+        return self(node[0]), self(node[1])
+    
+    def visit_asm_group(self, node):
+        return [self(v) for v in node]
+    
+    def visit_asm_stmt(self, node):
+        volatile = self(node[0]) is not None
+        template_str = self(node[1])
+        outputs = self(node[2])
+        outputs = outputs if outputs is not None else []
+        inputs = self(node[3])
+        inputs = inputs if inputs is not None else []
+        return AsmStmt(template_str, outputs, inputs, volatile)
+    
+    def visit_dim3(self, node):
+        return (self(node[0]), self(node[1]), self(node[2]))
+    
+    def visit_launch_kernel_stmt(self, node):
+        fn_var = self(node[0])
+        grid_dim = self(node[1])
+        block_dim = self(node[2])
+        shared_smem = self(node[3])
+        
+        args = [self(v) for v in node[4:]]
+        return LaunchKernelStmt(fn_var, args, grid_dim, block_dim, shared_smem)
+    
+    def visit_let_expr(self, node):
+        return Let(self(node[0]), self(node[1]), self(node[2]))
+
+class ComputeFunctionVariables(ParseTreeVisitor):
+    def __init__(
+        self, 
+        global_symbols: Dict[str, SymbolVar],
+        fn_vars_defs: Dict[str, Tree],
+        attributes: Dict[str, Tree]
+    ):
+        super().__init__()
+        self.global_symbols = global_symbols
+        self.variables: Dict[str, Var] = {}
+        self.visited_vars: Set[str] = set()
+        self.var_type_defs: Dict[str, Tree] = fn_vars_defs
+
+        self.attributes = attributes
+        self.processed_attributes = {}
+
+
+    def visit_symbol_var(self, node):
+        name = str(node[0])
+        assert name in self.global_symbols, "cannot find symbolvar {}".format(name)
+        return self.global_symbols[name]
+    
+    def visit_var(self, node):
+        name = str(node[0])
+        if name in self.variables:
+            return self.variables[name]
+        if name in self.visited_vars:
+            raise RuntimeError("Circular dependency detected.")
+        self.visited_vars.add(name)
+        assert name in self.var_type_defs, "cannot find var type def {}".format(name)
+        var_type = self.visit(self.var_type_defs[name])
+        self.variables[name] = Var(hint=name, type=var_type)
+        return self.variables[name]
+    
+    def construct_attribute(self, name):
+        assert name in self.attributes, "cannot find attribute {}".format(name)
+        if name in self.processed_attributes:
+            return self.processed_attributes[name]
+        attr = self(self.attributes[name])
+        self.processed_attributes[name] = attr
+        return attr
+    
+    def reconstruct_for_attr(self, d: Dict[str, Any]):
+        return ForStmtAttr(
+            d['unroll'],
+            d['factor'],
+            d['explicit'],
+            d['parallel'],
+            d['threads']
+        )
+    
+    def visit_fn_name(self, node):
+        name_to_taskmap = {
+            'compose_map': ComposedTaskMapping,
+            'repeat_map': RepeatTaskMapping,
+            'spatial_map': SpatialTaskMapping
+        }
+        name_to_layout = {
+            'row': RowMajorLayout,
+            'column': ColumnMajorLayout,
+            'strides': StridesLayout,
+            'swizzle': SwizzleLayout,
+            'local': LocalLayout,
+            'compose': ComposedLayout,
+            'concat': ConcatLayout
+        }
+        # in the type definition the only functions that are called are
+        # the ones above and list(...)
+        name = str(node[0])
+        if name == 'list':
+            return lambda *x : list(x)
+        attr_name = self(node[1])
+        if attr_name is not None:
+            attr = self.construct_attribute(attr_name)
+            assert isinstance(attr, dict)
+            if "fn_type" in attr:
+                fn_type = attr["fn_type"]
+                if fn_type == "TaskMapping":
+                    if 'attrs' in attr:
+                        # repeat task mapping, got to reconstruct third argument
+                        for_stmt_attr = attr['attrs']
+                        for_stmt_attr = [self.reconstruct_for_attr(a) for a in for_stmt_attr]
+                        return lambda *args, **kwargs: RepeatTaskMapping(*args, **kwargs, attrs=for_stmt_attr)
+                    return name_to_taskmap[name]
+                elif fn_type == "Layout":
+                    return name_to_layout[name]
+                else:
+                    raise RuntimeError(f"Unknown fn_type {fn_type}")
+        
+        
+        raise RuntimeError(f"cannot find function {name}")
+    
+    def run(self):
+        for name, tree in self.var_type_defs.items():
+            if name not in self.variables:
+                self.visited_vars.add(name)
+                var_type = self.visit(tree)
+                self.variables[name] = Var(hint=name, type=var_type)
+
+
+class ModuleProcessData:
+    def __init__(self, tree: Tree):
+        assert tree.data.value == 'top_level', f"tree.data.value is {tree.data.value}, expected top_level"
+        # the global_symbolic variable
+        self.global_symbolvars: Dict[str, SymbolVar] = construct_global_symbols(tree)
+
+        extractor = ExtractLocalVars()
+        extractor.visit(tree)
+        fn_local_var_defs = extractor.fn_vars
+
+        attr_extractor = ExtractAttributes()
+        attr_extractor.visit(tree)
+        attrs = attr_extractor.attributes
+
+        fn_attrs_extractor = ExtractFunctionNames()
+        fn_attrs_extractor.visit(tree)
+        fn_attrs = fn_attrs_extractor.func_attrs
+        # function definitions
+        self.fn_name: Dict[str, Tree] = fn_attrs_extractor.funcs
+
+        # module-level attributes
+        self.attributes: Dict[str, Any] = {}
+        self.local_fn_vars: Dict[str, Dict[str, Var]] = {}
+        for name, var_defs in fn_local_var_defs.items():
+            func_var_compute = ComputeFunctionVariables(self.global_symbolvars, var_defs, attrs)
+            func_var_compute.run()
+            self.attributes.update(func_var_compute.processed_attributes)
+            self.local_fn_vars[name] = func_var_compute.variables
+            if name in fn_attrs:
+                compute_func_attr = ComputeFunctionVariables(self.global_symbolvars, {}, {})
+                compute_func_attr.variables = self.local_fn_vars[name]
+                res = compute_func_attr.visit(attrs[fn_attrs[name]])
+                self.attributes[fn_attrs[name]] = res
+        for name in attrs:
+            if name not in self.attributes:
+                compute = ComputeFunctionVariables(self.global_symbolvars, {}, {})
+                res = compute.visit(attrs[name])
+                self.attributes[name] = res
+        mod_attr_name = get_module_attribute_name(tree)
+
 
 class IRConstructor:
-    def __init__(self, preprocessor: PreProcessTree, pass_through=True):
+    def __init__(self, preprocessor: ModuleProcessData, pass_through=True):
         self.pass_through = pass_through
         self.preprocessor = preprocessor
-        self.symboltable = preprocessor.symbols
+
+        self.symboltable = preprocessor.global_symbolvars
+        # {cur_fn_name: {local_var_name: var_type}}
+        self.local_vars: Dict[str, Dict[str, Var]] = preprocessor.local_fn_vars
+
         self.attributes = preprocessor.attributes
-        self.funcs = preprocessor.funcs
+        self.funcs = preprocessor.fn_name
         # self.scope_stack = ScopeStack()
 
-        # a property of the ir is that every name to a variable is unique
-        # so we don't need to worry about the scope, shadowing, etc.
-        self.var_table: Dict[str, Var] = {}
+        self.cur_fn_name: str = None
         self.global_var_table: Dict[str, Var] = {}
         self.func_var_table: Dict[str, Var] = {}
         self.functions: Dict[str, Function] = {}
@@ -955,11 +1399,13 @@ class IRConstructor:
 
     def visit_def_var(self, node):
         name = self(node[0])
+        if self.cur_fn_name is not None and name in self.local_vars[self.cur_fn_name]:
+            return self.local_vars[self.cur_fn_name][name]
         type = self(node[1])
         var = Var(hint=name, type=type)
-        assert name not in self.var_table, f"variable {name} already defined"
+        assert name not in self.global_var_table, f"variable {name} already defined"
 
-        self.var_table[name] = var
+        self.global_var_table[name] = var
         return var
     
     def visit_var(self, node):
@@ -973,8 +1419,8 @@ class IRConstructor:
             return blockDim
         elif name == 'gridDim':
             return gridDim
-        if name in self.var_table:
-            return self.var_table[name]
+        if self.cur_fn_name is not None and name in self.local_vars[self.cur_fn_name]:
+            return self.local_vars[self.cur_fn_name][name]
         if name in self.global_var_table:
             return self.global_var_table[name]
         if name in self.func_var_table:
@@ -1150,8 +1596,6 @@ class IRConstructor:
             return self.func_var_table[name]
         if is_primitive_function(name):
             return lookup_primitive_function(name)
-        if name in self.var_table:
-            return self.var_table[name]
         if name == 'list':
             return lambda *x: list(x)
         
@@ -1220,7 +1664,7 @@ class IRConstructor:
     def visit_buffer_store_stmt(self, node):
         protected = self(node[0]) is not None
         buffer_ind = self(node[1])
-        assert isinstance(buffer_ind, TensorElement)
+        # assert isinstance(buffer_ind, TensorElement)
 
 
         var = buffer_ind.base
@@ -1266,7 +1710,11 @@ class IRConstructor:
         return AssertStmt(cond, msg)
     
     def visit_black_box_stmt(self, node):
-        exprs = [self(v) for v in node[:-1]]
+        v = self(node[0])
+        if len(node) == 2 and v is None:
+            exprs = []
+        else:
+            exprs = [v] + [self(v) for v in node[1:-1]]
         template_str = str(node[-1])
         return BlackBoxStmt(template_str, *exprs)
     
@@ -1330,6 +1778,8 @@ class IRConstructor:
 
     def visit_function(self, node):
         name = self(node[0])
+        self.cur_fn_name = name
+
         args = self(node[1])
         args = args if args is not None else []
         return_type = self(node[2])
@@ -1363,15 +1813,10 @@ class IRConstructor:
         for stmt in children[1:]:
             assert isinstance(stmt, Tree)
             if stmt.data.value == 'function':
-                self.var_table = {}  # clear the local variables
                 self(stmt)
-
+                self.cur_fn_name = None
             elif stmt.data.value == 'declare_stmt':
-                vars = self.var_table
-                self.var_table = {}
                 self.visit(stmt)
-                self.var_table, vars = vars, self.var_table
-                self.global_var_table.update(vars)
             elif stmt.data.value == 'attribute':
                 pass
             else:
@@ -1394,19 +1839,6 @@ class IRConstructor:
             functions[name] = self.functions[name]
         
         return IRModule(functions, self.global_var_table, **mod_attrs)
-
-
-def parse(text: str, parser: Lark) -> IRModule:
-    tree = parser.parse(text)
-    try:
-        symbol_table = construct_symbols(preprocess_symbolvar(tree))
-        preprocess = PreProcessTree(symbol_table)
-        preprocess.visit(tree)
-        ir_module = IRConstructor(preprocess)(tree)
-    except Exception as e:
-        print(text)
-        raise e
-    return ir_module
 
 
 from hidet.transforms.unify_global_objects import unify_global_objects_pass
@@ -1473,6 +1905,47 @@ def get_attn_task():
     mod = task.implement_cuda('.')
     return mod[0]
 
+def generate_ir_modules():
+    transforms = [
+        lambda x: x,
+        unify_global_objects_pass(),
+        generate_launch_func_pass(),
+        flatten_tensor_slice_pass(),
+        lower_protect_access_pass(),
+        lower_task_mapping_pass(),
+        normalize_const_tensor_pass(),
+        declare_to_let_pass(),
+        rule_based_simplify_pass(),
+        flatten_tensor_index_pass(),
+        lower_special_cast_pass(),
+        inline_function_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        propagate_launch_bound_pass(),
+        add_explicit_cast_pass(),
+        declare_to_let_pass(),
+        instantiate_symbols_pass(),
+        check_launch_configuration_pass(),
+        # simplification
+        expand_let_expr_pass(),
+        inline_let_stmt_pass(),
+        explicit_unroll_pass(),
+        rule_based_simplify_pass(),
+        inline_let_stmt_pass(),
+        simplify_stmt_pass(),
+        annotate_header_and_libs_pass(),
+    ]
+    for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
+        for t in transforms:
+            if hasattr(t, '__name__'):
+                print(t.__name__)
+            else:
+                print(t.__class__.__name__)
+            mod = t(mod)
+            yield mod
+
 def test_parser(grammar):
     from lark import Lark
     transforms = [
@@ -1536,14 +2009,30 @@ def diff_text(old: str, new: str):
             print(red(nline))
         else:
             print(oline)
-        
-with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') as f:
+
+
+
+with open('/home/allan/Programs/hidet_repo/hidet/python/hidet/ir/hidet.lark') as f:
     hidet_grammar = f.read()
+parser = Lark(hidet_grammar, start='top_level', parser='lalr')
+mod = get_matmul_task()
 
-test_parser(hidet_grammar)
+for mod in generate_ir_modules():
+    text = astext(mod)
+    tree = parser.parse(text)
+
+    try:
+        data = ModuleProcessData(tree)
+        ir_module = IRConstructor(data)(tree)
+    except Exception as e:
+        print(text)
+        raise e
+    new_text = astext(ir_module)
+    if text != new_text:
+        diff_text(text, new_text)
+        
+
 # %%
-
-
 from lark import Lark, logger
 
 mod = get_softmax_task()
@@ -1557,7 +2046,7 @@ tree = parser.parse(text)
 # print(tree.pretty())
 
 
-symbol_table = construct_symbols(preprocess_symbolvar(tree))
+symbol_table = construct_global_symbols(preprocess_symbolvar(tree))
 preprocess = PreProcessTree(symbol_table)
 preprocess.visit(tree)
 new_tree = IRConstructor(preprocess)(tree)
