@@ -19,11 +19,14 @@ from hidet.graph.graph_utils.functors import analyze_usage
 
 
 class PermutedOp:
+    from hidet.graph.ops.arithmetic import AddOp, MultiplyOp
+    from hidet.graph.ops.activation import SigmoidOp
+    regular_operators = (AddOp, SigmoidOp, MultiplyOp)
+
     def __init__(self, op: Operator) -> None:
         self.op = op
 
     def reforward(self, tensor_map) -> None:
-        from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.transform import transpose
         node = self.op
         new_inputs: List[Tensor] = []
@@ -35,6 +38,7 @@ class PermutedOp:
                 current_x, current_perm = x, None
             if current_perm is not None:
                 new_x = current_x
+                new_perm = current_perm
             else:
                 new_perm = [0, 2, 3, 1]
                 new_x = transpose(current_x, new_perm)
@@ -47,10 +51,9 @@ class PermutedOp:
     @staticmethod
     def get_permuted_op(op: Operator):
         from hidet.graph.ops.conv2d import Conv2dOp
-        from hidet.graph.ops.arithmetic import AddOp
         if isinstance(op, Conv2dOp):
             return PermutedConv2dOp(op)
-        elif isinstance(op, AddOp):
+        elif isinstance(op, PermutedOp.regular_operators):
             return PermutedOp(op)
         else:
             raise RuntimeError("PermutedOp.get_permuted_op() got invalid Operator.")
@@ -68,7 +71,6 @@ class PermutedConv2dOp(PermutedOp):
         stride = node.attrs['stride']
         groups = node.attrs['groups']
         dilations = node.attrs['dilations']
-
         # Prepare transformed inputs
         x = node.inputs[0]
         if x in tensor_map:
@@ -107,8 +109,7 @@ class ConvChannelLastPass(GraphPass):
                and there exists another set of attributes P', such that 
                Op(x_chnlast, P')).transpose([0, 3, 1, 2]) == Op(x, P)
         """
-        from hidet.graph.ops.arithmetic import AddOp
-        if isinstance(op, AddOp):
+        if isinstance(op, PermutedOp.regular_operators):
             return True
         return False
 
@@ -126,11 +127,15 @@ class ConvChannelLastPass(GraphPass):
                     yield user
         
         scope_nodes = set()
-        for op in seeds:
+        visited_nodes = set()
+        candidates = set(seeds)
+        while len(candidates) != 0:
+            op = candidates.pop()
             scope_nodes.add(op)
+            visited_nodes.add(op)
             for connected in connected_operators(op):
-                if self.within_scope(connected):
-                    scope_nodes.add(connected)
+                if connected not in visited_nodes and self.within_scope(connected):
+                    candidates.add(connected)
         return scope_nodes
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
@@ -183,9 +188,20 @@ class ConvChannelLastPass(GraphPass):
                     for idx, y in enumerate(node.outputs):
                         tensor_map[y] = (outputs[idx], None)
         
-        graph_outputs = [tensor_map[output_tensor][0]
-                         if output_tensor in tensor_map else output_tensor for output_tensor in graph.outputs]
-        ret =  FlowGraph(graph_outputs, graph.inputs)
+        new_outputs = []
+        for output_tensor in graph.outputs:
+            if output_tensor not in tensor_map:
+                new_x = output_tensor
+            else:
+                current_x, current_perm = tensor_map[output_tensor]
+                if current_perm is not None:
+                    to_orig_perm = [current_perm.index(i) for i in range(len(current_perm))]
+                    new_x = transpose(current_x, to_orig_perm)
+                else:
+                    new_x = current_x
+            new_outputs.append(new_x)
+        
+        ret =  FlowGraph(new_outputs, graph.inputs)
         return ret
 
 
