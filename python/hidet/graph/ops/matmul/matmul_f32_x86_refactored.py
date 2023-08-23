@@ -456,7 +456,40 @@ class MatmulF32Taskx86_refactored(Task):
             for workid_loop5 in range(loop5_nways):
                 loop5_start = 0
                 loop5_end = 0
-                thread_range_sub(loop5_nways, workid_loop5, n_size, NR, ~loop5_start, ~loop5_end)
+                # thread_range_sub(loop5_nways, workid_loop5, n_size, NR, ~loop5_start, ~loop5_end)
+                # TODO: For now, substitute the above func call with code
+                if loop5_nways == 1:
+                    loop5_start = 0
+                    loop5_end = n_size
+                else:
+                    all_start = 0
+                    all_end = n_size
+                    size = all_end - all_start
+                    n_bf_whole = n_size // NR
+                    n_bf_left = n_size % NR
+                    n_bf_lo = n_bf_whole // loop5_nways
+                    n_bf_hi = n_bf_whole // loop5_nways
+
+                    n_th_lo = n_bf_whole % loop5_nways
+                    if n_th_lo != 0:
+                        n_bf_lo += 1
+                    size_lo = n_bf_lo * NR
+                    size_hi = n_bf_hi * NR
+
+                    lo_start = all_start
+                    hi_start = all_start + n_th_lo * size_lo
+
+                    if workid_loop5 < n_th_lo:
+                        loop5_start = lo_start + workid_loop5 * size_lo
+                        loop5_end = lo_start + (workid_loop5 + 1) * size_lo
+                    else:
+                        loop5_start = hi_start + (workid_loop5 - n_th_lo) * size_hi
+                        loop5_end = hi_start + (workid_loop5 - n_th_lo + 1) * size_hi
+
+                        if workid_loop5 == loop5_nways - 1:
+                            loop5_end += n_bf_left
+
+
                 curr_width = loop5_end - loop5_start
                 # packed_b_total_width += curr_width
                 # packb_start_offsets[workid_loop5] = temp_prev
