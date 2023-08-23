@@ -160,15 +160,15 @@ class MatmulF32Taskx86_refactored(Task):
 
             # The buffer for storing the starting offset of the packed B buffers for thread,
             # indexed by the work ID of Loop5
-            packb_start_offsets = tensor('int32', shape=[loop5_nways, 1])
+            packb_start_offsets = tensor('int32', shape=[loop5_nways,])
             # The buffer for storing the starting offset of the packed A buffers for thread,
             # indexed by the work ID of Loop3
-            packa_start_offsets = tensor('int32', shape=[loop3_nways])
+            packa_start_offsets = tensor('int32', shape=[loop3_nways,])
 
             # The array to store the needed size for each packed B buffer, indexed by the work ID of Loop5
-            packb_sizes = tensor('int32', shape=[loop5_nways])
+            packb_sizes = tensor('int32', shape=[loop5_nways,])
             # The array to store the needed size for each packed A buffer, indexed by the work ID of Loop3
-            packa_sizes = tensor('int32', shape=[loop3_nways])
+            packa_sizes = tensor('int32', shape=[loop3_nways,])
 
             @hidet.script
             def thread_range_sub(n_way: int32, work_id: int32, n: int32, bf: int32, start: ~int32, end: ~int32):
