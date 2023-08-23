@@ -226,6 +226,7 @@ class MatmulF32Taskx86_refactored(Task):
                 return i != n_iter - 1 or n_left == 0
 
             # Thread barrier
+            @hidet.script
             def thrcomm_barrier(tid: int32, barrier_sense: ~int32,
                                 barrier_threads_arrived: ~int32, nthreads: int32):
                 if nthreads == 1:
@@ -490,17 +491,27 @@ class MatmulF32Taskx86_refactored(Task):
                             loop5_end += n_bf_left
 
 
-                curr_width = loop5_end - loop5_start
+                # curr_width = loop5_end - loop5_start
+                # # packed_b_total_width += curr_width
+                # # packb_start_offsets[workid_loop5] = temp_prev
+                # # temp_prev += curr_width
+                # packb_start_offsets[workid_loop5] = packed_b_total_width
                 # packed_b_total_width += curr_width
-                # packb_start_offsets[workid_loop5] = temp_prev
-                # temp_prev += curr_width
-                packb_start_offsets[workid_loop5, 0] = packed_b_total_width
-                packed_b_total_width += curr_width
+
+                # packed_b_individual_width = min(NC, n_size)
 
             packed_b_height = KC
             if packed_b_height > k_size:
-                packed_b_height = (k_size + NR - 1) // NR * NR
+                packed_b_height = k_size
+                # packed_b_height = (k_size + NR - 1) // NR * NR
+            # packed_b_total_size = packed_b_total_width * packed_b_height
+            packed_b_width = NC
+            if packed_b_width > n_size:
+                packed_b_widht = (n_size + NR - 1) // NR * NR
+
+            packed_b_total_width = packed_b_width * loop5_nways
             packed_b_total_size = packed_b_total_width * packed_b_height
+            packed_b_individual_size = packed_b_width * packed_b_height
 
             a_height_mr_partitions = (m_size + MR - 1) // MR
             a_height_mr_remainder = m_size % MR
@@ -985,8 +996,11 @@ class MatmulF32Taskx86_refactored(Task):
                     loop4_partition_a_start_col = i_loop4
                     is_first = (i_loop4 == 0)
                     # Get the thread's partition of the buffer and the matrix
+                    # packed_b_buf = packb_buf + (
+                    #     packb_start_offsets[work_id_5th_loop, 0] * packed_b_height
+                    # )
                     packed_b_buf = packb_buf + (
-                        packb_start_offsets[work_id_5th_loop, 0] * packed_b_height
+                        packed_b_individual_size * work_id_5th_loop
                     )
 
                     loop4_partition_b = b + \
