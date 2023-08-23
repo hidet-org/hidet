@@ -777,7 +777,7 @@ def construct_pair(tree):
     return tree.children[0], tree.children[1]
 
 def preprocess_symbolvar(tree: Tree):
-    assert tree.data.value == 'top_level'
+    assert tree.data.value == 'start'
     attr = tree.children[0]
     assert attr.data.value == 'attribute'
     attr_dict = attr.children[1].children
@@ -850,7 +850,7 @@ class ExtractFunctionNames(Visitor):
 
 
 def get_module_attribute_name(tree: Tree):
-    assert tree.data.value == 'top_level'
+    assert tree.data.value == 'start'
     module = tree.children[1]
     assert module.data.value == 'module'
     attr = module.children[0].children[0]
@@ -940,7 +940,7 @@ class ParseTreeVisitor:
     def visit_list(self, node):
         return [self.visit(child) for child in node]
     
-    def visit_top_level(self, children):
+    def visit_start(self, children):
         return self(children[-1])
     
     def visit_attribute_name(self, name):
@@ -1263,7 +1263,7 @@ class ComputeFunctionVariables(ParseTreeVisitor):
 
 class ModuleProcessData:
     def __init__(self, tree: Tree):
-        assert tree.data.value == 'top_level', f"tree.data.value is {tree.data.value}, expected top_level"
+        assert tree.data.value == 'start', f"tree.data.value is {tree.data.value}, expected start"
         # the global_symbolic variable
         self.global_symbolvars: Dict[str, SymbolVar] = construct_global_symbols(tree)
 
@@ -1438,7 +1438,7 @@ class IRConstructor:
         assert name in self.symboltable, "cannot find symbolvar {}".format(name)
         return self.symboltable[name]
 
-    def visit_top_level(self, children):
+    def visit_start(self, children):
         return self(children[-1])
     
     def visit_attribute_name(self, name):
@@ -1664,7 +1664,7 @@ class IRConstructor:
     def visit_buffer_store_stmt(self, node):
         protected = self(node[0]) is not None
         buffer_ind = self(node[1])
-        # assert isinstance(buffer_ind, TensorElement)
+        assert isinstance(buffer_ind, TensorElement)
 
 
         var = buffer_ind.base
@@ -1946,10 +1946,24 @@ def generate_ir_modules():
             mod = t(mod)
             yield mod
 
-def test_parser(grammar):
-    from lark import Lark
-    transforms = [
-        # necessary passes
+def diff_text(old: str, new: str):
+    from hidet.utils.py import red, green
+    old_lines = old.split('\n')
+    new_lines = new.split('\n')
+    for oline, nline in zip(old_lines, new_lines):
+        if oline != nline:
+            print(green(oline))
+            print(red(nline))
+        else:
+            print(oline)
+
+
+
+with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') as f:
+    hidet_grammar = f.read()
+parser = Lark(hidet_grammar, start='start', parser='lalr')
+
+transforms = [
         lambda x: x,
         unify_global_objects_pass(),
         generate_launch_func_pass(),
@@ -1958,7 +1972,7 @@ def test_parser(grammar):
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
-        rule_based_simplify_pass(),  # make ir more readable
+        rule_based_simplify_pass(),
         flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),
@@ -1980,44 +1994,12 @@ def test_parser(grammar):
         simplify_stmt_pass(),
         annotate_header_and_libs_pass(),
     ]
-    import difflib
-
-    parser = Lark(grammar, start='top_level', parser='lalr')
-
-    for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
-        for t in transforms:
-            if hasattr(t, '__name__'):
-                print(t.__name__)
-            else:
-                print(t.__class__.__name__)
-            
-            mod = t(mod)
-            text = astext(mod)
-            ir_module = parse(text, parser)
-            new_text = astext(ir_module)
-            if text != new_text:
-                diff_text(text, new_text)
-                return
-
-def diff_text(old: str, new: str):
-    from hidet.utils.py import red, green
-    old_lines = old.split('\n')
-    new_lines = new.split('\n')
-    for oline, nline in zip(old_lines, new_lines):
-        if oline != nline:
-            print(green(oline))
-            print(red(nline))
-        else:
-            print(oline)
+mod = get_bmatmul_task()
 
 
-
-with open('/home/allan/Programs/hidet_repo/hidet/python/hidet/ir/hidet.lark') as f:
-    hidet_grammar = f.read()
-parser = Lark(hidet_grammar, start='top_level', parser='lalr')
-mod = get_matmul_task()
-
-for mod in generate_ir_modules():
+for t in transforms[:22]:
+    mod = t(mod)
+    print(t.__class__.__name__)
     text = astext(mod)
     tree = parser.parse(text)
 
@@ -2030,7 +2012,17 @@ for mod in generate_ir_modules():
     new_text = astext(ir_module)
     if text != new_text:
         diff_text(text, new_text)
-        
+        break
+
+print(text)
+
+# %%
+mod = transforms[22](mod)
+text = astext(mod)
+print(text)
+# %%
+hidet.option.debug_show_var_id()
+print(mod)
 
 # %%
 from lark import Lark, logger

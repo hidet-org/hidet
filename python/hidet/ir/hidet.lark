@@ -1,6 +1,6 @@
 
 // statements
-top_level : attribute module
+start : attribute module
 
 module : "module" attribute_name "{" [attribute*] [(function | declare_stmt)*] "}"
 
