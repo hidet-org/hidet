@@ -557,8 +557,8 @@ class MatmulF32Taskx86_refactored(Task):
                     macro_m: int32,
                     macro_n: int32,
                     macro_k: int32,
-                    ps_packed_a,
-                    ps_packed_b,
+                    ps_packed_a: int32,
+                    ps_packed_b: int32,
                     comm_id_macro: int32,
                     work_id_macro: int32,
                     is_first: bool
