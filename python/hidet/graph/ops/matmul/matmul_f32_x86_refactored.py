@@ -149,14 +149,23 @@ class MatmulF32Taskx86_refactored(Task):
             loop5_thrcomm_barrier_sense = 0
             loop5_thrcomm_barrier_threads_arrived = 0
 
-            packb_thrcomm_barrier_sense = tensor('int32', shape=[loop4_nways])
+            packb_thrcomm_barrier_sense = tensor(dtype='int32',
+                                                 shape=[loop4_nways],
+                                                 scope=DeclareScope.Default,
+                                                 is_static=True)
             # for idx in range(loop4_nways):
             #     packb_thrcomm_barrier_sense[idx] = 0      TODO: This shouldn't be necessary, as static arrays are 0-initialized
-            packb_thrcomm_barrier_threads_arrived = tensor('int32',
-                                                           shape=[loop4_nways])
+            packb_thrcomm_barrier_threads_arrived = tensor(dtype='int32',
+                                                           shape=[loop4_nways],
+                                                           scope=DeclareScope.Default,
+                                                           is_static=True)
 
-            packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways])
-            packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways])
+            packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways],
+                                                 scope=DeclareScope.Default,
+                                                 is_static=True)
+            packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways],
+                                                   scope=DeclareScope.Default,
+                                                   is_static=True)
 
             # The buffer for storing the starting offset of the packed B buffers for thread,
             # indexed by the work ID of Loop5
