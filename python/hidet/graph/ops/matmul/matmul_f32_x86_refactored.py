@@ -116,53 +116,59 @@ class MatmulF32Taskx86_refactored(Task):
 
         tune.check(MC % MR == NC % NR == 0, 'Tile size must divide the corresponding block size')
 
-        packed_a_type = tensor_type('float32', layout=row_major(MC // MR, 1) * column_major(MR, KC))
-        packed_b_type = tensor_type('float32', layout=row_major(1, NC // NR) * row_major(KC, NR))
 
-        # Get the number of threads...
-        loop5_nways, loop3_nways, macro_nways, loop1_nways = ways
-        loop4_nways = 1
-        nthreads = loop5_nways * loop3_nways * macro_nways * loop1_nways
-
-        # Get the number of threads remaining at each level
-        loop5_nthreads = nthreads
-        loop4_nthreads = loop5_nthreads // loop5_nways
-        loop3_nthreads = loop4_nthreads
-        macro_nthreads = loop3_nthreads // loop3_nways
-        loop1_nthreads = macro_nthreads // macro_nways
-
-        packb_nthreads = loop3_nthreads
-        packa_nthreads = macro_nthreads
-
-        # TODO: Since Hidet doesn't support the parallel region syntax as in OpenMP,
-        # TODO: We instead use a loop to simulate the parallel region, with the "thread id" being the loop index.
-        outermost_iters = nthreads
-
-        loop5_thrcomm_barrier_sense = 0
-        loop5_thrcomm_barrier_threads_arrived = 0
-
-        packb_thrcomm_barrier_sense = tensor('int32', shape=[loop4_nways])
-        # for idx in range(loop4_nways):
-        #     packb_thrcomm_barrier_sense[idx] = 0      TODO: This shouldn't be necessary, as static arrays are 0-initialized
-        packb_thrcomm_barrier_threads_arrived = tensor('int32', shape=[loop4_nways])
-
-        packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways])
-        packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways])
-
-        # The buffer for storing the starting offset of the packed B buffers for thread,
-        # indexed by the work ID of Loop5
-        packb_start_offsets = tensor('int32', shape=[loop5_nways, 1])
-        # The buffer for storing the starting offset of the packed A buffers for thread,
-        # indexed by the work ID of Loop3
-        packa_start_offsets = tensor('int32', shape=[loop3_nways])
-
-        # The array to store the needed size for each packed B buffer, indexed by the work ID of Loop5
-        packb_sizes = tensor('int32', shape=[loop5_nways])
-        # The array to store the needed size for each packed A buffer, indexed by the work ID of Loop3
-        packa_sizes = tensor('int32', shape=[loop3_nways])
 
         with hidet.script_module() as module:
             # Helpers
+            packed_a_type = tensor_type('float32', layout=row_major(MC // MR,
+                                                                    1) * column_major(
+                MR, KC))
+            packed_b_type = tensor_type('float32', layout=row_major(1,
+                                                                    NC // NR) * row_major(
+                KC, NR))
+
+            # Get the number of threads...
+            loop5_nways, loop3_nways, macro_nways, loop1_nways = ways
+            loop4_nways = 1
+            nthreads = loop5_nways * loop3_nways * macro_nways * loop1_nways
+
+            # Get the number of threads remaining at each level
+            loop5_nthreads = nthreads
+            loop4_nthreads = loop5_nthreads // loop5_nways
+            loop3_nthreads = loop4_nthreads
+            macro_nthreads = loop3_nthreads // loop3_nways
+            loop1_nthreads = macro_nthreads // macro_nways
+
+            packb_nthreads = loop3_nthreads
+            packa_nthreads = macro_nthreads
+
+            # TODO: Since Hidet doesn't support the parallel region syntax as in OpenMP,
+            # TODO: We instead use a loop to simulate the parallel region, with the "thread id" being the loop index.
+            outermost_iters = nthreads
+
+            loop5_thrcomm_barrier_sense = 0
+            loop5_thrcomm_barrier_threads_arrived = 0
+
+            packb_thrcomm_barrier_sense = tensor('int32', shape=[loop4_nways])
+            # for idx in range(loop4_nways):
+            #     packb_thrcomm_barrier_sense[idx] = 0      TODO: This shouldn't be necessary, as static arrays are 0-initialized
+            packb_thrcomm_barrier_threads_arrived = tensor('int32',
+                                                           shape=[loop4_nways])
+
+            packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways])
+            packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways])
+
+            # The buffer for storing the starting offset of the packed B buffers for thread,
+            # indexed by the work ID of Loop5
+            packb_start_offsets = tensor('int32', shape=[loop5_nways, 1])
+            # The buffer for storing the starting offset of the packed A buffers for thread,
+            # indexed by the work ID of Loop3
+            packa_start_offsets = tensor('int32', shape=[loop3_nways])
+
+            # The array to store the needed size for each packed B buffer, indexed by the work ID of Loop5
+            packb_sizes = tensor('int32', shape=[loop5_nways])
+            # The array to store the needed size for each packed A buffer, indexed by the work ID of Loop3
+            packa_sizes = tensor('int32', shape=[loop3_nways])
 
             @hidet.script
             def thread_range_sub(n_way: int32, work_id: int32, n: int32, bf: int32, start: ~int32, end: ~int32):
