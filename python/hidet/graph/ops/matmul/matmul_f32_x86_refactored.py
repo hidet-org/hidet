@@ -1097,7 +1097,8 @@ class MatmulF32Taskx86_refactored(Task):
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
             matmul_kernel_x86_v3.kind = "cpu_kernel"
-            return module.ir_module()
+            ir_module = module.ir_module()
+            return ir_module
 
         # return ir_module
 
