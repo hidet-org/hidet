@@ -587,7 +587,7 @@ class MatmulF32Taskx86_refactored(Task):
                                     a_curr_panel_row_start * k_size + col
                             )
                             v0 = avx_f32x8_load(a_curr_panel_col)
-                            v1 = avx_f32x8_load(a_curr_panel_col * k_size)
+                            v1 = avx_f32x8_load(a_curr_panel_col + k_size)
                             v2 = avx_f32x8_load(a_curr_panel_col + (2 * k_size))
                             v3 = avx_f32x8_load(a_curr_panel_col + (3 * k_size))
                             v4 = avx_f32x8_load(a_curr_panel_col + (4 * k_size))
