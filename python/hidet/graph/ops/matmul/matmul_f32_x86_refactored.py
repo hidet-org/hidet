@@ -682,7 +682,7 @@ class MatmulF32Taskx86_refactored(Task):
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
 
-                npanels_b = npanels_full_b + (npanels_b_remainder != 0)
+                npanels_b = npanels_full_b + (1 if npanels_b_remainder != 0 else 0)
                 packedb_panel_stride = packed_b_height * NR
 
                 # Loop for the packing of B
