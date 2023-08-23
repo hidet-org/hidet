@@ -151,7 +151,7 @@ class MatmulF32Taskx86_refactored(Task):
 
         # The buffer for storing the starting offset of the packed B buffers for thread,
         # indexed by the work ID of Loop5
-        packb_start_offsets = tensor('int32', shape=[loop5_nways], is_static=True)
+        packb_start_offsets = tensor('int32', shape=[loop5_nways, 1], is_static=True)
         # The buffer for storing the starting offset of the packed A buffers for thread,
         # indexed by the work ID of Loop3
         packa_start_offsets = tensor('int32', shape=[loop3_nways], is_static=True)
@@ -494,7 +494,7 @@ class MatmulF32Taskx86_refactored(Task):
                 # packed_b_total_width += curr_width
                 # packb_start_offsets[workid_loop5] = temp_prev
                 # temp_prev += curr_width
-                packb_start_offsets[workid_loop5] = packed_b_total_width
+                packb_start_offsets[workid_loop5, 0] = packed_b_total_width
                 packed_b_total_width += curr_width
 
             packed_b_height = KC
@@ -986,7 +986,7 @@ class MatmulF32Taskx86_refactored(Task):
                     is_first = (i_loop4 == 0)
                     # Get the thread's partition of the buffer and the matrix
                     packed_b_buf = packb_buf + (
-                        packb_start_offsets[work_id_5th_loop] * packed_b_height
+                        packb_start_offsets[work_id_5th_loop, 0] * packed_b_height
                     )
 
                     loop4_partition_b = b + \
