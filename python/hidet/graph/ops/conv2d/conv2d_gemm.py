@@ -692,7 +692,7 @@ class Conv2dGemmFp16Task(Task):
                 group_idx = blockIdx.z % GROUPS
                 group_offset = group_idx * GROUP_OC
 
-                if warp_count_k == 1:
+                if warp_count_k == 1 and False:
                     wi = warp_id // (warp_count_n * warp_count_k)
                     wj = (warp_id // warp_count_k) % warp_count_n
                     wk = warp_id % warp_count_k

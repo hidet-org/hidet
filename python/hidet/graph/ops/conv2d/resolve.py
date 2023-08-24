@@ -65,7 +65,7 @@ class Conv2dChannelLastResolveRule(ResolveRule):
         if is_constant(channels) and groups == channels:
             return None  # use depthwise schedule in the default Task
         data, weight = op.inputs
-        if channels >= 16 and data.dtype == float16 and weight.dtype == float16:
+        if data.dtype == float16 and weight.dtype == float16:
             # after some benchmarking, basically k_parts = 1 is sufficent for most cases
             if all(is_constant(s) for s in data.shape):
                 k_parts = parallel_part_heuristic(data.shape, weight.shape, stride, dilations, groups)
