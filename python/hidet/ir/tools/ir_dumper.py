@@ -762,7 +762,7 @@ def astext(obj: Node) -> str:
     else:
         raise ValueError()
 
-
+# %%
 from lark import Lark, Transformer, Token, Tree, Visitor
 import logging
 
@@ -945,6 +945,12 @@ class ParseTreeVisitor:
     
     def visit_attribute_name(self, name):
         return str(name[0])
+    
+    def visit_get_attr(self, node):
+        expr = self(node[0])
+        name = self(node[1])
+        assert hasattr(expr, name), f"expr of type {type(expr)} does not have attribute {name}"
+        return getattr(expr, name)
 
     def visit_data_type(self, type):
         type_name = str(type[0])
@@ -1299,11 +1305,11 @@ class ModuleProcessData:
                 compute = ComputeFunctionVariables(self.global_symbolvars, {}, {})
                 res = compute.visit(attrs[name])
                 self.attributes[name] = res
-        mod_attr_name = get_module_attribute_name(tree)
 
 
-class IRConstructor:
+class IRConstructor(ParseTreeVisitor):
     def __init__(self, preprocessor: ModuleProcessData, pass_through=True):
+        super().__init__(pass_through=pass_through)
         self.pass_through = pass_through
         self.preprocessor = preprocessor
 
@@ -1322,81 +1328,6 @@ class IRConstructor:
 
         self.visited_user_funcs: Set[str] = set()
     
-    # def scope(self) -> ScopeStack:
-    #     return self.scope_stack
-    
-    def __call__(self, node) -> Node:
-        return self.visit(node)
-    
-    def visit(self, node) -> Node:
-        if isinstance(node, Tree):
-            if isinstance(node.data, str):
-                # alias
-                method_name = 'visit_' + node.data
-            else:
-                # rule
-                assert node.data.type == 'RULE'
-                method_name = 'visit_' + node.data.value
-            method = getattr(self, method_name, None)
-            if method is None:
-                if not self.pass_through:
-                    raise NotImplementedError("No method {} for {}".format(method_name, node.data))
-                children = [self.visit(child) for child in node.children]
-                return Tree(node.data, children, meta=node.meta)
-            else:
-                return method(node.children)
-
-        elif isinstance(node, Token):
-            method_name = 'visit_' + node.type
-            method = getattr(self, method_name, None)
-            if method is None:
-                if not self.pass_through:
-                    raise NotImplementedError("No method {} for {}".format(method_name, node.type))
-                return node
-            else:
-                return method(node.value)
-        elif node is None:
-            return node
-        elif isinstance(node, (str, int, float, Node)):
-            return node
-        else:
-            if not self.pass_through:
-                raise NotImplementedError("Unknown node type: {}".format(type(node)))
-            else:
-                print(type(node), node)
-    
-    def visit_STRING(self, value):
-        return str(value[1:-1])
-
-    def visit_INT(self, value):
-        return int(value)
-
-    def visit_SIGNED_FLOAT(self, value):
-        return float(value)
-    
-    def visit_true(self, _):
-        return True
-    
-    def visit_false(self, _):
-        return False
-    
-    def visit_none(self, _):
-        return None
-    
-    def visit_pair(self, node):
-        return self.visit(node[0]), self.visit(node[1])
-    
-    
-    def visit_dict(self, node):
-        pairs = [self.visit(child) for child in node]
-        return {key: value for key, value in pairs}
-    
-    def visit_list(self, node):
-        return [self.visit(child) for child in node]
-    
-    def visit_name(self, name):
-        return str(name[0])
-
     def visit_def_var(self, node):
         name = self(node[0])
         if self.cur_fn_name is not None and name in self.local_vars[self.cur_fn_name]:
@@ -1427,112 +1358,10 @@ class IRConstructor:
             return self.func_var_table[name]
         raise RuntimeError("Cannot find variable {}".format(name))
     
-    def visit_get_attr(self, node):
-        expr = self(node[0])
-        name = self(node[1])
-        assert hasattr(expr, name), f"expr of type {type(expr)} does not have attribute {name}"
-        return getattr(expr, name)
-    
     def visit_symbol_var(self, node):
         name = str(node[0])
         assert name in self.symboltable, "cannot find symbolvar {}".format(name)
         return self.symboltable[name]
-
-    def visit_start(self, children):
-        return self(children[-1])
-    
-    def visit_attribute_name(self, name):
-        return str(name[0])
-
-    def visit_data_type(self, type):
-        type_name = str(type[0])
-        if type_name == 'void':
-            return hidet.ir.type.void
-        
-        return ir.data_type(type_name)
-    
-    def visit_ptr_type(self, node):
-        t = self(node[0])
-        if isinstance(t, TensorType):
-            return ir.TensorPointerType(t)
-        elif isinstance(t, DataType):
-            return ir.PointerType(t)
-        elif isinstance(t, VoidType):
-            return void_p
-        raise RuntimeError("Unknown type {}".format(t))
-    
-    def visit_addr_expr(self, node):
-        return ~self(node[0])
-
-    def visit_tensor_layout(self, node):
-        return self(node[0])
-
-    def visit_tensor_type(self, node):
-        dtype = self(node[0])
-        shape = [self(v)  for v in node[1:-1]]
-        layout = self(node[-1])
-        return ir.tensor_type(dtype, shape, layout)
-    
-    def visit_name(self, node):
-        return str(node[0])
-
-    def visit_unary_op(self, node):
-        op, expr = node
-        try:
-            return resolve_unary_op(op, self.visit(expr))
-        except Exception as e:
-            return node
-    
-    def visit_binary_op(self, node):
-        a, op, b = node
-        try:
-            return resolve_binary_op(op, self.visit(a), self.visit(b))
-        except Exception as e:
-            return node
-    
-    def visit_keyword_arg(self, node):
-        name = self(node[0])
-        value = self(node[1])
-        return name, value
-    
-    def visit_call_args(self, node):
-        args = []
-        kwargs = {}
-        i = len(node) - 1
-        while i > -1:
-            cur_arg = node[i]
-            if isinstance(cur_arg, Tree) and hasattr(cur_arg, 'data'):
-                arg_data = cur_arg.data
-                if hasattr(arg_data, 'value') and arg_data.value == 'keyword_arg':
-                    key, value = self(node[i])
-                    kwargs[key] = value
-                    i -= 1
-                else:
-                    break
-            else:
-                break
-        for arg in node[0:i+1]:
-            args.append(self(arg))
-        return args, kwargs
-
-    def visit_call_expr(self, node):
-        from hidet.ir.primitives.func import PrimitiveFunctionRegistry
-        func = self(node[0])
-        call_args = self(node[1])
-        if call_args is None:
-            args = []
-            kwargs = {}
-        else:
-            args, kwargs = call_args
-
-        # print(type(func))
-        # print(type(func.var))
-        if isinstance(func, PrimitiveFunctionRegistry):
-            return func.var(*args, **kwargs)
-        elif callable(func):
-            return func(*args, **kwargs)
-        else:
-            raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
     
     def reconstruct_for_attr(self, d: Dict[str, Any]):
         return ForStmtAttr(
@@ -1602,29 +1431,6 @@ class IRConstructor:
         
         raise RuntimeError(f"cannot find function {name}")
     
-    def visit_stmt_body(self, node):
-        stmts = []
-        for stmt in node:
-            res = self(stmt)
-            assert isinstance(res, ir.stmt.Stmt)
-            stmts.append(res)
-        
-        return SeqStmt(stmts)
-    
-    def visit_slice(self, node):
-        return slice(self(node[0]), self(node[1]))
-    
-    def visit_get_item_expr(self, node):
-        it = self(node[0])
-        slices = tuple(self(s) for s in node[1:])
-        return it[slices]
-
-    def visit_for_ind_var(self, node):
-        return [self(v) for v in node]
-    
-    def visit_task_mapping(self, node):
-        return self(node[0])
-    
     def visit_for_stmt(self, node):
         # print(node)
         ind_vars = self(node[0])
@@ -1646,108 +1452,6 @@ class IRConstructor:
             for_attr = None
         return ForStmt(ind_vars[0], args[0], body, attr=for_attr)
     
-    def visit_cast_expr(self, node):
-        expr = self(node[0])
-        dtype = self(node[1])
-        return ir.expr.cast(expr, dtype)
-    
-    def visit_if_then_else_expr(self, node):
-        cond = self(node[0])
-        then_expr = self(node[1])
-        else_expr = self(node[2])
-        return ir.expr.if_then_else(cond, then_expr, else_expr)
-    
-    def visit_evaluate_stmt(self, node):
-        expr = self(node[0])
-        return EvaluateStmt(expr)
-    
-    def visit_buffer_store_stmt(self, node):
-        protected = self(node[0]) is not None
-        buffer_ind = self(node[1])
-        assert isinstance(buffer_ind, TensorElement)
-
-
-        var = buffer_ind.base
-        ind = buffer_ind.indices
-        value = self(node[2])
-        return BufferStoreStmt(var, ind, value, protected)
-    
-    def visit_assign_stmt(self, node):
-        var = self(node[0])
-        value = self(node[1])
-        return AssignStmt(var, value)
-    
-    def visit_return_stmt(self, node):
-        value = self(node[0])
-        return ReturnStmt(value)
-    
-    def visit_let_stmt(self, node):
-        bind_vars = [self(v) for v in node[0:-1:2]]
-        values = [self(v) for v in node[1:-1:2]]
-        body = self(node[-1])
-        return LetStmt(bind_vars, values, body)
-
-    def visit_while_stmt(self, node):
-        cond = self(node[0])
-        body = self(node[1])
-        return WhileStmt(cond, body)
-    
-    def visit_break_stmt(self, node):
-        return BreakStmt()
-    
-    def visit_continue_stmt(self, node):
-        return ContinueStmt()
-    
-    def visit_if_stmt(self, node):
-        cond = self(node[0])
-        then_body = self(node[1])
-        else_body = self(node[2])
-        return IfStmt(cond, then_body, else_body)
-    
-    def visit_assert_stmt(self, node):
-        cond = self(node[0])
-        msg = self(node[1])
-        return AssertStmt(cond, msg)
-    
-    def visit_black_box_stmt(self, node):
-        v = self(node[0])
-        if len(node) == 2 and v is None:
-            exprs = []
-        else:
-            exprs = [v] + [self(v) for v in node[1:-1]]
-        template_str = str(node[-1])
-        return BlackBoxStmt(template_str, *exprs)
-    
-    def visit_asm_label(self, node):
-        return self(node[0]), self(node[1])
-    
-    def visit_asm_group(self, node):
-        return [self(v) for v in node]
-    
-    def visit_asm_stmt(self, node):
-        volatile = self(node[0]) is not None
-        template_str = self(node[1])
-        outputs = self(node[2])
-        outputs = outputs if outputs is not None else []
-        inputs = self(node[3])
-        inputs = inputs if inputs is not None else []
-        return AsmStmt(template_str, outputs, inputs, volatile)
-    
-    def visit_dim3(self, node):
-        return (self(node[0]), self(node[1]), self(node[2]))
-    
-    def visit_launch_kernel_stmt(self, node):
-        fn_var = self(node[0])
-        grid_dim = self(node[1])
-        block_dim = self(node[2])
-        shared_smem = self(node[3])
-        
-        args = [self(v) for v in node[4:]]
-        return LaunchKernelStmt(fn_var, args, grid_dim, block_dim, shared_smem)
-    
-    def visit_let_expr(self, node):
-        return Let(self(node[0]), self(node[1]), self(node[2]))
-
     def visit_declare_stmt(self, node):
         is_static = self(node[0])
         var = self(node[1])
@@ -1958,14 +1662,163 @@ def diff_text(old: str, new: str):
             print(oline)
 
 
+GRAMMAR = """
+// statements
+start : attribute module
 
+module : "module" attribute_name "{" [attribute*] [(function | declare_stmt)*] "}"
+
+function : "def" name "(" [fn_args] ")" "->" type [attribute_name] "{" stmt_body "}"
+
+fn_args : def_var ("," def_var)*
+
+stmt_body : [stmt*]
+
+?stmt : declare_stmt
+        | buffer_store_stmt
+        | assign_stmt
+        | return_stmt
+        | let_stmt
+        | for_stmt
+        | while_stmt
+        | break_stmt
+        | continue_stmt
+        | if_stmt
+        | assert_stmt
+        | black_box_stmt
+        | asm_stmt
+        | launch_kernel_stmt
+        | evaluate_stmt
+
+
+declare_stmt : [static_decl] "decl" def_var ["=" expr] ";" [attribute_name]
+static_decl : "static"
+buffer_store_stmt : [protected] get_item_expr "=" expr ";"
+protected : "protected"
+
+assign_stmt : var "=" expr ";"
+return_stmt : "return" [expr] ";"
+let_stmt : "let" "(" (def_var "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
+for_stmt : "for" for_ind_var "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
+for_ind_var : "(" def_var [("," def_var)*] ")"
+task_mapping : "on" "(" expr ")"
+
+while_stmt : "while" expr "{" stmt_body "}"
+break_stmt : "break" ";"
+continue_stmt : "continue" ";"
+if_stmt : "if" expr "{" stmt_body "}" ["else" "{" stmt_body "}"]
+assert_stmt : "assert" "(" expr ["," STRING] ")" ";"
+black_box_stmt : "blackbox" "(" [expr ("," expr)*] ")" "{" "$" ANYWILDCARD "$" "}" ";"
+
+
+asm_stmt : [volatile] "asm" "{" STRING "{" [asm_group] "}" "{" [asm_group] "}" "}" ";"
+volatile : "volatile"
+asm_label : STRING "(" expr ")"
+asm_group : asm_label ("," asm_label)*
+
+launch_kernel_stmt : fn_name "<<<" dim3 "," dim3 "," [INT] ">>>" "(" expr ("," expr)* ")" ";" // TODO: shared_mem may not be constant
+dim3 : "(" expr "," expr "," expr ")"
+// seq_stmt : "{" stmt* "}"
+evaluate_stmt : expr ";"
+
+?expr : "(" _unary_op expr ")"  -> unary_op
+        | "(" expr _binary_op expr ")" -> binary_op
+        | fn_call_expr 
+!_unary_op: "+"|"-"| "!"
+!_binary_op: "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "**" | "^" | "|" | "&"
+
+?fn_call_expr : get_item_expr 
+        | cast_expr 
+        | deref_expr 
+        | addr_expr 
+        | call_expr 
+        | let_expr 
+        | if_then_else_expr 
+        | atom
+
+// tensor_slice_expr : expr "[" [slice ("," slice)*] "]"
+get_item_expr : expr "[" (expr | slice) ("," (expr | slice))* "]"
+slice : [expr] ":" [expr]
+call_expr : fn_name "(" [call_args] ")"
+call_args : expr ("," expr)* | keyword_arg ("," keyword_arg)* | expr ("," expr)* ("," keyword_arg)*
+keyword_arg : name "=" expr
+
+
+cast_expr : "cast" "(" expr "as" type ")"
+deref_expr : "deref" "(" expr ")"
+addr_expr : "addr" "(" expr ")"
+
+let_expr : "let" "(" def_var "=" expr ")" "in" "(" expr ")"
+if_then_else_expr : "if" expr "then" "{" expr "}" "else" "{" expr "}"
+
+?atom : "(" expr ")"
+        | get_attr
+        | "true" -> true
+        | "false" -> false
+        | "none" -> none
+        | symbol_var
+        | var
+        | STRING
+        | INT
+        | SIGNED_FLOAT
+
+get_attr : expr "." name
+
+// Types
+?type : data_type | tensor_type | ptr_type | fn_type
+
+fn_type : "(" [type ("," type)*] ")" "->" type
+ptr_type : "~" type
+tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
+?tensor_tt_shape : expr
+tensor_layout : ";" expr
+!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
+
+// attributes
+attribute_name : "#" IDENT
+attribute : attribute_name "=" dict ";"
+
+// python objects (or constants)
+?value: dict
+        | list
+        | expr
+        | type
+
+pair : STRING ":" value
+dict : "dict" "(" (pair ("," pair)*)? ")"
+list : "list" "(" (value ("," value)*)? ")"
+// tuple : "(" value "," (value ",")* ")"
+
+symbol_var : "@" IDENT
+var : IDENT // var appearance in definitions
+def_var : name ":" type // var appearance in definitions to define a new var
+name : IDENT
+fn_name : IDENT [attribute_name]
+
+IDENT : /[^\W\d]\w*/
+ANYWILDCARD : /[^\$]+/
+STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+SIGNED_FLOAT : ["+" | "-"] FLOAT
+
+%import common.FLOAT
+%import common.INT
+%import common.WS
+%ignore WS
+"""
+
+def parse(text: str) -> IRModule:
+    parser = Lark(GRAMMAR, start='start', parser='lalr')
+    tree = parser.parse(text)
+    data = ModuleProcessData(tree)
+    ir_module = IRConstructor(data)(tree)
+    return ir_module
+
+# %%
 with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') as f:
     hidet_grammar = f.read()
 parser = Lark(hidet_grammar, start='start', parser='lalr')
 
 
-
-# %%
 transforms = [
         lambda x: x,
         unify_global_objects_pass(),
@@ -2000,7 +1853,7 @@ transforms = [
 mod = get_attn_task()
 
 
-for t in transforms[:23]:
+for t in transforms:
     mod = t(mod)
     print(t.__class__.__name__)
     text = astext(mod)
@@ -2015,7 +1868,6 @@ for t in transforms[:23]:
     new_text = astext(ir_module)
     if text != new_text:
         diff_text(text, new_text)
-        break
 
 def round_trip(ir_module):
     text = astext(ir_module)
@@ -2026,36 +1878,17 @@ def round_trip(ir_module):
     return new_text
 
 # %%
-mod = transforms[23](mod)
-text = astext(mod)
-new_text = round_trip(mod)
+should_print = True
+# logging.basicConfig(level=logging.DEBUG, force=True)
+mod2 = transforms[23](mod)
+text = astext(mod2)
+new_text = round_trip(mod2)
+# %%
+if text != new_text:
+    diff_text(text, new_text)
 
 
 # %%
 hidet.option.debug_show_var_id()
 print(mod)
 
-# %%
-from lark import Lark, logger
-
-mod = get_softmax_task()
-text = astext(mod)
-# print(text)
-logger.setLevel(logging.DEBUG)
-
-
-parser = Lark(hidet_grammar, start='top_level', debug=True, parser='lalr')
-tree = parser.parse(text)
-# print(tree.pretty())
-
-
-symbol_table = construct_global_symbols(preprocess_symbolvar(tree))
-preprocess = PreProcessTree(symbol_table)
-preprocess.visit(tree)
-new_tree = IRConstructor(preprocess)(tree)
-
-# print(new_tree)
-
-new_text = astext(new_tree)
-
-print(new_text == text)
