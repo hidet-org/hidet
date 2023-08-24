@@ -11,36 +11,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional, List, Union, Dict, Tuple, Any, Set
-import types
+from lark import Lark, Token, Tree, Visitor
 
-import hidet.utils.structure
-from hidet import symbol_var
-from hidet import ir
 from hidet.ir.node import Node
-from hidet.ir.expr import Expr, SymbolVar
+from hidet.ir.expr import Expr, SymbolVar, symbol_var, logical_and, logical_or, logical_not, cast, if_then_else
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
-from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType, void, void_p
-from hidet.ir.type import ArrayType, StringType
+from hidet.ir.type import DataType, data_type, TensorType, tensor_type, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType, void, void_p
+from hidet.ir.type import StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
-from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, ForStmtAttr, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
+from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Dereference, Address
+from hidet.ir.stmt import Stmt, SeqStmt, IfStmt, ForStmt, ForStmtAttr, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForMappingStmt, WhileStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt, ContinueStmt
 from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLayout, ComposedLayout, RowMajorLayout
 from hidet.ir.layout import ColumnMajorLayout
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
-from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
-from hidet.ir.dialects.pattern import PlaceholderExpr
-from hidet.ir.task import Task
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
-
-from hidet.ir.functors import IRFunctor
-from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
+from hidet.ir.functors.ir_functor import IRFunctor
+from hidet.ir.primitives.func import is_primitive_function, lookup_primitive_function
 
 
 class IRDumper(IRFunctor):
@@ -755,16 +748,12 @@ class IRDumper(IRFunctor):
         return '(' + self(e.a) + ' >> ' + self(e.b) + ')'
 
 
-def astext(obj: Node) -> str:
+def astext2(obj: Node) -> str:
     if isinstance(obj, Node):
         printer = IRDumper()
         return str(printer(obj))
     else:
         raise ValueError()
-
-# %%
-from lark import Lark, Transformer, Token, Tree, Visitor
-import logging
 
 # 1. Extract the global symbols from the module
 # 2. Extract the local variables from each function
@@ -858,15 +847,16 @@ def get_module_attribute_name(tree: Tree):
 
 def resolve_binary_op(op, a, b):
     if op == '&&':
-        return ir.logical_and(a, b)
+        return logical_and(a, b)
     elif op == '||':
-        return ir.logical_or(a, b)
+        return logical_or(a, b)
     return eval(f'a {op} b')
 
 def resolve_unary_op(op, a):
     if op == '!':
-        return ir.logical_not(a)
+        return logical_not(a)
     return eval(f'{op} a')
+
 
 class ParseTreeVisitor:
     def __init__(self, pass_through=True):
@@ -955,16 +945,15 @@ class ParseTreeVisitor:
     def visit_data_type(self, type):
         type_name = str(type[0])
         if type_name == 'void':
-            return hidet.ir.type.void
-        
-        return ir.data_type(type_name)
+            return void
+        return data_type(type_name)
     
     def visit_ptr_type(self, node):
         t = self(node[0])
         if isinstance(t, TensorType):
-            return ir.TensorPointerType(t)
+            return TensorPointerType(t)
         elif isinstance(t, DataType):
-            return ir.PointerType(t)
+            return PointerType(t)
         elif isinstance(t, VoidType):
             return void_p
         raise RuntimeError("Unknown type {}".format(t))
@@ -979,7 +968,7 @@ class ParseTreeVisitor:
         dtype = self(node[0])
         shape = [self(v)  for v in node[1:-1]]
         layout = self(node[-1])
-        return ir.tensor_type(dtype, shape, layout)
+        return tensor_type(dtype, shape, layout)
     
     def visit_name(self, node):
         return str(node[0])
@@ -1046,7 +1035,7 @@ class ParseTreeVisitor:
         stmts = []
         for stmt in node:
             res = self(stmt)
-            assert isinstance(res, ir.stmt.Stmt)
+            assert isinstance(res, Stmt)
             stmts.append(res)
         
         return SeqStmt(stmts)
@@ -1068,13 +1057,13 @@ class ParseTreeVisitor:
     def visit_cast_expr(self, node):
         expr = self(node[0])
         dtype = self(node[1])
-        return ir.expr.cast(expr, dtype)
+        return cast(expr, dtype)
     
     def visit_if_then_else_expr(self, node):
         cond = self(node[0])
         then_expr = self(node[1])
         else_expr = self(node[2])
-        return ir.expr.if_then_else(cond, then_expr, else_expr)
+        return if_then_else(cond, then_expr, else_expr)
     
     def visit_evaluate_stmt(self, node):
         expr = self(node[0])
@@ -1505,7 +1494,7 @@ class IRConstructor(ParseTreeVisitor):
             func_kind = 'cuda_internal'
         
 
-        ir_fn = ir.Function(name, args, body, return_type, func_kind, func_attrs)
+        ir_fn = Function(name, args, body, return_type, func_kind, func_attrs)
         func_var = Var(name, FuncType.from_func(ir_fn), name=name)
         self.func_var_table[name] = func_var
         self.functions[name] = ir_fn
@@ -1545,111 +1534,6 @@ class IRConstructor(ParseTreeVisitor):
         return IRModule(functions, self.global_var_table, **mod_attrs)
 
 
-from hidet.transforms.unify_global_objects import unify_global_objects_pass
-from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
-from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
-from hidet.transforms.generate_launch_func import generate_launch_func_pass
-from hidet.transforms.explicit_unroll import explicit_unroll_pass
-from hidet.transforms.import_primitive_functions import import_primitive_functions_pass
-from hidet.transforms.simplify_stmt import simplify_stmt_pass
-from hidet.transforms.expand_let_expr import expand_let_expr_pass
-from hidet.transforms.instantiate_symbols import instantiate_symbols_pass
-from hidet.transforms.resolve_generic_primitive_function import resolve_primitive_func_pass
-from hidet.transforms.inline_function import inline_function_pass
-from hidet.transforms.add_explicit_cast import add_explicit_cast_pass
-from hidet.transforms.inline_let_stmt import inline_let_stmt_pass
-from hidet.transforms.rule_based_simplifier import rule_based_simplify_pass
-from hidet.transforms.normalize_const_tensor import normalize_const_tensor_pass
-from hidet.transforms.lower_task_mapping import lower_task_mapping_pass
-from hidet.transforms.lower_protect_access import lower_protect_access_pass
-from hidet.transforms.declare_to_let import declare_to_let_pass
-from hidet.transforms.propagate_launch_bound import propagate_launch_bound_pass
-from hidet.transforms.check_launch_configuration import check_launch_configuration_pass
-from hidet.transforms.lower_special_cast import lower_special_cast_pass
-from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
-
-# from hidet.graph.ops.softmax import SoftmaxTask
-from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
-from hidet.graph.ops.matmul.batch_matmul import BatchMatmulTask
-from hidet.graph.ops.softmax import SoftmaxTask
-from hidet.graph.ops.attention.attention import AttnTask
-from hidet.graph.ops.utils import input_like, tensor_input
-
-def get_matmul_task():
-    s = symbol_var('s')
-    a = tensor_input('a', 'float16', [s, 256])
-    b = tensor_input('b', 'float16', [256, 512])
-    task = MatmulF16Task(a, b)
-    mods = task.implement_cuda('.')
-    mod = mods[0]
-    return mod
-
-def get_bmatmul_task(mma_str='simt'):
-    s = symbol_var('s')
-    a = tensor_input('a', 'float16', [1, s, 256])
-    b = tensor_input('b', 'float16', [1, 256, 256])
-    task = BatchMatmulTask(a, b, mma_str)
-    mods = task.implement_cuda('.')
-    mod = mods[0]
-    return mod
-
-def get_softmax_task():
-    a = tensor_input('a', 'float16', [1, 256])
-    task = SoftmaxTask(a, 1)
-    mod = task.implement_cuda('.')
-    return mod
-
-def get_attn_task():
-    s = symbol_var('s')
-    h = symbol_var('h')
-    q = tensor_input('q', 'float16', [1, h, s, 64])
-    k = tensor_input('k', 'float16', [1, h, s, 64])
-    v = tensor_input('v', 'float16', [1, h, s, 64])
-    task = AttnTask('attn', q, k, v, False)
-    mod = task.implement_cuda('.')
-    return mod[0]
-
-def generate_ir_modules():
-    transforms = [
-        lambda x: x,
-        unify_global_objects_pass(),
-        generate_launch_func_pass(),
-        flatten_tensor_slice_pass(),
-        lower_protect_access_pass(),
-        lower_task_mapping_pass(),
-        normalize_const_tensor_pass(),
-        declare_to_let_pass(),
-        rule_based_simplify_pass(),
-        flatten_tensor_index_pass(),
-        lower_special_cast_pass(),
-        inline_function_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
-        add_explicit_cast_pass(),
-        declare_to_let_pass(),
-        instantiate_symbols_pass(),
-        check_launch_configuration_pass(),
-        # simplification
-        expand_let_expr_pass(),
-        inline_let_stmt_pass(),
-        explicit_unroll_pass(),
-        rule_based_simplify_pass(),
-        inline_let_stmt_pass(),
-        simplify_stmt_pass(),
-        annotate_header_and_libs_pass(),
-    ]
-    for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
-        for t in transforms:
-            if hasattr(t, '__name__'):
-                print(t.__name__)
-            else:
-                print(t.__class__.__name__)
-            mod = t(mod)
-            yield mod
-
 def diff_text(old: str, new: str):
     from hidet.utils.py import red, green
     old_lines = old.split('\n')
@@ -1662,7 +1546,7 @@ def diff_text(old: str, new: str):
             print(oline)
 
 
-GRAMMAR = """
+GRAMMAR = r"""
 // statements
 start : attribute module
 
@@ -1812,83 +1696,4 @@ def parse(text: str) -> IRModule:
     data = ModuleProcessData(tree)
     ir_module = IRConstructor(data)(tree)
     return ir_module
-
-# %%
-with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') as f:
-    hidet_grammar = f.read()
-parser = Lark(hidet_grammar, start='start', parser='lalr')
-
-
-transforms = [
-        lambda x: x,
-        unify_global_objects_pass(),
-        generate_launch_func_pass(),
-        flatten_tensor_slice_pass(),
-        lower_protect_access_pass(),
-        lower_task_mapping_pass(),
-        normalize_const_tensor_pass(),
-        declare_to_let_pass(),
-        rule_based_simplify_pass(),
-        flatten_tensor_index_pass(),
-        lower_special_cast_pass(),
-        inline_function_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        resolve_primitive_func_pass(),
-        import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
-        add_explicit_cast_pass(),
-        declare_to_let_pass(),
-        instantiate_symbols_pass(),
-        check_launch_configuration_pass(),
-        # simplification
-        expand_let_expr_pass(),
-        inline_let_stmt_pass(),
-        explicit_unroll_pass(),
-        rule_based_simplify_pass(),
-        inline_let_stmt_pass(),
-        simplify_stmt_pass(),
-        annotate_header_and_libs_pass(),
-    ]
-mod = get_attn_task()
-
-
-for t in transforms:
-    mod = t(mod)
-    print(t.__class__.__name__)
-    text = astext(mod)
-    tree = parser.parse(text)
-
-    try:
-        data = ModuleProcessData(tree)
-        ir_module = IRConstructor(data)(tree)
-    except Exception as e:
-        print(text)
-        raise e
-    new_text = astext(ir_module)
-    if text != new_text:
-        diff_text(text, new_text)
-
-def round_trip(ir_module):
-    text = astext(ir_module)
-    tree = parser.parse(text)
-    data = ModuleProcessData(tree)
-    ir_module = IRConstructor(data)(tree)
-    new_text = astext(ir_module)
-    return new_text
-
-# %%
-should_print = True
-# logging.basicConfig(level=logging.DEBUG, force=True)
-mod2 = transforms[23](mod)
-text = astext(mod2)
-new_text = round_trip(mod2)
-# %%
-if text != new_text:
-    diff_text(text, new_text)
-
-
-# %%
-hidet.option.debug_show_var_id()
-print(mod)
 
