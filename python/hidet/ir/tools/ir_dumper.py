@@ -17,13 +17,35 @@ from hidet.ir.node import Node
 from hidet.ir.expr import Expr, SymbolVar, symbol_var, logical_and, logical_or, logical_not, cast, if_then_else
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
-from hidet.ir.type import DataType, data_type, TensorType, tensor_type, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType, void, void_p
+from hidet.ir.type import (
+    DataType,
+    data_type,
+    TensorType,
+    tensor_type,
+    VoidType,
+    PointerType,
+    ReferenceType,
+    TensorPointerType,
+    FuncType,
+    void,
+    void_p,
+)
 from hidet.ir.type import StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Dereference, Address
-from hidet.ir.stmt import Stmt, SeqStmt, IfStmt, ForStmt, ForStmtAttr, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
+from hidet.ir.stmt import (
+    Stmt,
+    SeqStmt,
+    IfStmt,
+    ForStmt,
+    ForStmtAttr,
+    AssignStmt,
+    BufferStoreStmt,
+    EvaluateStmt,
+    AssertStmt,
+)
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForMappingStmt, WhileStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt, ContinueStmt
 from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLayout, ComposedLayout, RowMajorLayout
@@ -63,14 +85,15 @@ class IRDumper(IRFunctor):
 
     def visit_PyConstant(self, c: Union[str, int, float, None]):
         return Text(str(c))
-    
+
     def clear_attr_table(self):
         self.attr_table = {}
         self.module_headers = []
-    
+
     def format_attr_dict(self, name: str, d: Dict) -> str:
         if name in self.attr_table:
             raise ValueError('Attribute dict with name {} already exists'.format(name))
+
         def check_attr(d):
             if isinstance(d, dict):
                 for k, v in d.items():
@@ -86,12 +109,13 @@ class IRDumper(IRFunctor):
                 pass
             else:
                 raise ValueError("Unexpected type {} in attribute dict".format(type(d)))
+
         if not isinstance(d, dict):
             raise ValueError('Attribute dict must be a dict, but got {}'.format(type(d)))
         check_attr(d)
 
         self.attr_table[name] = d
-        
+
         def format_str(d):
             if isinstance(d, dict):
                 return 'dict(' + ', '.join([format_str(k) + ': ' + format_str(v) for k, v in d.items()]) + ')'
@@ -111,10 +135,10 @@ class IRDumper(IRFunctor):
                 return str(d)
 
         return f"#{name} = " + format_str(d) + ";"
-    
+
     def format_attr_name(self, name: str) -> str:
         return f"#{name}"
-    
+
     def get_unique_attr_name(self, name: str) -> str:
         if name not in self.attr_table:
             return name
@@ -130,6 +154,7 @@ class IRDumper(IRFunctor):
         if the name exists and the attributes are not equal, create a new attribute with a new name.
         If the name exists and the attributes are equal, just refer to the existing attribute.
         """
+
         def dict_equal(d1, d2):
             if len(d1) != len(d2):
                 return False
@@ -148,12 +173,13 @@ class IRDumper(IRFunctor):
                 elif v0 != v1:
                     return False
             return True
+
         if name not in self.attr_table:
             # do this to preserve the order of defined attributes
             self.module_headers.append(self.format_attr_dict(name, d))
             return self.format_attr_name(name)
         else:
-            
+
             if self.attr_table[name] == d:
                 return self.format_attr_name(name)
             i = 1
@@ -200,13 +226,15 @@ class IRDumper(IRFunctor):
         doc = Doc()
         self.ir_module = ir_module
 
-        ir_module_attrs = {"linking_libs": ir_module.linking_libs, 
-                           "linking_dirs": ir_module.linking_dirs,
-                           "object_files": ir_module.object_files, 
-                           "namespace": ir_module.namespace,
-                           "include_headers": ir_module.include_headers,
-                           "extern_functions": {k: self(v.type) for k, v in ir_module.extern_functions.items()}}
-        mod_attr_name =  self.get_unique_attr_name('m')
+        ir_module_attrs = {
+            "linking_libs": ir_module.linking_libs,
+            "linking_dirs": ir_module.linking_dirs,
+            "object_files": ir_module.object_files,
+            "namespace": ir_module.namespace,
+            "include_headers": ir_module.include_headers,
+            "extern_functions": {k: self(v.type) for k, v in ir_module.extern_functions.items()},
+        }
+        mod_attr_name = self.get_unique_attr_name('m')
         doc += Text("module #") + mod_attr_name + " {" + NewLine()
 
         mod_inner_attr = NewLine()
@@ -217,7 +245,7 @@ class IRDumper(IRFunctor):
             mod_body += Text('decl ') + self(var) + Text(': ') + self(var.type) + ";" + NewLine() + NewLine()
         for func in ir_module.functions.values():
             mod_body += self(func) + NewLine()
-        
+
         for i in self.module_headers:
             mod_inner_attr += i + NewLine()
 
@@ -231,13 +259,13 @@ class IRDumper(IRFunctor):
         headers = Doc()
         for i in self.module_headers:
             headers += i + NewLine()
-        
+
         self.global_symbolvars.clear()
         res = headers + doc
         return res
 
     def visit_TensorElement(self, e: TensorElement):
-        # TODO: 
+        # TODO:
         if e.protected:
             doc = NewLine() + "protected " + self(e.base) + '[' + self(e.indices) + ']'
         else:
@@ -278,7 +306,9 @@ class IRDumper(IRFunctor):
         return doc
 
     def visit_Let(self, e: Let):
-        return Text('let(') + self(e.var) + ": " + self(e.var.type) + '=' + self(e.value) + ') in (' + self(e.body) + ')'
+        return (
+            Text('let(') + self(e.var) + ": " + self(e.var.type) + '=' + self(e.value) + ') in (' + self(e.body) + ')'
+        )
 
     def visit_Cast(self, e: Cast):
         return Text('cast(') + self(e.expr) + " as " + self(e.target_type) + ')'
@@ -370,10 +400,10 @@ class IRDumper(IRFunctor):
         doc += NewLine() + ');'
         # doc += self(stmt.body).indent()
         return doc
-    
+
     def for_ind_var(self, vars: List[Var]):
         return doc_join([self(v) + ":" + self(v.type) for v in vars], ",")
-    
+
     def format_for_attr(self, attr: ForStmtAttr):
         for_stmt_attr = {}
         for_stmt_attr['unroll'] = attr.unroll
@@ -385,12 +415,12 @@ class IRDumper(IRFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         for_stmt_attr = self.format_for_attr(stmt.attr)
-        
+
         if len(for_stmt_attr) > 0:
             attr_name = self.add_attr('u', for_stmt_attr)
         else:
             attr_name = ''
-        
+
         rng = Text('range(') + self(stmt.extent) + ') '
         doc = NewLine()
         doc += NewLine() + Text('for (') + self.for_ind_var([stmt.loop_var]) + ') in ' + rng + attr_name + ' {'
@@ -399,7 +429,17 @@ class IRDumper(IRFunctor):
         return doc
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        doc = NewLine() + NewLine() + Text('for (') + self.for_ind_var(stmt.loop_vars) + ') in ' + self(stmt.mapping) + ' on (' + self(stmt.worker) + ') {'
+        doc = (
+            NewLine()
+            + NewLine()
+            + Text('for (')
+            + self.for_ind_var(stmt.loop_vars)
+            + ') in '
+            + self(stmt.mapping)
+            + ' on ('
+            + self(stmt.worker)
+            + ') {'
+        )
         doc += self(stmt.body).indent(4)
         doc += NewLine() + '}'
         return doc
@@ -504,7 +544,7 @@ class IRDumper(IRFunctor):
 
     def visit_TensorType(self, t: TensorType):
         return self._tensor_type(t)
-    
+
     def visit_FuncType(self, t: FuncType):
         return Text('(') + self(t.param_types) + ') -> ' + self(t.ret_type)
 
@@ -665,7 +705,7 @@ class IRDumper(IRFunctor):
             return Text(f'column{attr}(list(') + self(layout.shape) + '))'
         else:
             return Text(f'strides{attr}(list(') + self(layout.shape) + '),' + 'list(' + self(layout.strides) + '))'
-    
+
     # def get_strides_layout_attr
 
     def visit_SwizzleLayout(self, layout: SwizzleLayout):
@@ -686,7 +726,7 @@ class IRDumper(IRFunctor):
     def visit_ConcatLayout(self, layout: ConcatLayout):
         attr = self.add_attr("c", {"fn_type": "Layout"})
         return Text(f'concat{attr}(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
-    
+
     def visit_Add(self, e: Add):
         return Text('(') + self(e.a) + ' + ' + self(e.b) + ')'
 
@@ -755,15 +795,18 @@ def astext2(obj: Node) -> str:
     else:
         raise ValueError()
 
+
 # 1. Extract the global symbols from the module
 # 2. Extract the local variables from each function
 # 3. Compute the types of the local variables
 # 4. Compute the attributes of the module
 # 5. Preprocess the module
 
+
 def construct_pair(tree):
     assert tree.data.value == 'pair'
     return tree.children[0], tree.children[1]
+
 
 def preprocess_symbolvar(tree: Tree):
     assert tree.data.value == 'start'
@@ -780,6 +823,7 @@ def preprocess_symbolvar(tree: Tree):
             return symbol_var
     return None
 
+
 def construct_global_symbols(tree: Tree) -> Dict[str, SymbolVar]:
     symbols = {}
     svars = preprocess_symbolvar(tree)
@@ -792,31 +836,34 @@ def construct_global_symbols(tree: Tree) -> Dict[str, SymbolVar]:
 class ExtractLocalFnVars(Visitor):
     def __init__(self):
         self.local_vars: Dict[str, Tree] = {}
-    
+
     def def_var(self, node):
         name = str(node.children[0].children[0])
         var = node.children[1]
         self.local_vars[name] = var
-    
+
+
 class ExtractLocalVars(Visitor):
     def __init__(self):
         # {fn_name: {var_name: var_type}}
         self.fn_vars: Dict[str, Dict[str, Tree]] = {}
-    
+
     def function(self, node):
         name = str(node.children[0].children[0])
         visitor = ExtractLocalFnVars()
         visitor.visit(node)
         self.fn_vars[name] = visitor.local_vars
 
+
 class ExtractAttributes(Visitor):
     def __init__(self):
         self.attributes: Dict[str, Tree] = {}
-        
+
     def attribute(self, tree):
         name = tree.children[0].children[0]
         value = tree.children[1]
         self.attributes[str(name)] = value
+
 
 class ExtractFunctionNames(Visitor):
     def __init__(self):
@@ -845,12 +892,14 @@ def get_module_attribute_name(tree: Tree):
     attr = module.children[0].children[0]
     return str(attr)
 
+
 def resolve_binary_op(op, a, b):
     if op == '&&':
         return logical_and(a, b)
     elif op == '||':
         return logical_or(a, b)
     return eval(f'a {op} b')
+
 
 def resolve_unary_op(op, a):
     if op == '!':
@@ -861,10 +910,10 @@ def resolve_unary_op(op, a):
 class ParseTreeVisitor:
     def __init__(self, pass_through=True):
         self.pass_through = pass_through
-    
+
     def __call__(self, node) -> Node:
         return self.visit(node)
-    
+
     def visit(self, node) -> Node:
         if isinstance(node, Tree):
             if isinstance(node.data, str):
@@ -910,32 +959,32 @@ class ParseTreeVisitor:
 
     def visit_SIGNED_FLOAT(self, value):
         return float(value)
-    
+
     def visit_true(self, _):
         return True
-    
+
     def visit_false(self, _):
         return False
-    
+
     def visit_none(self, _):
         return None
-    
+
     def visit_pair(self, node):
         return self.visit(node[0]), self.visit(node[1])
-    
+
     def visit_dict(self, node):
         pairs = [self.visit(child) for child in node]
         return {key: value for key, value in pairs}
-    
+
     def visit_list(self, node):
         return [self.visit(child) for child in node]
-    
+
     def visit_start(self, children):
         return self(children[-1])
-    
+
     def visit_attribute_name(self, name):
         return str(name[0])
-    
+
     def visit_get_attr(self, node):
         expr = self(node[0])
         name = self(node[1])
@@ -947,7 +996,7 @@ class ParseTreeVisitor:
         if type_name == 'void':
             return void
         return data_type(type_name)
-    
+
     def visit_ptr_type(self, node):
         t = self(node[0])
         if isinstance(t, TensorType):
@@ -957,7 +1006,7 @@ class ParseTreeVisitor:
         elif isinstance(t, VoidType):
             return void_p
         raise RuntimeError("Unknown type {}".format(t))
-    
+
     def visit_addr_expr(self, node):
         return ~self(node[0])
 
@@ -966,10 +1015,10 @@ class ParseTreeVisitor:
 
     def visit_tensor_type(self, node):
         dtype = self(node[0])
-        shape = [self(v)  for v in node[1:-1]]
+        shape = [self(v) for v in node[1:-1]]
         layout = self(node[-1])
         return tensor_type(dtype, shape, layout)
-    
+
     def visit_name(self, node):
         return str(node[0])
 
@@ -979,19 +1028,19 @@ class ParseTreeVisitor:
             return resolve_unary_op(op, self.visit(expr))
         except Exception as e:
             return node
-    
+
     def visit_binary_op(self, node):
         a, op, b = node
         try:
             return resolve_binary_op(op, self.visit(a), self.visit(b))
         except Exception as e:
             return node
-    
+
     def visit_keyword_arg(self, node):
         name = self(node[0])
         value = self(node[1])
         return name, value
-    
+
     def visit_call_args(self, node):
         args = []
         kwargs = {}
@@ -1008,12 +1057,13 @@ class ParseTreeVisitor:
                     break
             else:
                 break
-        for arg in node[0:i+1]:
+        for arg in node[0 : i + 1]:
             args.append(self(arg))
         return args, kwargs
 
     def visit_call_expr(self, node):
         from hidet.ir.primitives.func import PrimitiveFunctionRegistry
+
         func = self(node[0])
         call_args = self(node[1])
         if call_args is None:
@@ -1030,19 +1080,19 @@ class ParseTreeVisitor:
             return func(*args, **kwargs)
         else:
             raise RuntimeError("Unknown calling function {} of type {}".format(func, type(func)))
-    
+
     def visit_stmt_body(self, node):
         stmts = []
         for stmt in node:
             res = self(stmt)
             assert isinstance(res, Stmt)
             stmts.append(res)
-        
+
         return SeqStmt(stmts)
-    
+
     def visit_slice(self, node):
         return slice(self(node[0]), self(node[1]))
-    
+
     def visit_get_item_expr(self, node):
         it = self(node[0])
         slices = tuple(self(s) for s in node[1:])
@@ -1050,45 +1100,44 @@ class ParseTreeVisitor:
 
     def visit_for_ind_var(self, node):
         return [self(v) for v in node]
-    
+
     def visit_task_mapping(self, node):
         return self(node[0])
-    
+
     def visit_cast_expr(self, node):
         expr = self(node[0])
         dtype = self(node[1])
         return cast(expr, dtype)
-    
+
     def visit_if_then_else_expr(self, node):
         cond = self(node[0])
         then_expr = self(node[1])
         else_expr = self(node[2])
         return if_then_else(cond, then_expr, else_expr)
-    
+
     def visit_evaluate_stmt(self, node):
         expr = self(node[0])
         return EvaluateStmt(expr)
-    
+
     def visit_buffer_store_stmt(self, node):
         protected = self(node[0]) is not None
         buffer_ind = self(node[1])
         assert isinstance(buffer_ind, TensorElement)
 
-
         var = buffer_ind.base
         ind = buffer_ind.indices
         value = self(node[2])
         return BufferStoreStmt(var, ind, value, protected)
-    
+
     def visit_assign_stmt(self, node):
         var = self(node[0])
         value = self(node[1])
         return AssignStmt(var, value)
-    
+
     def visit_return_stmt(self, node):
         value = self(node[0])
         return ReturnStmt(value)
-    
+
     def visit_let_stmt(self, node):
         bind_vars = [self(v) for v in node[0:-1:2]]
         values = [self(v) for v in node[1:-1:2]]
@@ -1099,24 +1148,24 @@ class ParseTreeVisitor:
         cond = self(node[0])
         body = self(node[1])
         return WhileStmt(cond, body)
-    
+
     def visit_break_stmt(self, node):
         return BreakStmt()
-    
+
     def visit_continue_stmt(self, node):
         return ContinueStmt()
-    
+
     def visit_if_stmt(self, node):
         cond = self(node[0])
         then_body = self(node[1])
         else_body = self(node[2])
         return IfStmt(cond, then_body, else_body)
-    
+
     def visit_assert_stmt(self, node):
         cond = self(node[0])
         msg = self(node[1])
         return AssertStmt(cond, msg)
-    
+
     def visit_black_box_stmt(self, node):
         v = self(node[0])
         if len(node) == 2 and v is None:
@@ -1125,13 +1174,13 @@ class ParseTreeVisitor:
             exprs = [v] + [self(v) for v in node[1:-1]]
         template_str = str(node[-1])
         return BlackBoxStmt(template_str, *exprs)
-    
+
     def visit_asm_label(self, node):
         return self(node[0]), self(node[1])
-    
+
     def visit_asm_group(self, node):
         return [self(v) for v in node]
-    
+
     def visit_asm_stmt(self, node):
         volatile = self(node[0]) is not None
         template_str = self(node[1])
@@ -1140,28 +1189,26 @@ class ParseTreeVisitor:
         inputs = self(node[3])
         inputs = inputs if inputs is not None else []
         return AsmStmt(template_str, outputs, inputs, volatile)
-    
+
     def visit_dim3(self, node):
         return (self(node[0]), self(node[1]), self(node[2]))
-    
+
     def visit_launch_kernel_stmt(self, node):
         fn_var = self(node[0])
         grid_dim = self(node[1])
         block_dim = self(node[2])
         shared_smem = self(node[3])
-        
+
         args = [self(v) for v in node[4:]]
         return LaunchKernelStmt(fn_var, args, grid_dim, block_dim, shared_smem)
-    
+
     def visit_let_expr(self, node):
         return Let(self(node[0]), self(node[1]), self(node[2]))
 
+
 class ComputeFunctionVariables(ParseTreeVisitor):
     def __init__(
-        self, 
-        global_symbols: Dict[str, SymbolVar],
-        fn_vars_defs: Dict[str, Tree],
-        attributes: Dict[str, Tree]
+        self, global_symbols: Dict[str, SymbolVar], fn_vars_defs: Dict[str, Tree], attributes: Dict[str, Tree]
     ):
         super().__init__()
         self.global_symbols = global_symbols
@@ -1172,12 +1219,11 @@ class ComputeFunctionVariables(ParseTreeVisitor):
         self.attributes = attributes
         self.processed_attributes = {}
 
-
     def visit_symbol_var(self, node):
         name = str(node[0])
         assert name in self.global_symbols, "cannot find symbolvar {}".format(name)
         return self.global_symbols[name]
-    
+
     def visit_var(self, node):
         name = str(node[0])
         if name in self.variables:
@@ -1189,7 +1235,7 @@ class ComputeFunctionVariables(ParseTreeVisitor):
         var_type = self.visit(self.var_type_defs[name])
         self.variables[name] = Var(hint=name, type=var_type)
         return self.variables[name]
-    
+
     def construct_attribute(self, name):
         assert name in self.attributes, "cannot find attribute {}".format(name)
         if name in self.processed_attributes:
@@ -1197,21 +1243,15 @@ class ComputeFunctionVariables(ParseTreeVisitor):
         attr = self(self.attributes[name])
         self.processed_attributes[name] = attr
         return attr
-    
+
     def reconstruct_for_attr(self, d: Dict[str, Any]):
-        return ForStmtAttr(
-            d['unroll'],
-            d['factor'],
-            d['explicit'],
-            d['parallel'],
-            d['threads']
-        )
-    
+        return ForStmtAttr(d['unroll'], d['factor'], d['explicit'], d['parallel'], d['threads'])
+
     def visit_fn_name(self, node):
         name_to_taskmap = {
             'compose_map': ComposedTaskMapping,
             'repeat_map': RepeatTaskMapping,
-            'spatial_map': SpatialTaskMapping
+            'spatial_map': SpatialTaskMapping,
         }
         name_to_layout = {
             'row': RowMajorLayout,
@@ -1220,13 +1260,13 @@ class ComputeFunctionVariables(ParseTreeVisitor):
             'swizzle': SwizzleLayout,
             'local': LocalLayout,
             'compose': ComposedLayout,
-            'concat': ConcatLayout
+            'concat': ConcatLayout,
         }
         # in the type definition the only functions that are called are
         # the ones above and list(...)
         name = str(node[0])
         if name == 'list':
-            return lambda *x : list(x)
+            return lambda *x: list(x)
         attr_name = self(node[1])
         if attr_name is not None:
             attr = self.construct_attribute(attr_name)
@@ -1244,10 +1284,9 @@ class ComputeFunctionVariables(ParseTreeVisitor):
                     return name_to_layout[name]
                 else:
                     raise RuntimeError(f"Unknown fn_type {fn_type}")
-        
-        
+
         raise RuntimeError(f"cannot find function {name}")
-    
+
     def run(self):
         for name, tree in self.var_type_defs.items():
             if name not in self.variables:
@@ -1316,7 +1355,7 @@ class IRConstructor(ParseTreeVisitor):
         self.functions: Dict[str, Function] = {}
 
         self.visited_user_funcs: Set[str] = set()
-    
+
     def visit_def_var(self, node):
         name = self(node[0])
         if self.cur_fn_name is not None and name in self.local_vars[self.cur_fn_name]:
@@ -1327,9 +1366,10 @@ class IRConstructor(ParseTreeVisitor):
 
         self.global_var_table[name] = var
         return var
-    
+
     def visit_var(self, node):
         from hidet.lang.cuda import threadIdx, blockIdx, blockDim, gridDim
+
         name = str(node[0])
         if name == 'threadIdx':
             return threadIdx
@@ -1346,26 +1386,20 @@ class IRConstructor(ParseTreeVisitor):
         if name in self.func_var_table:
             return self.func_var_table[name]
         raise RuntimeError("Cannot find variable {}".format(name))
-    
+
     def visit_symbol_var(self, node):
         name = str(node[0])
         assert name in self.symboltable, "cannot find symbolvar {}".format(name)
         return self.symboltable[name]
-    
+
     def reconstruct_for_attr(self, d: Dict[str, Any]):
-        return ForStmtAttr(
-            d['unroll'],
-            d['factor'],
-            d['explicit'],
-            d['parallel'],
-            d['threads']
-        )
-    
+        return ForStmtAttr(d['unroll'], d['factor'], d['explicit'], d['parallel'], d['threads'])
+
     def visit_fn_name(self, node):
         name_to_taskmap = {
             'compose_map': ComposedTaskMapping,
             'repeat_map': RepeatTaskMapping,
-            'spatial_map': SpatialTaskMapping
+            'spatial_map': SpatialTaskMapping,
         }
         name_to_layout = {
             'row': RowMajorLayout,
@@ -1374,7 +1408,7 @@ class IRConstructor(ParseTreeVisitor):
             'swizzle': SwizzleLayout,
             'local': LocalLayout,
             'compose': ComposedLayout,
-            'concat': ConcatLayout
+            'concat': ConcatLayout,
         }
         name = str(node[0])
         attr_name = self(node[1])
@@ -1396,11 +1430,11 @@ class IRConstructor(ParseTreeVisitor):
                 else:
                     raise RuntimeError(f"Unknown fn_type {fn_type}")
 
-        if name in self.funcs: # this is a user defined function, visit this one first
+        if name in self.funcs:  # this is a user defined function, visit this one first
             if name not in self.func_var_table:
                 if name in self.visited_user_funcs:
                     raise RuntimeError(f"recursive/mutally recursive function {name} is not supported")
-                
+
                 self.visited_user_funcs.add(name)
 
                 # make the new construct inherit everything except for local variables
@@ -1410,16 +1444,15 @@ class IRConstructor(ParseTreeVisitor):
                 new_constructor.visited_user_funcs = self.visited_user_funcs
                 new_constructor.functions = self.functions
                 return new_constructor(self.funcs[name])
-                
+
             return self.func_var_table[name]
         if is_primitive_function(name):
             return lookup_primitive_function(name)
         if name == 'list':
             return lambda *x: list(x)
-        
-        
+
         raise RuntimeError(f"cannot find function {name}")
-    
+
     def visit_for_stmt(self, node):
         # print(node)
         ind_vars = self(node[0])
@@ -1428,7 +1461,7 @@ class IRConstructor(ParseTreeVisitor):
         if attrs is not None and node[2].data.value == 'task_mapping':
             mapping = self(node[1])
             return ForMappingStmt(ind_vars, mapping, attrs, body)
-        elif attrs is not None: # regular range for loop
+        elif attrs is not None:  # regular range for loop
             rng = node[1]
             assert isinstance(rng, Tree)
             assert rng.data.value == 'call_expr'
@@ -1440,7 +1473,7 @@ class IRConstructor(ParseTreeVisitor):
         else:
             for_attr = None
         return ForStmt(ind_vars[0], args[0], body, attr=for_attr)
-    
+
     def visit_declare_stmt(self, node):
         is_static = self(node[0])
         var = self(node[1])
@@ -1478,7 +1511,7 @@ class IRConstructor(ParseTreeVisitor):
         return_type = self(node[2])
         attrs = self(node[3])
         body = self(node[4])
-        
+
         func_attrs = {}
         if attrs in self.attributes:
             func_attrs = self.attributes[attrs]
@@ -1492,14 +1525,13 @@ class IRConstructor(ParseTreeVisitor):
             func_kind = 'cuda_kernel'
         else:
             func_kind = 'cuda_internal'
-        
 
         ir_fn = Function(name, args, body, return_type, func_kind, func_attrs)
         func_var = Var(name, FuncType.from_func(ir_fn), name=name)
         self.func_var_table[name] = func_var
         self.functions[name] = ir_fn
         return func_var
-    
+
     def visit_module(self, children):
         mod_attrs = self.attributes[self(children[0])]
 
@@ -1514,7 +1546,7 @@ class IRConstructor(ParseTreeVisitor):
                 pass
             else:
                 raise RuntimeError(f"Unknown stmt type {stmt.data.value}")
-        
+
         extern_funcs = {k: Var(None, self(v), name=k) for k, v in mod_attrs["extern_functions"].items()}
         mod_attrs = {
             "linking_libs": mod_attrs["linking_libs"],
@@ -1522,7 +1554,7 @@ class IRConstructor(ParseTreeVisitor):
             "namespace": mod_attrs["namespace"],
             "include_headers": mod_attrs["include_headers"],
             "linking_dirs": mod_attrs["linking_dirs"],
-            "extern_functions": extern_funcs
+            "extern_functions": extern_funcs,
         }
 
         # maintain the same order of functions
@@ -1530,12 +1562,13 @@ class IRConstructor(ParseTreeVisitor):
         functions = {}
         for name in self.funcs:
             functions[name] = self.functions[name]
-        
+
         return IRModule(functions, self.global_var_table, **mod_attrs)
 
 
 def diff_text(old: str, new: str):
     from hidet.utils.py import red, green
+
     old_lines = old.split('\n')
     new_lines = new.split('\n')
     for oline, nline in zip(old_lines, new_lines):
@@ -1690,10 +1723,10 @@ SIGNED_FLOAT : ["+" | "-"] FLOAT
 %ignore WS
 """
 
+
 def parse(text: str) -> IRModule:
     parser = Lark(GRAMMAR, start='start', parser='lalr')
     tree = parser.parse(text)
     data = ModuleProcessData(tree)
     ir_module = IRConstructor(data)(tree)
     return ir_module
-

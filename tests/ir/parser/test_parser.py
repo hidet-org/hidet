@@ -43,6 +43,7 @@ from hidet.graph.ops.softmax import SoftmaxTask
 from hidet.graph.ops.attention.attention import AttnTask
 from hidet.graph.ops.utils import input_like, tensor_input
 
+
 def get_matmul_task():
     s = symbol_var('s')
     a = tensor_input('a', 'float16', [s, 256])
@@ -51,6 +52,7 @@ def get_matmul_task():
     mods = task.implement_cuda('.')
     mod = mods[0]
     return mod
+
 
 def get_bmatmul_task(mma_str='simt'):
     s = symbol_var('s')
@@ -61,11 +63,13 @@ def get_bmatmul_task(mma_str='simt'):
     mod = mods[0]
     return mod
 
+
 def get_softmax_task():
     a = tensor_input('a', 'float16', [1, 256])
     task = SoftmaxTask(a, 1)
     mod = task.implement_cuda('.')
     return mod
+
 
 def get_attn_task():
     s = symbol_var('s')
@@ -76,6 +80,7 @@ def get_attn_task():
     task = AttnTask('attn', q, k, v, False)
     mod = task.implement_cuda('.')
     return mod[0]
+
 
 def generate_ir_modules():
     transforms = [
@@ -118,9 +123,9 @@ def generate_ir_modules():
             mod = t(mod)
             yield mod
 
+
 def test_parser():
     for mod in generate_ir_modules():
         text = astext2(mod)
         ir_module = parse(text)
         new_text = astext2(ir_module)
-

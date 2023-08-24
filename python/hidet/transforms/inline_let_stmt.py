@@ -67,6 +67,7 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
 
     def should_inline(self, var: Var, expr: Expr) -> bool:
         from hidet.ir.tools import ExprHash
+
         if isinstance(var.type, (TensorPointerType, TensorType)):
             tt_type = var.type.tensor_type if isinstance(var.type, TensorPointerType) else var.type
             assert isinstance(tt_type, TensorType)
