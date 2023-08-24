@@ -33,7 +33,7 @@ buffer_store_stmt : [protected] get_item_expr "=" expr ";"
 protected : "protected"
 
 assign_stmt : var "=" expr ";"
-return_stmt : "return" expr ";"
+return_stmt : "return" [expr] ";"
 let_stmt : "let" "(" (def_var "=" expr ";")+ ")" ["in" "(" stmt_body ")"] ";"
 for_stmt : "for" for_ind_var "in" call_expr ([attribute_name] | [task_mapping]) "{" stmt_body "}"
 for_ind_var : "(" def_var [("," def_var)*] ")"

@@ -1963,6 +1963,9 @@ with open('/home/allan/Programs/hidet-repos/hidet/python/hidet/ir/hidet.lark') a
     hidet_grammar = f.read()
 parser = Lark(hidet_grammar, start='start', parser='lalr')
 
+
+
+# %%
 transforms = [
         lambda x: x,
         unify_global_objects_pass(),
@@ -1994,10 +1997,10 @@ transforms = [
         simplify_stmt_pass(),
         annotate_header_and_libs_pass(),
     ]
-mod = get_bmatmul_task()
+mod = get_attn_task()
 
 
-for t in transforms[:22]:
+for t in transforms[:23]:
     mod = t(mod)
     print(t.__class__.__name__)
     text = astext(mod)
@@ -2014,12 +2017,20 @@ for t in transforms[:22]:
         diff_text(text, new_text)
         break
 
-print(text)
+def round_trip(ir_module):
+    text = astext(ir_module)
+    tree = parser.parse(text)
+    data = ModuleProcessData(tree)
+    ir_module = IRConstructor(data)(tree)
+    new_text = astext(ir_module)
+    return new_text
 
 # %%
-mod = transforms[22](mod)
+mod = transforms[23](mod)
 text = astext(mod)
-print(text)
+new_text = round_trip(mod)
+
+
 # %%
 hidet.option.debug_show_var_id()
 print(mod)
