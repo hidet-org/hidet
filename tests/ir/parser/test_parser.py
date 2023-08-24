@@ -116,10 +116,10 @@ def generate_ir_modules():
     ]
     for mod in [get_matmul_task(), get_bmatmul_task(), get_softmax_task(), get_attn_task()]:
         for t in transforms:
-            # if hasattr(t, '__name__'):
-            #     print(t.__name__)
-            # else:
-            #     print(t.__class__.__name__)
+            if hasattr(t, '__name__'):
+                print(t.__name__)
+            else:
+                print(t.__class__.__name__)
             mod = t(mod)
             yield mod
 

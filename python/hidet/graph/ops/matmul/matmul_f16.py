@@ -1,4 +1,3 @@
-# %%
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -367,4 +366,3 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return MatmulF16Op(a, b, parallel_k_parts).outputs[0]
-
