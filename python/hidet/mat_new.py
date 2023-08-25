@@ -25,6 +25,7 @@ def matmul_ansor(M, K, N, dtype):
     )
 
     return [A, B, rst]
+hidet.option.cache_dir("./wtf")
 
 target = tvm.target.Target("llvm -mcpu=core-avx2")
 debug_cache_tuning(True)
