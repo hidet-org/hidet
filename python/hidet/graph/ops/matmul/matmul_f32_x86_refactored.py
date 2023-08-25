@@ -141,12 +141,7 @@ class MatmulF32Taskx86_refactored(Task):
                     sense[i] = 0
                     arrived[i] = 0
 
-            # for i in range(loop3_nways):
-            #     packa_thrcomm_barrier_sense[i] = 0
-            #     packa_thrcomm_threads_arrived[i] = 0
-            # for i in range(loop5_nways):
-            #     packb_thrcomm_barrier_sense[i] = 0
-            #     packb_thrcomm_barrier_threads_arrived = [0]
+            init_thr.kind = "cpu_internal"
 
 
 
@@ -209,6 +204,7 @@ class MatmulF32Taskx86_refactored(Task):
                     # Add the remainder to the last thread's end
                     if work_id == n_way - 1:
                         end[0] += n_bf_left
+            thread_range_sub.kind = "cpu_internal"
 
             @hidet.script
             def thread_range_jrir(work_id: int32, n_way: int32, n: int32, bf: int32,
@@ -216,6 +212,8 @@ class MatmulF32Taskx86_refactored(Task):
                 start[0] = work_id
                 end[0] = n
                 inc[0] = n_way
+
+            thread_range_jrir.kind = "cpu_internal"
 
             @hidet.script
             def determine_blocksize_f_sub(i: int32, dim: int32, b_alg: int32) -> int32:
@@ -228,9 +226,12 @@ class MatmulF32Taskx86_refactored(Task):
                 assert b_now >= 0
                 return b_now
 
+            determine_blocksize_f_sub.kind = "cpu_internal"
+
             @hidet.script
             def not_edge(i: int32, n_iter: int32, n_left: int32) -> bool:
                 return i != n_iter - 1 or n_left == 0
+            not_edge.kind = 'cpu_internal'
 
             # Thread barrier
             @hidet.script
@@ -250,6 +251,8 @@ class MatmulF32Taskx86_refactored(Task):
                 else:
                     while cpu_atomic_load_n(barrier_sense, 2) == orig_sense:  # _ATOMIC_ACQUIRE
                         pass
+
+            thrcomm_barrier.kind = 'cpu_internal'
 
             @hidet.script
             def micro_kernel(
