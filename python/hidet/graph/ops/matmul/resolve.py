@@ -103,8 +103,8 @@ class MatmulResolveRule(ResolveRule):
             # bb = [e for e in b]  #[b, k, m] -> list[[k, m], [k, m] ... * b]
             cc = [matmul_x86(a[i], b[i]).unsqueeze(0) for i in range(a.shape[0])]
             c = cc[0]
-            for i in range(a.shape[0] - 1):
-                c = hidet.ops.concat([cc[i + 1], c], axis=0)
+            for i in range(1, a.shape[0]):
+                c = hidet.ops.concat([cc[i], c], axis=0)
             return c
         else:
             parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...

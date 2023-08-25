@@ -164,7 +164,7 @@ class SoftmaxTask(Task):
         return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
     def allow_epilogue(self) -> bool:
-        return True
+        return False
 
     def allow_prologue(self) -> bool:
         return False
