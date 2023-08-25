@@ -156,15 +156,6 @@ class MatmulF32Taskx86_refactored(Task):
                     sense[i] = 0
                     arrived[i] = 0
 
-            init_thr(packa_thrcomm_barrier_sense,
-                     packa_thrcomm_threads_arrived,
-                     loop3_nways)
-            init_thr(packb_thrcomm_barrier_sense,
-                     packb_thrcomm_barrier_threads_arrived,
-                     loop3_nways)
-
-
-
             # for i in range(loop3_nways):
             #     packa_thrcomm_barrier_sense[i] = 0
             #     packa_thrcomm_threads_arrived[i] = 0
@@ -1164,6 +1155,13 @@ class MatmulF32Taskx86_refactored(Task):
                 b_width_nr_remainder = n_size % NR
                 # TODO: Since we(they, BLIS) use a memory broker... Allocate a little more memory is OK I think???
                 # packed_b_individual_width = NC
+
+                init_thr(packa_thrcomm_barrier_sense,
+                         packa_thrcomm_threads_arrived,
+                         loop3_nways)
+                init_thr(packb_thrcomm_barrier_sense,
+                         packb_thrcomm_barrier_threads_arrived,
+                         loop3_nways)
 
                 parallel_attr = 'p' + str(nthreads)
                 # The outermost loop spawning threads
