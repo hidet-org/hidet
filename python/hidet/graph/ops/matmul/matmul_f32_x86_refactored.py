@@ -149,12 +149,28 @@ class MatmulF32Taskx86_refactored(Task):
                 name="pack_b_threads_arrived",
                 var_type=int32[loop5_nways]
             )
-            for i in range(loop3_nways):
-                packa_thrcomm_barrier_sense[i] = 0
-                packa_thrcomm_threads_arrived[i] = 0
-            for i in range(loop5_nways):
-                packb_thrcomm_barrier_sense[i] = 0
-                packb_thrcomm_barrier_threads_arrived = [0]
+
+            @hidet.script
+            def init_thr(sense: ~int32, arrived: ~int32, size: int32):
+                for i in range(size):
+                    sense[i] = 0
+                    arrived[i] = 0
+
+            init_thr(packa_thrcomm_barrier_sense,
+                     packa_thrcomm_threads_arrived,
+                     loop3_nways)
+            init_thr(packb_thrcomm_barrier_sense,
+                     packb_thrcomm_barrier_threads_arrived,
+                     loop3_nways)
+
+
+
+            # for i in range(loop3_nways):
+            #     packa_thrcomm_barrier_sense[i] = 0
+            #     packa_thrcomm_threads_arrived[i] = 0
+            # for i in range(loop5_nways):
+            #     packb_thrcomm_barrier_sense[i] = 0
+            #     packb_thrcomm_barrier_threads_arrived = [0]
 
 
 
