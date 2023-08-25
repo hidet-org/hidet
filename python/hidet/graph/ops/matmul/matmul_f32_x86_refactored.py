@@ -890,7 +890,7 @@ class MatmulF32Taskx86_refactored(Task):
                     loop3_partition_a_start_row = ii
                     loop3_partition_a_height = b_alg_loop3
 
-                    loop3_partition_a = a + (
+                    loop3_partition_a = cast(a, ~float32) + (
                         loop3_partition_a_start_row * k_size +
                         loop3_partition_a_start_col
                     )
@@ -975,7 +975,8 @@ class MatmulF32Taskx86_refactored(Task):
                         packed_b_individual_size * work_id_5th_loop
                     )
 
-                    loop4_partition_b = b + \
+
+                    loop4_partition_b = cast(b, ~float32) + \
                         (loop4_partition_b_start_row * n_size +
                          loop4_partition_b_start_col)
 
