@@ -119,6 +119,45 @@ class MatmulF32Taskx86_refactored(Task):
 
 
         with hidet.script_module() as module:
+            # Get the number of threads...
+            loop5_nways, loop3_nways, macro_nways, loop1_nways = ways
+            loop4_nways = 1
+            nthreads = loop5_nways * loop3_nways * macro_nways * loop1_nways
+
+            # Use the define_global_var functionality.
+            # packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways],
+            #                                      scope=DeclareScope.Default,
+            #                                      is_static=True)
+            # packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways],
+            #                                        scope=DeclareScope.Default,
+            #                                        is_static=True)
+
+            packa_thrcomm_barrier_sense = module.define_global_var(
+                name="pack_a_barrier_sense",
+                var_type=int32[loop3_nways]
+            )
+            packa_thrcomm_threads_arrived = module.define_global_var(
+                name="pack_a_threads_arrived",
+                var_type=int32[loop3_nways]
+            )
+
+            packb_thrcomm_barrier_sense = module.define_global_var(
+                name='pack_b_barrier_sense',
+                var_type=int32[loop5_nways]
+            )
+            packb_thrcomm_barrier_threads_arrived = module.define_global_var(
+                name="pack_b_threads_arrived",
+                var_type=int32[loop5_nways]
+            )
+            for i in range(loop3_nways):
+                packa_thrcomm_barrier_sense[i] = 0
+                packa_thrcomm_threads_arrived[i] = 0
+            for i in range(loop5_nways):
+                packb_thrcomm_barrier_sense[i] = 0
+                packb_thrcomm_barrier_threads_arrived = [0]
+
+
+
             # Helpers
             packed_a_type = tensor_type('float32', layout=row_major(MC // MR,
                                                                     1) * column_major(
@@ -127,10 +166,6 @@ class MatmulF32Taskx86_refactored(Task):
                                                                     NC // NR) * row_major(
                 KC, NR))
 
-            # Get the number of threads...
-            loop5_nways, loop3_nways, macro_nways, loop1_nways = ways
-            loop4_nways = 1
-            nthreads = loop5_nways * loop3_nways * macro_nways * loop1_nways
 
             # Get the number of threads remaining at each level
             loop5_nthreads = nthreads
@@ -149,16 +184,16 @@ class MatmulF32Taskx86_refactored(Task):
             loop5_thrcomm_barrier_sense = 0
             loop5_thrcomm_barrier_threads_arrived = 0
 
-            packb_thrcomm_barrier_sense = tensor(dtype='int32',
-                                                 shape=[loop4_nways],
-                                                 scope=DeclareScope.Default,
-                                                 is_static=True)
-            # for idx in range(loop4_nways):
-            #     packb_thrcomm_barrier_sense[idx] = 0      TODO: This shouldn't be necessary, as static arrays are 0-initialized
-            packb_thrcomm_barrier_threads_arrived = tensor(dtype='int32',
-                                                           shape=[loop4_nways],
-                                                           scope=DeclareScope.Default,
-                                                           is_static=True)
+            # packb_thrcomm_barrier_sense = tensor(dtype='int32',
+            #                                      shape=[loop4_nways],
+            #                                      scope=DeclareScope.Default,
+            #                                      is_static=True)
+            # # for idx in range(loop4_nways):
+            # #     packb_thrcomm_barrier_sense[idx] = 0      TODO: This shouldn't be necessary, as static arrays are 0-initialized
+            # packb_thrcomm_barrier_threads_arrived = tensor(dtype='int32',
+            #                                                shape=[loop4_nways],
+            #                                                scope=DeclareScope.Default,
+            #                                                is_static=True)
 
             packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways],
                                                  scope=DeclareScope.Default,
