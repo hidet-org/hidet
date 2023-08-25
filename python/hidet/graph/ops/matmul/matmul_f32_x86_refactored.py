@@ -841,7 +841,7 @@ class MatmulF32Taskx86_refactored(Task):
                         else:
                             for i, j in grid(MR, NR):
                                 temp_c[i, j] = 0.0
-                            micro_kernel(a1, b1, temp_c, macro_k, macro_m, macro_n, is_first)
+                            micro_kernel(a1, b1, cast(temp_c, ~float32), macro_k, macro_m, macro_n, is_first)
                             if not is_first:
                                 for mm, nn in grid(m_cur, n_cur):
                                     c11[mm, nn] += temp_c[mm, nn]
