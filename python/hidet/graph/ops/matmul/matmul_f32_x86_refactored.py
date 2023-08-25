@@ -83,13 +83,7 @@ class MatmulF32Taskx86_refactored(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    # @tune.space(
-    #     2,
-    #     block_m=[2016, 3024],
-    #     block_n=[64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024],
-    #     block_k=[96, 128, 256, 384, 512, 560, 688, 784],
-    #     nthreads=[4, 8, 16, 32],
-    # )
+
     @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], nthreads=[8, 16])
     def schedule_matmulf32_x86(
             self, MC=2016, NC=896, KC=512, ways=(1, 8, 4, 1)
@@ -99,9 +93,7 @@ class MatmulF32Taskx86_refactored(Task):
         from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_major, column_major
         from hidet.lang.cpu import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
-        from hidet.lang.cpu import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
         from hidet.lang.cpu import avx_f32x8_store_aligned, avx_f32x8_load_aligned
-        from hidet.lang.cpu import avx_f32x4_store_aligned, avx_f32x4_load_aligned
         from hidet.lang.cpu import avx_f32x8_unpacklo, avx_f32x8_unpackhi
         from hidet.lang.cpu import avx_f32x8_shuffle, avx_f32x8_cast_f32x4
         from hidet.lang.cpu import avx_f32x8_insert_f32x4, avx_f32x8_permute2f32x4
@@ -124,13 +116,6 @@ class MatmulF32Taskx86_refactored(Task):
             loop4_nways = 1
             nthreads = loop5_nways * loop3_nways * macro_nways * loop1_nways
 
-            # Use the define_global_var functionality.
-            # packa_thrcomm_barrier_sense = tensor('int32', shape=[loop3_nways],
-            #                                      scope=DeclareScope.Default,
-            #                                      is_static=True)
-            # packa_thrcomm_threads_arrived = tensor('int32', shape=[loop3_nways],
-            #                                        scope=DeclareScope.Default,
-            #                                        is_static=True)
 
             packa_thrcomm_barrier_sense = module.define_global_var(
                 name="pack_a_barrier_sense",
@@ -184,17 +169,6 @@ class MatmulF32Taskx86_refactored(Task):
             packb_nthreads = loop3_nthreads
             packa_nthreads = macro_nthreads
 
-            # TODO: Since Hidet doesn't support the parallel region syntax as in OpenMP,
-            # TODO: We instead use a loop to simulate the parallel region, with the "thread id" being the loop index.
-            outermost_iters = nthreads
-
-            loop5_thrcomm_barrier_sense = 0
-            loop5_thrcomm_barrier_threads_arrived = 0
-
-            # The array to store the needed size for each packed B buffer, indexed by the work ID of Loop5
-            packb_sizes = tensor('int32', shape=[loop5_nways,])
-            # The array to store the needed size for each packed A buffer, indexed by the work ID of Loop3
-            packa_sizes = tensor('int32', shape=[loop3_nways,])
 
             @hidet.script
             def thread_range_sub(n_way: int32, work_id: int32, n: int32, bf: int32, start: ~int32, end: ~int32):
@@ -487,57 +461,10 @@ class MatmulF32Taskx86_refactored(Task):
 
             #### Some setup code ####
             packed_b_total_width = 0
-            for workid_loop5 in range(loop5_nways):
-                loop5_start = 0
-                loop5_end = 0
-                # thread_range_sub(loop5_nways, workid_loop5, n_size, NR, ~loop5_start, ~loop5_end)
-                # TODO: For now, substitute the above func call with code
-                if loop5_nways == 1:
-                    loop5_start = 0
-                    loop5_end = n_size
-                else:
-                    all_start = 0
-                    all_end = n_size
-                    size = all_end - all_start
-                    n_bf_whole = n_size // NR
-                    n_bf_left = n_size % NR
-                    n_bf_lo = n_bf_whole // loop5_nways
-                    n_bf_hi = n_bf_whole // loop5_nways
-
-                    n_th_lo = n_bf_whole % loop5_nways
-                    if n_th_lo != 0:
-                        n_bf_lo += 1
-                    size_lo = n_bf_lo * NR
-                    size_hi = n_bf_hi * NR
-
-                    lo_start = all_start
-                    hi_start = all_start + n_th_lo * size_lo
-
-                    if workid_loop5 < n_th_lo:
-                        loop5_start = lo_start + workid_loop5 * size_lo
-                        loop5_end = lo_start + (workid_loop5 + 1) * size_lo
-                    else:
-                        loop5_start = hi_start + (workid_loop5 - n_th_lo) * size_hi
-                        loop5_end = hi_start + (workid_loop5 - n_th_lo + 1) * size_hi
-
-                        if workid_loop5 == loop5_nways - 1:
-                            loop5_end += n_bf_left
-
-
-                # curr_width = loop5_end - loop5_start
-                # # packed_b_total_width += curr_width
-                # # packb_start_offsets[workid_loop5] = temp_prev
-                # # temp_prev += curr_width
-                # packb_start_offsets[workid_loop5] = packed_b_total_width
-                # packed_b_total_width += curr_width
-
-                # packed_b_individual_width = min(NC, n_size)
 
             packed_b_height = KC
             if packed_b_height > k_size:
                 packed_b_height = k_size
-                # packed_b_height = (k_size + NR - 1) // NR * NR
-            # packed_b_total_size = packed_b_total_width * packed_b_height
             packed_b_width = NC
             if packed_b_width > n_size:
                 packed_b_widht = (n_size + NR - 1) // NR * NR
@@ -872,6 +799,7 @@ class MatmulF32Taskx86_refactored(Task):
 
                 thread_range_jrir(
                     work_id_1st_loop,
+                    loop1_nways,
                     m_iter,
                     1,
                     ~ir_start,
