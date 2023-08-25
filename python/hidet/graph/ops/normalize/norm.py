@@ -356,7 +356,7 @@ class NormalizeTask(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return True
+        return False
 
     @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=['', 8, 16])
