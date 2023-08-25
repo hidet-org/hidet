@@ -71,7 +71,7 @@ class MatmulF32Taskx86(Task):
         )
 
     def allow_epilogue(self) -> bool:
-        return True
+        return False
 
     def allow_prologue(self) -> bool:
         return False
