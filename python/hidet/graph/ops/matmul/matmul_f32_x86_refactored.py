@@ -751,6 +751,10 @@ class MatmulF32Taskx86_refactored(Task):
                                     packed_b_remaining_buf_curr += 1
                                     zero_fill_col += 1
 
+            gemm_pack_b.kind = "cpu_internal"
+            gemm_pack_a.kind = "cpu_internal"
+            micro_kernel.kind = "cpu_internal"
+
             @hidet.script
             def gemm_macro(
                     packed_a: ~float32,
@@ -852,6 +856,8 @@ class MatmulF32Taskx86_refactored(Task):
                         i += ir_inc
                     j += jr_inc
 
+            gemm_macro.kind = "cpu_internal"
+
 
             @hidet.script
             def gemm_3rd_loop(
@@ -940,6 +946,8 @@ class MatmulF32Taskx86_refactored(Task):
                                is_first
                                )
 
+            gemm_3rd_loop.kind = "cpu_internal"
+
             @hidet.script
             def gemm_4th_loop(a: float32[m_size, k_size],
                               b: float32[k_size, n_size],
@@ -1019,6 +1027,7 @@ class MatmulF32Taskx86_refactored(Task):
 
 
                     i_loop4 += b_alg_loop4
+            gemm_4th_loop.kind = "cpu_internal"
 
 
             @hidet.script
@@ -1049,6 +1058,7 @@ class MatmulF32Taskx86_refactored(Task):
                                   work_id_4th_loop,
                                   work_id_5th_loop)
                     loop5_iter += b_alg_loop5
+            gemm_5th_loop.kind = 'cpu_internal'
 
 
             ################### Start of the main kernel ###################
