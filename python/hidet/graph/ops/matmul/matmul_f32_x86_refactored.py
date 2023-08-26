@@ -672,7 +672,7 @@ class MatmulF32Taskx86_refactored(Task):
                             packed_b_buff_curr += 16
 
                             b10 = avx_f32x8_load(b_panel + n_size)
-                            b18 = avx_f32x8_load(b_panel + (n_size * 8))
+                            b18 = avx_f32x8_load(b_panel + (n_size + 8))
 
                             avx_f32x8_store_aligned(packed_b_buff_curr, b10)
                             avx_f32x8_store_aligned(packed_b_buff_curr + 8, b18)
