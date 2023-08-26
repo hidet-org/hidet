@@ -1078,7 +1078,7 @@ class MatmulF32Taskx86_refactored(Task):
                          loop3_nways)
                 init_thr(packb_thrcomm_barrier_sense,
                          packb_thrcomm_barrier_threads_arrived,
-                         loop3_nways)
+                         loop5_nways)
 
                 parallel_attr = 'p' + str(nthreads)
                 # The outermost loop spawning threads
