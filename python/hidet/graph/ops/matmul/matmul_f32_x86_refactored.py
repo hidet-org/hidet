@@ -14,7 +14,7 @@ from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
-from hidet.ir.primitives import avx_malloc
+from hidet.ir.primitives import avx_malloc, printf
 from hidet.ir.primitives.cpu import avx_f32x8_setzero, avx_f32x8_load_aligned
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
@@ -259,6 +259,7 @@ class MatmulF32Taskx86_refactored(Task):
                     a: packed_a_type, b: packed_b_type, c_ptr: ~float32, pb: int32, msize: int32, nsize: int32,
                     is_first: bool
             ):
+                printf("The start of the micro_kernel.....")
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
                 c0 = avx_f32x8_load(~c[0, 0])
                 c08 = avx_f32x8_load(~c[0, 8])
@@ -459,6 +460,7 @@ class MatmulF32Taskx86_refactored(Task):
 
                 avx_f32x8_store(c_ptr + 5 * nsize, c5)
                 avx_f32x8_store(c_ptr + (5 * nsize + 8), c58)
+            printf("The end of micro kernel....")
 
 
 
@@ -491,8 +493,10 @@ class MatmulF32Taskx86_refactored(Task):
             packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
             packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
 
-            packb_buf = as_tensor_pointer(packb_buf_ptr, dtype=float32, shape=[packed_b_total_size])
-            packa_buf = as_tensor_pointer(packa_buf_ptr, dtype=float32, shape=[packed_a_total_size])
+            # packb_buf = as_tensor_pointer(packb_buf_ptr, dtype=float32, shape=[packed_b_total_size])
+            # packa_buf = as_tensor_pointer(packa_buf_ptr, dtype=float32, shape=[packed_a_total_size])
+            packb_buf = cast(packb_buf_ptr, ~float32)
+            packa_buf = cast(packa_buf_ptr, ~float32)
 
             packed_a_type = tensor_type(
                 dtype='float32',
