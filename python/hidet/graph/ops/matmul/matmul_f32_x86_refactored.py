@@ -886,7 +886,7 @@ class MatmulF32Taskx86_refactored(Task):
                     work_id_3rd_loop: int32,
                     is_first: bool):
 
-                printf("The start of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
+                # printf("The start of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
 
                 comm_id_macro = work_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
@@ -962,7 +962,7 @@ class MatmulF32Taskx86_refactored(Task):
                                work_id_macro,
                                is_first
                                )
-                printf("The end of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
+                # printf("The end of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
 
             gemm_3rd_loop.kind = "cpu_internal"
 
