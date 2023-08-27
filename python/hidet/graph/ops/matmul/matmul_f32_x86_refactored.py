@@ -236,8 +236,8 @@ class MatmulF32Taskx86_refactored(Task):
             # Thread barrier
             @hidet.script
             def thrcomm_barrier(tid: int32, barrier_sense: ~int32,
-                                barrier_threads_arrived: ~int32, nthreads: int32):
-                if nthreads == 1:
+                                barrier_threads_arrived: ~int32, num_threads: int32):
+                if num_threads == 1:
                     return
                 orig_sense = cpu_atomic_load_n(barrier_sense, 0)  # _ATOMIC_RELAXED
 
@@ -245,7 +245,7 @@ class MatmulF32Taskx86_refactored(Task):
                 my_threads_arrived = cpu_atomic_add_fetch(
                     barrier_threads_arrived, 1, 4)  # _ATOMIC_ACQ_REL
 
-                if my_threads_arrived == nthreads:
+                if my_threads_arrived == num_threads:
                     barrier_threads_arrived[0] = 0
                     cpu_atomic_fetch_xor(barrier_sense, 1, 3)  # _ATOMIC_RELEASE
                 else:
@@ -290,13 +290,11 @@ class MatmulF32Taskx86_refactored(Task):
                 a_ptr = cast(a, ~float32)
                 b_ptr = cast(b, ~float32)
 
-                niters = msize // 4
-                nleft = msize % 4
-                # Outer iterations with step 4
-                for _ in range(niters):
-                    # First of the 4 unrolled iterations
+                # TODO: For now, let's forget about unrolling for now.
+                for _ in range(pb):
                     bb0to7 = avx_f32x8_load_aligned(b_ptr)
                     bb8to15 = avx_f32x8_load_aligned(b_ptr + 8)
+                    b_ptr = b_ptr + 16
 
                     aa = avx_f32x8_broadcast(a_ptr)
                     c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
@@ -322,125 +320,7 @@ class MatmulF32Taskx86_refactored(Task):
                     c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
                     c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
 
-                    # Second of the 4 unrolled iterations
-                    bb0to7 = avx_f32x8_load_aligned(b_ptr + 16)
-                    bb8to15 = avx_f32x8_load_aligned(b_ptr + 24)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 6)
-                    c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
-                    c08 = avx_f32x8_fmadd(aa, bb8to15, c08)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 7)
-                    c1 = avx_f32x8_fmadd(aa, bb0to7, c1)
-                    c18 = avx_f32x8_fmadd(aa, bb8to15, c18)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 8)
-                    c2 = avx_f32x8_fmadd(aa, bb0to7, c2)
-                    c28 = avx_f32x8_fmadd(aa, bb8to15, c28)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 9)
-                    c3 = avx_f32x8_fmadd(aa, bb0to7, c3)
-                    c38 = avx_f32x8_fmadd(aa, bb8to15, c38)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 10)
-                    c4 = avx_f32x8_fmadd(aa, bb0to7, c4)
-                    c48 = avx_f32x8_fmadd(aa, bb8to15, c48)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 11)
-                    c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
-                    c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
-
-                    # Third of the 4 unrolled iterations
-                    bb0to7 = avx_f32x8_load_aligned(b_ptr + 32)
-                    bb8to15 = avx_f32x8_load_aligned(b_ptr + 40)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 12)
-                    c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
-                    c08 = avx_f32x8_fmadd(aa, bb8to15, c08)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 13)
-                    c1 = avx_f32x8_fmadd(aa, bb0to7, c1)
-                    c18 = avx_f32x8_fmadd(aa, bb8to15, c18)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 14)
-                    c2 = avx_f32x8_fmadd(aa, bb0to7, c2)
-                    c28 = avx_f32x8_fmadd(aa, bb8to15, c28)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 15)
-                    c3 = avx_f32x8_fmadd(aa, bb0to7, c3)
-                    c38 = avx_f32x8_fmadd(aa, bb8to15, c38)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 16)
-                    c4 = avx_f32x8_fmadd(aa, bb0to7, c4)
-                    c48 = avx_f32x8_fmadd(aa, bb8to15, c48)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 17)
-                    c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
-                    c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
-
-                    # Fourth of the 4 unrolled iterations
-                    bb0to7 = avx_f32x8_load_aligned(b_ptr + 48)
-                    bb8to15 = avx_f32x8_load_aligned(b_ptr + 56)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 18)
-                    c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
-                    c08 = avx_f32x8_fmadd(aa, bb8to15, c08)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 19)
-                    c1 = avx_f32x8_fmadd(aa, bb0to7, c1)
-                    c18 = avx_f32x8_fmadd(aa, bb8to15, c18)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 20)
-                    c2 = avx_f32x8_fmadd(aa, bb0to7, c2)
-                    c28 = avx_f32x8_fmadd(aa, bb8to15, c28)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 21)
-                    c3 = avx_f32x8_fmadd(aa, bb0to7, c3)
-                    c38 = avx_f32x8_fmadd(aa, bb8to15, c38)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 22)
-                    c4 = avx_f32x8_fmadd(aa, bb0to7, c4)
-                    c48 = avx_f32x8_fmadd(aa, bb8to15, c48)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 23)
-                    c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
-                    c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
-
-                    # Increment the a_ptr and b_ptr for the next iteration of the outermost loop
-                    a_ptr += 24
-                    b_ptr += 64
-
-                # process the edge
-                for _ in range(nleft):
-                    aa = avx_f32x8_broadcast(a_ptr)
-                    bb0to7 = avx_f32x8_load_aligned(b_ptr)
-                    bb8to15 = avx_f32x8_load_aligned(b_ptr + 8)
-
-                    c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
-                    c08 = avx_f32x8_fmadd(aa, bb8to15, c08)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 1)
-                    c1 = avx_f32x8_fmadd(aa, bb0to7, c1)
-                    c18 = avx_f32x8_fmadd(aa, bb8to15, c18)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 2)
-                    c2 = avx_f32x8_fmadd(aa, bb0to7, c2)
-                    c28 = avx_f32x8_fmadd(aa, bb8to15, c28)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 3)
-                    c3 = avx_f32x8_fmadd(aa, bb0to7, c3)
-                    c38 = avx_f32x8_fmadd(aa, bb8to15, c38)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 4)
-                    c4 = avx_f32x8_fmadd(aa, bb0to7, c4)
-                    c48 = avx_f32x8_fmadd(aa, bb8to15, c48)
-
-                    aa = avx_f32x8_broadcast(a_ptr + 5)
-                    c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
-                    c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
-
-                    a_ptr += 6
-                    b_ptr += 16
+                    a_ptr = a_ptr + 6
 
                 # Store the results
                 avx_f32x8_store(c_ptr, c0)
@@ -462,8 +342,6 @@ class MatmulF32Taskx86_refactored(Task):
                 avx_f32x8_store(c_ptr + (5 * nsize + 8), c58)
                 # printf("The end of micro kernel....")
 
-
-
             #### Some setup code ####
             packed_b_total_width = 0
 
@@ -472,18 +350,15 @@ class MatmulF32Taskx86_refactored(Task):
                 packed_b_height = k_size
             packed_b_width = NC
             if packed_b_width > n_size:
-                packed_b_widht = (n_size + NR - 1) // NR * NR
+                packed_b_width = (n_size + NR - 1) // NR * NR
 
             packed_b_total_width = packed_b_width * loop5_nways
             packed_b_total_size = packed_b_total_width * packed_b_height
             packed_b_individual_size = packed_b_width * packed_b_height
 
-            a_height_mr_partitions = (m_size + MR - 1) // MR
-            a_height_mr_remainder = m_size % MR
             packed_a_individual_height = MC
             packed_a_total_height = packed_a_individual_height * loop3_nways
-            # if packed_a_total_height > m_size:
-            #     packed_a_total_height = a_height_mr_partitions * MR
+
             packed_a_width = KC
             if packed_a_width > k_size:
                 packed_a_width = (k_size + MR - 1) // MR * MR
@@ -493,8 +368,6 @@ class MatmulF32Taskx86_refactored(Task):
             packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
             packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
 
-            # packb_buf = as_tensor_pointer(packb_buf_ptr, dtype=float32, shape=[packed_b_total_size])
-            # packa_buf = as_tensor_pointer(packa_buf_ptr, dtype=float32, shape=[packed_a_total_size])
             packb_buf = cast(packb_buf_ptr, ~float32)
             packa_buf = cast(packa_buf_ptr, ~float32)
 
@@ -505,15 +378,6 @@ class MatmulF32Taskx86_refactored(Task):
 
 
             ##### Start of the loops around micro kernel #####
-            # gemm_macro(packed_a_buf,
-            #            packed_b,
-            #            c,
-            #            loop3_partition_a_height,
-            #            loop3_partition_b_width,
-            #            loop3_partition_a_width,
-            #            comm_id_macro,
-            #            work_id_macro
-            #            )
 
             @hidet.script
             def gemm_pack_a(
@@ -636,7 +500,7 @@ class MatmulF32Taskx86_refactored(Task):
                             remain_row = panel_a_remainder
                             while remain_row < MR:
                                 packed_a_tensor[
-                                    remain_start_row + remain_row, remain_col] = 0
+                                    remain_start_row + remain_row, remain_col] = 0.0
                                 remain_row += 1
                 printf("The end of the pack a, comm id: %d, work id: %d\n",
                        comm_id_packa, work_id_packa)
@@ -731,7 +595,7 @@ class MatmulF32Taskx86_refactored(Task):
 
                             packed_b_buff_curr += 16
 
-                        row = k_iters + 8
+                        row = k_iters * 8
                         for _ in range(k_remainder):
                             b_panel = loop4_partition_b + (
                                         row * n_size + curr_panel_start)
