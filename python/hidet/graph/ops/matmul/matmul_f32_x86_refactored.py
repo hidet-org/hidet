@@ -1051,7 +1051,7 @@ class MatmulF32Taskx86_refactored(Task):
                               c: float32[m_size, n_size],
                               work_id_5th_loop: int32,
                               comm_id_5th_loop: int32):
-                comm_id_4th_loop = comm_id_5th_loop % loop4_nways
+                comm_id_4th_loop = comm_id_5th_loop % loop4_nthreads
                 work_id_4th_loop = comm_id_4th_loop // (loop4_nthreads // loop4_nways)
                 # printf("Start of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d, comm_id_4th_loop: %d, work_id_4th_loop: %d\n",
                 #        work_id_5th_loop, comm_id_5th_loop,
