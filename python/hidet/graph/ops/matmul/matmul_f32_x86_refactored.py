@@ -648,6 +648,7 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_packb: int32, work_id_packb: int32,
                     packb_nways: int32
             ):
+                printf("The start of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
 
@@ -760,6 +761,8 @@ class MatmulF32Taskx86_refactored(Task):
                                     packed_b_remaining_buf_curr[0] = 0.0
                                     packed_b_remaining_buf_curr += 1
                                     zero_fill_col += 1
+                printf("The end of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
+
 
             gemm_pack_b.kind = "cpu_internal"
             gemm_pack_a.kind = "cpu_internal"
@@ -975,7 +978,7 @@ class MatmulF32Taskx86_refactored(Task):
                 comm_id_packb = comm_id_3rd_loop
                 work_id_packb = comm_id_3rd_loop
                 # packb_nways = loop3_nthreads
-                printf("The start of the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
+                # printf("The start of the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
 
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
@@ -1038,7 +1041,7 @@ class MatmulF32Taskx86_refactored(Task):
 
 
                     i_loop4 += b_alg_loop4
-                printf("The end of the 4th loop. work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
+                # printf("The end of the 4th loop. work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
             gemm_4th_loop.kind = "cpu_internal"
 
 
@@ -1050,9 +1053,9 @@ class MatmulF32Taskx86_refactored(Task):
                               comm_id_5th_loop: int32):
                 comm_id_4th_loop = comm_id_5th_loop % loop4_nways
                 work_id_4th_loop = comm_id_4th_loop // (loop4_nthreads // loop4_nways)
-                printf("Start of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d, comm_id_4th_loop: %d, work_id_4th_loop: %d\n",
-                       work_id_5th_loop, comm_id_5th_loop,
-                       comm_id_4th_loop, work_id_4th_loop)
+                # printf("Start of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d, comm_id_4th_loop: %d, work_id_4th_loop: %d\n",
+                #        work_id_5th_loop, comm_id_5th_loop,
+                #        comm_id_4th_loop, work_id_4th_loop)
 
                 loop5_my_start = -1
                 loop5_my_end = -1
