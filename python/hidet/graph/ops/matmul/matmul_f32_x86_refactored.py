@@ -975,6 +975,7 @@ class MatmulF32Taskx86_refactored(Task):
                 comm_id_packb = comm_id_3rd_loop
                 work_id_packb = comm_id_3rd_loop
                 # packb_nways = loop3_nthreads
+                printf("The start of the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n")
 
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
@@ -1037,6 +1038,7 @@ class MatmulF32Taskx86_refactored(Task):
 
 
                     i_loop4 += b_alg_loop4
+                printf("The end of the 4th loop. work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
             gemm_4th_loop.kind = "cpu_internal"
 
 
@@ -1048,7 +1050,7 @@ class MatmulF32Taskx86_refactored(Task):
                               comm_id_5th_loop: int32):
                 comm_id_4th_loop = comm_id_5th_loop % loop4_nways
                 work_id_4th_loop = comm_id_4th_loop // (loop4_nthreads // loop4_nways)
-                printf("Start of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", work_id_5th_loop, comm_id_5th_loop)
+                # printf("Start of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", work_id_5th_loop, comm_id_5th_loop)
 
                 loop5_my_start = -1
                 loop5_my_end = -1
@@ -1069,7 +1071,7 @@ class MatmulF32Taskx86_refactored(Task):
                                   work_id_4th_loop,
                                   work_id_5th_loop)
                     loop5_iter += b_alg_loop5
-                printf("End of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", work_id_5th_loop, comm_id_5th_loop)
+                # printf("End of 5th loop, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", work_id_5th_loop, comm_id_5th_loop)
             gemm_5th_loop.kind = 'cpu_internal'
 
 
