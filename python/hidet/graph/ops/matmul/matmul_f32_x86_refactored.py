@@ -587,30 +587,31 @@ class MatmulF32Taskx86_refactored(Task):
                             res4 = avx_f32x8_insert_f32x4(shf3, low_shf4, 0x1)
                             res5 = avx_f32x8_permute2f32x4(shf3, shf4, 0x31)
 
-                            avx_f32x8_store_aligned(
+                            # TODO: Now I changed to unaligned to debug...
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start, col],
                                 res0
                             )
-                            avx_f32x8_store_aligned(
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start + 2,
                                                  col + 1],
                                 res2
                             )
-                            avx_f32x8_store_aligned(
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start + 4,
                                                  col + 2],
                                 res4)
-                            avx_f32x8_store_aligned(
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start,
                                 col + 4],
                                 res1
                             )
-                            avx_f32x8_store_aligned(
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start + 2,
                                                  col + 5],
                                 res3
                             )
-                            avx_f32x8_store_aligned(
+                            avx_f32x8_store(
                                 ~packed_a_tensor[a_curr_panel_row_start + 4,
                                                  col + 6],
                                 res5
