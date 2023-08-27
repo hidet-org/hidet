@@ -963,6 +963,7 @@ class MatmulF32Taskx86_refactored(Task):
                                work_id_macro,
                                is_first
                                )
+                    ii += b_alg_loop3
                 # printf("The end of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
 
             gemm_3rd_loop.kind = "cpu_internal"
