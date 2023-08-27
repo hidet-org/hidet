@@ -525,7 +525,7 @@ class MatmulF32Taskx86_refactored(Task):
                     work_id_packa: int32,
                     packa_nways: int32
             ):
-                printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
+                # printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
                 packed_a_tensor = as_tensor_pointer(
                     packed_a_buf,
                     float32,
@@ -636,8 +636,8 @@ class MatmulF32Taskx86_refactored(Task):
                                 packed_a_tensor[
                                     remain_start_row + remain_row, remain_col] = 0
                                 remain_row += 1
-                printf("The end of the pack a, comm id: %d, work id: %d\n",
-                       comm_id_packa, work_id_packa)
+                # printf("The end of the pack a, comm id: %d, work id: %d\n",
+                #        comm_id_packa, work_id_packa)
 
             @hidet.script
             def gemm_pack_b(
@@ -1093,6 +1093,9 @@ class MatmulF32Taskx86_refactored(Task):
                     tid_5th_loop = tidx
                     work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
                     comm_id_5th_loop = tid_5th_loop
+
+                    printf("tidx: %d, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", tidx, work_id_5th_loop, comm_id_5th_loop)
+
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
