@@ -648,7 +648,7 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_packb: int32, work_id_packb: int32,
                     packb_nways: int32
             ):
-                printf("The start of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
+                # printf("The start of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
 
@@ -761,7 +761,7 @@ class MatmulF32Taskx86_refactored(Task):
                                     packed_b_remaining_buf_curr[0] = 0.0
                                     packed_b_remaining_buf_curr += 1
                                     zero_fill_col += 1
-                printf("The end of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
+                # printf("The end of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
 
 
             gemm_pack_b.kind = "cpu_internal"
@@ -884,6 +884,9 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_3rd_loop: int32,
                     work_id_3rd_loop: int32,
                     is_first: bool):
+
+                printf("The start of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
+
                 comm_id_macro = work_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
                 comm_id_packa = comm_id_macro
@@ -958,6 +961,7 @@ class MatmulF32Taskx86_refactored(Task):
                                work_id_macro,
                                is_first
                                )
+                printf("The end of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
 
             gemm_3rd_loop.kind = "cpu_internal"
 
@@ -1102,8 +1106,6 @@ class MatmulF32Taskx86_refactored(Task):
                     tid_5th_loop = tidx
                     work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
                     comm_id_5th_loop = tid_5th_loop
-
-                    # printf("tidx: %d, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", tidx, work_id_5th_loop, comm_id_5th_loop)
 
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
 
