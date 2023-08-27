@@ -525,13 +525,14 @@ class MatmulF32Taskx86_refactored(Task):
                     work_id_packa: int32,
                     packa_nways: int32
             ):
-                # printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
+                printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
                 packed_a_tensor = as_tensor_pointer(
                     packed_a_buf,
                     float32,
                     layout=row_major(packed_a_individual_height // MR, 1) *
                            column_major(MR, packed_a_width)
                 )
+
 
                 npanels_full_a = loop3_partition_a_height // MR
                 panel_a_remainder = loop3_partition_a_height % MR
@@ -636,8 +637,8 @@ class MatmulF32Taskx86_refactored(Task):
                                 packed_a_tensor[
                                     remain_start_row + remain_row, remain_col] = 0
                                 remain_row += 1
-                # printf("The end of the pack a, comm id: %d, work id: %d\n",
-                #        comm_id_packa, work_id_packa)
+                printf("The end of the pack a, comm id: %d, work id: %d\n",
+                       comm_id_packa, work_id_packa)
 
             @hidet.script
             def gemm_pack_b(
