@@ -888,7 +888,7 @@ class MatmulF32Taskx86_refactored(Task):
 
                 # printf("The start of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
 
-                comm_id_macro = work_id_3rd_loop % macro_nthreads
+                comm_id_macro = comm_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
                 comm_id_packa = comm_id_macro
                 work_id_packa = comm_id_macro
