@@ -1068,10 +1068,14 @@ class MatmulF32Taskx86_refactored(Task):
                 loop5_my_end = -1
                 thread_range_sub(loop5_nways, work_id_5th_loop, n_size,
                                  NR, ~loop5_my_start, ~loop5_my_end)
+
+                printf("loop5_my_start: %d, loop5_my_end: %d\n", loop5_my_start, loop5_my_end)
+
                 loop5_iter = loop5_my_start
                 while loop5_iter < loop5_my_end:
                     b_alg_loop5 = determine_blocksize_f_sub(loop5_iter,
                                                             loop5_my_end, NC)
+                    printf("b_alg_loop5: %d\n", b_alg_loop5)
                     loop5_partition_c_width = b_alg_loop5
                     loop5_partition_c_start_col = loop5_iter
                     loop5_partition_b_width = b_alg_loop5,
@@ -1091,10 +1095,6 @@ class MatmulF32Taskx86_refactored(Task):
             @hidet.script
             def matmul_kernel_x86_v3(a: float32[m_size, k_size], b: float32[k_size, n_size],
                                      c: float32[m_size, n_size]):
-                b_width_nr_partitions = (n_size + NR - 1) // NR
-                b_width_nr_remainder = n_size % NR
-                # TODO: Since we(they, BLIS) use a memory broker... Allocate a little more memory is OK I think???
-                # packed_b_individual_width = NC
 
                 init_thr(packa_thrcomm_barrier_sense,
                          packa_thrcomm_threads_arrived,
