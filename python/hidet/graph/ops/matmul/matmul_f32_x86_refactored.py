@@ -782,11 +782,14 @@ class MatmulF32Taskx86_refactored(Task):
                     ~m_start_loop3,
                     ~m_end_loop3
                 )
+                printf("In loop 3: m_start_loop3: %d, m_end_loop3: %d\n", m_start_loop3, m_end_loop3)
                 ii = m_start_loop3
                 while ii < m_end_loop3:
                     b_alg_loop3 = determine_blocksize_f_sub(
                         ii, m_size, MC
                     )
+                    printf("The ii in loop3: %d\n", ii)
+                    printf("b_alg_loop3: %d\n", b_alg_loop3)
                     # Acquire the partition at loop 3
                     loop3_partition_a_start_row = ii
                     loop3_partition_a_height = b_alg_loop3
@@ -892,6 +895,7 @@ class MatmulF32Taskx86_refactored(Task):
                     loop4_partition_b = cast(b, ~float32) + \
                         (loop4_partition_b_start_row * n_size +
                          loop4_partition_b_start_col)
+
 
                     # TODO: If passed, see if this barrier is really needed
                     thrcomm_barrier(

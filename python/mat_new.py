@@ -45,16 +45,16 @@ for m, n, k in [(128, 128, 128)]:
 
     actual = c.numpy()
     desired = a.numpy() @ b.numpy()
-
-    for i in range(m):
-        for j in range(n):
-            if abs(actual[i, j] - desired[i, j]) > 1e-3:
-                print(f"mismatch at {i}, {j}")
+    #
+    # for i in range(m):
+    #     for j in range(n):
+    #         if abs(actual[i, j] - desired[i, j]) > 1e-3:
+    #             print(f"mismatch at {i}, {j}")
 
 
     np.testing.assert_allclose(
-        actual=c.numpy(),
-        desired=a.numpy() @ b.numpy(),
+        actual=actual,
+        desired=desired,
         rtol=1e-3,
         atol=1e-3
     )
