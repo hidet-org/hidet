@@ -908,8 +908,6 @@ class MatmulF32Taskx86_refactored(Task):
                                 loop4_partition_b_height, packed_b_buf,
                                 comm_id_packb, work_id_packb, loop3_nthreads)
 
-
-
                     # The barrier at the end of the packing of B
                     thrcomm_barrier(
                         comm_id_packb,
