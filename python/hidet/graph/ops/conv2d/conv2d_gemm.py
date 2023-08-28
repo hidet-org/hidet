@@ -581,7 +581,7 @@ class Conv2dGemmFp16Task(Task):
                     channel_offset = channel_group_offset + k + group_idx * GROUP_C
 
                     src_size = 0
-                    if iw_idx < W and ih_idx < H and channel_group_offset + k < GROUP_C:
+                    if iw_idx < W + 2 * PADX and ih_idx < H + 2 * PADY and channel_group_offset + k < GROUP_C:
                         src_size = min(8, GROUP_C - (channel_group_offset + k))
 
                     if (ih_idx >= H + PADY or ih_idx < PADY or iw_idx >= W + PADX or iw_idx < PADX or channel_offset >= C):
