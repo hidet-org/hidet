@@ -870,27 +870,28 @@ class MatmulF32Taskx86_refactored(Task):
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
 
-                    printf("i_loop4: %d\n", i_loop4)
+                    # printf("i_loop4: %d\n", i_loop4)
 
                     loop4_partition_b_height = b_alg_loop4
                     loop4_partition_b_width = loop5_partition_b_width
                     loop4_partition_b_start_row = i_loop4
                     loop4_partition_b_start_col = loop5_partition_b_start_col
-                    printf("loop4_partition_b_height: %d\n", loop4_partition_b_height)
-                    printf("loop4_partition_b_width: %d\n", loop4_partition_b_width)
-                    printf("loop4_partition_b_start_row: %d\n", loop4_partition_b_start_row)
-                    printf("loop4_partition_b_start_col: %d\n", loop4_partition_b_start_col)
+                    # printf("loop4_partition_b_height: %d\n", loop4_partition_b_height)
+                    # printf("loop4_partition_b_width: %d\n", loop4_partition_b_width)
+                    # printf("loop4_partition_b_start_row: %d\n", loop4_partition_b_start_row)
+                    # printf("loop4_partition_b_start_col: %d\n", loop4_partition_b_start_col)
 
                     loop4_partition_a_start_col = i_loop4
                     is_first = (i_loop4 == 0)
+
                     # Get the thread's partition of the buffer and the matrix
                     # packed_b_buf = packb_buf + (
                     #     packb_start_offsets[work_id_5th_loop, 0] * packed_b_height
                     # )
+
                     packed_b_buf = packb_buf + (
                         packed_b_individual_size * work_id_5th_loop
                     )
-
 
                     loop4_partition_b = cast(b, ~float32) + \
                         (loop4_partition_b_start_row * n_size +
@@ -904,6 +905,7 @@ class MatmulF32Taskx86_refactored(Task):
                         ~packb_thrcomm_barrier_threads_arrived[work_id_4th_loop],
                         packb_nthreads
                     )
+
 
                     # Start the packing of B
                     # TODO: Check this assertion:
@@ -1002,8 +1004,6 @@ class MatmulF32Taskx86_refactored(Task):
             matmul_kernel_x86_v3.kind = "cpu_kernel"
             ir_module = module.ir_module()
             return ir_module
-
-        # return ir_module
 
 
 class Matmulx86Op_refactored(Operator):
