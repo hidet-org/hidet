@@ -53,7 +53,6 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     passes = [
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
-        subgraph_rewrite_pass(ctx.configs['quantize_patterns']),
         selective_quantize_pass(),
         resolve_variant_pass(),
         fuse_operator_pass(),
