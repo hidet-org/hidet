@@ -415,8 +415,8 @@ class Conv2dGemmFp16Task(Task):
     def allow_epilogue(self) -> bool:
         return True
 
-    # def implement_cuda(self, working_dir: str) -> List[IRModule]:
-    #     return tune.extract_ir_modules(self.schedule)
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        return tune.extract_ir_modules(self.schedule)
 
     @tune.space(
         2,
@@ -444,11 +444,12 @@ class Conv2dGemmFp16Task(Task):
 
         DILY, DILX = self.dilations
         STRY, STRX = self.stride
+        PADY, PADX, PADC = self.padding # Note: weight is already padded when passed in
         N, H, W, C = self.img_shape
         OC, WC, KY, KX = self.orig_weight_shape
         GROUPS = self.groups
 
-        GROUP_C = C // GROUPS
+        GROUP_C = (C + PADC) // GROUPS
         GROUP_OC = OC // GROUPS
         # actual shape = [KY * KX * WC, OC]
 
@@ -583,21 +584,34 @@ class Conv2dGemmFp16Task(Task):
                     if iw_idx < W and ih_idx < H and channel_group_offset + k < GROUP_C:
                         src_size = min(8, GROUP_C - (channel_group_offset + k))
 
-                    # a bit strange, the two branches should be the same, but gives different results
-                    #   but only when GROUP_C % 8 != 0
-                    if GROUP_C % 8 == 0 and not self.disable_cp_async:
-                        cp_async(
-                            ~smem_img[i, k],
-                            ~img[batch_idx, ih_idx, iw_idx, channel_offset],
-                            cp_size=16,
-                            src_size=src_size * 2,
-                            cache_level='global',
-                        )
+                    if (ih_idx >= H + PADY or ih_idx < PADY or iw_idx >= W + PADX or iw_idx < PADX or channel_offset >= C):
+                        if GROUP_C % 8 == 0 and not self.disable_cp_async:
+                            cp_async(
+                                ~smem_img[i, k],
+                                ~img[0, 0, 0, 0],
+                                cp_size=16,
+                                src_size=0,
+                                cache_level='global',
+                            )
+                        else:
+                            for ki in range(8):
+                                smem_img[i, k + ki] = 0
                     else:
-                        for ki in range(src_size):
-                            smem_img[i, k + ki] = img[batch_idx, ih_idx, iw_idx, channel_offset + ki]
-                        for ki in range(8 - src_size):
-                            smem_img[i, k + ki + src_size] = 0
+                        # a bit strange, the two branches should be the same, but gives different results
+                        #   but only when GROUP_C % 8 != 0
+                        if GROUP_C % 8 == 0 and not self.disable_cp_async:
+                            cp_async(
+                                ~smem_img[i, k],
+                                ~img[batch_idx, ih_idx - PADY, iw_idx - PADX, channel_offset],
+                                cp_size=16,
+                                src_size=src_size * 2,
+                                cache_level='global',
+                            )
+                        else:
+                            for ki in range(src_size):
+                                smem_img[i, k + ki] = img[batch_idx, ih_idx - PADY, iw_idx - PADX, channel_offset + ki]
+                            for ki in range(8 - src_size):
+                                smem_img[i, k + ki + src_size] = 0
 
             @hidet.script
             def load_smem_weight(k0: int, weight: float16[KX * KY * WC, OC], smem_weight: smem_weight_type):
