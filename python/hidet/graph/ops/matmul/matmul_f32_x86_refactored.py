@@ -520,6 +520,9 @@ class MatmulF32Taskx86_refactored(Task):
 
                 npanels_b = npanels_full_b + (1 if npanels_b_remainder != 0 else 0)
                 packedb_panel_stride = packed_b_height * NR
+                printf("Start of the packing of B...")
+                printf("packed_b_height: %d", packed_b_height)
+                printf("packedb_panel_stride: %d\n", packedb_panel_stride)
 
                 # Loop for the packing of B
                 for i_panel in range(npanels_b):
@@ -530,12 +533,21 @@ class MatmulF32Taskx86_refactored(Task):
                     curr_panel_start = i_panel * NR
                     curr_panel_width = min(NR,
                                            loop4_partition_b_width - curr_panel_start)
+
+                    printf("i_panel: %d\n", i_panel)
+                    printf("curr_panel_start: %d\n", curr_panel_start)
+                    printf("curr_panel_width: %d\n", curr_panel_width)
+
                     if curr_panel_width == NR:
                         k_iters = loop4_partition_b_height // 8
                         k_remainder = loop4_partition_b_height % 8
+
+                        printf("k_iters: %d\n", k_iters)
+                        printf("k_remainder: %d\n", k_remainder)
                         row = 0
                         for k_iter in range(k_iters):
                             row = k_iter * 8
+                            printf('row: %d\n', row)
                             b_panel = loop4_partition_b + (
                                         row * n_size + curr_panel_start)
                             b00 = avx_f32x8_load(b_panel)
@@ -596,6 +608,7 @@ class MatmulF32Taskx86_refactored(Task):
                             packed_b_buff_curr += 16
 
                         row = k_iters * 8
+                        printf("After the unrolled-by-8 loop, row: %d\n", row)
                         for _ in range(k_remainder):
                             b_panel = loop4_partition_b + (
                                         row * n_size + curr_panel_start)
