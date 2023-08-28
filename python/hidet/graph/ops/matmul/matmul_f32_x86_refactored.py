@@ -853,10 +853,17 @@ class MatmulF32Taskx86_refactored(Task):
 
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
+
+                    printf("i_loop4: %d\n", i_loop4)
+
                     loop4_partition_b_height = b_alg_loop4
                     loop4_partition_b_width = loop5_partition_b_width
                     loop4_partition_b_start_row = i_loop4
                     loop4_partition_b_start_col = loop5_partition_b_start_col
+                    printf("loop4_partition_b_height: %d\n", loop4_partition_b_height)
+                    printf("loop4_partition_b_width: %d\n", loop4_partition_b_width)
+                    printf("loop4_partition_b_start_row: %d\n", loop4_partition_b_start_row)
+                    printf("loop4_partition_b_start_col: %d\n", loop4_partition_b_start_col)
 
                     loop4_partition_a_start_col = i_loop4
                     is_first = (i_loop4 == 0)
