@@ -60,6 +60,7 @@ class Conv2dChannelLastResolveRule(ResolveRule):
         stride = ops.utils.normalize_stride(op.attrs['stride'])
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
+        padding = op.attrs['padding']
         channels = op.inputs[0].shape[-1]
         # TODO: current assert mechanism does not cover this use case
         if is_constant(channels) and groups == channels:
@@ -72,7 +73,7 @@ class Conv2dChannelLastResolveRule(ResolveRule):
             else:
                 k_parts = 1
             out = ops.conv2d_gemm_fp16_channel_last(
-                data, weight, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=k_parts
+                data, weight, padding=padding, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=k_parts
             )
             return [out]
         return None

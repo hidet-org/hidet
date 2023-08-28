@@ -308,12 +308,14 @@ class Conv2dGemmFp16Task(Task):
         img: TensorNode,
         weight: TensorNode,
         orig_weight_shape: List[int],
+        padding: List[int],
         stride: List[int],
         dilations: List[int],
         groups: int = 1,
         parallel_k_parts: int = 1,
         disable_cp_async: bool = False,
     ):
+        from hidet.ir.compute.cops import pad
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
         # weight.shape [OC, WC, KY, KX] -> [KY * KX * WC, OC]
@@ -326,15 +328,20 @@ class Conv2dGemmFp16Task(Task):
 
         self.groups = groups
         self.dilations = dilations
+        self.padding = padding
         self.stride = stride
         self.img_shape = img.shape
         self.orig_weight_shape = orig_weight_shape
         self.disable_cp_async = disable_cp_async
 
         DILY, DILX = dilations
+        PADY, PADX, PADC = padding
         STRY, STRX = stride
         # orig_weight_shape == [OC, WC, KY, KX]
         N, H, W, C = img.shape
+        H, W, C = H + 2 * PADY, W + 2 * PADX, C + PADC
+        pads = [0, PADY, PADX, 0, 0, PADY, PADX, PADC]
+        img_padded = pad(img, pads, value=0.0)  # only zero padding is needed right now
         OC, WC, KY, KX = orig_weight_shape
 
         self._assert(C % groups == 0, f"expected input channels to be divisible by groups, got {C}")
@@ -367,7 +374,7 @@ class Conv2dGemmFp16Task(Task):
             kx = (k // WC) % KX
             out_group_size = OC // groups
             return (
-                img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, (oci // out_group_size) * WC + wci]
+                img_padded[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, (oci // out_group_size) * WC + wci]
                 * weight[k, oci]
             )
 
@@ -393,6 +400,7 @@ class Conv2dGemmFp16Task(Task):
             outputs=[c],
             attributes={
                 'stride': stride,
+                'padding': padding,
                 'dilations': dilations,
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
@@ -407,8 +415,8 @@ class Conv2dGemmFp16Task(Task):
     def allow_epilogue(self) -> bool:
         return True
 
-    def implement_cuda(self, working_dir: str) -> List[IRModule]:
-        return tune.extract_ir_modules(self.schedule)
+    # def implement_cuda(self, working_dir: str) -> List[IRModule]:
+    #     return tune.extract_ir_modules(self.schedule)
 
     @tune.space(
         2,
@@ -754,6 +762,7 @@ class Conv2dGemmFp16Op(Operator):
         img: Tensor,
         weight: Tensor,
         orig_weight_shape: List[int],
+        padding: List[int],
         stride: List[int],
         dilations: List[int],
         groups: int,
@@ -766,6 +775,7 @@ class Conv2dGemmFp16Op(Operator):
         super().__init__(
             inputs=[img, weight],
             attributes={
+                'padding': padding,
                 'stride': stride,
                 'dilations': dilations,
                 'orig_weight_shape': orig_weight_shape,
@@ -777,6 +787,7 @@ class Conv2dGemmFp16Op(Operator):
                 input_like(img, 'img'),
                 input_like(weight, 'weight'),
                 orig_weight_shape,
+                padding,
                 stride,
                 dilations,
                 groups=groups,
@@ -826,6 +837,7 @@ def parallel_part_heuristic(
 def conv2d_gemm_fp16_channel_last(
     img: Tensor,
     weight: Tensor,
+    padding: List[int],
     stride: List[int],
     dilations: List[int],
     groups: int,
@@ -838,6 +850,8 @@ def conv2d_gemm_fp16_channel_last(
         raise ValueError('a and b must have 4 dimensions, got shape {} and {}'.format(img.shape, weight.shape))
     if img.dtype != dtypes.float16 or weight.dtype != dtypes.float16:
         raise ValueError('ConvGemmF16Op only support float16, got {} and {}'.format(img.dtype, weight.dtype))
+    pad_channel = padding[2]
+    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
     oc, wc, ky, kx = weight.shape
     weight = hidet.ops.transpose(weight, [2, 3, 1, 0]).reshape([ky * kx * wc, oc])
     return (
@@ -845,6 +859,7 @@ def conv2d_gemm_fp16_channel_last(
             img,
             weight,
             orig_weight_shape=[oc, wc, ky, kx],
+            padding=padding,
             stride=stride,
             dilations=dilations,
             groups=groups,
@@ -900,15 +915,10 @@ def conv2d_gemm_fp16(
     else:
         pad_channel = 0
     if isinstance(padding, int):
-        pad_h = padding
-        pad_w = padding
-    else:
-        pad_h = padding[0]
-        pad_w = padding[1]
-    img = hidet.ops.pad(img, [0, 0, pad_h, pad_w, 0, pad_channel, pad_h, pad_w])
-    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
+        padding = [padding, padding]
+    padding = list(padding) + [pad_channel]
 
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
 
-    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts, disable_cp_async)
+    res = conv2d_gemm_fp16_channel_last(img, weight, padding, stride, dilations, groups, parallel_k_parts, disable_cp_async)
     return hidet.ops.transpose(res, [0, 3, 1, 2])

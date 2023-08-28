@@ -77,10 +77,15 @@ class Conv2dTask(Task):
 
 
 class Conv2dChannelLastTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
+    def __init__(self, data: TensorNode, weight: TensorNode, padding: List[int], stride: List[int], dilations: List[int], groups: int):
         # pylint: disable=too-many-locals
+        from hidet.ir.compute.cops import pad
         # we assume that only data needs to have dynamic shape
+        pad_h, pad_w, pad_c = padding
         n, h, w, c = data.shape
+        h, w, c = h + 2 * pad_h, w + 2 * pad_w, c + pad_c
+        pads = [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_c]
+        data_padded = pad(data, pads, value=0.0)  # only zero padding is needed right now
         oc, wc, kx, ky = weight.shape
         sx, sy = stride
         dilx, dily = dilations
@@ -106,7 +111,7 @@ class Conv2dChannelLastTask(Task):
             fcompute=lambda ni, pi, qi, oci: reduce(
                 shape=[wc, kx, ky],
                 fcompute=lambda wci, kxi, kyi: (
-                    data[ni, pi * sx + kxi * dilx, qi * sy + kyi * dily, (oci // out_group_size) * wc + wci]
+                    data_padded[ni, pi * sx + kxi * dilx, qi * sy + kyi * dily, (oci // out_group_size) * wc + wci]
                     * weight[oci, wci, kxi, kyi]
                 ),
                 reduce_type='sum',
@@ -115,6 +120,7 @@ class Conv2dChannelLastTask(Task):
         self.channels = c
         self.stride = stride
         self.groups = groups
+        self.padding = padding
         super().__init__(name='conv2d_channel_last', inputs=[data, weight], outputs=[output])
 
 
@@ -138,13 +144,13 @@ class Conv2dOp(Operator):
 
 
 class Conv2dChannelLastOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, padding: Sequence[int], stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         stride = normalize_stride(stride)
         dilations = normalize_dilations(dilations)
         super().__init__(
             inputs=[x, w],
-            attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
-            task=Conv2dChannelLastTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
+            attributes={'padding': padding, 'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv2dChannelLastTask(input_like(x, 'x'), input_like(w, 'w'), padding, stride, dilations, groups),
         )
 
 
@@ -174,11 +180,8 @@ def conv2d_channel_last(
     else:
         pad_channel = 0
     if isinstance(padding, int):
-        pad_h = padding
-        pad_w = padding
-    else:
-        pad_h = padding[0]
-        pad_w = padding[1]
-    data = hidet.ops.pad(data, [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_channel])
+        padding = [padding, padding]
+    padding = list(padding) + [pad_channel]
+    # data = hidet.ops.pad(data, [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_channel])
     weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
-    return Conv2dChannelLastOp(data, weight, stride, dilations, groups).outputs[0]
+    return Conv2dChannelLastOp(data, weight, padding, stride, dilations, groups).outputs[0]
