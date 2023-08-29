@@ -366,8 +366,8 @@ class MatmulF32Taskx86_refactored(Task):
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
 
-            packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
-            packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
+            packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 64)
+            packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 64)
 
             packb_buf = cast(packb_buf_ptr, ~float32)
             packa_buf = cast(packa_buf_ptr, ~float32)
