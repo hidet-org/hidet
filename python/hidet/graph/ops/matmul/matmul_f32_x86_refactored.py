@@ -14,8 +14,8 @@ from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
-from hidet.ir.primitives import avx_malloc, printf
-from hidet.ir.primitives.cpu import avx_f32x8_setzero, avx_f32x8_load_aligned
+from hidet.ir.primitives import printf
+from hidet.ir.primitives.cpu import avx_f32x8_setzero, avx_f32x8_load_aligned, avx_free, avx_malloc
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
@@ -366,8 +366,10 @@ class MatmulF32Taskx86_refactored(Task):
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
 
-            packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 64)
-            packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 64)
+            packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
+            packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
+
+
 
             packb_buf = cast(packb_buf_ptr, ~float32)
             packa_buf = cast(packa_buf_ptr, ~float32)
@@ -1046,6 +1048,8 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_5th_loop = tid_5th_loop
 
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
+                avx_free(packa_buf)
+                avx_free(packb_buf)
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
             matmul_kernel_x86_v3.kind = "cpu_kernel"
