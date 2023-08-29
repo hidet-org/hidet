@@ -358,6 +358,8 @@ class MatmulF32Taskx86_refactored(Task):
             packed_b_individual_size = packed_b_width * packed_b_height
 
             packed_a_individual_height = MC
+            if packed_a_individual_height > m_size:
+                packed_a_individual_height = (m_size + MR - 1) // MR * MR
             packed_a_total_height = packed_a_individual_height * loop3_nways
 
             packed_a_width = KC
