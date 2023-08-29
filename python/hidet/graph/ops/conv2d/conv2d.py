@@ -86,7 +86,9 @@ class Conv2dChannelLastTask(Task):
         h, w, c = h + 2 * pad_h, w + 2 * pad_w, c + pad_c
         pads = [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_c]
         data_padded = pad(data, pads, value=0.0)  # only zero padding is needed right now
-        oc, wc, kx, ky = weight.shape
+        pads_weight = [0, 0, 0, 0, 0, pad_c, 0, 0]
+        weight_padded = pad(weight, pads_weight, value=0.0)  # only zero padding is needed right now
+        oc, wc, kx, ky = weight_padded.shape
         sx, sy = stride
         dilx, dily = dilations
         p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
@@ -112,7 +114,7 @@ class Conv2dChannelLastTask(Task):
                 shape=[wc, kx, ky],
                 fcompute=lambda wci, kxi, kyi: (
                     data_padded[ni, pi * sx + kxi * dilx, qi * sy + kyi * dily, (oci // out_group_size) * wc + wci]
-                    * weight[oci, wci, kxi, kyi]
+                    * weight_padded[oci, wci, kxi, kyi]
                 ),
                 reduce_type='sum',
             ),
@@ -182,6 +184,4 @@ def conv2d_channel_last(
     if isinstance(padding, int):
         padding = [padding, padding]
     padding = list(padding) + [pad_channel]
-    # data = hidet.ops.pad(data, [0, pad_h, pad_w, 0, 0, pad_h, pad_w, pad_channel])
-    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
     return Conv2dChannelLastOp(data, weight, padding, stride, dilations, groups).outputs[0]
