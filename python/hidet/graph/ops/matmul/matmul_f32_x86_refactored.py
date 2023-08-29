@@ -542,8 +542,8 @@ class MatmulF32Taskx86_refactored(Task):
                         k_iters = loop4_partition_b_height // 8
                         k_remainder = loop4_partition_b_height % 8
 
-                        printf("k_iters: %d\n", k_iters)
-                        printf("k_remainder: %d\n", k_remainder)
+                        # printf("k_iters: %d\n", k_iters)
+                        # printf("k_remainder: %d\n", k_remainder)
                         row = 0
                         for k_iter in range(k_iters):
                             row = k_iter * 8
@@ -608,7 +608,7 @@ class MatmulF32Taskx86_refactored(Task):
                             packed_b_buff_curr += 16
 
                         row = k_iters * 8
-                        printf("After the unrolled-by-8 loop, row: %d\n", row)
+                        # printf("After the unrolled-by-8 loop, row: %d\n", row)
                         for _ in range(k_remainder):
                             b_panel = loop4_partition_b + (
                                         row * n_size + curr_panel_start)
@@ -671,6 +671,12 @@ class MatmulF32Taskx86_refactored(Task):
                 m_iter = macro_m // MR
                 m_remainder = macro_m % MR
 
+                printf("The start of the macro kernel.\n")
+                printf("n_iter: %d\n", n_iter)
+                printf("n_remainder: %d\n", n_remainder)
+                printf("m_iter: %d\n", m_iter)
+                printf("m_remainder: %d\n", m_remainder)
+
                 if n_remainder > 0:
                     n_iter += 1
                 if m_remainder > 0:
@@ -703,12 +709,25 @@ class MatmulF32Taskx86_refactored(Task):
                     ~ir_inc
                 )
 
+                printf("jr_start: %d\n", jr_start)
+                printf("jr_end: %d\n", jr_end)
+                printf("jr_inc: %d\n", jr_inc)
+
+                printf("ir_start: %d\n", ir_start)
+                printf("ir_end: %d\n", ir_end)
+                printf("ir_inc: %d\n", ir_inc)
+
                 rs_packeda = 1
                 rstep_a = ps_packed_a
                 cstep_b = ps_packed_b
 
                 cstep_c = NR
                 rstep_c = n_size * MR
+
+                printf("rstep_a: %d\n", rstep_a)
+                printf("cstep_b: %d\n", cstep_b)
+                printf("cstep_c: %d\n", cstep_c)
+                printf("rstep_c: %d\n", rstep_c)
 
                 macro_c_cast = as_tensor_pointer(
                     ~c[c_row_off, c_col_off],
