@@ -930,6 +930,7 @@ class MatmulF32Taskx86_refactored(Task):
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
 
                     printf("i_loop4: %d\n", i_loop4)
+                    printf("b_alg_loop4: %d\n", b_alg_loop4)
 
                     loop4_partition_b_height = b_alg_loop4
                     loop4_partition_b_width = loop5_partition_b_width
