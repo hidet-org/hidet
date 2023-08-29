@@ -1056,8 +1056,8 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_5th_loop = tid_5th_loop
 
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
-                avx_free(packa_buf)
-                avx_free(packb_buf)
+                # avx_free(packa_buf)
+                # avx_free(packb_buf)
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
             matmul_kernel_x86_v3.kind = "cpu_kernel"
