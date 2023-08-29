@@ -570,57 +570,57 @@ class MatmulF32Taskx86_refactored(Task):
                             b00 = avx_f32x8_load(b_panel)
                             b08 = avx_f32x8_load(b_panel + 8)
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
+                            avx_f32x8_store(packed_b_buff_curr, b00)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b08)
                             packed_b_buff_curr += 16
 
                             b10 = avx_f32x8_load(b_panel + n_size)
                             b18 = avx_f32x8_load(b_panel + (n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b10)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b18)
+                            avx_f32x8_store(packed_b_buff_curr, b10)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b18)
                             packed_b_buff_curr += 16
 
                             b20 = avx_f32x8_load(b_panel + (2 * n_size))
                             b28 = avx_f32x8_load(b_panel + (2 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b20)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b28)
+                            avx_f32x8_store(packed_b_buff_curr, b20)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b28)
                             packed_b_buff_curr += 16
 
                             b30 = avx_f32x8_load(b_panel + (3 * n_size))
                             b38 = avx_f32x8_load(b_panel + (3 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b30)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b38)
+                            avx_f32x8_store(packed_b_buff_curr, b30)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b38)
                             packed_b_buff_curr += 16
 
                             b40 = avx_f32x8_load(b_panel + (4 * n_size))
                             b48 = avx_f32x8_load(b_panel + (4 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b40)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b48)
+                            avx_f32x8_store(packed_b_buff_curr, b40)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b48)
                             packed_b_buff_curr += 16
 
                             b50 = avx_f32x8_load(b_panel + (5 * n_size))
                             b58 = avx_f32x8_load(b_panel + (5 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b50)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b58)
+                            avx_f32x8_store(packed_b_buff_curr, b50)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b58)
                             packed_b_buff_curr += 16
 
                             b60 = avx_f32x8_load(b_panel + (6 * n_size))
                             b68 = avx_f32x8_load(b_panel + (6 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b60)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b68)
+                            avx_f32x8_store(packed_b_buff_curr, b60)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b68)
                             packed_b_buff_curr += 16
 
                             b70 = avx_f32x8_load(b_panel + (7 * n_size))
                             b78 = avx_f32x8_load(b_panel + (7 * n_size + 8))
 
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b70)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b78)
+                            avx_f32x8_store(packed_b_buff_curr, b70)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b78)
 
                             packed_b_buff_curr += 16
 
@@ -631,8 +631,8 @@ class MatmulF32Taskx86_refactored(Task):
                                         row * n_size + curr_panel_start)
                             b00 = avx_f32x8_load(b_panel)
                             b08 = avx_f32x8_load(b_panel + 8)
-                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
-                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
+                            avx_f32x8_store(packed_b_buff_curr, b00)
+                            avx_f32x8_store(packed_b_buff_curr + 8, b08)
                             packed_b_buff_curr += 16
                             row += 1
 
