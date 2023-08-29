@@ -676,6 +676,14 @@ class MatmulF32Taskx86_refactored(Task):
                 printf("n_remainder: %d\n", n_remainder)
                 printf("m_iter: %d\n", m_iter)
                 printf("m_remainder: %d\n", m_remainder)
+                printf("c_row_off: %d\n", c_row_off)
+                printf("c_col_off: %d\n", c_col_off)
+                printf("macro_m: %d\n", macro_m)
+                printf("macro_n: %d\n", macro_n)
+                printf("macro_k: %d\n", macro_k)
+                printf("ps_packed_a: %d\n", ps_packed_a)
+                printf("ps_packed_b: %d\n", ps_packed_b)
+
 
                 if n_remainder > 0:
                     n_iter += 1
