@@ -749,6 +749,7 @@ class MatmulF32Taskx86_refactored(Task):
                     while i < ir_end:
                         a1 = packed_a + i * rstep_a
                         c11 = c1 + i * rstep_a
+                        c11 = as_tensor_pointer(c11, dtype=float32, shape=(m_size, n_size))
                         m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
 
                         if m_cur == MR and n_cur == NR:
