@@ -838,9 +838,11 @@ class MatmulF32Taskx86_refactored(Task):
                         loop3_partition_a_start_row * k_size +
                         loop3_partition_a_start_col
                     )
+                    printf("Got the loop3_partition_a\n")
 
                     # Get our position within the packed A global buffer
                     packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
+                    printf("Got the packed_a_buf\n")
 
                     # TODO: If passed, see if this barrier is necessary
                     thrcomm_barrier(
