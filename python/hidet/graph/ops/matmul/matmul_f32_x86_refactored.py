@@ -396,15 +396,23 @@ class MatmulF32Taskx86_refactored(Task):
                     layout=row_major(packed_a_individual_height // MR, 1) *
                            column_major(MR, packed_a_width)
                 )
+                printf("pack a: packed_a_individual_height: %d, packed_a_width: %d\n", packed_a_individual_height,
+                       packed_a_width)
 
 
                 npanels_full_a = loop3_partition_a_height // MR
                 panel_a_remainder = loop3_partition_a_height % MR
 
+                printf("loop3_partition_a_height: %d\n", loop3_partition_a_height)
+                printf("npanels_full_a: %d\n", npanels_full_a)
+                assert panel_a_remainder == 0 # TODO: remove after debugging
+
                 npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
                 for ii_panel in range(npanels_a):
                     if ii_panel % packa_nways != work_id_packa % packa_nways:
                         continue
+                    printf("ii_panel: %d\n", ii_panel)
+                    printf("packa_nways: %d\n", packa_nways)
                     a_curr_panel_row_start = ii_panel * MR
                     a_curr_panel_height = min(MR,
                                               loop3_partition_a_height - a_curr_panel_row_start)
@@ -490,7 +498,7 @@ class MatmulF32Taskx86_refactored(Task):
                                     loop3_partition_a[(
                                                                   micropanel_row + a_curr_panel_row_start) * k_size + curr_remain_col]
                     else:
-                        remain_start_row = npanels_a * MR
+                        remain_start_row = npanels_full_a * MR
                         for remain_col in range(loop3_partition_a_width):
                             for remain_row in range(panel_a_remainder):
                                 packed_a_tensor[
