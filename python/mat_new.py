@@ -30,7 +30,7 @@ hidet.option.cache_dir("./wtf")
 target = tvm.target.Target("llvm -mcpu=core-avx2")
 debug_cache_tuning(True)
 hidet.option.search_space(0)
-for m, n, k in [(64, 64, 64), (444, 3072, 768), (768, 768, 768), (123, 456, 789)]:
+for m, n, k in [(64, 64, 64), (768, 768, 768)]:
     a = hidet.randn([m, k], device='cpu')
     b = hidet.randn([k, n], device='cpu')
     x1 = hidet.symbol_like(a)
