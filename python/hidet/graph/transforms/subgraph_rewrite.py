@@ -141,5 +141,5 @@ class SubgraphRewritePass(GraphPass):
         return False, graph
 
 
-def subgraph_rewrite_pass() -> GraphPass:
-    return SubgraphRewritePass()
+def subgraph_rewrite_pass(rewrite_rules: Optional[List[SubgraphRewriteRule]] = None) -> GraphPass:
+    return SubgraphRewritePass(rewrite_rules)

@@ -164,7 +164,6 @@ class PassContext:
             for pat in patterns:
                 if isinstance(pat, SubgraphRewriteRule):
                     self.configs['quantize_patterns'].append(pat)
-                    return None
                 elif issubclass(pat, SubgraphRewriteRule):
                     self.configs['quantize_patterns'].append(pat())
         else:
