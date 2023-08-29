@@ -389,7 +389,7 @@ class MatmulF32Taskx86_refactored(Task):
                     work_id_packa: int32,
                     packa_nways: int32
             ):
-                printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
+                # printf("The start of the pack a, comm id: %d, work id: %d\n", comm_id_packa, work_id_packa)
                 packed_a_tensor = as_tensor_pointer(
                     packed_a_buf,
                     float32,
@@ -410,8 +410,7 @@ class MatmulF32Taskx86_refactored(Task):
                 for ii_panel in range(npanels_a):
                     if ii_panel % packa_nways != work_id_packa % packa_nways:
                         continue
-                    printf("ii_panel: %d\n", ii_panel)
-                    printf("packa_nways: %d\n", packa_nways)
+
                     a_curr_panel_row_start = ii_panel * MR
                     a_curr_panel_height = min(MR,
                                               loop3_partition_a_height - a_curr_panel_row_start)
@@ -509,8 +508,8 @@ class MatmulF32Taskx86_refactored(Task):
                                 packed_a_tensor[
                                     remain_start_row + remain_row, remain_col] = 0.0
                                 remain_row += 1
-                printf("The end of the pack a, comm id: %d, work id: %d\n",
-                       comm_id_packa, work_id_packa)
+                # printf("The end of the pack a, comm id: %d, work id: %d\n",
+                #        comm_id_packa, work_id_packa)
 
             @hidet.script
             def gemm_pack_b(
@@ -763,7 +762,7 @@ class MatmulF32Taskx86_refactored(Task):
                     i = ir_start
                     while i < ir_end:
                         a1 = packed_a + i * rstep_a
-                        c11 = c1 + i * rstep_a
+                        c11 = c1 + i * rstep_c
                         c11 = as_tensor_pointer(c11, dtype=float32, shape=(m_size, n_size))
                         m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
 
