@@ -756,6 +756,8 @@ class MatmulF32Taskx86_refactored(Task):
                 while j < jr_end:
                     b1 = packed_b + j * cstep_b
                     c1 = macro_c_cast + j * cstep_c
+                    printf("j = %d\n", j)
+                    printf("The offset j * cstep_c: %d\n", j * cstep_c)
 
                     n_cur = NR if not_edge(j, n_iter, n_remainder) else n_remainder
                     # Loop over the m dimension, MR rows at a time
@@ -763,6 +765,8 @@ class MatmulF32Taskx86_refactored(Task):
                     while i < ir_end:
                         a1 = packed_a + i * rstep_a
                         c11 = c1 + i * rstep_c
+                        printf("The offset i * rstep_a: %d\n", i * rstep_a)
+                        printf("The offset i * rstep_c: %d\n", i * rstep_c)
                         c11 = as_tensor_pointer(c11, dtype=float32, shape=(m_size, n_size))
                         m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
 
