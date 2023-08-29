@@ -839,6 +839,9 @@ class MatmulF32Taskx86_refactored(Task):
                         loop3_partition_a_start_col
                     )
                     printf("Got the loop3_partition_a\n")
+                    printf("packed_a_individual_size: %d\n", packed_a_individual_size)
+                    printf("work_id_packa: %d\n", work_id_packa)
+                    printf("packed_a_total_size: %d\n", packed_a_total_size)
 
                     # Get our position within the packed A global buffer
                     packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
