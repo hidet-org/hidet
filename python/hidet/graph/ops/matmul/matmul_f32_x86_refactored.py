@@ -405,7 +405,6 @@ class MatmulF32Taskx86_refactored(Task):
 
                 printf("loop3_partition_a_height: %d\n", loop3_partition_a_height)
                 printf("npanels_full_a: %d\n", npanels_full_a)
-                assert panel_a_remainder == 0 # TODO: remove after debugging
 
                 npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
                 for ii_panel in range(npanels_a):
