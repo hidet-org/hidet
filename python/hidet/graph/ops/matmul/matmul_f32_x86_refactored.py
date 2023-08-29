@@ -366,8 +366,16 @@ class MatmulF32Taskx86_refactored(Task):
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
 
-            packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
-            packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
+            # packb_buf_ptr = avx_malloc(packed_b_total_size * 4, 4096)
+            # packa_buf_ptr = avx_malloc(packed_a_total_size * 4, 4096)
+            packb_buf_ptr = module.define_global_var(
+                name='packb_buf_ptr',
+                var_type=float32[packed_b_total_size]
+            )
+            packa_buf_ptr = module.define_global_var(
+                name='packa_buf_ptr',
+                var_type=float32[packed_a_total_size]
+            )
 
 
 
