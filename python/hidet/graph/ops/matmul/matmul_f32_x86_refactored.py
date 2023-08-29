@@ -817,9 +817,6 @@ class MatmulF32Taskx86_refactored(Task):
                     comm_id_3rd_loop: int32,
                     work_id_3rd_loop: int32,
                     is_first: bool):
-
-                printf("The start of 3rd loop. comm_id_3rd_loop: %d, work_id_3rd_loop: %d\n", comm_id_3rd_loop, work_id_3rd_loop)
-
                 comm_id_macro = comm_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
                 comm_id_packa = comm_id_macro
@@ -932,7 +929,7 @@ class MatmulF32Taskx86_refactored(Task):
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
 
-                    # printf("i_loop4: %d\n", i_loop4)
+                    printf("i_loop4: %d\n", i_loop4)
 
                     loop4_partition_b_height = b_alg_loop4
                     loop4_partition_b_width = loop5_partition_b_width
@@ -1025,7 +1022,8 @@ class MatmulF32Taskx86_refactored(Task):
                 while loop5_iter < loop5_my_end:
                     b_alg_loop5 = determine_blocksize_f_sub(loop5_iter,
                                                             loop5_my_end, NC)
-                    # printf("b_alg_loop5: %d\n", b_alg_loop5)
+                    printf("loop5_iter: %d\n", loop5_iter)
+                    printf("b_alg_loop5: %d\n", b_alg_loop5)
                     loop5_partition_c_width = b_alg_loop5
                     loop5_partition_c_start_col = loop5_iter
                     loop5_partition_b_width = b_alg_loop5,
