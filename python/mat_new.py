@@ -46,6 +46,11 @@ for m, n, k in [(768, 768, 768)]:
     actual = c.numpy()
     desired = a.numpy() @ b.numpy()
 
+    for i in range(m):
+        for j in range(n):
+            if abs(actual[i, j] - desired[i, j]) < 1e-3:
+                print(f"Actually passed for i={i}, j={j}")
+
 
     np.testing.assert_allclose(
         actual=actual,
