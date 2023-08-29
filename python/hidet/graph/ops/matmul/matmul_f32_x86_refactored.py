@@ -845,6 +845,7 @@ class MatmulF32Taskx86_refactored(Task):
 
                     # Get our position within the packed A global buffer
                     # packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
+                    printf("work_id_packa * packed_a_individual_size: %d\n", work_id_packa * packed_a_individual_size)
                     packed_a_buf = ~packa_buf[work_id_packa * packed_a_individual_size]
                     printf("Got the packed_a_buf\n")
 
