@@ -58,13 +58,24 @@ class PermutedOp:
     @staticmethod
     def get_permuted_op(op: Operator):
         from hidet.graph.ops.conv2d import Conv2dOp
+        from hidet.graph.ops.pool import MaxPool2dOp
         if isinstance(op, Conv2dOp):
             return PermutedConv2dOp(op)
+        elif isinstance(op, MaxPool2dOp):
+            return PermutedMaxPool2dOp(op)
         elif isinstance(op, PermutedOp.regular_operators):
             return PermutedOp(op)
         else:
             raise RuntimeError("PermutedOp.get_permuted_op() got invalid Operator.")
 
+    @staticmethod
+    def get_scoped_ops():
+        from hidet.graph.ops.arithmetic import AddOp, MultiplyOp
+        from hidet.graph.ops.activation import SigmoidOp
+        from hidet.graph.ops.transform import ConcatOp
+        from hidet.graph.ops.pool import MaxPool2dOp
+        operators = (AddOp, SigmoidOp, MultiplyOp, ConcatOp, MaxPool2dOp)
+        return operators
 
 class PermutedConv2dOp(PermutedOp):
     def __init__(self, op: Operator) -> None:
@@ -98,6 +109,36 @@ class PermutedConv2dOp(PermutedOp):
         output = conv2d_channel_last(new_x, w, stride=stride, dilations=dilations, groups=groups, padding=padding)
         tensor_map[node.outputs[0]] = (output, new_perm)
 
+class PermutedMaxPool2dOp(PermutedOp):
+    def __init__(self, op: Operator) -> None:
+        super().__init__(op)
+    
+    def reforward(self, tensor_map) -> None:
+        from hidet.graph.ops.transform import transpose
+        from hidet.graph.ops.pool import max_pool2d_channel_last
+        node = self.op
+        kernel = node.attrs['kernel']
+        stride = node.attrs['stride']
+        padding = node.attrs['padding']
+        ceil_mode = node.attrs['ceil_mode']
+        # Prepare transformed inputs
+        x = node.inputs[0]
+        if x in tensor_map:
+            current_x, current_perm = tensor_map[x]
+        else:
+            current_x, current_perm = x, None
+        if current_perm is not None:
+            new_x = current_x
+            new_perm = current_perm
+        else:
+            new_perm = [0, 2, 3, 1]
+            new_x = transpose(current_x, new_perm)
+            tensor_map[x] = (new_x, new_perm)
+
+        # Run channel last conv2d and update tensor map
+        output = max_pool2d_channel_last(new_x, kernel=kernel, stride=stride, padding=padding, ceil_mode=ceil_mode)
+        tensor_map[node.outputs[0]] = (output, new_perm)
+
 
 class ConvChannelLastPass(GraphPass):
     """
@@ -116,7 +157,7 @@ class ConvChannelLastPass(GraphPass):
                and there exists another set of attributes P', such that 
                Op(x_chnlast, P')).transpose([0, 3, 1, 2]) == Op(x, P)
         """
-        if isinstance(op, PermutedOp.regular_operators):
+        if isinstance(op, PermutedOp.get_scoped_ops()):
             return True
         return False
 
