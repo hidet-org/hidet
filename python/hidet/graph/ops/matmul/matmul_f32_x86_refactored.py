@@ -343,14 +343,15 @@ class MatmulF32Taskx86_refactored(Task):
                 # printf("The end of micro kernel....")
 
             #### Some setup code ####
-            packed_b_total_width = 0
-
             packed_b_height = KC
             if packed_b_height > k_size:
                 packed_b_height = k_size
             packed_b_width = NC
             if packed_b_width > n_size:
                 packed_b_width = (n_size + NR - 1) // NR * NR
+
+            printf("packed_b_height: %d\n", packed_b_height)
+            printf("packed_b_width: %d\n", packed_b_width)
 
             packed_b_total_width = packed_b_width * loop5_nways
             packed_b_total_size = packed_b_total_width * packed_b_height
@@ -361,7 +362,7 @@ class MatmulF32Taskx86_refactored(Task):
 
             packed_a_width = KC
             if packed_a_width > k_size:
-                packed_a_width = (k_size + MR - 1) // MR * MR
+                packed_a_width = k_size
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
 
