@@ -754,6 +754,7 @@ class Conv2dGemmFp16Task(Task):
                                         p += 1
                         if warp_count_k > 1:
                             syncthreads()
+                    syncthreads()
                     for i, j in store_smem_c_map.on(threadIdx.x):
                         res_spatial = i + offset_m
                         channel_group_idx = j + offset_n
