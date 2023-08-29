@@ -520,9 +520,9 @@ class MatmulF32Taskx86_refactored(Task):
 
                 npanels_b = npanels_full_b + (1 if npanels_b_remainder != 0 else 0)
                 packedb_panel_stride = packed_b_height * NR
-                printf("Start of the packing of B...")
-                printf("packed_b_height: %d", packed_b_height)
-                printf("packedb_panel_stride: %d\n", packedb_panel_stride)
+                # printf("Start of the packing of B...")
+                # printf("packed_b_height: %d", packed_b_height)
+                # printf("packedb_panel_stride: %d\n", packedb_panel_stride)
 
                 # Loop for the packing of B
                 for i_panel in range(npanels_b):
@@ -534,9 +534,9 @@ class MatmulF32Taskx86_refactored(Task):
                     curr_panel_width = min(NR,
                                            loop4_partition_b_width - curr_panel_start)
 
-                    printf("i_panel: %d\n", i_panel)
-                    printf("curr_panel_start: %d\n", curr_panel_start)
-                    printf("curr_panel_width: %d\n", curr_panel_width)
+                    # printf("i_panel: %d\n", i_panel)
+                    # printf("curr_panel_start: %d\n", curr_panel_start)
+                    # printf("curr_panel_width: %d\n", curr_panel_width)
 
                     if curr_panel_width == NR:
                         k_iters = loop4_partition_b_height // 8
@@ -547,7 +547,7 @@ class MatmulF32Taskx86_refactored(Task):
                         row = 0
                         for k_iter in range(k_iters):
                             row = k_iter * 8
-                            printf('row: %d\n', row)
+                            # printf('row: %d\n', row)
                             b_panel = loop4_partition_b + (
                                         row * n_size + curr_panel_start)
                             b00 = avx_f32x8_load(b_panel)
@@ -957,13 +957,13 @@ class MatmulF32Taskx86_refactored(Task):
                 thread_range_sub(loop5_nways, work_id_5th_loop, n_size,
                                  NR, ~loop5_my_start, ~loop5_my_end)
 
-                printf("loop5_my_start: %d, loop5_my_end: %d\n", loop5_my_start, loop5_my_end)
+                # printf("loop5_my_start: %d, loop5_my_end: %d\n", loop5_my_start, loop5_my_end)
 
                 loop5_iter = loop5_my_start
                 while loop5_iter < loop5_my_end:
                     b_alg_loop5 = determine_blocksize_f_sub(loop5_iter,
                                                             loop5_my_end, NC)
-                    printf("b_alg_loop5: %d\n", b_alg_loop5)
+                    # printf("b_alg_loop5: %d\n", b_alg_loop5)
                     loop5_partition_c_width = b_alg_loop5
                     loop5_partition_c_start_col = loop5_iter
                     loop5_partition_b_width = b_alg_loop5,
