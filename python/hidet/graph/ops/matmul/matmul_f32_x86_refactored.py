@@ -876,7 +876,7 @@ class MatmulF32Taskx86_refactored(Task):
                                loop3_partition_a_height,
                                loop3_partition_b_width,
                                loop3_partition_a_width,
-                               MR * k_size,
+                               MR * packed_a_width,
                                packed_b_height * NR,
                                comm_id_macro,
                                work_id_macro,
