@@ -927,7 +927,7 @@ class MatmulF32Taskx86_refactored(Task):
                 # printf("The start of the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
 
                 while i_loop4 < k_size:
-                    b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, NC)
+                    b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, KC)
 
                     printf("i_loop4: %d\n", i_loop4)
                     printf("b_alg_loop4: %d\n", b_alg_loop4)
