@@ -90,6 +90,11 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
             if self.is_symbolic() and instantiate_device(device_from_torch(arg)) != self.device:
                 raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg
+        elif isinstance(arg, Tensor):
+            dtype = arg.dtype
+            if self.is_symbolic() and arg.device != self.device:
+                raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
+            device = arg.device
         else:
             raise ValueError(f'Unsupported argument type: {type(arg)}')
 
@@ -222,7 +227,10 @@ def tensor_type(self: Tensor, dtype: Union[str, torch.dtype], non_blocking: bool
 
 @register_method(torch.Tensor.expand)
 def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
-    sizes: List[int] = list(sizes)
+    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
+        sizes = sizes[0]
+    else:
+        sizes: List[int] = list(sizes)
     assert len(sizes) >= len(self.shape)
     for i in range(len(sizes)):
         if sizes[i] == -1:
@@ -265,3 +273,32 @@ def tensor_any(self: Tensor, dim=None, keepdim=False) -> Tensor:
 @register_method(torch.Tensor.all)
 def tensor_all(self: Tensor, dim=None, keepdim=False) -> Tensor:
     return ops.all(self, axis=dim, keepdims=keepdim)
+
+
+@register_method(torch.Tensor.matmul)
+def tensor_matmul(self: Tensor, other: Tensor) -> Tensor:
+    return ops.matmul(self, other)
+
+
+@register_method(torch.Tensor.new_zeros)
+def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = size
+    if dtype is None:
+        dtype = self.dtype
+    if device is None:
+        device = self.device
+
+    _ = pin_memory
+    _ = requires_grad
+
+    return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)
+
+
+@register_method(torch.Tensor.zero_)
+def tensor_zero_(self: Tensor):
+    return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)

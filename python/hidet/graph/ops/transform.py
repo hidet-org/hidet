@@ -17,7 +17,7 @@ from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
-from .utils import TensorInput
+from .utils import TensorInput, normalize_slice
 
 
 def is_true(x: Union[Expr, bool]) -> bool:
@@ -444,52 +444,11 @@ class StridedSliceOp(Operator):
         axes: Optional[Sequence[Optional[int]]] = None,
         strides: Optional[Sequence[Optional[int]]] = None,
     ):
-        starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
+        starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes, strides)
         task = StridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides)
         super().__init__(
             inputs=[data], attributes={'starts': starts, 'ends': ends, 'axes': axes, 'strides': strides}, task=task
         )
-
-    @staticmethod
-    def normalize(data_shape, starts, ends, axes: Optional[List[int]], strides: Optional[List[Optional[int]]]):
-        # follow: https://data-apis.org/array-api/latest/API_specification/indexing.html
-        if axes is None:
-            axes = [i for i in range(len(starts))]
-        axes = normalize_dim(axes, len(data_shape))
-        if strides is None:
-            strides = [1 for _ in range(len(starts))]
-        shape = [data_shape[i] for i in axes]
-        assert len(shape) == len(starts) == len(ends) == len(axes) == len(strides)
-
-        ii, jj, kk = [], [], []
-        for i, j, k, n in zip(starts, ends, strides, shape):
-            if k is None:
-                k = 1
-            if k > 0:
-                i = i if i is not None else 0
-                j = j if j is not None else n
-                if is_constant(i, j, n) and not (-n <= i <= n and -n <= j):
-                    raise IndexError('Invalid slice')
-                j = if_then_else(j < n, j, n)
-                if is_constant(i) and i < 0:
-                    i = i + n
-                if is_constant(j) and j < 0:
-                    j = j + n
-            elif k < 0:
-                i = i if i is not None else n - 1
-                j = j if j is not None else -n - 1
-                if is_constant(i) and i < 0:
-                    i += n
-                if is_constant(j) and j < -1:
-                    j += n
-                if is_constant(i, j, n) and not (-n <= i <= n and -n - 1 <= j <= max(0, n - 1)):
-                    raise IndexError('Invalid slice')
-            else:
-                raise IndexError('slice step cannot be zero')
-            ii.append(i)
-            jj.append(j)
-            kk.append(k)
-        return ii, jj, axes, kk
 
 
 class BroadcastOp(Operator):

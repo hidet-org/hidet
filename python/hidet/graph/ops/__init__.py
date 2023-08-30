@@ -24,7 +24,7 @@ from .activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, pre
 from .activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink
 from .activation import softshrink, softmax, softmin, hardtanh
 from .attention import attention
-from .normalize import batch_norm_infer, instance_norm, layer_norm, group_norm
+from .normalize import batch_norm_infer, instance_norm, layer_norm, group_norm, lp_norm
 from .image import resize2d
 from .create import full, arange, linspace, tri
 from .arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square
@@ -32,7 +32,7 @@ from .arithmetic import floor, ceil, round, trunc, sqrt, rsqrt, pow, abs
 from .arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
 from .arithmetic import bitwise_right_shift, bitwise_left_shift, bitwise_and, bitwise_invert, bitwise_or
 from .arithmetic import bitwise_xor, maximum, minimum, clamp
-from .arithmetic import isfinite, isinf, isnan, sign, where
+from .arithmetic import isfinite, isinf, isnan, sign, where, set_strided_slice, roll
 from .arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, atan2
 from .complex import real, imag, conj, make_complex
 from .compare import equal, not_equal, less, greater, less_equal, greater_equal
@@ -47,5 +47,6 @@ from .fusion import fused_operator
 from .transfer import transfer
 from .special import barrier
 from .distributed import all_reduce, all_gather, reduce_scatter
+from .linear import einsum
 
 from . import utils

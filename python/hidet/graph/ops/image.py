@@ -12,7 +12,7 @@
 from typing import Optional, List, Sequence, Union
 
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, Int, if_then_else, cast, logical_or, logical_and
+from hidet.ir.expr import Expr, Int, if_then_else, cast, logical_or, logical_and, convert
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -59,8 +59,8 @@ def get_2d_pixel(data: TensorNode, n, c, h, w) -> Expr:
     return data[n, c, h, w]
 
 
-def linear_interpolate(a, b, ratio):
-    return a * (1.0 - ratio) + b * ratio
+def linear_interpolate(a, b, ratio, dtype='float32'):
+    return a * (convert(1.0, dtype) - ratio) + b * ratio
 
 
 def get_cubic_weights(s, a) -> List[int]:
@@ -112,6 +112,7 @@ def resize2d_nchw_compute(
 
     scale_factor = _normalize(scale_factor, 2)
     size = _normalize(size, 2)
+    dtype = data.type.dtype
 
     if size is not None and scale_factor is None:
         target_size = size
@@ -146,12 +147,12 @@ def resize2d_nchw_compute(
         elif method == 'linear':
             h_int = cast(prim.floor(h), 'int32')
             w_int = cast(prim.floor(w), 'int32')
-            h_ratio = h - h_int
-            w_ratio = w - w_int
+            h_ratio = cast(h - h_int, dtype)
+            w_ratio = cast(w - w_int, dtype)
             pixels = [[get_2d_pixel(data, n, c, h_int + i, w_int + j) for j in range(2)] for i in range(2)]
-            top = linear_interpolate(*pixels[0], w_ratio)
-            bottom = linear_interpolate(*pixels[1], w_ratio)
-            value = linear_interpolate(top, bottom, h_ratio)
+            top = linear_interpolate(*pixels[0], w_ratio, dtype)
+            bottom = linear_interpolate(*pixels[1], w_ratio, dtype)
+            value = linear_interpolate(top, bottom, h_ratio, dtype)
         elif method == 'cubic':
             h_int = cast(prim.floor(h), 'int32')
             w_int = cast(prim.floor(w), 'int32')
