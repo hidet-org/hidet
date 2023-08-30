@@ -1007,6 +1007,9 @@ class MatmulF32Taskx86_refactored(Task):
                 thread_range_sub(loop5_nways, work_id_5th_loop, n_size,
                                  NR, ~loop5_my_start, ~loop5_my_end)
 
+                printf("work_id_5th_loop: %d, comm_id_5th_loop: %d, loop5_my_start: %d, loop5_my_end: %d\n",
+                       work_id_5th_loop, comm_id_5th_loop, loop5_my_start, loop5_my_end)
+
                 # printf("loop5_my_start: %d, loop5_my_end: %d\n", loop5_my_start, loop5_my_end)
 
                 loop5_iter = loop5_my_start
