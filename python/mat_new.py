@@ -51,6 +51,11 @@ for m, n, k in [(768, 768, 768), (111, 333, 222)]:
     #         if abs(actual[i, j] - desired[i, j]) < 1e-3:
     #             print(f"Actually passed for i={i}, j={j}")
 
+    for i in range(m):
+        for j in range(n):
+            if actual[i, j] == 0.0:
+                print(f"element is 0 for i={i}, j={j}")
+
 
     np.testing.assert_allclose(
         actual=actual,
