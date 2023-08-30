@@ -350,8 +350,8 @@ class MatmulF32Taskx86_refactored(Task):
             if packed_b_width > n_size:
                 packed_b_width = (n_size + NR - 1) // NR * NR
 
-            printf("packed_b_height: %d\n", packed_b_height)
-            printf("packed_b_width: %d\n", packed_b_width)
+            # printf("packed_b_height: %d\n", packed_b_height)
+            # printf("packed_b_width: %d\n", packed_b_width)
 
             packed_b_total_width = packed_b_width * loop5_nways
             packed_b_total_size = packed_b_total_width * packed_b_height
@@ -411,15 +411,15 @@ class MatmulF32Taskx86_refactored(Task):
                     layout=row_major(packed_a_individual_height // MR, 1) *
                            column_major(MR, packed_a_width)
                 )
-                printf("pack a: packed_a_individual_height: %d, packed_a_width: %d\n", packed_a_individual_height,
-                       packed_a_width)
+                # printf("pack a: packed_a_individual_height: %d, packed_a_width: %d\n", packed_a_individual_height,
+                #        packed_a_width)
 
 
                 npanels_full_a = loop3_partition_a_height // MR
                 panel_a_remainder = loop3_partition_a_height % MR
 
-                printf("loop3_partition_a_height: %d\n", loop3_partition_a_height)
-                printf("npanels_full_a: %d\n", npanels_full_a)
+                # printf("loop3_partition_a_height: %d\n", loop3_partition_a_height)
+                # printf("npanels_full_a: %d\n", npanels_full_a)
 
                 npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
                 for ii_panel in range(npanels_a):
