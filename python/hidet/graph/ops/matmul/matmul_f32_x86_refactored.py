@@ -86,7 +86,7 @@ class MatmulF32Taskx86_refactored(Task):
 
     @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 1, 1, 1)])
     def schedule_matmulf32_x86(
-            self, MC=2016, NC=896, KC=512, ways=(1, 8, 4, 1)
+            self, MC=2016, NC=896, KC=512, ways=(1, 2, 2, 1)
     ) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -532,7 +532,7 @@ class MatmulF32Taskx86_refactored(Task):
                     loop4_partition_b_width: int32,
                     loop4_partition_b_height: int32,
                     packed_b_buf: ~float32,
-                    comm_id_packb: int32, work_id_packb: int32,
+                    comm_id_packb: int32, workn_id_packb: int32,
                     packb_nways: int32
             ):
                 # printf("The start of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
@@ -544,6 +544,9 @@ class MatmulF32Taskx86_refactored(Task):
                 # printf("Start of the packing of B...")
                 # printf("packed_b_height: %d", packed_b_height)
                 # printf("packedb_panel_stride: %d\n", packedb_panel_stride)
+
+                printf("work_id_packb: %d, packed_b_height: %d, loop4_partition_b_width: %d, npanels_full_b: %d, packb_nways: %d",
+                        work_id_packb, packed_b_height, loop4_partition_b_width, npanels_full_b, packb_nways)
 
                 # Loop for the packing of B
                 for i_panel in range(npanels_b):
@@ -1007,8 +1010,8 @@ class MatmulF32Taskx86_refactored(Task):
                 thread_range_sub(loop5_nways, work_id_5th_loop, n_size,
                                  NR, ~loop5_my_start, ~loop5_my_end)
 
-                printf("work_id_5th_loop: %d, comm_id_5th_loop: %d, loop5_my_start: %d, loop5_my_end: %d\n",
-                       work_id_5th_loop, comm_id_5th_loop, loop5_my_start, loop5_my_end)
+                # printf("work_id_5th_loop: %d, comm_id_5th_loop: %d, loop5_my_start: %d, loop5_my_end: %d\n",
+                #        work_id_5th_loop, comm_id_5th_loop, loop5_my_start, loop5_my_end)
 
                 # printf("loop5_my_start: %d, loop5_my_end: %d\n", loop5_my_start, loop5_my_end)
 
@@ -1016,8 +1019,8 @@ class MatmulF32Taskx86_refactored(Task):
                 while loop5_iter < loop5_my_end:
                     b_alg_loop5 = determine_blocksize_f_sub(loop5_iter,
                                                             loop5_my_end, NC)
-                    printf("loop5_iter: %d\n", loop5_iter)
-                    printf("b_alg_loop5: %d\n", b_alg_loop5)
+                    # printf("loop5_iter: %d\n", loop5_iter)
+                    # printf("b_alg_loop5: %d\n", b_alg_loop5)
                     loop5_partition_c_width = b_alg_loop5
                     loop5_partition_c_start_col = loop5_iter
                     loop5_partition_b_width = b_alg_loop5,
