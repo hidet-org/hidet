@@ -1049,6 +1049,9 @@ class MatmulF32Taskx86_refactored(Task):
                     work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
                     comm_id_5th_loop = tid_5th_loop
 
+                    printf("tid_5th_loop: %d, work_id_5th_loop: %d, comm_id_5th_loop: %d\n",
+                           tid_5th_loop, work_id_5th_loop, comm_id_5th_loop)
+
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
                 # avx_free(packa_buf)
                 # avx_free(packb_buf)
