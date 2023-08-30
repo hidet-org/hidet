@@ -738,13 +738,13 @@ class MatmulF32Taskx86_refactored(Task):
                     ~ir_inc
                 )
 
-                printf("jr_start: %d\n", jr_start)
-                printf("jr_end: %d\n", jr_end)
-                printf("jr_inc: %d\n", jr_inc)
-
-                printf("ir_start: %d\n", ir_start)
-                printf("ir_end: %d\n", ir_end)
-                printf("ir_inc: %d\n", ir_inc)
+                # printf("jr_start: %d\n", jr_start)
+                # printf("jr_end: %d\n", jr_end)
+                # printf("jr_inc: %d\n", jr_inc)
+                #
+                # printf("ir_start: %d\n", ir_start)
+                # printf("ir_end: %d\n", ir_end)
+                # printf("ir_inc: %d\n", ir_inc)
 
                 rs_packeda = 1
                 rstep_a = ps_packed_a
@@ -753,10 +753,10 @@ class MatmulF32Taskx86_refactored(Task):
                 cstep_c = NR
                 rstep_c = n_size * MR
 
-                printf("rstep_a: %d\n", rstep_a)
-                printf("cstep_b: %d\n", cstep_b)
-                printf("cstep_c: %d\n", cstep_c)
-                printf("rstep_c: %d\n", rstep_c)
+                # printf("rstep_a: %d\n", rstep_a)
+                # printf("cstep_b: %d\n", cstep_b)
+                # printf("cstep_c: %d\n", cstep_c)
+                # printf("rstep_c: %d\n", rstep_c)
 
                 macro_c_cast = as_tensor_pointer(
                     ~c[c_row_off, c_col_off],
@@ -833,14 +833,14 @@ class MatmulF32Taskx86_refactored(Task):
                     ~m_start_loop3,
                     ~m_end_loop3
                 )
-                printf("In loop 3: m_start_loop3: %d, m_end_loop3: %d\n", m_start_loop3, m_end_loop3)
+                # printf("In loop 3: m_start_loop3: %d, m_end_loop3: %d\n", m_start_loop3, m_end_loop3)
                 ii = m_start_loop3
                 while ii < m_end_loop3:
                     b_alg_loop3 = determine_blocksize_f_sub(
                         ii, m_size, MC
                     )
-                    printf("The ii in loop3: %d\n", ii)
-                    printf("b_alg_loop3: %d\n", b_alg_loop3)
+                    # printf("The ii in loop3: %d\n", ii)
+                    # printf("b_alg_loop3: %d\n", b_alg_loop3)
                     # Acquire the partition at loop 3
                     loop3_partition_a_start_row = ii
                     loop3_partition_a_height = b_alg_loop3
@@ -849,17 +849,17 @@ class MatmulF32Taskx86_refactored(Task):
                         loop3_partition_a_start_row * k_size +
                         loop3_partition_a_start_col
                     )
-                    printf("Got the loop3_partition_a\n")
-                    printf("packed_a_individual_size: %d\n", packed_a_individual_size)
-                    printf("work_id_packa: %d\n", work_id_packa)
-                    printf("packed_a_total_size: %d\n", packed_a_total_size)
+                    # printf("Got the loop3_partition_a\n")
+                    # printf("packed_a_individual_size: %d\n", packed_a_individual_size)
+                    # printf("work_id_packa: %d\n", work_id_packa)
+                    # printf("packed_a_total_size: %d\n", packed_a_total_size)
 
                     # Get our position within the packed A global buffer
                     # packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
-                    printf("work_id_packa * packed_a_individual_size: %d\n", work_id_packa * packed_a_individual_size)
+                    # printf("work_id_packa * packed_a_individual_size: %d\n", work_id_packa * packed_a_individual_size)
                     # packed_a_buf = ~packa_buf[work_id_packa * packed_a_individual_size]
                     packed_a_buf = packa_buf + (work_id_packa * packed_a_individual_size)
-                    printf("Got the packed_a_buf\n")
+                    # printf("Got the packed_a_buf\n")
 
                     # TODO: If passed, see if this barrier is necessary
                     thrcomm_barrier(
@@ -929,8 +929,8 @@ class MatmulF32Taskx86_refactored(Task):
                 while i_loop4 < k_size:
                     b_alg_loop4 = determine_blocksize_f_sub(i_loop4, k_size, KC)
 
-                    printf("i_loop4: %d\n", i_loop4)
-                    printf("b_alg_loop4: %d\n", b_alg_loop4)
+                    # printf("i_loop4: %d\n", i_loop4)
+                    # printf("b_alg_loop4: %d\n", b_alg_loop4)
 
                     loop4_partition_b_height = b_alg_loop4
                     loop4_partition_b_width = loop5_partition_b_width
