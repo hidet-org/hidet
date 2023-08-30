@@ -52,10 +52,10 @@ for m, n, k in [(64, 64, 64)]:
     #         if abs(actual[i, j] - desired[i, j]) < 1e-3:
     #             print(f"Actually passed for i={i}, j={j}")
 
-    for i in range(m):
-        for j in range(n):
-            if actual[i, j] == 0.0:
-                print(f"element is 0 for i={i}, j={j}")
+    # for i in range(m):
+    #     for j in range(n):
+    #         if actual[i, j] == 0.0:
+    #             print(f"element is 0 for i={i}, j={j}")
 
 
     np.testing.assert_allclose(
