@@ -74,6 +74,8 @@ class FunctionBuilder(StmtBuilder):
             self.attrs['label'] = self.label
         if self.body is None:
             self.body = self.finish()
+        if 'func_kind' not in self.attrs:
+            self.attrs['func_kind'] = self.kind
         self.func = Function(
             self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type, attrs=self.attrs
         )
