@@ -582,10 +582,10 @@ class Conv2dGemmFp16Task(Task):
 
                     src_size = 0
                     if iw_idx < W + 2 * PADX and ih_idx < H + 2 * PADY and channel_group_offset + k < GROUP_C:
-                        src_size = min(8, GROUP_C - (channel_group_offset + k))
+                        src_size = min(8, C - (channel_group_offset + k))
 
                     if (ih_idx >= H + PADY or ih_idx < PADY or iw_idx >= W + PADX or iw_idx < PADX or channel_offset >= C):
-                        if GROUP_C % 8 == 0 and not self.disable_cp_async:
+                        if GROUP_C % 8 == 0 and C % 8 == 0 and not self.disable_cp_async:
                             cp_async(
                                 ~smem_img[i, k],
                                 ~img[0, 0, 0, 0],
@@ -599,7 +599,7 @@ class Conv2dGemmFp16Task(Task):
                     else:
                         # a bit strange, the two branches should be the same, but gives different results
                         #   but only when GROUP_C % 8 != 0
-                        if GROUP_C % 8 == 0 and not self.disable_cp_async:
+                        if GROUP_C % 8 == 0 and C % 8 == 0 and not self.disable_cp_async:
                             cp_async(
                                 ~smem_img[i, k],
                                 ~img[batch_idx, ih_idx - PADY, iw_idx - PADX, channel_offset],
