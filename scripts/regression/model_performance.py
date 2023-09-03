@@ -13,6 +13,16 @@ logging.set_verbosity_error()
 
 device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
+def enable_compiled_server(enable=True):
+    # Uncomment and edit below options to use your own compile server. See apps/compile_server README.
+    # hidet.option.compile_server.addr('xx.xx.xx.xx')
+    # hidet.option.compile_server.port(0)
+    # hidet.option.compile_server.username('username')
+    # hidet.option.compile_server.password('password')
+    # hidet.option.compile_server.repo('https://github.com/hidet-org/hidet', 'main')
+    # hidet.option.compile_server.enable()
+    pass
+
 def setup_hidet_flags(dtype):
     use_fp16 = dtype == 'float16'
     hidet.torch.dynamo_config.search_space(2)
@@ -126,12 +136,15 @@ def llama_regression():
     return None
 
 def model_performance_regression(report_file):
+    # Uncomment below line to limit parallel jobs if running out of CPU memory
+    # hidet.option.parallel_tune(16)
     result_groups = []
+    hidet.option.cache_dir('/home/hanjie/hidet/hidet_regression/.hidet_cache')
+    result_groups.append(torchvision_regression('resnet50'))
     result_groups.append(torchvision_regression('densenet121'))
     result_groups.append(torchvision_regression('deeplabv3_resnet50'))
     result_groups.append(torchvision_regression('mobilenet_v2'))
     result_groups.append(torchvision_regression('efficientnet_b0'))
-    result_groups.append(torchvision_regression('resnet50'))
     result_groups.append(torchhub_regression('ultralytics/yolov5','yolov5s'))
     result_groups.append(bert_regression())
     result_groups.append(llama_regression())
@@ -150,4 +163,5 @@ if __name__ == '__main__':
         help='Specify report output path'
     )
     args = parser.parse_args()
+    enable_compiled_server(True)
     model_performance_regression(args.report)
