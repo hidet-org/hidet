@@ -114,6 +114,8 @@ def torchvision_regression(model_name):
         model_cls = getattr(torchvision.models, model_name)
     for shape, perf in perf_data.items():
         for dtype, ref_latency in perf.items():
+            if dtype == 'float32':
+                continue
             _shape = [int(s.strip()) for s in shape.split(',')]
             latency = bench_torchvision(model_cls, _shape, dtype)
             result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
@@ -126,6 +128,8 @@ def torchhub_regression(repo_name, model_name):
     perf_data = regression_data[device_name][model_name + '_shapes']
     for shape, perf in perf_data.items():
         for dtype, ref_latency in perf.items():
+            if dtype == 'float32':
+                continue
             _shape = [int(s.strip()) for s in shape.split(',')]
             latency = bench_torchhub(repo_name, model_name, _shape, dtype)
             result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
@@ -137,17 +141,24 @@ def llama_regression():
 
 def model_performance_regression(report_file):
     # Uncomment below line to limit parallel jobs if running out of CPU memory
-    # hidet.option.parallel_tune(16)
+    hidet.option.parallel_tune(16)
     result_groups = []
     hidet.option.cache_dir('/home/hanjie/hidet/hidet_regression/.hidet_cache')
     result_groups.append(torchvision_regression('resnet50'))
-    result_groups.append(torchvision_regression('densenet121'))
     result_groups.append(torchvision_regression('deeplabv3_resnet50'))
     result_groups.append(torchvision_regression('mobilenet_v2'))
     result_groups.append(torchvision_regression('efficientnet_b0'))
+    result_groups.append(torchvision_regression('alexnet'))
+    result_groups.append(torchvision_regression('vgg19'))
+    result_groups.append(torchvision_regression('squeezenet1_1'))
+    result_groups.append(torchvision_regression('inception_v3'))
+    result_groups.append(torchvision_regression('googlenet'))
+    result_groups.append(torchvision_regression('shufflenet_v2_x1_0'))
+    result_groups.append(torchvision_regression('regnet_x_400mf'))
     result_groups.append(torchhub_regression('ultralytics/yolov5','yolov5s'))
-    result_groups.append(bert_regression())
-    result_groups.append(llama_regression())
+    result_groups.append(torchvision_regression('densenet121'))
+    # result_groups.append(bert_regression())
+    # result_groups.append(llama_regression())
     with open(report_file, 'w') as f:
         f.write("---------------- Model Performance Regression -----------------\n")
         for result_group in result_groups:
