@@ -14,7 +14,7 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant, cast
-from hidet.ir.layout import StridesLayout, data_layout, row_major, column_major, local_layout
+from hidet.ir.layout import StridesLayout, strided_layout, row_major, column_major, local_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
@@ -437,9 +437,9 @@ class BatchMatmulTask(Task):
             task_shape=[block_k, block_n], num_workers=num_threads, ranks=[0, 1]
         )
 
-        smem_a_layout = data_layout([2, block_m, block_k], ranks=[0, 1, 2])
-        smem_b_layout = data_layout([2, block_k, block_n], ranks=[0, 1, 2])
-        smem_c_layout = data_layout([block_m, block_n], ranks=[0, 1])
+        smem_a_layout = strided_layout([2, block_m, block_k], ranks=[0, 1, 2])
+        smem_b_layout = strided_layout([2, block_k, block_n], ranks=[0, 1, 2])
+        smem_c_layout = strided_layout([block_m, block_n], ranks=[0, 1])
         regs_a_layout = row_major(2, mma_count_m, mma_config.a_elements)
         regs_b_layout = row_major(2, mma_count_n, mma_config.b_elements)
         regs_c_layout = row_major(mma_count_m, mma_count_n, mma_config.c_elements)

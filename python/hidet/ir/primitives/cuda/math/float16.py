@@ -62,6 +62,7 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
     # pylint: disable=abstract-method
     def register(self):
         entries = {
+            'abs': ['__habs', 1],
             'sin': ['hsin', 1],
             'cos': ['hcos', 1],
             'exp': ['hexp', 1],
@@ -141,6 +142,9 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
         return entry.var(*args)
+
+    def abs(self, a: Expr) -> Expr:
+        return self.call('cuda_f16_abs', a)
 
     def sin(self, a: Expr) -> Expr:
         return self.call('cuda_f16_sin', a)

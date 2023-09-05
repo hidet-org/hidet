@@ -11,6 +11,7 @@
 # limitations under the License.
 from __future__ import annotations
 import torch
+from hidet.graph import ops
 from hidet.graph.tensor import Tensor
 from .interpreter import HidetModule, register_module
 from . import register_functions as regs
@@ -117,6 +118,13 @@ class HidetAdaptiveAvgPool2d(HidetModule):
         return regs.adaptive_avg_pool2d(x, self.mod.output_size)
 
 
+@register_module(torch.nn.AdaptiveAvgPool3d)
+class HidetAdaptiveAvgPool3d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.AdaptiveAvgPool3d)
+        return regs.adaptive_avg_pool3d(x, self.mod.output_size)
+
+
 @register_module(torch.nn.ReLU)
 class HidetReLU(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -158,21 +166,21 @@ class HidetMaxPool3d(HidetModule):
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):
         super().__init__(torch_module)
-        from hidet import ops
-
         steal = dynamo_config['steal_weights']
-
         self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True))
+        return regs.linear(
+            x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True), weight_is_transposed=True
+        )
 
 
 @register_module(torch.nn.BatchNorm2d)
+@register_module(torch.nn.BatchNorm3d)
 class HidetBatchNorm2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.BatchNorm2d)
+        assert isinstance(self.mod, (torch.nn.BatchNorm2d, torch.nn.BatchNorm3d))
         return regs.batch_norm(
             x=x,
             running_mean=self.param('running_mean'),
@@ -404,3 +412,70 @@ class HidetUpsample(HidetModule):
             align_corners=self.mod.align_corners,
             recompute_scale_factor=self.mod.recompute_scale_factor,
         )
+
+
+@register_module(torch.nn.MultiheadAttention)
+class HidetMultiheadAttention(HidetModule):
+    def __init__(self, torch_module: torch.nn.Module):
+        super().__init__(torch_module)
+        steal = dynamo_config['steal_weights']
+        self.in_proj_weight_transposed = ops.transpose(self.param('in_proj_weight', steal=steal), [1, 0])
+        self.out_proj_weight_transposed = ops.transpose(self.param('out_proj.weight', steal=steal), [1, 0])
+
+    def __call__(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask=None,
+        need_weights=True,
+        attn_mask=None,
+        average_attn_weights=True,
+        is_causal=False,
+    ) -> Tensor:
+        assert isinstance(self.mod, torch.nn.MultiheadAttention)
+        supported = (
+            self.mod._qkv_same_embed_dim
+            and self.mod.bias_k is None
+            and self.mod.bias_v is None
+            and not self.mod.add_zero_attn
+            and self.mod.batch_first
+            and key_padding_mask is None
+            and not need_weights
+        )
+        if not supported:
+            raise NotImplementedError(
+                "Hidet Multihead Attention currently only supports "
+                "kdim=vdim=embed_dim, add_bias_kv=False, add_zero_attn=False, "
+                "batch_first=True, forward(key_padding_mask=None, need_weights=False)."
+            )
+
+        # Input feed forward
+        wq, wk, wv = ops.split(self.in_proj_weight_transposed, parts_or_sections=3, axis=1)
+        query = ops.matmul(query, wq)
+        key = ops.matmul(key, wk)
+        value = ops.matmul(value, wv)
+        if self.mod.in_proj_bias is not None:
+            bq, bk, bv = ops.split(self.param('in_proj_bias'), parts_or_sections=3, axis=0)
+            query = ops.add(query, bq)
+            key = ops.add(key, bk)
+            value = ops.add(value, bv)
+
+        # Split heads
+        split_head_dims = [query.shape[0], query.shape[1], self.mod.num_heads, query.shape[2] // self.mod.num_heads]
+        query = ops.transpose(query.reshape(split_head_dims), [0, 2, 1, 3])
+        key = ops.transpose(key.reshape(split_head_dims), [0, 2, 1, 3])
+        value = ops.transpose(value.reshape(split_head_dims), [0, 2, 1, 3])
+
+        # fmha
+        out = regs.scaled_dot_product_attention(
+            query, key, value, attn_mask=attn_mask, dropout_p=self.mod.dropout, is_causal=is_causal
+        )
+
+        # Output feed forward
+        merge_head_dims = [out.shape[0], out.shape[2], self.mod.embed_dim]
+        out = ops.transpose(out, [0, 2, 1, 3]).reshape(merge_head_dims)
+        out = ops.matmul(out, self.out_proj_weight_transposed)
+        if self.mod.out_proj.bias is not None:
+            out = ops.add(out, self.param('out_proj.bias'))
+        return out

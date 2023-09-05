@@ -13,6 +13,7 @@ import logging
 import re
 import os
 import json
+import shutil
 from hashlib import sha256
 from typing import List, Optional, Tuple
 
@@ -162,6 +163,10 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
     # build task ir module
     build_ir_module(ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', target=target)
 
+    # clear the candidate object files that are no longer needed
+    if not hidet.option.get_option('debug_cache_tuning'):
+        shutil.rmtree(os.path.join(task_dir, 'candidates'), ignore_errors=True)
+
 
 def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):
     from hidet.ir.compute import TensorNode
@@ -183,8 +188,17 @@ def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candida
             device=device, dtype=t.type.dtype.name, shape=[int(v) if is_constant(v) else str(v) for v in t.shape]
         )
 
+    # extract the task name
+    from hidet.graph.ops.fusion.fused_operator import FusedTask
+
+    if isinstance(task, FusedTask):
+        task_name = 'fused_{}'.format(task.attrs['fused_ops'].replace(' ', '_'))
+    else:
+        task_name = task.name
+
     # generate meta data
     meta = TaskMetaData(
+        name=task_name,
         symbols=[v.name for v in task.symbols],
         inputs=[get_signature(t, input_device) for t in task.inputs],
         outputs=[get_signature(t, output_device) for t in task.outputs],

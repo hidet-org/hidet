@@ -13,17 +13,16 @@ from typing import Dict
 
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.compute import TensorNode, GridCompute
-from hidet.ir.expr import Var, convert, call
+from hidet.ir.expr import Var, call
 from hidet.ir.tools import rewrite
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt
 from hidet.ir.schedulers.base import AutoScheduler, ComputeExprLower
+from hidet.ir.mapping import row_spatial
+from hidet.utils.py import prod
 
 
 class CpuAutoScheduler(AutoScheduler):
     def schedule_grid_compute(self, node: GridCompute, tensor_map: Dict[TensorNode, Var]) -> Stmt:
-        # pylint: disable=too-many-locals, import-outside-toplevel, unnecessary-comprehension
-        from hidet.ir.mapping import row_repeat, TaskMapping
-
         params, param_map, call_args = self.grid_compute_params_and_args(node, tensor_map)
 
         if self.task is not None:
@@ -35,16 +34,16 @@ class CpuAutoScheduler(AutoScheduler):
             # set function parameters
             fb.extend_params(params)
 
-            mapping: TaskMapping = row_repeat(*node.shape)
             iter_names = [f'i{i}' for i in range(len(node.shape))]
-            with fb.for_mapping(iter_names, mapping, convert(0)) as task_index:
-                out_param: Var = param_map[node]
-                compute_lower = ComputeExprLower(node.value, param_map=param_map)
-                stmts, value = compute_lower.lower()
-                rmap = {axis: axis_value for axis, axis_value in zip(node.axes, task_index)}
-                stmts, value = rewrite([stmts, value], rmap)
-                fb += stmts
-                fb += BufferStoreStmt(out_param, task_index, value)
+            with fb.for_loop('w', extent=prod(node.shape), attr='p') as w:
+                with fb.for_mapping(iter_names, row_spatial(*node.shape), worker=w) as task_index:
+                    out_param: Var = param_map[node]
+                    compute_lower = ComputeExprLower(node.value, param_map=param_map)
+                    stmts, value = compute_lower.lower()
+                    rmap = {axis: axis_value for axis, axis_value in zip(node.axes, task_index)}
+                    stmts, value = rewrite([stmts, value], rmap)
+                    fb += stmts
+                    fb += BufferStoreStmt(out_param, task_index, value)
         func = fb.get()
         func_var = self.add_function(func)
 

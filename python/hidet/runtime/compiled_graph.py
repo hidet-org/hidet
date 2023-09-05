@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable, Union
+from typing import List, Optional, Tuple, Dict, Any, Callable
 import zipfile
 import os
 import json
@@ -28,7 +28,8 @@ from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
-from hidet.utils import prod
+from hidet.utils.py import prod, median
+from hidet.utils.trace_utils import TraceEventEmitter
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
@@ -94,9 +95,9 @@ class CompiledGraph:
         # derived properties (will be initialized in _init_compiled_graph at the end of this constructor)
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
         self.is_dynamic: bool = False
-        self.constant_outputs: List[Union[None, Tensor]] = []
 
         # runtime state
+        self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
@@ -143,11 +144,6 @@ class CompiledGraph:
             self.is_dynamic = True
         else:
             self.is_dynamic = False
-        for out_idx in self.graph_execution.outputs_index:
-            if out_idx in self.graph_execution.weights_index:
-                self.constant_outputs.append(self.weights[self.graph_execution.weights_index.index(out_idx)])
-            else:
-                self.constant_outputs.append(None)
 
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
@@ -207,13 +203,15 @@ class CompiledGraph:
             runtime_api.set_symbol_value(name, symbol_dims[-1])
         return tuple(symbol_dims)
 
-    def _create_outputs(self):
+    def _create_outputs(self, inputs):
         from hidet.graph.tensor import empty
 
         outputs = []
-        for output_index, (sig, const_out) in enumerate(zip(self.meta.outputs, self.constant_outputs)):
-            if const_out is not None:
-                outputs.append(const_out)
+        for output_index, (exec_idx, sig) in enumerate(zip(self.graph_execution.outputs_index, self.meta.outputs)):
+            if exec_idx in self.graph_execution.inputs_index:
+                outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
+            elif exec_idx in self.graph_execution.weights_index:
+                outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
             else:
                 if self.is_dynamic:
                     shape_buffer = Array(i32, len(sig.shape))
@@ -238,7 +236,7 @@ class CompiledGraph:
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...]):
         # create output tensors
-        outputs = self._create_outputs()
+        outputs = self._create_outputs(inputs)
 
         # prepare workspace
         self._prepare_workspace()
@@ -258,22 +256,48 @@ class CompiledGraph:
             index2tensor[exe.inputs_index[i]] = inputs[i]
         for i in range(len(self.weights)):
             index2tensor[exe.weights_index[i]] = self.weights[i]
+
         best_candidates = [-1 for _ in range(len(self.compiled_tasks))]
+        trace_emitter = TraceEventEmitter({'graph': self.graph_string})
         for inst in exe.instructions:
+            # prepare inputs and kernel
             node_inputs = [index2tensor[i] for i in inst.inputs]
             node_kernel: CompiledTask = self.compiled_tasks[inst.task_idx]
+
+            # run the kernel
             node_outputs = node_kernel.run_async(node_inputs)
+
+            # record outputs
             for i, output_index in enumerate(inst.outputs):
                 index2tensor[output_index] = node_outputs[i]
 
+            # record best candidate for this kernel
             best_candidates[inst.task_idx] = node_kernel.pick_best_candidate(node_inputs, node_outputs)
 
+            # record trace events
+            trace_emitter.append(
+                name=node_kernel.meta_data.name,
+                duration_us=int(median(node_kernel.profile(*node_inputs, *node_outputs)) * 1000),
+                args={
+                    'name': node_kernel.meta_data.name,
+                    'inputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.inputs],
+                    'outputs': ['{}{}'.format(x.dtype, x.shape) for x in node_kernel.meta_data.outputs],
+                },
+            )
+
+            # free tensors that are no longer needed
             for idx in inst.free:
                 del index2tensor[idx]
 
         outputs = [index2tensor[i] for i in exe.outputs_index]
 
+        # update the dispatch table
         self._update_symbol_table(symbol_dims, best_candidates)
+
+        # save the trace
+        trace_filename = 'trace{}.json'.format('_'.join(str(x) for x in symbol_dims))
+        with open(os.path.join(self.working_dir, trace_filename), 'w') as f:
+            trace_emitter.save(f)
 
         return outputs
 
