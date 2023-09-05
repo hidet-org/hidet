@@ -26,10 +26,9 @@ class PermutedOp:
     """
     # Some imports will cause circular import errors if imported at top level of class
     # Therefore we import those inside PermutedOp.get_scroped_ops() instead
-    from hidet.graph.ops.arithmetic import AddOp, MultiplyOp, SubtractOp
-    from hidet.graph.ops.activation import SigmoidOp, ReluOp
+    from hidet.graph.ops.arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
     from hidet.graph.ops.transform import ConcatOp
-    regular_operators = (AddOp, SubtractOp, SigmoidOp, ReluOp, MultiplyOp, ConcatOp, SubtractOp)
+    regular_operators = (UnaryElementwiseOp, BinaryElementwiseOp, ConcatOp)
     channel_last_operators = tuple()
     scoped_operators = tuple()
 
@@ -116,6 +115,7 @@ class PermutedOp:
             return {'callable': conv2d_channel_last, 'attrs': op.attrs}
         get_params_func_map = {
             MaxPool2dOp: MaxPool2dOp_params,
+            AdaptiveAvgPool2dOp: AdaptiveAvgPool2dOp_params,
             Conv2dOp: Conv2dOp_params,
         }
         if op.__class__ not in get_params_func_map:
