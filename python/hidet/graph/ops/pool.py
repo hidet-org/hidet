@@ -174,6 +174,47 @@ class AdaptivePoolTask(Task):
             attributes={'output_size': output_size},
         )
 
+class AdaptivePoolChannelLastTask(Task):
+    def __init__(self, x: TensorNode, output_size: Sequence[int], reduce_type: str):
+        assert reduce_type in ['max', 'avg']
+        x_shape: List[Expr] = x.shape  # [N, D1, D2, ..., C]
+        output_size: List[Expr] = normalize_output(output_size, len(x_shape) - 2)
+        y_shape: List[Int] = [x_shape[0]] + output_size + [x_shape[-1]]
+        spatial_ndim = len(output_size)
+
+        def start_index(y_indices: Sequence[Expr], spatial_dim: int) -> Expr:
+            a = y_indices[spatial_dim + 1] * x_shape[spatial_dim + 1]
+            b = y_shape[spatial_dim + 1]
+            return a / b
+
+        def end_index(y_indices: Sequence[Expr], spatial_dim: int) -> Expr:
+            a = (1 + y_indices[spatial_dim + 1]) * x_shape[spatial_dim + 1]
+            b = y_shape[spatial_dim + 1]
+            return (a + b - 1) / b
+
+        def grid_compute(*y_indices: Expr):
+            start_indices: List[Expr] = [start_index(y_indices, dim) for dim in range(spatial_ndim)]
+            end_indices: List[Expr] = [end_index(y_indices, dim) for dim in range(spatial_ndim)]
+            reduce_shape: List[Expr] = [end_indices[dim] - start_indices[dim] for dim in range(spatial_ndim)]
+
+            def reduce_compute(*reduce_indices: Expr) -> Expr:
+                x_indices: List[Expr] = [y_indices[0]]
+                for dim in range(spatial_ndim):
+                    x_indices.append(start_indices[dim] + reduce_indices[dim])
+                x_indices.append(y_indices[-1])
+                return x[x_indices]
+
+            return reduce(
+                shape=reduce_shape, fcompute=reduce_compute, reduce_type=reduce_type, accumulate_dtype=x.type.dtype.name
+            )
+
+        y = compute(name='y', shape=y_shape, fcompute=grid_compute)
+        super().__init__(
+            name='adaptive_{}_pool{}d_channel_last'.format(reduce_type, spatial_ndim),
+            inputs=[x],
+            outputs=[y],
+            attributes={'output_size': output_size},
+        )
 
 class MaxPool2dOp(Operator):
     def __init__(
@@ -268,6 +309,21 @@ class AdaptivePoolOp(Operator):
             task=AdaptivePoolTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
         )
 
+class AdaptivePoolChannelLastOp(Operator):
+    def __init__(self, x: Tensor, output_size, reduce_type: str, attrs: Dict[str, Any], spatial_ndim: int):
+        if len(x.shape) != spatial_ndim + 2:
+            raise ValueError(
+                'Adaptive{}Pool{}d expects {}D input, got {}D one.'.format(
+                    reduce_type.capitalize(), spatial_ndim, spatial_ndim + 2, len(x.shape)
+                )
+            )
+        output_size = normalize_output(output_size, spatial_ndim)
+        self.reduce_type = reduce_type
+        super().__init__(
+            inputs=[x],
+            attributes=attrs,
+            task=AdaptivePoolChannelLastTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
+        )
 
 class AdaptiveAvgPool1dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
@@ -278,6 +334,9 @@ class AdaptiveAvgPool2dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
         super().__init__(x, output_size, reduce_type='avg', attrs={'output_size': output_size}, spatial_ndim=2)
 
+class AdaptiveAvgPool2dChannelLastOp(AdaptivePoolChannelLastOp):
+    def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
+        super().__init__(x, output_size, reduce_type='avg', attrs={'output_size': output_size}, spatial_ndim=2)
 
 class AdaptiveAvgPool3dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
@@ -324,6 +383,8 @@ def adaptive_avg_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Te
 def adaptive_avg_pool2d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool2dOp(x, output_size).outputs[0]
 
+def adaptive_avg_pool2d_channel_last(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
+    return AdaptiveAvgPool2dChannelLastOp(x, output_size).outputs[0]
 
 def adaptive_avg_pool3d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool3dOp(x, output_size).outputs[0]

@@ -24,10 +24,14 @@ class PermutedOp:
     as needed, produce channel last outputs, and update the tensor map with new inputs and outputs.
     The base case of PermutedOp can accept channel last inputs by updating its 'axis' attribute.
     """
-    from hidet.graph.ops.arithmetic import AddOp, MultiplyOp
-    from hidet.graph.ops.activation import SigmoidOp
+    # Some imports will cause circular import errors if imported at top level of class
+    # Therefore we import those inside PermutedOp.get_scroped_ops() instead
+    from hidet.graph.ops.arithmetic import AddOp, MultiplyOp, SubtractOp
+    from hidet.graph.ops.activation import SigmoidOp, ReluOp
     from hidet.graph.ops.transform import ConcatOp
-    regular_operators = (AddOp, SigmoidOp, MultiplyOp, ConcatOp)
+    regular_operators = (AddOp, SubtractOp, SigmoidOp, ReluOp, MultiplyOp, ConcatOp, SubtractOp)
+    channel_last_operators = tuple()
+    scoped_operators = tuple()
 
     def __init__(self, op: Operator) -> None:
         self.op = op
@@ -63,11 +67,21 @@ class PermutedOp:
             tensor_map[y] = (outputs[idx], new_perm)
     
     @staticmethod
-    def get_permuted_op(op: Operator):
+    def initialize_scoped_ops():
+        """
+        The Operators imported within this function will cause circular imports if imported
+        at the top level of the class. As a temporary solution, we import them here and add them
+        to the class variable sets. This function will be called when the pass is instantiated.
+        TODO: Restructure the code to resolve the circular imports.
+        """
         from hidet.graph.ops.conv2d import Conv2dOp
-        from hidet.graph.ops.pool import MaxPool2dOp
-        Chanlast_ops = (Conv2dOp, MaxPool2dOp)
-        if isinstance(op, Chanlast_ops):
+        from hidet.graph.ops.pool import MaxPool2dOp, AdaptiveAvgPool2dOp
+        PermutedOp.channel_last_operators = (Conv2dOp, MaxPool2dOp, AdaptiveAvgPool2dOp)
+        PermutedOp.scoped_operators = PermutedOp.regular_operators + PermutedOp.channel_last_operators
+
+    @staticmethod
+    def get_permuted_op(op: Operator):
+        if isinstance(op, PermutedOp.channel_last_operators):
             return PermutedChanlastOp(op)
         elif isinstance(op, PermutedOp.regular_operators):
             return PermutedOp(op)
@@ -85,20 +99,18 @@ class PermutedOp:
         This list is incomplete. To support a new operator in the scope, implement its
         corresponding PermutedOp or use an existing one and update `get_permuted_op()`.
         """
-        from hidet.graph.ops.arithmetic import AddOp, MultiplyOp
-        from hidet.graph.ops.activation import SigmoidOp
-        from hidet.graph.ops.transform import ConcatOp
-        from hidet.graph.ops.pool import MaxPool2dOp
-        operators = (AddOp, SigmoidOp, MultiplyOp, ConcatOp, MaxPool2dOp)
-        return operators
+        return PermutedOp.scoped_operators
     
     @staticmethod
     def get_new_params(op: Operator) -> Dict:
-        from hidet.graph.ops.pool import MaxPool2dOp
+        from hidet.graph.ops.pool import MaxPool2dOp, AdaptiveAvgPool2dOp
         from hidet.graph.ops.conv2d import Conv2dOp
         def MaxPool2dOp_params(op: MaxPool2dOp):
             from hidet.graph.ops.pool import max_pool2d_channel_last
             return {'callable': max_pool2d_channel_last, 'attrs': op.attrs}
+        def AdaptiveAvgPool2dOp_params(op: AdaptiveAvgPool2dOp):
+            from hidet.graph.ops.pool import adaptive_avg_pool2d_channel_last
+            return {'callable': adaptive_avg_pool2d_channel_last, 'attrs': op.attrs}
         def Conv2dOp_params(op: Conv2dOp):
             from hidet.graph.ops.conv2d import conv2d_channel_last
             return {'callable': conv2d_channel_last, 'attrs': op.attrs}
@@ -120,7 +132,6 @@ class PermutedChanlastOp(PermutedOp):
     
     def reforward(self, tensor_map) -> None:
         from hidet.graph.ops.transform import transpose
-        from hidet.graph.ops.pool import max_pool2d_channel_last
         node = self.op
         # Prepare transformed inputs
         x = node.inputs[0]
@@ -144,7 +155,7 @@ class PermutedChanlastOp(PermutedOp):
         # Run channel last version of the op and update tensor map
         # It is assumes that the python callable `func` follows this pattern:
         #   def func(x: Tensor, w0: Tensor, ..., wN: Tensor, **attrs) -> Tensor:
-        # Where w0...wN are optional inputs(e.g., weights), and attrs are attributes of the op
+        # Where w0...wN are optional inputs(e.g., weights), and attrs are attributes/parameters of the op
         output = func(new_x, *other_inputs, **attrs)
         tensor_map[node.outputs[0]] = (output, new_perm)
 
@@ -159,7 +170,7 @@ class ConvChannelLastPass(GraphPass):
     """
 
     def span_from_nodes(
-        self, usage: Dict[Tensor, List[Tuple[Operator, int]]], seeds: List[Operator], scoped_ops: Sequence[Type]
+        self, usage: Dict[Tensor, List[Tuple[Operator, int]]], seeds: List[Operator]
     ) -> List[Operator]:
         # span from the seed operators, return all operators that are connect to the
         # seed operators and also within the predefined scope of this pass (see `PermutedOp.get_scoped_op()`).
@@ -171,6 +182,7 @@ class ConvChannelLastPass(GraphPass):
                 for user, idx in usage[y]:
                     yield user
         
+        scoped_ops = PermutedOp.get_scoped_ops()
         scope_nodes = set()
         visited_nodes = set()
         candidates = set(seeds)
@@ -194,16 +206,17 @@ class ConvChannelLastPass(GraphPass):
         # Only use this pass if there is convolution in the graph
         if len(seeds) == 0:
             return graph
-
+        
+        # Update the class variables of PermutedOp, this is done here to avoid circular dependency
+        PermutedOp.initialize_scoped_ops()
         # Get the usage of each Tensor
         usage: Dict[Tensor, List[Tuple[Operator, int]]] = analyze_usage(graph)
         # Use the usage to trace through all operators spanning from the seeds
-        scoped_ops = PermutedOp.get_scoped_ops()
-        scope_nodes = self.span_from_nodes(usage=usage, seeds=seeds, scoped_ops=scoped_ops)
-
+        scope_nodes = self.span_from_nodes(usage=usage, seeds=seeds)
         # Map a Tensor from itself to its current instance and permutation
         tensor_map: Dict[Tensor, Tuple[Tensor, Optional[List[int]]]] = {}
-        
+
+        out_of_scope_count = 0
         # Iterate through nodes in topological order
         for node in nodes:
             if node in scope_nodes:
@@ -213,6 +226,7 @@ class ConvChannelLastPass(GraphPass):
             else:
                 # Node is not within scope. If its inputs are permuted to channel last,
                 # need to convert back, reforward, and update mappings
+                out_of_scope_count += 1
                 need_to_reforward = False
                 new_inputs: List[Tensor] = []
                 update_attributes = {}
@@ -248,6 +262,7 @@ class ConvChannelLastPass(GraphPass):
                     new_x = current_x
             new_outputs.append(new_x)
         
+        print("ConvChannelLastPass number of out of scope nodes:", out_of_scope_count)
         ret =  FlowGraph(new_outputs, graph.inputs)
         return ret
 
