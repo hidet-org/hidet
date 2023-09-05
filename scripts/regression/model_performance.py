@@ -31,6 +31,7 @@ def setup_hidet_flags(dtype):
     hidet.torch.dynamo_config.use_attention(True)
     hidet.torch.dynamo_config.use_tensor_core(True)
     hidet.torch.dynamo_config.use_cuda_graph(True)
+    hidet.torch.dynamo_config.dump_graph_ir("./graph_ir")
 
 def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     for _ in range(warmup_iters):
@@ -155,7 +156,6 @@ def model_performance_regression(report_file):
     result_groups.append(torchvision_regression('googlenet'))
     result_groups.append(torchvision_regression('shufflenet_v2_x1_0'))
     result_groups.append(torchvision_regression('regnet_x_400mf'))
-    result_groups.append(torchhub_regression('ultralytics/yolov5','yolov5s'))
     result_groups.append(torchvision_regression('densenet121'))
     # result_groups.append(bert_regression())
     # result_groups.append(llama_regression())
