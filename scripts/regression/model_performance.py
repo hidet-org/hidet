@@ -13,7 +13,8 @@ logging.set_verbosity_error()
 
 device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
-def enable_compiled_server(enable=True):
+def enable_compiled_server():
+    # TODO: Accept compile server config as input to regression launching
     # Uncomment and edit below options to use your own compile server. See apps/compile_server README.
     # hidet.option.compile_server.addr('xx.xx.xx.xx')
     # hidet.option.compile_server.port(0)
@@ -129,20 +130,18 @@ def torchhub_regression(repo_name, model_name):
     perf_data = regression_data[device_name][model_name + '_shapes']
     for shape, perf in perf_data.items():
         for dtype, ref_latency in perf.items():
-            if dtype == 'float32':
-                continue
             _shape = [int(s.strip()) for s in shape.split(',')]
             latency = bench_torchhub(repo_name, model_name, _shape, dtype)
             result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
 def llama_regression():
-    # ToDo
+    # TODO: Add llama regression
     return None
 
 def model_performance_regression(report_file):
     # Uncomment below line to limit parallel jobs if running out of CPU memory
-    hidet.option.parallel_tune(16)
+    # hidet.option.parallel_tune(16)
     result_groups = []
     hidet.option.cache_dir('/home/hanjie/hidet/hidet_regression/.hidet_cache')
     result_groups.append(torchvision_regression('resnet50'))
@@ -157,8 +156,8 @@ def model_performance_regression(report_file):
     result_groups.append(torchvision_regression('shufflenet_v2_x1_0'))
     result_groups.append(torchvision_regression('regnet_x_400mf'))
     result_groups.append(torchvision_regression('densenet121'))
-    # result_groups.append(bert_regression())
-    # result_groups.append(llama_regression())
+    result_groups.append(bert_regression())
+    result_groups.append(llama_regression())
     with open(report_file, 'w') as f:
         f.write("---------------- Model Performance Regression -----------------\n")
         for result_group in result_groups:
@@ -174,5 +173,5 @@ if __name__ == '__main__':
         help='Specify report output path'
     )
     args = parser.parse_args()
-    enable_compiled_server(True)
+    enable_compiled_server()
     model_performance_regression(args.report)
