@@ -73,7 +73,13 @@ class Conv2dChannelLastResolveRule(ResolveRule):
             else:
                 k_parts = 1
             out = ops.conv2d_gemm_fp16_channel_last(
-                data, weight, padding=padding, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=k_parts
+                data,
+                weight,
+                padding=padding,
+                stride=stride,
+                dilations=dilations,
+                groups=groups,
+                parallel_k_parts=k_parts,
             )
             return [out]
         return None

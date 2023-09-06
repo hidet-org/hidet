@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Callable, Tuple, Iterable, Optional, Sequence, Type
+from typing import List, Dict, Tuple, Iterable, Optional
 
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.flow_graph import FlowGraph
@@ -24,10 +24,12 @@ class PermutedOp:
     as needed, produce channel last outputs, and update the tensor map with new inputs and outputs.
     The base case of PermutedOp can accept channel last inputs by updating its 'axis' attribute.
     """
+
     # Some imports will cause circular import errors if imported at top level of class
     # Therefore we import those inside PermutedOp.get_scroped_ops() instead
     from hidet.graph.ops.arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
     from hidet.graph.ops.transform import ConcatOp
+
     regular_operators = (UnaryElementwiseOp, BinaryElementwiseOp, ConcatOp)
     channel_last_operators = tuple()
     scoped_operators = tuple()
@@ -37,6 +39,7 @@ class PermutedOp:
 
     def reforward(self, tensor_map) -> None:
         from hidet.graph.ops.transform import transpose
+
         node = self.op
         new_inputs: List[Tensor] = []
         update_attributes = {}
@@ -58,13 +61,13 @@ class PermutedOp:
             new_inputs.append(new_x)
             new_perms.append(new_perm)
         new_perm = new_perms[0]
-        assert all([p == new_perm for p in new_perms])
+        assert all(p == new_perm for p in new_perms)
         if 'axis' in node.attrs and isinstance(node.attrs['axis'], int):
             update_attributes['axis'] = new_perm.index(node.attrs['axis'])
         outputs = node.reforward(new_inputs, update_attributes)
         for idx, y in enumerate(node.outputs):
             tensor_map[y] = (outputs[idx], new_perm)
-    
+
     @staticmethod
     def initialize_scoped_ops():
         """
@@ -75,6 +78,7 @@ class PermutedOp:
         """
         from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.pool import MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp
+
         PermutedOp.channel_last_operators = (Conv2dOp, MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp)
         PermutedOp.scoped_operators = PermutedOp.regular_operators + PermutedOp.channel_last_operators
 
@@ -93,29 +97,38 @@ class PermutedOp:
         Given input tensor x[n, c, h, w], an operator Op is within scope if
             1. x is an input to Op, and the output tensor is also of shape [n, c, h, w]
             2. P is the set of attributes of Op; x_chnlast = x.transpose[0, 2, 3, 1];
-               and there exists another set of attributes P', such that 
+               and there exists another set of attributes P', such that
                Op(x_chnlast, P')).transpose([0, 3, 1, 2]) == Op(x, P)
         This list is incomplete. To support a new operator in the scope, implement its
         corresponding PermutedOp or use an existing one and update `get_permuted_op()`.
         """
         return PermutedOp.scoped_operators
-    
+
     @staticmethod
     def get_new_params(op: Operator) -> Dict:
         from hidet.graph.ops.pool import MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp
         from hidet.graph.ops.conv2d import Conv2dOp
+
         def MaxPool2dOp_params(op: MaxPool2dOp):
             from hidet.graph.ops.pool import max_pool2d_channel_last
+
             return {'callable': max_pool2d_channel_last, 'attrs': op.attrs}
+
         def AvgPool2dOp_params(op: AvgPool2dOp):
             from hidet.graph.ops.pool import avg_pool2d_channel_last
+
             return {'callable': avg_pool2d_channel_last, 'attrs': op.attrs}
+
         def AdaptiveAvgPool2dOp_params(op: AdaptiveAvgPool2dOp):
             from hidet.graph.ops.pool import adaptive_avg_pool2d_channel_last
+
             return {'callable': adaptive_avg_pool2d_channel_last, 'attrs': op.attrs}
+
         def Conv2dOp_params(op: Conv2dOp):
             from hidet.graph.ops.conv2d import conv2d_channel_last
+
             return {'callable': conv2d_channel_last, 'attrs': op.attrs}
+
         get_params_func_map = {
             MaxPool2dOp: MaxPool2dOp_params,
             AvgPool2dOp: AvgPool2dOp_params,
@@ -127,15 +140,15 @@ class PermutedOp:
         get_params_func = get_params_func_map[op.__class__]
         return get_params_func(op)
 
+
 class PermutedChanlastOp(PermutedOp):
     """
     This type of PermutedOp requires calling a new function specifically made for channel last tensors
     """
-    def __init__(self, op: Operator) -> None:
-        super().__init__(op)
-    
+
     def reforward(self, tensor_map) -> None:
         from hidet.graph.ops.transform import transpose
+
         node = self.op
         # Prepare transformed inputs
         x = node.inputs[0]
@@ -150,7 +163,7 @@ class PermutedChanlastOp(PermutedOp):
             new_perm = [0, 2, 3, 1]
             new_x = transpose(current_x, new_perm)
             tensor_map[x] = (new_x, new_perm)
-        
+
         params = PermutedOp.get_new_params(node)
         func = params['callable']
         attrs = params['attrs']
@@ -173,9 +186,7 @@ class ConvChannelLastPass(GraphPass):
         3. For operators out of scope, convert its input back to channel first based on recorded permuations.
     """
 
-    def span_from_nodes(
-        self, usage: Dict[Tensor, List[Tuple[Operator, int]]], seeds: List[Operator]
-    ) -> List[Operator]:
+    def span_from_nodes(self, usage: Dict[Tensor, List[Tuple[Operator, int]]], seeds: List[Operator]) -> List[Operator]:
         # span from the seed operators, return all operators that are connect to the
         # seed operators and also within the predefined scope of this pass (see `PermutedOp.get_scoped_op()`).
         def connected_operators(op: Operator) -> Iterable[Operator]:
@@ -183,9 +194,9 @@ class ConvChannelLastPass(GraphPass):
                 if x.trace is not None:
                     yield x.trace[0]
             for y in op.outputs:
-                for user, idx in usage[y]:
+                for user, _ in usage[y]:
                     yield user
-        
+
         scoped_ops = PermutedOp.get_scoped_ops()
         scope_nodes = set()
         visited_nodes = set()
@@ -203,6 +214,7 @@ class ConvChannelLastPass(GraphPass):
         # TODO: Deal with FP16/FP32
         from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.transform import transpose
+
         nodes: List[Operator] = graph.nodes
         # Start from all conv2d operators as seeds
         seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
@@ -210,7 +222,7 @@ class ConvChannelLastPass(GraphPass):
         # Only use this pass if there is convolution in the graph
         if len(seeds) == 0:
             return graph
-        
+
         # Update the class variables of PermutedOp, this is done here to avoid circular dependency
         PermutedOp.initialize_scoped_ops()
         # Get the usage of each Tensor
@@ -242,7 +254,7 @@ class ConvChannelLastPass(GraphPass):
                             to_orig_perm = [current_perm.index(i) for i in range(len(current_perm))]
                             new_x = transpose(current_x, to_orig_perm)
                         else:
-                            new_x = current_x 
+                            new_x = current_x
                         tensor_map[x] = (new_x, None)
                         new_inputs.append(new_x)
                     else:
@@ -251,7 +263,7 @@ class ConvChannelLastPass(GraphPass):
                     outputs = node.reforward(new_inputs, update_attributes)
                     for idx, y in enumerate(node.outputs):
                         tensor_map[y] = (outputs[idx], None)
-        
+
         # Get the new outputs for the new flowgraph
         new_outputs = []
         for output_tensor in graph.outputs:
@@ -265,9 +277,8 @@ class ConvChannelLastPass(GraphPass):
                 else:
                     new_x = current_x
             new_outputs.append(new_x)
-        
-        print("ConvChannelLastPass number of out of scope nodes:", out_of_scope_count)
-        ret =  FlowGraph(new_outputs, graph.inputs)
+
+        ret = FlowGraph(new_outputs, graph.inputs)
         return ret
 
 

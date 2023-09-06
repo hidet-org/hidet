@@ -17,6 +17,7 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_li
 from .utils import normalize_padding, normalize_output
 from ..transforms import ResolveRule, register_resolve_rule
 
+
 class Pool2dChannelLastTask(Task):
     def __init__(self, x: TensorNode, kernel, strides, padding, ceil_mode: bool, reduce_type: str):
         assert reduce_type in ['max', 'avg']
@@ -50,6 +51,7 @@ class Pool2dChannelLastTask(Task):
             ),
         )
         super().__init__(name='{}_pool2d_channel_last'.format(reduce_type), inputs=[x], outputs=[y])
+
 
 class Pool2dTask(Task):
     def __init__(self, x: TensorNode, kernel, strides, padding, ceil_mode: bool, reduce_type: str):
@@ -174,6 +176,7 @@ class AdaptivePoolTask(Task):
             attributes={'output_size': output_size},
         )
 
+
 class AdaptivePoolChannelLastTask(Task):
     def __init__(self, x: TensorNode, output_size: Sequence[int], reduce_type: str):
         assert reduce_type in ['max', 'avg']
@@ -216,6 +219,7 @@ class AdaptivePoolChannelLastTask(Task):
             attributes={'output_size': output_size},
         )
 
+
 class MaxPool2dOp(Operator):
     def __init__(
         self,
@@ -230,6 +234,7 @@ class MaxPool2dOp(Operator):
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding, 'ceil_mode': ceil_mode},
             task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='max'),
         )
+
 
 class MaxPool2dChannelLastOp(Operator):
     def __init__(
@@ -276,6 +281,7 @@ class AvgPool2dOp(Operator):
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding, 'ceil_mode': ceil_mode},
             task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='avg'),
         )
+
 
 class AvgPool2dChannelLastOp(Operator):
     def __init__(
@@ -324,6 +330,7 @@ class AdaptivePoolOp(Operator):
             task=AdaptivePoolTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
         )
 
+
 class AdaptivePoolChannelLastOp(Operator):
     def __init__(self, x: Tensor, output_size, reduce_type: str, attrs: Dict[str, Any], spatial_ndim: int):
         if len(x.shape) != spatial_ndim + 2:
@@ -340,6 +347,7 @@ class AdaptivePoolChannelLastOp(Operator):
             task=AdaptivePoolChannelLastTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
         )
 
+
 class AdaptiveAvgPool1dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
         super().__init__(x, output_size, reduce_type='avg', attrs={'output_size': output_size}, spatial_ndim=1)
@@ -349,9 +357,11 @@ class AdaptiveAvgPool2dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
         super().__init__(x, output_size, reduce_type='avg', attrs={'output_size': output_size}, spatial_ndim=2)
 
+
 class AdaptiveAvgPool2dChannelLastOp(AdaptivePoolChannelLastOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
         super().__init__(x, output_size, reduce_type='avg', attrs={'output_size': output_size}, spatial_ndim=2)
+
 
 class AdaptiveAvgPool3dOp(AdaptivePoolOp):
     def __init__(self, x: Tensor, output_size: Union[int, Sequence[int]]):
@@ -376,8 +386,10 @@ class AdaptiveMaxPool3dOp(AdaptivePoolOp):
 def max_pool2d(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
     return MaxPool2dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
+
 def max_pool2d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
     return MaxPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+
 
 def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return MaxPool3dOp(x, kernel, stride, padding).outputs[0]
@@ -386,8 +398,10 @@ def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
 def avg_pool2d(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
     return AvgPool2dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
+
 def avg_pool2d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
     return AvgPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+
 
 def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool3dOp(x, kernel, stride, padding).outputs[0]
@@ -400,8 +414,10 @@ def adaptive_avg_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Te
 def adaptive_avg_pool2d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool2dOp(x, output_size).outputs[0]
 
+
 def adaptive_avg_pool2d_channel_last(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool2dChannelLastOp(x, output_size).outputs[0]
+
 
 def adaptive_avg_pool3d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool3dOp(x, output_size).outputs[0]

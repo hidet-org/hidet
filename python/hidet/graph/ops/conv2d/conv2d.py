@@ -77,9 +77,18 @@ class Conv2dTask(Task):
 
 
 class Conv2dChannelLastTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, padding: List[int], stride: List[int], dilations: List[int], groups: int):
+    def __init__(
+        self,
+        data: TensorNode,
+        weight: TensorNode,
+        padding: List[int],
+        stride: List[int],
+        dilations: List[int],
+        groups: int,
+    ):
         # pylint: disable=too-many-locals
         from hidet.ir.compute.cops import pad
+
         # we assume that only data needs to have dynamic shape
         pad_h, pad_w, pad_c = padding
         n, h, w, c = data.shape
@@ -146,7 +155,15 @@ class Conv2dOp(Operator):
 
 
 class Conv2dChannelLastOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, padding: Sequence[int], stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
+    def __init__(
+        self,
+        x: Tensor,
+        w: Tensor,
+        padding: Sequence[int],
+        stride: Sequence[int],
+        dilations: Union[int, Sequence[int]],
+        groups: int,
+    ):
         stride = normalize_stride(stride)
         dilations = normalize_dilations(dilations)
         super().__init__(
@@ -175,7 +192,6 @@ def conv2d_channel_last(
     groups: int = 1,
     padding: Sequence[int] = (0, 0),
 ) -> Tensor:
-    import hidet
     _, _, _, c = data.shape
     if groups == 1 and c % 8 != 0:
         pad_channel = cdiv(c, 8) * 8 - c
