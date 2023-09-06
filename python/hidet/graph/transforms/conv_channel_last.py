@@ -74,8 +74,8 @@ class PermutedOp:
         TODO: Restructure the code to resolve the circular imports.
         """
         from hidet.graph.ops.conv2d import Conv2dOp
-        from hidet.graph.ops.pool import MaxPool2dOp, AdaptiveAvgPool2dOp
-        PermutedOp.channel_last_operators = (Conv2dOp, MaxPool2dOp, AdaptiveAvgPool2dOp)
+        from hidet.graph.ops.pool import MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp
+        PermutedOp.channel_last_operators = (Conv2dOp, MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp)
         PermutedOp.scoped_operators = PermutedOp.regular_operators + PermutedOp.channel_last_operators
 
     @staticmethod
@@ -102,11 +102,14 @@ class PermutedOp:
     
     @staticmethod
     def get_new_params(op: Operator) -> Dict:
-        from hidet.graph.ops.pool import MaxPool2dOp, AdaptiveAvgPool2dOp
+        from hidet.graph.ops.pool import MaxPool2dOp, AvgPool2dOp, AdaptiveAvgPool2dOp
         from hidet.graph.ops.conv2d import Conv2dOp
         def MaxPool2dOp_params(op: MaxPool2dOp):
             from hidet.graph.ops.pool import max_pool2d_channel_last
             return {'callable': max_pool2d_channel_last, 'attrs': op.attrs}
+        def AvgPool2dOp_params(op: AvgPool2dOp):
+            from hidet.graph.ops.pool import avg_pool2d_channel_last
+            return {'callable': avg_pool2d_channel_last, 'attrs': op.attrs}
         def AdaptiveAvgPool2dOp_params(op: AdaptiveAvgPool2dOp):
             from hidet.graph.ops.pool import adaptive_avg_pool2d_channel_last
             return {'callable': adaptive_avg_pool2d_channel_last, 'attrs': op.attrs}
@@ -115,6 +118,7 @@ class PermutedOp:
             return {'callable': conv2d_channel_last, 'attrs': op.attrs}
         get_params_func_map = {
             MaxPool2dOp: MaxPool2dOp_params,
+            AvgPool2dOp: AvgPool2dOp_params,
             AdaptiveAvgPool2dOp: AdaptiveAvgPool2dOp_params,
             Conv2dOp: Conv2dOp_params,
         }

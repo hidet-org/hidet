@@ -277,6 +277,21 @@ class AvgPool2dOp(Operator):
             task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='avg'),
         )
 
+class AvgPool2dChannelLastOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        kernel: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]],
+        padding: Union[int, Sequence[int]],
+        ceil_mode: bool,
+    ):
+        super().__init__(
+            inputs=[x],
+            attributes={'kernel': kernel, 'stride': stride, 'padding': padding, 'ceil_mode': ceil_mode},
+            task=Pool2dChannelLastTask(input_like(x, 'x'), kernel, stride, padding, ceil_mode, reduce_type='avg'),
+        )
+
 
 class AvgPool3dOp(Operator):
     def __init__(
@@ -371,6 +386,8 @@ def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
 def avg_pool2d(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
     return AvgPool2dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
+def avg_pool2d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
+    return AvgPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
 def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool3dOp(x, kernel, stride, padding).outputs[0]
