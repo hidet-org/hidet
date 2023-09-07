@@ -143,7 +143,6 @@ def model_performance_regression(report_file):
     # Uncomment below line to limit parallel jobs if running out of CPU memory
     # hidet.option.parallel_tune(16)
     result_groups = []
-    hidet.option.cache_dir('/home/hanjie/hidet/hidet_regression/.hidet_cache')
     result_groups.append(torchvision_regression('resnet50'))
     result_groups.append(torchvision_regression('deeplabv3_resnet50'))
     result_groups.append(torchvision_regression('mobilenet_v2'))
