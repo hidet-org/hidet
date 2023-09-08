@@ -142,6 +142,7 @@ def llama_regression():
 def model_performance_regression(report_file):
     # Uncomment below line to limit parallel jobs if running out of CPU memory
     # hidet.option.parallel_tune(16)
+    hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
     result_groups = []
     result_groups.append(torchvision_regression('resnet50'))
     result_groups.append(torchvision_regression('deeplabv3_resnet50'))

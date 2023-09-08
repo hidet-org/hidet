@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Tuple, Iterable, Optional
+from typing import List, Dict, Tuple, Iterable, Optional, Any
 
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.flow_graph import FlowGraph
@@ -37,13 +37,13 @@ class PermutedOp:
     def __init__(self, op: Operator) -> None:
         self.op = op
 
-    def reforward(self, tensor_map) -> None:
+    def reforward(self, tensor_map: Dict[Tensor, Tuple[Tensor, Optional[List[int]]]]) -> None:
         from hidet.graph.ops.transform import transpose
 
         node = self.op
         new_inputs: List[Tensor] = []
-        update_attributes = {}
-        new_perms = []
+        update_attributes: Dict[str, Any] = {}
+        new_perms: List[List[int]] = []
         for x in node.inputs:
             if x in tensor_map:
                 current_x, current_perm = tensor_map[x]
@@ -146,7 +146,7 @@ class PermutedChanlastOp(PermutedOp):
     This type of PermutedOp requires calling a new function specifically made for channel last tensors
     """
 
-    def reforward(self, tensor_map) -> None:
+    def reforward(self, tensor_map: Dict[Tensor, Tuple[Tensor, Optional[List[int]]]]) -> None:
         from hidet.graph.ops.transform import transpose
 
         node = self.op
