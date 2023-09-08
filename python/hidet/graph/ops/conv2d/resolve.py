@@ -56,23 +56,30 @@ class Conv2dResolveRule(ResolveRule):
 @register_resolve_rule(Conv2dChannelLastOp)
 class Conv2dChannelLastResolveRule(ResolveRule):
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
-        assert isinstance(op, Conv2dOp)
+        assert isinstance(op, Conv2dChannelLastOp)
         stride = ops.utils.normalize_stride(op.attrs['stride'])
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
+        padding = op.attrs['padding']
         channels = op.inputs[0].shape[-1]
         # TODO: current assert mechanism does not cover this use case
         if is_constant(channels) and groups == channels:
             return None  # use depthwise schedule in the default Task
         data, weight = op.inputs
-        if channels >= 16 and data.dtype == float16 and weight.dtype == float16:
+        if data.dtype == float16 and weight.dtype == float16:
             # after some benchmarking, basically k_parts = 1 is sufficent for most cases
             if all(is_constant(s) for s in data.shape):
                 k_parts = parallel_part_heuristic(data.shape, weight.shape, stride, dilations, groups)
             else:
                 k_parts = 1
             out = ops.conv2d_gemm_fp16_channel_last(
-                data, weight, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=k_parts
+                data,
+                weight,
+                padding=padding,
+                stride=stride,
+                dilations=dilations,
+                groups=groups,
+                parallel_k_parts=k_parts,
             )
             return [out]
         return None
