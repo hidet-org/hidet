@@ -24,6 +24,15 @@ from hidet.lang.transpiler import PythonToHidetTranslator
 from hidet.runtime.compiled_module import CompiledModule
 
 
+class ScriptFunction:
+    def __init__(self, func: Function):
+        self.func: Function = func
+        self.callees: List[ScriptFunction] = []
+
+    def __call__(self, *args):
+        pass
+
+
 def eliminate_indent(source: str) -> Tuple[str, int]:
     lines = source.split('\n')
     indent = len(source)
