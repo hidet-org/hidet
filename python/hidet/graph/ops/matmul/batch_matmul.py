@@ -474,7 +474,7 @@ class BatchMatmulTask(Task):
 
             @hidet.script
             def copy_a_g2r(
-                a: a_dtype[bs, m_size, k_size],
+                a: input_a_dtype[bs, m_size, k_size],
                 regs_a_ldg: TensorType(dtype=a_dtype, layout=regs_a_ldg_layout),
                 offset_m: i32,
                 offset_k: i32,
@@ -511,7 +511,7 @@ class BatchMatmulTask(Task):
 
             @hidet.script
             def copy_b_g2r(
-                b: b_dtype[bs, k_size, n_size],
+                b: input_b_dtype[bs, k_size, n_size],
                 regs_b_ldg: TensorType(dtype=b_dtype, layout=regs_b_ldg_layout),
                 offset_k: i32,
                 offset_n: i32,
@@ -549,7 +549,7 @@ class BatchMatmulTask(Task):
             @hidet.script
             def copy_c_r2g(
                 regs_c: TensorType(dtype=c_dtype, layout=regs_c_layout),
-                c: c_dtype[bs, m_size, n_size],
+                c: input_c_dtype[bs, m_size, n_size],
                 offset_m: i32,
                 offset_n: i32,
                 smem: void_p,
