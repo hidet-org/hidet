@@ -453,16 +453,19 @@ class AdaptivePoolResolveRule(ResolveRule):
                 return [mean(x, dims=dims[2:], keep_dim=True)]
         return None
 
+
 @register_resolve_rule(AdaptivePoolChannelLastOp)
-class AdaptivePoolResolveRule(ResolveRule):
+class AdaptivePoolChannelLastResolveRule(ResolveRule):
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, AdaptivePoolChannelLastOp)
         x: Tensor = op.inputs[0]
+        # TODO: Deal with generic N-dimensional convolution
+        if len(x.shape) != 4:
+            return None
         output_size = op.attrs['output_size']
         reduce_type = op.reduce_type
         resolve_to_reduce = output_size == 1 if isinstance(output_size, int) else all(d == 1 for d in output_size)
         if resolve_to_reduce:
-            dims = [i for i in range(len(x.shape))]
             from hidet.graph.ops import mean, max
 
             # Since sometimes the h and w dimensions are large, separating them into two kernels may be faster
@@ -470,10 +473,8 @@ class AdaptivePoolResolveRule(ResolveRule):
                 reduce_h = max(x, dims=1, keep_dim=True)
                 reduce_hw = max(reduce_h, dims=2, keep_dim=True)
                 return [reduce_hw]
-                # return [max(x, dims=dims[1:-1], keep_dim=True)]
             elif reduce_type == 'avg':
                 reduce_h = mean(x, dims=1, keep_dim=True)
                 reduce_hw = mean(reduce_h, dims=2, keep_dim=True)
                 return [reduce_hw]
-                # return [mean(x, dims=dims[1:-1], keep_dim=True)]
         return None
