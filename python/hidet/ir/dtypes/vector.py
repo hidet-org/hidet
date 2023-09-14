@@ -12,7 +12,7 @@
 from typing import Any, Sequence
 from hidet.ir.type import DataType
 from .floats import float32, float16
-from .integer import int32, int8
+from .integer import int8
 
 
 class VectorType(DataType):
@@ -77,8 +77,6 @@ i8x4 = int8x4
 float32x4 = VectorType(float32, 4)
 float32x8 = VectorType(float32, 8)
 float16x2 = VectorType(float16, 2)
-int32x8 = VectorType(int32, 8)
-i32x8 = int32x8
 
 float32x4 = VectorType(float32, 4)
 f32x4 = float32x4

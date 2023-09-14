@@ -171,12 +171,12 @@ class NormalizeTask(Task):
 
             @hidet.script
             def welford_combine(
-                    mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                    m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                    count_a: TensorType(dtype=i32, shape=[1]),
-                    mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                    m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                    count_b: TensorType(dtype=i32, shape=[1]),
+                mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                count_a: TensorType(dtype=i32, shape=[1]),
+                mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                count_b: TensorType(dtype=i32, shape=[1]),
             ):
                 count = count_a[0] + count_b[0]
                 if count == 0:
@@ -185,13 +185,13 @@ class NormalizeTask(Task):
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
                 m2_a[0] = (
-                        m2_a[0]
-                        + m2_b[0]
-                        + delta
-                        * delta
-                        * cast(count_a[0], accumulate_dtype)
-                        * cast(count_b[0], accumulate_dtype)
-                        / cast(count, accumulate_dtype)
+                    m2_a[0]
+                    + m2_b[0]
+                    + delta
+                    * delta
+                    * cast(count_a[0], accumulate_dtype)
+                    * cast(count_b[0], accumulate_dtype)
+                    / cast(count, accumulate_dtype)
                 )
                 count_a[0] = count
 

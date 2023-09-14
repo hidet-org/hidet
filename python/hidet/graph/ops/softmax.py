@@ -187,7 +187,6 @@ class SoftmaxTask(Task):
         head_size = prod(head)
         tail_size = prod(tail)
         axis_size = shape[self.axis]
-        total_size = prod(shape)
 
         with hidet.script_module() as module:
             @hidet.script

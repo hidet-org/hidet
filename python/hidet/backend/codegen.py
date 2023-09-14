@@ -620,12 +620,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'float16x2': 'half2',
             'float32x4': '__m128',
             'float32x8': '__m256',
-            'int8x4': 'char4',
-            'int32x8': '__m256i',
+            'int8x4': 'char4'
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
-        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8', 'int32x8']
+        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8']
         self.require_bf16 = self.require_bf16 or t.name == 'bfloat16'
         self.require_fp16 = self.require_fp16 or t.name == 'float16'
         self.require_tf32 = self.require_tf32 or t.name == 'tfloat32'
