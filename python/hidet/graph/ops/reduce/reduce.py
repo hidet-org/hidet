@@ -17,6 +17,7 @@ from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.ir.type import DataType
 from hidet.ir.dtypes.vector import VectorType, vectorize
 from hidet.ir.library import tune
+from hidet.utils.py import cdiv
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
 from ..utils import compute, input_like, normalize_dim, arg_reduce
@@ -87,7 +88,7 @@ class ReduceTask(Task):
                 lanes = num_eles
                 vtype = vectorize(xdtype, lanes)
         read_shape = shape[:]
-        read_shape[-1] /= lanes
+        read_shape[-1] //= lanes
         block_size = (read_shape[-1] + warp_size - 1) // warp_size * warp_size
         block_size = hidet.ir.expr.if_then_else(block_size > 1024, 1024, block_size)
 
@@ -192,12 +193,16 @@ class ReduceTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    def cuda_schedule_reduce_by_default(self) -> IRModule:
+    @tune.space(2, max_block_size=[256, 512, 1024])
+    def cuda_schedule_reduce_by_default(self, max_block_size=256) -> IRModule:
         import hidet
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int
         from hidet.lang import spatial, repeat, attrs, tensor_pointer
         from hidet.ir.expr import cast, address
+
+        WARP_SIZE = 32
+        max_num_warps = max_block_size // WARP_SIZE
 
         x, y = self.inputs[0], self.outputs[0]
         xdtype = x.type.dtype
@@ -212,33 +217,47 @@ class ReduceTask(Task):
                 vtype = VectorType(xdtype, lanes)
 
         read_shape = shape[:]
-        read_shape[-1] /= lanes
+        read_shape[-1] //= lanes
+        read_shape[-1] = cdiv(read_shape[-1], WARP_SIZE) * WARP_SIZE
 
         dims = self.dims
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
         else:
             remain_shape = [v for i, v in enumerate(shape) if i not in dims]
-        remain_shape[-1] /= lanes
+        remain_shape[-1] //= lanes
+        remain_shape[-1] = cdiv(remain_shape[-1], WARP_SIZE) * WARP_SIZE
 
         reduce_extent = hidet.utils.prod(x.shape[i] for i in dims)
 
         remain_extent = hidet.utils.prod(remain_shape)
-        block_size = hidet.ir.expr.if_then_else(256 < remain_extent, 256, remain_extent)
+
+        remain_threads = hidet.ir.expr.if_then_else(remain_extent > max_block_size, max_block_size, remain_extent)
+        # 1 <= read_warps <= max_num_warps
+        remain_warps = cdiv(remain_threads, WARP_SIZE)
+        # 8 <= max_num_warps <= 32, so 1 <= warps_per_reduce <= 32
+        reduce_warps = max_num_warps // remain_warps
+        num_warps = reduce_warps * remain_warps
+        block_size = num_warps * WARP_SIZE
+
         remain_layout = spatial(*remain_shape)
 
         spatial_shape = []
         repeat_shape = []
         for i in range(len(read_shape)):
-            if i in dims:
+            if i == dims[0]:
+                spatial_shape.append(reduce_warps)
+                repeat_shape.append(cdiv(read_shape[i], reduce_warps))
+            elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(read_shape[i])
             else:
                 spatial_shape.append(read_shape[i])
                 repeat_shape.append(1)
+
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
 
-        grid_size = (remain_layout.num_workers + block_size - 1) // block_size
+        grid_size = (task_layout.num_workers + block_size - 1) // block_size
         accumulate_dtype = self.attrs['accumulate_dtype']
         reduce_type = self.attrs['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
