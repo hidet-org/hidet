@@ -210,6 +210,11 @@ class ReduceTask(Task):
         xdtype = x.type.dtype
         shape: List[Int] = list(x.shape)
 
+        accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
+        reduce_type = self.attrs['reduce_type']
+        ro = ReduceOperation.from_name(reduce_type)
+        perform_atomic_reduce = use_atomic and ro.has_atomic(accumulate_dtype)
+
         lanes = 1
         vtype: Union[VectorType, DataType] = xdtype
         if xdtype.nbytes < 4:
@@ -250,33 +255,36 @@ class ReduceTask(Task):
 
         spatial_shape = []
         repeat_shape = []
+        smem_shape = []
         for i in range(len(read_shape)):
             if i == dims[0]:
                 spatial_shape.append(reduce_warps)
                 repeat_shape.append(cdiv(read_shape[i], reduce_warps))
+                if perform_atomic_reduce:
+                    smem_shape.append(reduce_warps)
+                else:
+                    smem_shape.append(1)
             elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(read_shape[i])
+                smem_shape.append(1)
             else:
                 spatial_shape.append(read_shape[i])
                 repeat_shape.append(1)
+                smem_shape.append(shape[i])
 
-        task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
+        read_task_mapping = repeat(*repeat_shape) * spatial(*spatial_shape)
 
-        grid_size = (task_layout.num_workers + block_size - 1) // block_size
-        accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
-        reduce_type = self.attrs['reduce_type']
-        ro = ReduceOperation.from_name(reduce_type)
+        grid_size = (read_task_mapping.num_workers + block_size - 1) // block_size
 
-        perform_atomic_reduce = use_atomic and ro.has_atomic(accumulate_dtype)
-        if perform_atomic_reduce:
-            smem_shape = [1 if i == dims[0] else v for i, v in enumerate(spatial_shape)]
-        else:
-            smem_shape = spatial_shape
         smem_layout = row_major(*smem_shape)
-        smem_task_mapping = spatial(*smem_shape)
+        smem_repeat_shape = [1] * (len(spatial_shape) - 1) + [lanes]
+        smem_task_mapping = spatial(*spatial_shape) * repeat(*smem_repeat_shape)
         smem_type = tensor_type(accumulate_dtype, layout=smem_layout)
         smem_needed = smem_type.storage_bytes()
+
+        import pdb
+        pdb.set_trace()
 
         with hidet.script_module() as module:
 
@@ -301,9 +309,10 @@ class ReduceTask(Task):
 
                 # Init smem
                 for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                    smem_staging[indices] = rv[0]
+                    if smem_layout.within_bound(indices):
+                        smem_staging[indices] = rv[0]
 
-                for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
+                for indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                     if read_layout.within_bound(indices):
                         vec_read = x_vectorized[indices]
                         if lanes > 1:
@@ -316,8 +325,21 @@ class ReduceTask(Task):
                 # At this point, all threads contain their local reduction value in their register rv[]
                 # Next, need to atomically update those values into respective smem location
 
+                if perform_atomic_reduce:
+                    syncthreads()
+                    for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                        if smem_layout.within_bound(indices):
+                            ro.atomic_combine(~smem_staging[indices], rv[indices[-1] % lanes])
+                else:
+                    #TODO: Implement reduce via multiround writebacks + syncthreads
+                    pass
+                
+                # At this point, the shared memory contains the final reduction value.
+                # Next, need to collect the value and write back to global memory
+
+                # ---------------------------- old -------------------------------------
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
-                    for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
+                    for indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                         vec_read = x_vectorized[indices]
                         if lanes > 1:
                             for lane_id in grid(lanes, "u+"):
