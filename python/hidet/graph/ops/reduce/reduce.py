@@ -225,6 +225,7 @@ class ReduceTask(Task):
 
         read_shape = shape[:]
         read_shape[-1] //= lanes
+        x_vectorized_shape = read_shape[:]
         read_layout = row_major(*read_shape)
         read_shape[-1] = cdiv(read_shape[-1], WARP_SIZE) * WARP_SIZE
 
@@ -234,6 +235,7 @@ class ReduceTask(Task):
         else:
             remain_shape = [v for i, v in enumerate(shape) if i not in dims]
         remain_shape[-1] //= lanes
+        y_vectorized_shape = remain_shape[:]
         remain_shape[-1] = cdiv(remain_shape[-1], WARP_SIZE) * WARP_SIZE
 
         reduce_extent = hidet.utils.prod(x.shape[i] for i in dims)
@@ -250,10 +252,7 @@ class ReduceTask(Task):
         reduce_warps = max_num_warps // remain_warps
         num_warps = reduce_warps * remain_warps
         block_size = num_warps * WARP_SIZE
-
-        remain_task_mapping = spatial(*remain_shape)
-        write_repeat_shape = [1] * (len(remain_shape) - 1) + [lanes]
-        write_task_mapping = spatial(*remain_shape) * repeat(*write_repeat_shape)
+        write_task_mapping = spatial(*remain_shape)
 
         spatial_shape = []
         repeat_shape = []
@@ -275,7 +274,7 @@ class ReduceTask(Task):
                 repeat_shape.append(1)
                 smem_shape.append(shape[i])
 
-        read_task_mapping = repeat(*repeat_shape) * spatial(*spatial_shape)
+        read_task_mapping =  spatial(*spatial_shape) * repeat(*repeat_shape)
 
         grid_size = (read_task_mapping.num_workers + block_size - 1) // block_size
 
@@ -303,8 +302,8 @@ class ReduceTask(Task):
                 smem_base = dynamic_shared_memory(byte_offset=0, dtype=accumulate_dtype)
                 smem_staging = tensor_pointer(accumulate_dtype, layout=smem_layout, init=cast(smem_base, ~accumulate_dtype))
 
-                x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
-                y_vectorized = tensor_pointer(vtype, shape=remain_shape, init=cast(y, ~vtype))
+                x_vectorized = tensor_pointer(vtype, shape=x_vectorized_shape, init=cast(x, ~vtype))
+                y_vectorized = tensor_pointer(vtype, shape=y_vectorized_shape, init=cast(y, ~vtype))
 
                 rv = register_tensor(accumulate_dtype, [lanes])
                 for lane_id in grid(lanes, "u+"):
@@ -344,14 +343,15 @@ class ReduceTask(Task):
                 # Next, need to write back to global memory
 
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
-                    for indices in write_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                    for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                         if smem_layout.within_bound(indices):
                             if lanes > 1:
                                 lane_vec = cast(~write_val, ~vtype.lane_type)
                                 lane_vec[indices[-1] % lanes] = ro.finalize(acc=smem_staging[indices], size=reduce_extent)
                             else:
                                 write_val[0] = ro.finalize(acc=smem_staging[indices], size=reduce_extent)
-                            y_vectorized[indices] = write_val[0]
+                    for indices in write_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                        y_vectorized[indices] = write_val[0]
 
         ir_module = module.ir_module()
         return ir_module
