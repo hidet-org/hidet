@@ -62,7 +62,7 @@ class ReduceTask(Task):
         if rank - 1 in self.dims:
             return tune.extract_ir_modules(self.cuda_schedule_reduce_by_warp)
         else:
-            return self.cuda_schedule_reduce_by_default()
+            return tune.extract_ir_modules(self.cuda_schedule_reduce_by_default)
 
     @tune.space(2, use_atomic=[True, False])
     @tune.space(1, use_atomic=[True, False])
@@ -193,7 +193,8 @@ class ReduceTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(2, max_block_size=[256, 512, 1024], use_atomic=[True, False])
+    @tune.space(2, max_block_size=[256, 512, 1024], use_atomic=[True])
+    @tune.space(1, max_block_size=[256, 512, 1024], use_atomic=[True])
     def cuda_schedule_reduce_by_default(self, max_block_size=256, use_atomic=True) -> IRModule:
         import hidet
         from hidet.ir.compute import ReduceOperation
