@@ -193,13 +193,15 @@ class ReduceTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(2, max_block_size=[256, 512, 1024])
-    def cuda_schedule_reduce_by_default(self, max_block_size=256) -> IRModule:
+    @tune.space(2, max_block_size=[256, 512, 1024], use_atomic=[True, False])
+    def cuda_schedule_reduce_by_default(self, max_block_size=256, use_atomic=True) -> IRModule:
         import hidet
         from hidet.ir.compute import ReduceOperation
-        from hidet.ir.type import data_type, Int
+        from hidet.ir.type import data_type, Int, tensor_type
+        from hidet.ir.expr import cast, address, is_constant
+        from hidet.ir.layout import row_major, local_layout
         from hidet.lang import spatial, repeat, attrs, tensor_pointer
-        from hidet.ir.expr import cast, address
+        from hidet.lang.cuda import dynamic_shared_memory, syncthreads
 
         WARP_SIZE = 32
         max_num_warps = max_block_size // WARP_SIZE
@@ -218,6 +220,7 @@ class ReduceTask(Task):
 
         read_shape = shape[:]
         read_shape[-1] //= lanes
+        read_layout = row_major(*read_shape)
         read_shape[-1] = cdiv(read_shape[-1], WARP_SIZE) * WARP_SIZE
 
         dims = self.dims
@@ -231,8 +234,11 @@ class ReduceTask(Task):
         reduce_extent = hidet.utils.prod(x.shape[i] for i in dims)
 
         remain_extent = hidet.utils.prod(remain_shape)
+        if is_constant(remain_extent):
+            remain_threads = hidet.ir.expr.if_then_else(remain_extent > max_block_size, max_block_size, remain_extent)
+        else:
+            remain_threads = max_block_size
 
-        remain_threads = hidet.ir.expr.if_then_else(remain_extent > max_block_size, max_block_size, remain_extent)
         # 1 <= read_warps <= max_num_warps
         remain_warps = cdiv(remain_threads, WARP_SIZE)
         # 8 <= max_num_warps <= 32, so 1 <= warps_per_reduce <= 32
@@ -258,9 +264,19 @@ class ReduceTask(Task):
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
 
         grid_size = (task_layout.num_workers + block_size - 1) // block_size
-        accumulate_dtype = self.attrs['accumulate_dtype']
+        accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
         reduce_type = self.attrs['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
+
+        perform_atomic_reduce = use_atomic and ro.has_atomic(accumulate_dtype)
+        if perform_atomic_reduce:
+            smem_shape = [1 if i == dims[0] else v for i, v in enumerate(spatial_shape)]
+        else:
+            smem_shape = spatial_shape
+        smem_layout = row_major(*smem_shape)
+        smem_task_mapping = spatial(*smem_shape)
+        smem_type = tensor_type(accumulate_dtype, layout=smem_layout)
+        smem_needed = smem_type.storage_bytes()
 
         with hidet.script_module() as module:
 
@@ -270,15 +286,35 @@ class ReduceTask(Task):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
+                attrs.cuda.dynamic_smem_bytes = smem_needed
+
+                smem_staging = dynamic_shared_memory(byte_offset=0, dtype=accumulate_dtype)
 
                 x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
                 y_vectorized = tensor_pointer(vtype, shape=remain_shape, init=cast(y, ~vtype))
 
                 rv = register_tensor(accumulate_dtype, [lanes])
                 for lane_id in grid(lanes, "u+"):
-                    rv[lane_id] = ro.initial_value(data_type(accumulate_dtype))
+                    rv[lane_id] = ro.initial_value(accumulate_dtype)
 
                 write_val = register_tensor(vtype, [1])
+
+                # Init smem
+                for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                    smem_staging[indices] = rv[0]
+
+                for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
+                    if read_layout.within_bound(indices):
+                        vec_read = x_vectorized[indices]
+                        if lanes > 1:
+                            for lane_id in grid(lanes, "u+"):
+                                lane_val = cast(address(vec_read), ~vtype.lane_type)[lane_id]
+                                rv[lane_id] = ro.combine(rv[lane_id], cast(lane_val, accumulate_dtype))
+                        else:
+                            rv[0] = ro.combine(rv[0], cast(vec_read, accumulate_dtype))
+
+                # At this point, all threads contain their local reduction value in their register rv[]
+                # Next, need to atomically update those values into respective smem location
 
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
                     for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
