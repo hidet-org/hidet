@@ -41,7 +41,7 @@ name2dtype = {
     'float32x4': float32x4,
     'float32x8': float32x8,
     'float16x2': float16x2,
-    'int8x4': int8x4
+    'int8x4': int8x4,
 }
 
 sname2dtype = {
@@ -64,7 +64,7 @@ sname2dtype = {
     'f32x4': f32x4,
     'f32x8': f32x8,
     'f16x2': f16x2,
-    'i8x4': int8x4
+    'i8x4': int8x4,
 }
 
 
