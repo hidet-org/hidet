@@ -40,8 +40,11 @@ def register_primitive_functions():
         ('avx_x86_float32x8_sqrt', '_mm256_sqrt_ps', FuncType(['float32x8'], 'float32x8')),
         ('avx_x86_float32x8_max', '_mm256_max_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_permute', '_mm256_permute_ps', FuncType(['float32x8', 'int8'], 'float32x8')),
-        ('avx_x86_float32x8_permute_2f128', '_mm256_permute2f128_ps', FuncType(['float32x8', 'float32x8', 'int8'],
-                                                                               'float32x8')),
+        (
+            'avx_x86_float32x8_permute_2f128',
+            '_mm256_permute2f128_ps',
+            FuncType(['float32x8', 'float32x8', 'int8'], 'float32x8'),
+        ),
         ('avx_x86_float32x8_extract_last', '_mm256_cvtss_f32', FuncType(['float32x8'], 'float32')),
         ('avx_x86_float32x8_extract_half', '_mm256_extractf128_ps', FuncType(['float32x8', 'int8'], 'float32x4')),
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
@@ -64,9 +67,13 @@ def register_primitive_functions():
     def avx_x86_f32x8_find_sum(x: f32x8) -> f32:
         attrs.func_kind = "cpu_internal"
         attrs.func_name = "avx_x86_float32x8_find_sum"
-        sum_vec = call_primitive_func('avx_x86_float32x4_add',
-                                      [call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b0]),
-                                       call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b1])])
+        sum_vec = call_primitive_func(
+            'avx_x86_float32x4_add',
+            [
+                call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b0]),
+                call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b1]),
+            ],
+        )
         sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
         sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
         return call_primitive_func('avx_x86_float32x4_extract_last', [sum_vec])

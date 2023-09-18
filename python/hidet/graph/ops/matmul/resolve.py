@@ -187,10 +187,10 @@ class MatmulResolveRule(ResolveRule):
             return None
         # if op.task.has_symbolic_shape():
         #     return None
-        
+
         if is_cpu:
             return None
-        
+
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]
