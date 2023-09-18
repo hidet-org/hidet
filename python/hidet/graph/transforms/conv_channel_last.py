@@ -224,12 +224,18 @@ class ConvChannelLastPass(GraphPass):
         from hidet.ir.dtypes import float16
 
         nodes: List[Operator] = graph.nodes
+<<<<<<< HEAD
         # Start from all fp16 conv2d operators as seeds
         seeds: List[Operator] = []
         for node in nodes:
             if isinstance(node, Conv2dOp):
                 if node.inputs[0].dtype == float16 and node.inputs[1].dtype == float16:
                     seeds.append(node)
+=======
+        # Start from all float16 conv2d operators as seed
+        seeds = [node for node in nodes if (isinstance(
+            node, Conv2dOp) and node.inputs[0].dtype == float16 and node.inputs[1].dtype == float16)]
+>>>>>>> c1c32936 (rid excessive smem)
 
         # Only use this pass if there is convolution in the graph
         if len(seeds) == 0:

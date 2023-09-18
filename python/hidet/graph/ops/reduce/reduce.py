@@ -247,42 +247,53 @@ class ReduceTask(Task):
         else:
             remain_threads = max_block_size
 
-        # 1 <= read_warps <= max_num_warps
         remain_warps = cdiv(remain_threads, WARP_SIZE)
-        # 8 <= max_num_warps <= 32, so 1 <= warps_per_reduce <= 32
-        reduce_warps = max_num_warps // remain_warps
+        max_reduce_warps = max_num_warps // remain_warps
+        reduce_warps = cdiv(reduce_extent, WARP_SIZE)
+        reduce_warps = max_reduce_warps if max_reduce_warps < reduce_warps else reduce_warps
         num_warps = reduce_warps * remain_warps
         block_size = num_warps * WARP_SIZE
         write_task_mapping = spatial(*remain_shape)
 
         spatial_shape = []
         repeat_shape = []
-        smem_shape = []
+        smem_bound_check_shape = []
+        smem_flatten_idx_shape = []
         for i in range(len(read_shape)):
             if i == dims[0]:
                 spatial_shape.append(reduce_warps)
                 repeat_shape.append(cdiv(read_shape[i], reduce_warps))
-                smem_shape.append(1)
+                smem_bound_check_shape.append(reduce_warps)
+                smem_flatten_idx_shape.append(1)
             elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(read_shape[i])
-                smem_shape.append(1)
+                smem_bound_check_shape.append(1)
+                smem_flatten_idx_shape.append(1)
             else:
                 spatial_shape.append(read_shape[i])
                 repeat_shape.append(1)
-                smem_shape.append(shape[i])
+                smem_bound_check_shape.append(shape[i])
+                smem_flatten_idx_shape.append(shape[i])
 
         read_task_mapping =  spatial(*spatial_shape) * repeat(*repeat_shape)
-
         grid_size = (read_task_mapping.num_workers + block_size - 1) // block_size
-
-        smem_local_shape = [v if i == dims[0] else 1 for i, v, in enumerate(spatial_shape)]
-        smem_layout = row_major(*smem_shape) * local_layout(*smem_local_shape)
-
-        smem_repeat_shape = [1] * (len(smem_shape) - 1) + [lanes]
+            
+        # Since threadblocks are distributed unevenly across multiple dimensions,
+        # we will use a flattened 1D layout for shared memory for simplicity.
+        smem_length = remain_warps * WARP_SIZE * lanes
+        smem_layout = row_major(smem_length)
+        smem_bound_check_layout = row_major(*smem_bound_check_shape)
+        smem_flatten_idx_layout = row_major(*smem_flatten_idx_shape)
+        smem_repeat_shape = [1] * (len(spatial_shape) - 1) + [lanes]
         smem_task_mapping = spatial(*spatial_shape) * repeat(*smem_repeat_shape)
         smem_type = tensor_type(accumulate_dtype, layout=smem_layout)
         smem_needed = smem_type.storage_bytes()
+
+        def flatten_smem_idx(indices):
+            x = indices[:]
+            x[dims[0]] = 1
+            return smem_flatten_idx_layout.serialize(x) % smem_length
 
         with hidet.script_module() as module:
 
@@ -308,8 +319,9 @@ class ReduceTask(Task):
 
                 # Init smem
                 for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                    if smem_layout.within_bound(indices):
-                        smem_staging[indices] = rv[0]
+                    if smem_bound_check_layout.within_bound(indices):
+                        flattened_idx = flatten_smem_idx(indices)
+                        smem_staging[flattened_idx] = rv[0]
 
                 for indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                     if read_layout.within_bound(indices):
@@ -327,16 +339,18 @@ class ReduceTask(Task):
                 syncthreads()
                 if perform_atomic_reduce:
                     for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                        if smem_layout.within_bound(indices):
-                            ro.atomic_combine(~smem_staging[indices], rv[indices[-1] % lanes])
+                        if smem_bound_check_layout.within_bound(indices):
+                            flattened_idx = flatten_smem_idx(indices)
+                            ro.atomic_combine(~smem_staging[flattened_idx], rv[indices[-1] % lanes])
                 else:
                     # Reduce via multiround writebacks + syncthreads
                     for k in range(reduce_warps):
                         for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                            if smem_layout.within_bound(indices):
+                            if smem_bound_check_layout.within_bound(indices):
+                                flattened_idx = flatten_smem_idx(indices)
                                 reduce_round = indices[dims[0]]
                                 if reduce_round == k:
-                                    smem_staging[indices] = ro.combine(smem_staging[indices], rv[indices[-1] % lanes])
+                                    smem_staging[flattened_idx] = ro.combine(smem_staging[flattened_idx], rv[indices[-1] % lanes])
                         syncthreads()
                 
                 syncthreads()
@@ -345,12 +359,13 @@ class ReduceTask(Task):
 
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
                     for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                        if smem_layout.within_bound(indices):
+                        if smem_bound_check_layout.within_bound(indices):
+                            flattened_idx = flatten_smem_idx(indices)
                             if lanes > 1:
                                 lane_vec = cast(~write_val, ~vtype.lane_type)
-                                lane_vec[indices[-1] % lanes] = ro.finalize(acc=smem_staging[indices], size=reduce_extent)
+                                lane_vec[indices[-1] % lanes] = ro.finalize(acc=smem_staging[flattened_idx], size=reduce_extent)
                             else:
-                                write_val[0] = ro.finalize(acc=smem_staging[indices], size=reduce_extent)
+                                write_val[0] = ro.finalize(acc=smem_staging[flattened_idx], size=reduce_extent)
                     for indices in write_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                         y_vectorized[indices] = write_val[0]
 
