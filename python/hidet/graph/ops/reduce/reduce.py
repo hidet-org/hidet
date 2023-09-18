@@ -193,8 +193,8 @@ class ReduceTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(2, max_block_size=[256, 512, 1024], use_atomic=[True])
-    @tune.space(1, max_block_size=[256, 512, 1024], use_atomic=[True])
+    @tune.space(2, max_block_size=[256, 512, 1024], use_atomic=[True, False])
+    @tune.space(1, max_block_size=[256, 512, 1024], use_atomic=[True, False])
     def cuda_schedule_reduce_by_default(self, max_block_size=256, use_atomic=True) -> IRModule:
         import hidet
         from hidet.ir.compute import ReduceOperation
@@ -262,10 +262,7 @@ class ReduceTask(Task):
             if i == dims[0]:
                 spatial_shape.append(reduce_warps)
                 repeat_shape.append(cdiv(read_shape[i], reduce_warps))
-                if perform_atomic_reduce:
-                    smem_shape.append(1)
-                else:
-                    smem_shape.append(reduce_warps)
+                smem_shape.append(1)
             elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(read_shape[i])
@@ -286,9 +283,6 @@ class ReduceTask(Task):
         smem_task_mapping = spatial(*spatial_shape) * repeat(*smem_repeat_shape)
         smem_type = tensor_type(accumulate_dtype, layout=smem_layout)
         smem_needed = smem_type.storage_bytes()
-
-        # import pdb
-        # pdb.set_trace()
 
         with hidet.script_module() as module:
 
@@ -328,16 +322,22 @@ class ReduceTask(Task):
                             rv[0] = ro.combine(rv[0], cast(vec_read, accumulate_dtype))
 
                 # At this point, all threads contain their local reduction value in their register rv[]
-                # Next, need to atomically update those values into respective smem location
+                # Next, need to reduce those values into respective smem location
 
+                syncthreads()
                 if perform_atomic_reduce:
-                    syncthreads()
                     for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                         if smem_layout.within_bound(indices):
                             ro.atomic_combine(~smem_staging[indices], rv[indices[-1] % lanes])
                 else:
-                    #TODO: Implement reduce via multiround writebacks + syncthreads
-                    pass
+                    # Reduce via multiround writebacks + syncthreads
+                    for k in range(reduce_warps):
+                        for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                            if smem_layout.within_bound(indices):
+                                reduce_round = indices[dims[0]]
+                                if reduce_round == k:
+                                    smem_staging[indices] = ro.combine(smem_staging[indices], rv[indices[-1] % lanes])
+                        syncthreads()
                 
                 syncthreads()
                 # At this point, the shared memory contains the final reduction value.
