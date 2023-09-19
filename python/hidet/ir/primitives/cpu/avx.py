@@ -64,9 +64,9 @@ def register_primitive_functions():
     from hidet.ir.func import Function
 
     @script
-    def avx_x86_f32x8_find_sum(x: f32x8) -> f32:
+    def avx_x86_f32x8_sum(x: f32x8) -> f32:
         attrs.func_kind = "cpu_internal"
-        attrs.func_name = "avx_x86_float32x8_find_sum"
+        attrs.func_name = "avx_x86_float32x8_sum"
         sum_vec = call_primitive_func(
             'avx_x86_float32x4_add',
             [
@@ -78,13 +78,13 @@ def register_primitive_functions():
         sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
         return call_primitive_func('avx_x86_float32x4_extract_last', [sum_vec])
 
-    assert isinstance(avx_x86_f32x8_find_sum, Function)
-    register_primitive_function(avx_x86_f32x8_find_sum.name, avx_x86_f32x8_find_sum)
+    assert isinstance(avx_x86_f32x8_sum, Function)
+    register_primitive_function(avx_x86_f32x8_sum.name, avx_x86_f32x8_sum)
 
     @script
-    def avx_x86_f32x8_find_max(x: f32x8) -> f32:
+    def avx_x86_f32x8_scalar_max(x: f32x8) -> f32:
         attrs.func_kind = "cpu_internal"
-        attrs.func_name = "avx_x86_float32x8_find_max"
+        attrs.func_name = "avx_x86_float32x8_scalar_max"
         y = call_primitive_func('avx_x86_float32x8_permute_2f128', [x, x, 1])
         m1 = call_primitive_func('avx_x86_float32x8_max', [x, y])
         m2 = call_primitive_func('avx_x86_float32x8_permute', [m1, 0b01001110])
@@ -93,16 +93,16 @@ def register_primitive_functions():
         m = call_primitive_func('avx_x86_float32x8_max', [m3, m4])
         return call_primitive_func('avx_x86_float32x8_extract_last', [m])
 
-    assert isinstance(avx_x86_f32x8_find_max, Function)
-    register_primitive_function(avx_x86_f32x8_find_max.name, avx_x86_f32x8_find_max)
+    assert isinstance(avx_x86_f32x8_scalar_max, Function)
+    register_primitive_function(avx_x86_f32x8_scalar_max.name, avx_x86_f32x8_scalar_max)
 
 
-def avx_f32x8_find_sum(x: Expr) -> Call:
-    return call_primitive_func('avx_x86_float32x8_find_sum', [x])
+def avx_f32x8_sum(x: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_sum', [x])
 
 
-def avx_f32x8_find_max(x: Expr) -> Call:
-    return call_primitive_func('avx_x86_float32x8_find_max', [x])
+def avx_f32x8_scalar_max(x: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_scalar_max', [x])
 
 
 def aligned_alloc(alignment: Union[int, Expr], size: Union[int, Expr]):

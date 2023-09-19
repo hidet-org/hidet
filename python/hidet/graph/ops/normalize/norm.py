@@ -371,10 +371,10 @@ class NormalizeTask(Task):
             avx_f32x8_set1,
             avx_f32x8_divide,
             avx_f32x8_multiply,
-            avx_f32x8_find_sum,
+            avx_f32x8_sum,
             avx_f32x8_sqrt,
         )
-        from hidet.lang import tensor
+        from hidet.lang import tensor, attrs
 
         shape = self.inputs[0].shape
         head = shape[: -len(self.dims)]
@@ -385,6 +385,7 @@ class NormalizeTask(Task):
 
             @hidet.script
             def norm_cpu_kernel(x: float32[shape], out: float32[shape]):
+                attrs.func_kind = "cpu_kernel"
                 para = "p" + str(nthreads)
                 for k in grid(head_size, attrs=para):
                     head_idx = spatial(*head).map(k)
@@ -409,10 +410,10 @@ class NormalizeTask(Task):
                         # welford combine
                         # TODO: case for numerical stability? (number too high for large matrix)
                         # TODO: look at the cascade thing in pytorch github
-                        mean_combined = avx_f32x8_find_sum(mean_vec) / 8
+                        mean_combined = avx_f32x8_sum(mean_vec) / 8
                         mean_combined_vec = avx_f32x8_set1(mean_combined)
                         delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
-                        M2_combined = avx_f32x8_find_sum(M2_vec) + avx_f32x8_find_sum(
+                        M2_combined = avx_f32x8_sum(M2_vec) + avx_f32x8_sum(
                             avx_f32x8_multiply(delta_vec, delta_vec)
                         ) * (tail_size // 8)
                     mean_tail = 0.0
@@ -455,8 +456,6 @@ class NormalizeTask(Task):
                             var + self.attrs['epsilon']
                         )
 
-        norm_cpu_kernel.kind = "cpu_kernel"
-        avx_f32x8_find_sum.kind = "cpu_internal"
         assert isinstance(norm_cpu_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
         return ir_module

@@ -97,8 +97,8 @@ class MatmulResolveRule(ResolveRule):
     This resolve rule also parallelize k dimension when possible, and determine the mma instruction.
     """
 
-    def run_batch_matmul(self, a: Tensor, b: Tensor, is_cpu: bool) -> Tensor:
-        if is_cpu:
+    def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
+        if a.device.is_cpu():
             # aa = [e for e in a]
             # bb = [e for e in b]  #[b, k, m] -> list[[k, m], [k, m] ... * b]
             cc = [matmul_x86(a[i], b[i]).unsqueeze(0) for i in range(a.shape[0])]
@@ -135,7 +135,7 @@ class MatmulResolveRule(ResolveRule):
                 c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
             return c
 
-    def resolve_generic(self, op: Operator, is_cpu: bool) -> Optional[List[Tensor]]:
+    def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -148,25 +148,25 @@ class MatmulResolveRule(ResolveRule):
             if len(b.shape) == 2:  # shape: [a, b]
                 # [a] x [a, b] -> [b]
                 b = b.unsqueeze([0])  # [1, a, b]
-                c = self.run_batch_matmul(a, b, is_cpu)  # [1, 1, b]
+                c = self.run_batch_matmul(a, b)  # [1, 1, b]
                 c = c.squeeze([0, 1])  # [b]
             else:
                 assert len(b.shape) >= 3  # shape example: [b, c, a, d]
                 # [a] x [b, c, a, d] -> [b, c, d]
                 b = flatten(b, start_dim=0, end_dim=-3)  # [b * c, a, d]
-                c = self.run_batch_matmul(a, b, is_cpu)  # [b * c, 1, d]
+                c = self.run_batch_matmul(a, b)  # [b * c, 1, d]
                 c = c.reshape(c_shape)  # [b, c, d]
         elif len(b.shape) == 1:  # shape: [b]
             b = b.unsqueeze([0, 2])  # [1, b, 1]
             if len(a.shape) == 2:  # shape: [a, b]
                 a = a.unsqueeze([0])  # [1, a, b]
-                c = self.run_batch_matmul(a, b, is_cpu)  # [1, a, 1]
+                c = self.run_batch_matmul(a, b)  # [1, a, 1]
                 c = c.squeeze([0, 2])  # [a]
             else:
                 assert len(a.shape) >= 3  # shape example: [a, c, d, b]
                 # [a, c, d, b] x [b] -> [a, c, d]
                 a = flatten(a, start_dim=0, end_dim=-3)  # [a * c, d, b]
-                c = self.run_batch_matmul(a, b, is_cpu)  # [a * c, d, 1]
+                c = self.run_batch_matmul(a, b)  # [a * c, d, 1]
                 c = c.reshape(c_shape)  # [a, c, d]
         else:
             # example: [a, b, c] x [c, d] -> [a, b, d]
@@ -178,17 +178,17 @@ class MatmulResolveRule(ResolveRule):
             b_broadcast_shape = c_head + list(b.shape[-2:])
             a = flatten(broadcast(a, a_broadcast_shape), start_dim=0, end_dim=-3)
             b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
-            c = self.run_batch_matmul(a, b, is_cpu)
+            c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
         return [c]
 
-    def resolve_f16(self, op: Operator, is_cpu: bool) -> Optional[List[Tensor]]:
+    def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
         if op.attrs['require_prologue']:
             return None
         # if op.task.has_symbolic_shape():
         #     return None
 
-        if is_cpu:
+        if op.device.is_cpu():
             return None
 
         a: Tensor = op.inputs[0]
@@ -253,11 +253,9 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
-        # if op.device.is_cpu():
-        #     return None
-        resolve_funcs: List[Callable[[Operator, bool], Any]] = [self.resolve_f16, self.resolve_generic]
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
-            outs = resolve_func(op, op.device.is_cpu())
+            outs = resolve_func(op)
             if outs is not None:
                 return outs
         return None
