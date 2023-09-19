@@ -162,6 +162,8 @@ class SoftmaxTask(Task):
             return NotImplemented  # use auto-scheduler
         return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
+
+class CPUSoftmaxTask(SoftmaxTask):
     def allow_epilogue(self) -> bool:
         return False
 

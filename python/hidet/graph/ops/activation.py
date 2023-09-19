@@ -15,7 +15,7 @@ from hidet.ir import primitives as prim
 from hidet.ir.expr import if_then_else, BitwiseAnd
 from .utils import Tensor, Operator, normalize_dim, input_like
 from .arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
-from .softmax import SoftmaxTask
+from .softmax import CPUSoftmaxTask
 
 
 class ReluOp(UnaryElementwiseOp):
@@ -189,7 +189,7 @@ class SoftShrinkOp(UnaryElementwiseOp):
 class SoftmaxOp(Operator):
     def __init__(self, x: Tensor, axis: int = 1):
         axis = normalize_dim(axis, len(x.shape))
-        super().__init__(inputs=[x], attributes={'axis': axis}, task=SoftmaxTask(input_like(x, 'x'), axis))
+        super().__init__(inputs=[x], attributes={'axis': axis}, task=CPUSoftmaxTask(input_like(x, 'x'), axis))
 
 
 def relu(x) -> Tensor:

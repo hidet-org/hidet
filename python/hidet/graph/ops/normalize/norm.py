@@ -105,6 +105,12 @@ class NormalizeTask(Task):
             attributes={'dims': dims, 'accumulate_dtype': accumulate_dtype, 'epsilon': epsilon},
         )
 
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        return True
+
     def implement_cuda(self, working_dir: str):
         return tune.extract_ir_modules(self.norm_by_warp)
 
@@ -347,16 +353,18 @@ class NormalizeTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        if self.dims[-1] != len(self.inputs[0].shape) - 1 or self.inputs[0].type.dtype != float32:
-            return NotImplemented
-        return tune.extract_ir_modules(self.schedule_norm_cpu)
 
+class CPUNormalizeTask(NormalizeTask):
     def allow_prologue(self) -> bool:
         return False
 
     def allow_epilogue(self) -> bool:
         return False
+
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        if self.dims[-1] != len(self.inputs[0].shape) - 1 or self.inputs[0].type.dtype != float32:
+            return NotImplemented
+        return tune.extract_ir_modules(self.schedule_norm_cpu)
 
     @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=['', 8, 16])
@@ -374,7 +382,7 @@ class NormalizeTask(Task):
             avx_f32x8_sum,
             avx_f32x8_sqrt,
         )
-        from hidet.lang import tensor, attrs
+        from hidet.lang import tensor
 
         shape = self.inputs[0].shape
         head = shape[: -len(self.dims)]
@@ -468,7 +476,7 @@ class NormalizeOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'dims': dims, 'epsilon': epsilon, 'accumulate_dtype': accumulate_dtype},
-            task=NormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype),
+            task=CPUNormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype),
         )
 
 

@@ -79,5 +79,19 @@ def test_group_norm(shape, num_groups):
     )
 
 
+@pytest.mark.parametrize(
+    'shape, num_last_dims',
+    [[[1, 2, 8, 8], 2], [[2, 2, 2, 255], 3], [[1, 8], 1], [[1, 1, 1, 18], 1], [[2, 2, 45, 45], 2], [[512, 768], 1]]
+)
+def test_layer_norm(shape, num_last_dims):
+    check_torch_unary(
+        shape,
+        lambda x: F.layer_norm(x, shape[-num_last_dims:]),
+        lambda x: ops.layer_norm(x, num_last_dims),
+        atol=1e-4,
+        rtol=1e-4,
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
