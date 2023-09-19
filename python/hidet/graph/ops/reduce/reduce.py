@@ -228,57 +228,56 @@ class ReduceTask(Task):
         read_shape[-1] //= lanes
         x_vectorized_shape = read_shape[:]
         read_layout = row_major(*read_shape)
-        read_shape[-1] = cdiv(read_shape[-1], WARP_SIZE) * WARP_SIZE
 
         dims = self.dims
+        read_remain_shape = [v for i, v in enumerate(shape) if i not in dims]
+        read_remain_shape[-1] //= lanes
         if self.keep_dim:
-            remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
+            write_remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
         else:
-            remain_shape = [v for i, v in enumerate(shape) if i not in dims]
-        remain_shape[-1] //= lanes
-        y_vectorized_shape = remain_shape[:]
-        remain_shape[-1] = cdiv(remain_shape[-1], WARP_SIZE) * WARP_SIZE
+            write_remain_shape = read_remain_shape[:]
+        y_vectorized_shape = write_remain_shape[:]
 
-        reduce_extent = hidet.utils.prod(x.shape[i] for i in dims)
+        reduce_shape = [v for i, v in enumerate(shape) if i in dims]
+        reduce_extent = hidet.utils.prod(reduce_shape)
+        remain_extent = hidet.utils.prod(read_remain_shape)
 
-        remain_extent = hidet.utils.prod(remain_shape)
-        if is_constant(remain_extent):
-            remain_threads = hidet.ir.expr.if_then_else(remain_extent > max_block_size, max_block_size, remain_extent)
-        else:
-            remain_threads = max_block_size
-
+        remain_threads = hidet.ir.expr.if_then_else(remain_extent > max_block_size, max_block_size, remain_extent)
         remain_warps = cdiv(remain_threads, WARP_SIZE)
         max_reduce_warps = max_num_warps // remain_warps
         reduce_warps = cdiv(reduce_extent, WARP_SIZE)
-        reduce_warps = max_reduce_warps if max_reduce_warps < reduce_warps else reduce_warps
+        reduce_warps = hidet.ir.expr.if_then_else(max_reduce_warps < reduce_warps, max_reduce_warps, reduce_warps)
+        repeats_per_reduce = cdiv(reduce_extent, reduce_warps)
         num_warps = reduce_warps * remain_warps
         block_size = num_warps * WARP_SIZE
-        write_task_mapping = spatial(*remain_shape)
+        grid_size = cdiv(remain_extent, remain_warps * WARP_SIZE)
 
-        spatial_shape = []
-        repeat_shape = []
+        remain_reduce_mapping = spatial(grid_size, 1) * spatial(remain_warps * WARP_SIZE, reduce_warps) * repeat(1, repeats_per_reduce)
+        reduce_mapping = spatial(*reduce_shape)
+        remain_mapping = spatial(*read_remain_shape)
+        import pdb
+        pdb.set_trace()
+
+        write_task_mapping = spatial(*write_remain_shape)
+
         smem_bound_check_shape = []
         smem_flatten_idx_shape = []
         for i in range(len(read_shape)):
             if i == dims[0]:
-                spatial_shape.append(reduce_warps)
-                repeat_shape.append(cdiv(read_shape[i], reduce_warps))
                 smem_bound_check_shape.append(reduce_warps)
                 smem_flatten_idx_shape.append(1)
             elif i in dims:
-                spatial_shape.append(1)
-                repeat_shape.append(read_shape[i])
                 smem_bound_check_shape.append(1)
                 smem_flatten_idx_shape.append(1)
             else:
-                spatial_shape.append(read_shape[i])
-                repeat_shape.append(1)
                 smem_bound_check_shape.append(shape[i])
                 smem_flatten_idx_shape.append(shape[i])
 
         read_task_mapping =  spatial(*spatial_shape) * repeat(*repeat_shape)
-        grid_size = (read_task_mapping.num_workers + block_size - 1) // block_size
-            
+        
+        if remain_threads < remain_warps * WARP_SIZE:
+            pad = remain_warps * WARP_SIZE - remain_threads
+            spatial_shape[-1] = spatial_shape[-1] + pad
         # Since threadblocks are distributed unevenly across multiple dimensions,
         # we will use a flattened 1D layout for shared memory for simplicity.
         smem_length = remain_warps * WARP_SIZE * lanes
@@ -294,6 +293,16 @@ class ReduceTask(Task):
             x = indices[:]
             x[dims[0]] = 1
             return smem_flatten_idx_layout.serialize(x) % smem_length
+        
+        def unflatten(indices):
+            # indices should only contain a 2D coordinate in the (remain, reduce) space
+            assert len(indices) == 2
+            remain_indices = remain_mapping.map(indices[0])
+            reduce_indices = reduce_mapping.map(indices[1])
+            unflattened_indices = merge(remain_indices, reduce_indices)
+
+            return unflattened_indices
+
 
         with hidet.script_module() as module:
 
@@ -317,13 +326,15 @@ class ReduceTask(Task):
 
                 write_val = register_tensor(vtype, [1])
 
-                # Init smem
+                # Init smem - TODO
                 for indices in smem_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                     if smem_bound_check_layout.within_bound(indices):
                         flattened_idx = flatten_smem_idx(indices)
                         smem_staging[flattened_idx] = rv[0]
 
-                for indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                for flat_indices in remain_reduce_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                    tensor_indices = unflatten(flat_indices)
+                    # ------------------------------------------
                     if read_layout.within_bound(indices):
                         vec_read = x_vectorized[indices]
                         if lanes > 1:
