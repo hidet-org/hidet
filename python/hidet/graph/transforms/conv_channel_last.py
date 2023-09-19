@@ -221,10 +221,15 @@ class ConvChannelLastPass(GraphPass):
         # TODO: Deal with FP16/FP32
         from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.transform import transpose
+        from hidet.ir.dtypes import float16
 
         nodes: List[Operator] = graph.nodes
-        # Start from all conv2d operators as seeds
-        seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
+        # Start from all fp16 conv2d operators as seeds
+        seeds: List[Operator] = []
+        for node in nodes:
+            if isinstance(node, Conv2dOp):
+                if node.inputs[0].dtype == float16 and node.inputs[1].dtype == float16:
+                    seeds.append(node)
 
         # Only use this pass if there is convolution in the graph
         if len(seeds) == 0:
