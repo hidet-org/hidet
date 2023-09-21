@@ -251,20 +251,20 @@ class ReduceTask(Task):
         num_warps = reduce_warps * remain_warps
         block_size = num_warps * WARP_SIZE
         grid_size = cdiv(remain_extent, remain_warps * WARP_SIZE)
-        read_task_mapping = spatial(grid_size, 1) * spatial(remain_warps * WARP_SIZE, reduce_warps) * repeat(1, repeats_per_reduce)
-        write_task_mapping = spatial(grid_size, 1) * spatial(remain_warps * WARP_SIZE, reduce_warps)
+        read_task_mapping = spatial(1, grid_size) * spatial(reduce_warps, remain_warps * WARP_SIZE) * repeat(repeats_per_reduce, 1)
+        write_task_mapping = spatial(1, grid_size) * spatial(reduce_warps, remain_warps * WARP_SIZE)
         remain_write_mapping = spatial(*write_remain_shape)
         smem_length = remain_warps * WARP_SIZE * lanes
         smem_flattened_layout = row_major(smem_length)
-        smem_task_mapping = spatial(remain_warps * WARP_SIZE, reduce_warps) * repeat(lanes, 1)
+        smem_task_mapping = spatial(reduce_warps, remain_warps * WARP_SIZE) * repeat(1, lanes)
         smem_type = tensor_type(accumulate_dtype, layout=smem_flattened_layout)
         smem_needed = smem_type.storage_bytes()
 
         def unflatten_read_idx(indices):
             # indices should only contain a 2D coordinate in the (remain, reduce) space
             assert len(indices) == 2
-            remain_indices = remain_mapping.map(indices[0])
-            reduce_indices = reduce_mapping.map(indices[1])
+            reduce_indices = reduce_mapping.map(indices[0])
+            remain_indices = remain_mapping.map(indices[1])
             unflattened_indices = []
             remain_dim = 0
             reduce_dim = 0
@@ -305,7 +305,7 @@ class ReduceTask(Task):
                         smem_staging[threadIdx.x * lanes + lane] = rv[0]
 
                 for flat_indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                    if flat_indices[0] < remain_extent and flat_indices[1] < reduce_extent:
+                    if flat_indices[0] < reduce_extent and flat_indices[1] < remain_extent:
                         indices = unflatten_read_idx(flat_indices)
                         vec_read = x_vectorized[indices]
                         if lanes > 1:
@@ -321,15 +321,15 @@ class ReduceTask(Task):
                 syncthreads()
                 if perform_atomic_reduce:
                     for indices in smem_task_mapping.on(threadIdx.x):
-                        remain_idx = indices[0]
+                        remain_idx = indices[1]
                         ro.atomic_combine(~smem_staging[remain_idx], rv[remain_idx % lanes])
                 else:
                     # Reduce via multiround writebacks + syncthreads
                     for k in range(reduce_warps):
                         for indices in smem_task_mapping.on(threadIdx.x):
-                            reduce_round = indices[1]
+                            reduce_round = indices[0]
                             if reduce_round == k:
-                                remain_idx = indices[0]
+                                remain_idx = indices[1]
                                 smem_staging[remain_idx] = ro.combine(smem_staging[remain_idx], rv[remain_idx % lanes])
                         syncthreads()
                 
@@ -339,16 +339,16 @@ class ReduceTask(Task):
 
                 if threadIdx.x < remain_warps * WARP_SIZE:
                     for indices in smem_task_mapping.on(threadIdx.x):
-                        remain_idx = indices[0]
+                        remain_idx = indices[1]
                         if lanes > 1:
                             lane_vec = cast(~write_val, ~vtype.lane_type)
                             lane_vec[remain_idx % lanes] = ro.finalize(acc=smem_staging[remain_idx], size=reduce_extent)
                         else:
                             write_val[0] = ro.finalize(acc=smem_staging[remain_idx], size=reduce_extent)
                     for flat_indices in write_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
-                        # flat_indices[1] will always be 0 because threadIdx.x < reduce_warps * WARP_SIZE
-                        if flat_indices[0] < remain_extent:
-                            indices = remain_write_mapping.map(flat_indices[0])
+                        # flat_indices[0] will always be 0 because threadIdx.x < reduce_warps * WARP_SIZE
+                        if flat_indices[1] < remain_extent:
+                            indices = remain_write_mapping.map(flat_indices[1])
                             y_vectorized[indices] = write_val[0]
 
         ir_module = module.ir_module()
