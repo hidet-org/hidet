@@ -302,7 +302,7 @@ class ReduceTask(Task):
                 # Init smem
                 if threadIdx.x * lanes < smem_length:
                     for lane in range(lanes):
-                        smem_staging[threadIdx.x + lane] = rv[0]
+                        smem_staging[threadIdx.x * lanes + lane] = rv[0]
 
                 for flat_indices in read_task_mapping.on(threadIdx.x + blockIdx.x * block_size):
                     if flat_indices[0] < remain_extent and flat_indices[1] < reduce_extent:
@@ -337,7 +337,7 @@ class ReduceTask(Task):
                 # At this point, the shared memory contains the final reduction value.
                 # Next, need to write back to global memory
 
-                if threadIdx.x < reduce_warps * WARP_SIZE:
+                if threadIdx.x < remain_warps * WARP_SIZE:
                     for indices in smem_task_mapping.on(threadIdx.x):
                         remain_idx = indices[0]
                         if lanes > 1:
