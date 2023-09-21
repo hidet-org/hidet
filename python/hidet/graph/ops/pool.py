@@ -470,12 +470,12 @@ class AdaptivePoolChannelLastResolveRule(ResolveRule):
 
             # Since sometimes the h and w dimensions are large, separating them into two kernels may be faster
             if reduce_type == 'max':
-                return [max(x, dims=[1, 2], keep_dim=True)]
+                # return [max(x, dims=[1, 2], keep_dim=True)]
                 reduce_h = max(x, dims=1, keep_dim=True)
                 reduce_hw = max(reduce_h, dims=2, keep_dim=True)
                 return [reduce_hw]
             elif reduce_type == 'avg':
-                return [mean(x, dims=[1, 2], keep_dim=True)]
+                # return [mean(x, dims=[1, 2], keep_dim=True)]
                 reduce_h = mean(x, dims=1, keep_dim=True)
                 reduce_hw = mean(reduce_h, dims=2, keep_dim=True)
                 return [reduce_hw]

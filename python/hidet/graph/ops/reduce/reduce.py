@@ -283,7 +283,6 @@ class ReduceTask(Task):
 
             @hidet.script
             def reduce_kernel(x: xdtype[x.shape], y: xdtype[y.shape]):
-                # Each 256-thread ThreadBlock handles 512 columns
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
