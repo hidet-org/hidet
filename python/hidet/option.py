@@ -17,7 +17,6 @@ import tomlkit
 
 class OptionRegistry:
     registered_options: Dict[str, OptionRegistry] = {}
-    config_doc: tomlkit.TOMLDocument = tomlkit.document()
 
     def __init__(
         self,
@@ -38,6 +37,54 @@ class OptionRegistry:
         self.checker = checker
 
 
+def create_toml_doc() -> tomlkit.TOMLDocument:
+    doc = tomlkit.document()
+    for _, v in OptionRegistry.registered_options.items():
+        doc.add(tomlkit.comment(v.description))
+        if v.choices is not None:
+            doc.add(tomlkit.comment(f'  choices: {v.choices}'))
+        if isinstance(v.default_value, (bool, int, float, str)):
+            doc.add(v.name, v.default_value)
+        elif isinstance(v.default_value, Tuple):
+            # represent tuples are toml arrays, do not allow python lists are default values to avoid ambiguity
+            val = list(v.default_value)
+            arr = tomlkit.array()
+            arr.extend(val)
+            doc.add(v.name, arr)
+        else:
+            raise ValueError(f'Invalid type of default value for option {v.name}: {type(v.default_value)}')
+        doc.add(tomlkit.nl())
+    return doc
+
+
+def _load_config(config_file_path: str):
+    def collapse_nested_dict(d: Dict[str, Any]) -> Dict[str, Union[str, int, float, bool, Tuple]]:
+        # {"cuda": {"arch": "hopper", "cc": [9, 0]}} -> {"cuda.arch": 90, "cuda.cc": (9, 0)}
+        ret = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                v = collapse_nested_dict(v)
+                for k1, v1 in v.items():
+                    ret[f'{k}.{k1}'] = v1
+                continue
+            if isinstance(v, list):
+                v = tuple(v)
+            ret[k] = v
+        return ret
+
+    with open(config_file_path, 'r') as f:
+        config_doc = tomlkit.parse(f.read())
+    for k, v in collapse_nested_dict(config_doc).items():
+        if k not in OptionRegistry.registered_options:
+            raise KeyError(f'Option {k} found in config file {config_file_path} is not registered.')
+        OptionRegistry.registered_options[k].default_value = v
+
+
+def _write_default_config(config_file_path: str, config_doc: tomlkit.TOMLDocument):
+    with open(config_file_path, 'w') as f:
+        tomlkit.dump(config_doc, f)
+
+
 def register_option(
     name: str,
     type_hint: str,
@@ -48,24 +95,9 @@ def register_option(
     checker: Optional[Callable[[Any], bool]] = None,
 ):
     registered_options = OptionRegistry.registered_options
-    doc = OptionRegistry.config_doc
     if name in registered_options:
         raise KeyError(f'Option {name} has already been registered.')
     registered_options[name] = OptionRegistry(name, type_hint, description, default_value, normalizer, choices, checker)
-    doc.add(tomlkit.comment(description))
-    if choices is not None:
-        doc.add(tomlkit.comment(f'  choices: {choices}'))
-    if isinstance(default_value, (bool, int, float, str)):
-        doc.add(name, default_value)
-    elif isinstance(default_value, Tuple):
-        # represent tuples are toml arrays, do not allow python lists are default values to avoid ambiguity
-        val = list(default_value)
-        arr = tomlkit.array()
-        arr.extend(val)
-        doc.add(name, arr)
-    else:
-        raise ValueError(f'Invalid type of default value for option {name}: {type(default_value)}')
-    doc.add(tomlkit.nl())
 
 
 def register_hidet_options():
@@ -199,34 +231,14 @@ def register_hidet_options():
         description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). "auto" for auto-detect.',
     )
 
-    def collapse_nested_dict(d: Dict[str, Any]) -> Dict[str, Union[str, int, float, bool, Tuple]]:
-        # {"cuda": {"arch": "hopper", "cc": [9, 0]}} -> {"cuda.arch": 90, "cuda.cc": (9, 0)}
-        ret = {}
-        for k, v in d.items():
-            if isinstance(v, dict):
-                v = collapse_nested_dict(v)
-                for k1, v1 in v.items():
-                    ret[f'{k}.{k1}'] = v1
-                continue
-            if isinstance(v, list):
-                v = tuple(v)
-            ret[k] = v
-        return ret
-
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
     if not os.path.exists(config_file_path):
         os.makedirs(config_file_path)
     config_file_path = os.path.join(config_file_path, 'hidet.toml')
     if not os.path.exists(config_file_path):
-        with open(config_file_path, 'w') as f:
-            tomlkit.dump(OptionRegistry.config_doc, f)
+        _write_default_config(config_file_path, create_toml_doc())
     else:
-        with open(config_file_path, 'r') as f:
-            OptionRegistry.config_doc = tomlkit.parse(f.read())
-        for k, v in collapse_nested_dict(OptionRegistry.config_doc).items():
-            if k not in OptionRegistry.registered_options:
-                raise KeyError(f'Option {k} found in config file {config_file_path} is not registered.')
-            OptionRegistry.registered_options[k].default_value = v
+        _load_config(config_file_path)
 
 
 register_hidet_options()
