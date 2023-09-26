@@ -60,6 +60,7 @@ def reduce_regression() -> ResultGroup:
 
 
 def op_performance_regression(report_file):
+    hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
     result_groups = []
     result_groups.append(matmul_regression())
     result_groups.append(fmha_regression())

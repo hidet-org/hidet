@@ -39,3 +39,6 @@ requests
 
 # for configuration
 tomlkit
+
+# for parser
+lark

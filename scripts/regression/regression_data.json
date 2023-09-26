@@ -90,8 +90,69 @@
     },
     "resnet50_shapes": {
       "1, 3, 224, 224": {
-        "float16": 0.879,
+        "float16": 0.678,
         "float32": 1.19593
+      }
+    },
+    "deeplabv3_resnet50_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 1.545
+      }
+    },
+    "densenet121_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 1.01
+      }
+    },
+    "mobilenet_v2_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.317
+      }
+    },
+    "efficientnet_b0_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.787
+      }
+    },
+    "alexnet_shapes": {
+      "1, 3, 227, 227": {
+        "float16": 0.254
+      }
+    },
+    "vgg19_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.978
+      }
+    },
+    "squeezenet1_1_shapes": {
+      "1, 3, 227, 227": {
+        "float16": 0.165
+      }
+    },
+    "inception_v3_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.705
+      }
+    },
+    "googlenet_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.465
+      }
+    },
+    "shufflenet_v2_x1_0_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.355
+      }
+    },
+    "regnet_x_400mf_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 0.415
+      }
+    },
+    "yolov5s_shapes": {
+      "1, 3, 720, 1280": {
+        "float16": 999,
+        "float32": 999
       }
     }
   },
@@ -284,6 +345,78 @@
       "1, 3, 224, 224": {
         "float16": 99999,
         "float32": 99999
+      }
+    },
+    "deeplabv3_resnet50_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "densenet121_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "mobilenet_v2_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "efficientnet_b0_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "alexnet_shapes": {
+      "1, 3, 227, 227": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "vgg19_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "squeezenet1_1_shapes": {
+      "1, 3, 227, 227": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "inception_v3_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "googlenet_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "shufflenet_v2_x1_0_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "regnet_x_400mf_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "yolov5s_shapes": {
+      "1, 3, 720, 1280": {
+        "float16": 999,
+        "float32": 999
       }
     }
   }
