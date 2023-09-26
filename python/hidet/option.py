@@ -38,22 +38,49 @@ class OptionRegistry:
 
 
 def create_toml_doc() -> tomlkit.TOMLDocument:
+    def nest_flattened_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+        new_dict = {}
+        for k, v in d.items():
+            if '.' in k:
+                prefix, suffix = k.split('.', 1)
+                if prefix not in new_dict:
+                    new_dict[prefix] = {suffix: v}
+                else:
+                    new_dict[prefix][suffix] = v
+            else:
+                new_dict[k] = v
+        for k, v in new_dict.items():
+            if isinstance(v, dict):
+                new_dict[k] = nest_flattened_dict(v)
+        return new_dict
+
+    def gen_doc(d: Dict[str, Any], toml_doc: tomlkit.TOMLDocument):
+        for k, v in d.items():
+            if isinstance(v, dict):
+                table = tomlkit.table()
+                gen_doc(v, table)
+                toml_doc.add(k, table)
+            elif isinstance(v, OptionRegistry):
+                toml_doc.add(tomlkit.comment(v.description))
+                if v.choices is not None:
+                    toml_doc.add(tomlkit.comment(f'  choices: {v.choices}'))
+                if isinstance(v.default_value, (bool, int, float, str)):
+                    toml_doc.add(k, v.default_value)
+                elif isinstance(v.default_value, Tuple):
+                    # represent tuples are toml arrays, do not allow python lists are default values to avoid ambiguity
+                    val = list(v.default_value)
+                    arr = tomlkit.array()
+                    arr.extend(val)
+                    toml_doc.add(k, arr)
+                else:
+                    raise ValueError(f'Invalid type of default value for option {k}: {type(v.default_value)}')
+                toml_doc.add(tomlkit.nl())
+            else:
+                raise ValueError(f'Invalid type of default value for option {k}: {type(v)}')
+
+    fd = nest_flattened_dict(OptionRegistry.registered_options)
     doc = tomlkit.document()
-    for _, v in OptionRegistry.registered_options.items():
-        doc.add(tomlkit.comment(v.description))
-        if v.choices is not None:
-            doc.add(tomlkit.comment(f'  choices: {v.choices}'))
-        if isinstance(v.default_value, (bool, int, float, str)):
-            doc.add(v.name, v.default_value)
-        elif isinstance(v.default_value, Tuple):
-            # represent tuples are toml arrays, do not allow python lists are default values to avoid ambiguity
-            val = list(v.default_value)
-            arr = tomlkit.array()
-            arr.extend(val)
-            doc.add(v.name, arr)
-        else:
-            raise ValueError(f'Invalid type of default value for option {v.name}: {type(v.default_value)}')
-        doc.add(tomlkit.nl())
+    gen_doc(fd, doc)
     return doc
 
 
