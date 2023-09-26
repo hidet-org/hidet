@@ -308,12 +308,15 @@ class Conv2dGemmFp16Task(Task):
         img: TensorNode,
         weight: TensorNode,
         orig_weight_shape: List[int],
+        padding: List[int],
         stride: List[int],
         dilations: List[int],
         groups: int = 1,
         parallel_k_parts: int = 1,
         disable_cp_async: bool = False,
     ):
+        from hidet.ir.compute.cops import pad
+
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
         # weight.shape [OC, WC, KY, KX] -> [KY * KX * WC, OC]
@@ -326,15 +329,20 @@ class Conv2dGemmFp16Task(Task):
 
         self.groups = groups
         self.dilations = dilations
+        self.padding = padding
         self.stride = stride
         self.img_shape = img.shape
         self.orig_weight_shape = orig_weight_shape
         self.disable_cp_async = disable_cp_async
 
         DILY, DILX = dilations
+        PADY, PADX, PADC = padding
         STRY, STRX = stride
         # orig_weight_shape == [OC, WC, KY, KX]
         N, H, W, C = img.shape
+        H, W, C = H + 2 * PADY, W + 2 * PADX, C + PADC
+        pads = [0, PADY, PADX, 0, 0, PADY, PADX, PADC]
+        img_padded = pad(img, pads, value=0.0)  # only zero padding is needed right now
         OC, WC, KY, KX = orig_weight_shape
 
         self._assert(C % groups == 0, f"expected input channels to be divisible by groups, got {C}")
@@ -367,7 +375,7 @@ class Conv2dGemmFp16Task(Task):
             kx = (k // WC) % KX
             out_group_size = OC // groups
             return (
-                img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, (oci // out_group_size) * WC + wci]
+                img_padded[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, (oci // out_group_size) * WC + wci]
                 * weight[k, oci]
             )
 
@@ -393,6 +401,7 @@ class Conv2dGemmFp16Task(Task):
             outputs=[c],
             attributes={
                 'stride': stride,
+                'padding': padding,
                 'dilations': dilations,
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
@@ -436,11 +445,12 @@ class Conv2dGemmFp16Task(Task):
 
         DILY, DILX = self.dilations
         STRY, STRX = self.stride
+        PADY, PADX, PADC = self.padding  # Note: weight is already padded when passed in
         N, H, W, C = self.img_shape
         OC, WC, KY, KX = self.orig_weight_shape
         GROUPS = self.groups
 
-        GROUP_C = C // GROUPS
+        GROUP_C = (C + PADC) // GROUPS
         GROUP_OC = OC // GROUPS
         # actual shape = [KY * KX * WC, OC]
 
@@ -571,25 +581,38 @@ class Conv2dGemmFp16Task(Task):
 
                     channel_offset = channel_group_offset + k + group_idx * GROUP_C
 
-                    src_size = 0
-                    if iw_idx < W and ih_idx < H and channel_group_offset + k < GROUP_C:
-                        src_size = min(8, GROUP_C - (channel_group_offset + k))
-
-                    # a bit strange, the two branches should be the same, but gives different results
-                    #   but only when GROUP_C % 8 != 0
-                    if GROUP_C % 8 == 0 and not self.disable_cp_async:
-                        cp_async(
-                            ~smem_img[i, k],
-                            ~img[batch_idx, ih_idx, iw_idx, channel_offset],
-                            cp_size=16,
-                            src_size=src_size * 2,
-                            cache_level='global',
-                        )
+                    if (
+                        ih_idx >= H + PADY
+                        or ih_idx < PADY
+                        or iw_idx >= W + PADX
+                        or iw_idx < PADX
+                        or channel_offset >= C
+                    ):
+                        if GROUP_C % 8 == 0 and C % 8 == 0 and not self.disable_cp_async:
+                            cp_async(~smem_img[i, k], ~img[0, 0, 0, 0], cp_size=16, src_size=0, cache_level='global')
+                        else:
+                            for ki in range(8):
+                                smem_img[i, k + ki] = 0
                     else:
-                        for ki in range(src_size):
-                            smem_img[i, k + ki] = img[batch_idx, ih_idx, iw_idx, channel_offset + ki]
-                        for ki in range(8 - src_size):
-                            smem_img[i, k + ki + src_size] = 0
+                        src_size = 0
+                        if iw_idx < W + 2 * PADX and ih_idx < H + 2 * PADY and channel_group_offset + k < GROUP_C:
+                            src_size = min(8, C - (channel_group_offset + k))
+
+                        # a bit strange, the two branches should be the same, but gives different results
+                        #   but only when GROUP_C % 8 != 0
+                        if GROUP_C % 8 == 0 and C % 8 == 0 and not self.disable_cp_async:
+                            cp_async(
+                                ~smem_img[i, k],
+                                ~img[batch_idx, ih_idx - PADY, iw_idx - PADX, channel_offset],
+                                cp_size=16,
+                                src_size=src_size * 2,
+                                cache_level='global',
+                            )
+                        else:
+                            for ki in range(src_size):
+                                smem_img[i, k + ki] = img[batch_idx, ih_idx - PADY, iw_idx - PADX, channel_offset + ki]
+                            for ki in range(8 - src_size):
+                                smem_img[i, k + ki + src_size] = 0
 
             @hidet.script
             def load_smem_weight(k0: int, weight: float16[KX * KY * WC, OC], smem_weight: smem_weight_type):
@@ -692,55 +715,36 @@ class Conv2dGemmFp16Task(Task):
                 group_idx = blockIdx.z % GROUPS
                 group_offset = group_idx * GROUP_OC
 
-                if warp_count_k == 1:
-                    wi = warp_id // (warp_count_n * warp_count_k)
-                    wj = (warp_id // warp_count_k) % warp_count_n
-                    wk = warp_id % warp_count_k
+                smem_c = tensor_pointer('float16', shape=[block_m, block_n])
+                smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
 
-                    for mi in range(mma_count_m):
-                        for mj in range(mma_count_n):
-                            p = 0
-                            for i, j in mma_config.c_store_map.on(lane_id):
-                                res_spatial = wi * warp_m + mi * mma_m + i + offset_m
-                                channel_group_idx = wj * warp_n + mj * mma_n + j + offset_n
+                for k_round in range(warp_count_k):
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        if wk == k_round:
+                            for mi, mj in grid(mma_count_m, mma_count_n):
+                                p = 0
+                                for i, j in mma_config.c_store_map.on(lane_id):
+                                    delta_m = wi * warp_m + mi * mma_m + i
+                                    delta_n = wj * warp_n + mj * mma_n + j
+                                    in_bound = (offset_m + delta_m < OUT_H * OUT_W) and (offset_n + delta_n < OC)
+                                    if in_bound:
+                                        if k_round == 0:
+                                            smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                        else:
+                                            smem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                    p += 1
+                    if warp_count_k > 1:
+                        syncthreads()
+                syncthreads()
+                for i, j in store_smem_c_map.on(threadIdx.x):
+                    res_spatial = i + offset_m
+                    channel_group_idx = j + offset_n
+                    channel_idx = channel_group_idx + group_offset
 
-                                channel_idx = channel_group_idx + group_offset
-                                res_x = res_spatial % OUT_W
-                                res_y = res_spatial // OUT_W
-                                in_bound = (res_spatial < OUT_H * OUT_W) and (channel_group_idx < GROUP_OC)
-                                if in_bound:
-                                    res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = regs_c[mi, mj, p]
-                                p += 1
-                else:
-                    smem_c = tensor_pointer('float16', shape=[block_m, block_n])
-                    smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
-
-                    for k_round in range(warp_count_k):
-                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                            if wk == k_round:
-                                for mi, mj in grid(mma_count_m, mma_count_n):
-                                    p = 0
-                                    for i, j in mma_config.c_store_map.on(lane_id):
-                                        delta_m = wi * warp_m + mi * mma_m + i
-                                        delta_n = wj * warp_n + mj * mma_n + j
-                                        in_bound = (offset_m + delta_m < OUT_H * OUT_W) and (offset_n + delta_n < OC)
-                                        if in_bound:
-                                            if k_round == 0:
-                                                smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
-                                            else:
-                                                smem_c[delta_m, delta_n] += regs_c[mi, mj, p]
-                                        p += 1
-                        if warp_count_k > 1:
-                            syncthreads()
-                    for i, j in store_smem_c_map.on(threadIdx.x):
-                        res_spatial = i + offset_m
-                        channel_group_idx = j + offset_n
-                        channel_idx = channel_group_idx + group_offset
-
-                        res_x = res_spatial % OUT_W
-                        res_y = res_spatial // OUT_W
-                        if res_spatial < OUT_H * OUT_W and channel_group_idx < GROUP_OC:
-                            res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
+                    res_x = res_spatial % OUT_W
+                    res_y = res_spatial // OUT_W
+                    if res_spatial < OUT_H * OUT_W and channel_group_idx < GROUP_OC:
+                        res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
 
         ir_module = module.ir_module()
         assert isinstance(conv2d_gemm_f16_kernel, Function)
@@ -754,6 +758,7 @@ class Conv2dGemmFp16Op(Operator):
         img: Tensor,
         weight: Tensor,
         orig_weight_shape: List[int],
+        padding: List[int],
         stride: List[int],
         dilations: List[int],
         groups: int,
@@ -766,6 +771,7 @@ class Conv2dGemmFp16Op(Operator):
         super().__init__(
             inputs=[img, weight],
             attributes={
+                'padding': padding,
                 'stride': stride,
                 'dilations': dilations,
                 'orig_weight_shape': orig_weight_shape,
@@ -777,6 +783,7 @@ class Conv2dGemmFp16Op(Operator):
                 input_like(img, 'img'),
                 input_like(weight, 'weight'),
                 orig_weight_shape,
+                padding,
                 stride,
                 dilations,
                 groups=groups,
@@ -826,6 +833,7 @@ def parallel_part_heuristic(
 def conv2d_gemm_fp16_channel_last(
     img: Tensor,
     weight: Tensor,
+    padding: List[int],
     stride: List[int],
     dilations: List[int],
     groups: int,
@@ -838,6 +846,8 @@ def conv2d_gemm_fp16_channel_last(
         raise ValueError('a and b must have 4 dimensions, got shape {} and {}'.format(img.shape, weight.shape))
     if img.dtype != dtypes.float16 or weight.dtype != dtypes.float16:
         raise ValueError('ConvGemmF16Op only support float16, got {} and {}'.format(img.dtype, weight.dtype))
+    pad_channel = padding[2]
+    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
     oc, wc, ky, kx = weight.shape
     weight = hidet.ops.transpose(weight, [2, 3, 1, 0]).reshape([ky * kx * wc, oc])
     return (
@@ -845,6 +855,7 @@ def conv2d_gemm_fp16_channel_last(
             img,
             weight,
             orig_weight_shape=[oc, wc, ky, kx],
+            padding=padding,
             stride=stride,
             dilations=dilations,
             groups=groups,
@@ -900,15 +911,12 @@ def conv2d_gemm_fp16(
     else:
         pad_channel = 0
     if isinstance(padding, int):
-        pad_h = padding
-        pad_w = padding
-    else:
-        pad_h = padding[0]
-        pad_w = padding[1]
-    img = hidet.ops.pad(img, [0, 0, pad_h, pad_w, 0, pad_channel, pad_h, pad_w])
-    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
+        padding = [padding, padding]
+    padding = list(padding) + [pad_channel]
 
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
 
-    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts, disable_cp_async)
+    res = conv2d_gemm_fp16_channel_last(
+        img, weight, padding, stride, dilations, groups, parallel_k_parts, disable_cp_async
+    )
     return hidet.ops.transpose(res, [0, 3, 1, 2])

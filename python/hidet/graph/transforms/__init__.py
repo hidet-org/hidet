@@ -20,6 +20,7 @@ from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
 from .selective_quantize import selective_quantize_pass
+from .conv_channel_last import conv_channel_last_pass
 
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
@@ -51,6 +52,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     """
     ctx = PassContext.current()
     passes = [
+        conv_channel_last_pass(),
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         selective_quantize_pass(),

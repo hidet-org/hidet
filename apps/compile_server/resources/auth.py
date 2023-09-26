@@ -17,7 +17,7 @@ class AuthResource(Resource):
         if username in users:
             if users[username] == password:
                 # Generate an access token
-                access_token = create_access_token(identity=username)
+                access_token = create_access_token(identity=username, expires_delta=False)
                 return {'access_token': access_token}
             else:
                 return {'message': 'Invalid credentials'}, 401

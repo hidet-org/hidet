@@ -1127,7 +1127,8 @@ def torch_conj(x: Tensor) -> Tensor:
 
 
 @register_function(torch._C._log_api_usage_once)
-def torch_noop(self):
+@register_function(torch.cuda.synchronize)
+def torch_noop(*args, **kwargs):
     return
 
 
