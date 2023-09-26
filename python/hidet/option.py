@@ -67,6 +67,7 @@ def register_option(
         raise ValueError(f'Invalid type of default value for option {name}: {type(default_value)}')
     doc.add(tomlkit.nl())
 
+
 def register_hidet_options():
     from hidet.utils import git_utils
 
@@ -211,7 +212,7 @@ def register_hidet_options():
                 v = tuple(v)
             ret[k] = v
         return ret
-    
+
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
     if not os.path.exists(config_file_path):
         os.makedirs(config_file_path)
@@ -226,6 +227,7 @@ def register_hidet_options():
             if k not in OptionRegistry.registered_options:
                 raise KeyError(f'Option {k} found in config file {config_file_path} is not registered.')
             OptionRegistry.registered_options[k].default_value = v
+
 
 register_hidet_options()
 
@@ -713,8 +715,8 @@ class cuda:
         Parameters
         ----------
         arch: Optional[str]
-            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. "auto" means using the architecture of the first
-            CUDA GPU on the current machine. Default "auto".
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. "auto" means
+            using the architecture of the first CUDA GPU on the current machine. Default "auto".
         """
         OptionContext.current().set_option('cuda.arch', arch)
 
