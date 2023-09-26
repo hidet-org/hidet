@@ -29,6 +29,7 @@ Hidet is an open-source DNN inference framework, it features
 
   hidet-script/index
   hidet-script/examples/index
+  hidet-script/reference/index
 
 .. toctree::
   :maxdepth: 1
