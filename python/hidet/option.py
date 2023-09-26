@@ -10,12 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple
+from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple, Union
 import os
+import tomlkit
 
 
 class OptionRegistry:
     registered_options: Dict[str, OptionRegistry] = {}
+    config_doc: tomlkit.TOMLDocument = tomlkit.document()
 
     def __init__(
         self,
@@ -46,10 +48,24 @@ def register_option(
     checker: Optional[Callable[[Any], bool]] = None,
 ):
     registered_options = OptionRegistry.registered_options
+    doc = OptionRegistry.config_doc
     if name in registered_options:
         raise KeyError(f'Option {name} has already been registered.')
     registered_options[name] = OptionRegistry(name, type_hint, description, default_value, normalizer, choices, checker)
-
+    doc.add(tomlkit.comment(description))
+    if choices is not None:
+        doc.add(tomlkit.comment(f'  choices: {choices}'))
+    if isinstance(default_value, (bool, int, float, str)):
+        doc.add(name, default_value)
+    elif isinstance(default_value, Tuple):
+        # represent tuples are toml arrays, do not allow python lists are default values to avoid ambiguity
+        val = list(default_value)
+        arr = tomlkit.array()
+        arr.extend(val)
+        doc.add(name, arr)
+    else:
+        raise ValueError(f'Invalid type of default value for option {name}: {type(default_value)}')
+    doc.add(tomlkit.nl())
 
 def register_hidet_options():
     from hidet.utils import git_utils
@@ -177,11 +193,39 @@ def register_hidet_options():
     )
     register_option(
         name='cuda.arch',
-        type_hint='Optional[str]',
-        default_value=None,
-        description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). None for auto-detect.',
+        type_hint='str',
+        default_value='auto',
+        description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). "auto" for auto-detect.',
     )
 
+    def collapse_nested_dict(d: Dict[str, Any]) -> Dict[str, Union[str, int, float, bool, Tuple]]:
+        # {"cuda": {"arch": "hopper", "cc": [9, 0]}} -> {"cuda.arch": 90, "cuda.cc": (9, 0)}
+        ret = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                v = collapse_nested_dict(v)
+                for k1, v1 in v.items():
+                    ret[f'{k}.{k1}'] = v1
+                continue
+            if isinstance(v, list):
+                v = tuple(v)
+            ret[k] = v
+        return ret
+    
+    config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
+    if not os.path.exists(config_file_path):
+        os.makedirs(config_file_path)
+    config_file_path = os.path.join(config_file_path, 'hidet.toml')
+    if not os.path.exists(config_file_path):
+        with open(config_file_path, 'w') as f:
+            tomlkit.dump(OptionRegistry.config_doc, f)
+    else:
+        with open(config_file_path, 'r') as f:
+            OptionRegistry.config_doc = tomlkit.parse(f.read())
+        for k, v in collapse_nested_dict(OptionRegistry.config_doc).items():
+            if k not in OptionRegistry.registered_options:
+                raise KeyError(f'Option {k} found in config file {config_file_path} is not registered.')
+            OptionRegistry.registered_options[k].default_value = v
 
 register_hidet_options()
 
@@ -662,15 +706,15 @@ def debug_show_verbose_flow_graph(enable: bool = True):
 
 class cuda:
     @staticmethod
-    def arch(arch: Optional[str] = None):
+    def arch(arch: str = 'auto'):
         """
         Set the CUDA architecture to use when building CUDA kernels.
 
         Parameters
         ----------
         arch: Optional[str]
-            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. None means using the architecture of the first
-            CUDA GPU on the current machine. Default None.
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. "auto" means using the architecture of the first
+            CUDA GPU on the current machine. Default "auto".
         """
         OptionContext.current().set_option('cuda.arch', arch)
 
@@ -685,7 +729,7 @@ class cuda:
             The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc.
         """
         arch: Optional[str] = OptionContext.current().get_option('cuda.arch')
-        if arch is None:
+        if arch == "auto":
             import hidet.cuda
 
             # get the architecture of the first CUDA GPU
