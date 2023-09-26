@@ -25,6 +25,13 @@ Hidet is an open-source DNN inference framework, it features
 
 .. toctree::
   :maxdepth: 1
+  :caption: Hidet Script
+
+  hidet-script/index
+  hidet-script/examples/index
+
+.. toctree::
+  :maxdepth: 1
   :caption: How-to Guide
 
   gallery/how-to-guides/visualize-flow-graph
@@ -37,12 +44,6 @@ Hidet is an open-source DNN inference framework, it features
   gallery/developer-guides/add-operator-resolve-rule
   gallery/developer-guides/add-subgraph-rewrite-rule
   developer-guides/contributing.rst
-
-.. toctree::
-  :maxdepth: 1
-  :caption: Hidet Script
-
-  hidet-script/index
 
 .. toctree::
   :maxdepth: 1

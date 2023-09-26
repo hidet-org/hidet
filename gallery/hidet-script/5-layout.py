@@ -2,6 +2,7 @@
 Data Layout
 ===========
 """
+# %%
 import hidet
 from hidet.lang import attrs, printf
 from hidet.lang.types import tensor, f32

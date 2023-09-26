@@ -114,8 +114,8 @@ html_theme = 'sphinx_book_theme'
 html_theme_options = {
     "repository_url": "https://github.com/hidet-org/hidet",
     "use_repository_button": True,
-    'logo_only': True,
-    "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
+    # 'logo_only': True,
+    # "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
     "show_navbar_depth": 1,
     # "home_page_in_toc": True
 }
@@ -136,7 +136,7 @@ html_css_files = ['custom.css']
 sphinx_gallery_conf = {
     'examples_dirs': '../../gallery',    # path to gallery scripts
     'gallery_dirs': 'gallery',  # path to where to save gallery generated output
-    'filename_pattern': r'/*.*\.py',
+    'filename_pattern': r'/*\.py',
     "download_all_examples": False,
 }
 

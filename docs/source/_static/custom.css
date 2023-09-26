@@ -17,13 +17,13 @@ div.sphx-glr-download-python {
 /*    font-weight: 550;*/
 /*}*/
 
-div.container-xl {
-    max-width: 1500px;
-}
+/*div.container-xl {*/
+/*    max-width: 1500px;*/
+/*}*/
 
-.sphx-glr-script-out .highlight pre {
-    background-color: #e9ecef !important;
-}
+/*.sphx-glr-script-out .highlight pre {*/
+/*    background-color: #e9ecef !important;*/
+/*}*/
 
 div.sphx-glr-download a {
     background-color: #0084c845 !important;
@@ -35,33 +35,41 @@ div.sphx-glr-download a:hover {
     background-image: none !important;
 }
 
-dt.sig {
-    letter-spacing: 0;
-    font-family: Menlo,Monaco,Consolas,SFMono-Regular,"Liberation Mono","Courier New",monospace;
-    /*font-family: ;*/
-    /*font-size=1em;*/
-}
+/*dt.sig {*/
+/*    letter-spacing: 0;*/
+/*    font-family: Menlo,Monaco,Consolas,SFMono-Regular,"Liberation Mono","Courier New",monospace;*/
+/*    !*font-family: ;*!*/
+/*    !*font-size=1em;*!*/
+/*}*/
 
-span.sig-name {
-    color: #0558b7;
-}
+/*span.sig-name {*/
+/*    color: #0558b7;*/
+/*}*/
 em.sig-param {
     font-style: normal;
 }
 em.property {
     font-style: normal;
 }
-code {
-    font-family: monospace;
+a {
+    text-decoration: unset;
 }
-code {
-    color: #434552;
-}
+/*code {*/
+/*    font-family: monospace;*/
+/*}*/
+/*code {*/
+/*    color: #434552;*/
+/*}*/
 
-.heading-style, h1, h2, h3, h4, h5, h6 {
-    font-family: Ubuntu, system-ui;
-}
+/*.heading-style, h1, h2, h3, h4, h5, h6 {*/
+/*    font-family: Ubuntu, system-ui;*/
+/*}*/
 
 dl.class, dl.function {
     margin-bottom: 3em;
+}
+
+.bd-sidebar-primary .sidebar-primary-items__end {
+    margin-bottom: 0;
+    margin-top: 0
 }

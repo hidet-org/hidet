@@ -12,8 +12,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # .. note::
 #   :class: margin
 #
-#   Torch dynamo is a feature introduced in PyTorch 2.0, which has not been officially released yet. Please install the
-#   nightly build of PyTorch to use this feature.
+#   ``torch.compile(...)``` requires PyTorch 2.0+.
 #
 # The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend, such as
 #
@@ -27,7 +26,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 #   :class: margin
 #
 #   Because tf32 is enabled by default for torch's cudnn backend, the torch's precision is slightly low.
-#   You could disable the tf32 via ``torch.backends.cudnn.allow_tf32 = False``. See also `PyTorch TF32`_.
+#   You could disable the tf32 (See also `PyTorch TF32`_).
 # .. _PyTorch TF32: https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
 
 import hidet
@@ -41,6 +40,9 @@ model = torch.hub.load(
 model = model.cuda().eval()
 
 # optimize the model with 'hidet' backend
+# uncomment the following line to enable kernel tuning, which will takes tens of minutes
+# but achieves better performance.
+# hidet.torch.dynamo_config.search_space(2)
 model_opt = torch.compile(model, backend='hidet')
 
 # run the optimized model

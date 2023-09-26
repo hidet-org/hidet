@@ -15,11 +15,11 @@ an operator.
   :maxdepth: 1
   :caption: Define Computation
 
-  ../../gallery/how-to-guides/add-new-operator-compute-definition
+  ../../gallery/developer-guides/add-new-operator-compute-definition
 
 .. toctree::
   :maxdepth: 1
   :caption: Two Scheduling Methods
 
-  ../../gallery/how-to-guides/add-new-operator-rule-based
-  ../../gallery/how-to-guides/add-new-operator-template-based
+  ../../gallery/developer-guides/add-new-operator-rule-based
+  ../../gallery/developer-guides/add-new-operator-template-based

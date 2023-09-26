@@ -16,7 +16,8 @@ the same input and one addition with a concatenation and a single matrix multipl
 .. seealso::
     :class: margin
 
-    TASO :cite:`taso` systematically studies the sub-graph rewrite optimization for deep learning workloads.
+    `TASO <https://dl.acm.org/doi/10.1145/3341301.3359630>`_ systematically studies the sub-graph rewrite optimization
+    for deep learning workloads.
 
 After the rewrite, the graph becomes more efficient as we only need to run a single kernel and the `fused` matrix
 multiplication usually exposes more parallelism to utilize the underlying hardware. We can also fuse multiple
@@ -177,7 +178,3 @@ print(graph_opt)
 # In this tutorial, we have learned how to define and register a sub-graph rewrite rule. It is an important
 # component of the graph optimization framework. Hidet uses it to implement some horizontal fusion rules.
 
-# %%
-# References
-# ----------
-# .. bibliography::
