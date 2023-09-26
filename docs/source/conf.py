@@ -136,7 +136,7 @@ html_css_files = ['custom.css']
 sphinx_gallery_conf = {
     'examples_dirs': '../../gallery',    # path to gallery scripts
     'gallery_dirs': 'gallery',  # path to where to save gallery generated output
-    'filename_pattern': r'/*\.py',
+    'filename_pattern': r'/*.*\.py',
     "download_all_examples": False,
 }
 
