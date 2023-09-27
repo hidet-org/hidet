@@ -54,6 +54,14 @@ em.property {
 a {
     text-decoration: unset;
 }
+
+.navbar-brand img {
+    width: 210px;
+}
+
+.navbar-brand {
+    padding: 1.8rem 0;
+}
 /*code {*/
 /*    font-family: monospace;*/
 /*}*/
