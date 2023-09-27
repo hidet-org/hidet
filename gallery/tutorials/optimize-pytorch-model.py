@@ -1,4 +1,6 @@
 """
+.. _Optimize PyTorch Model:
+
 Optimize PyTorch Model
 ======================
 

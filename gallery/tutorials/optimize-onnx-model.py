@@ -1,6 +1,6 @@
 """
 .. currentmodule:: hidet
-.. _Run ONNX Model with Hidet:
+.. _Optimize ONNX Model:
 
 Optimize ONNX Model
 ===================
@@ -145,6 +145,16 @@ with hidet.graph.PassContext() as ctx:
     graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
 
 bench_hidet_graph(graph_opt)
+
+# %%
+# When we search in space 2, we can have the following numbers on RTX 4090:
+#
+# .. code-block:: text
+#
+#    PyTorch: 1.806 ms (eager mode)
+#      Hidet: 3.477 ms (no optimization)
+#      Hidet: 0.841 ms (optimization and search space 2)
+#
 
 # %%
 # Summary

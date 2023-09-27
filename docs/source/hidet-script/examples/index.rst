@@ -1,6 +1,11 @@
 Examples
 ========
 
+This section contains a collection of examples that demonstrate how to use Hidet Script to write kernel programs. Each
+example is a self-contained hidet script program that can be run directly.
+
+.. _hidet script examples:
+
 .. toctree::
   :maxdepth: 1
   :caption: Hidet Script Examples

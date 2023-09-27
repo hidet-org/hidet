@@ -7,3 +7,5 @@ A transpiler is used to translate the python abstract syntax tree (AST) to Hidet
 Then, the translated tensor programs in Hidet IR is optimized and compiled to the target binary for execution.
 The tensor program writer works in the python environment in the whole process.
 
+
+To get started, please refer to the :ref:`hidet script examples`.

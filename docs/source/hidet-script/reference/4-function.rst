@@ -5,6 +5,7 @@ Function kinds
 --------------
 
 A function can be one of the following kinds:
+
 - ``public``: a public function can be invoked in python directly
 - ``cuda_kernel``: a cuda kernel function
 - ``cuda_internal``: a cuda device function that can only be invoked by cuda kernel/device functions

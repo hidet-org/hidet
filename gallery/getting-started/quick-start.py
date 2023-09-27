@@ -12,9 +12,9 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # .. note::
 #   :class: margin
 #
-#   ``torch.compile(...)``` requires PyTorch 2.0+.
+#   ``torch.compile(...)`` requires PyTorch 2.0+.
 #
-# The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend, such as
+# The easiest way to use Hidet is to use the :func:`torch.compile` function with ``hidet`` as the backend, such as
 #
 # .. code-block:: python
 #
@@ -39,10 +39,10 @@ model = torch.hub.load(
 )
 model = model.cuda().eval()
 
-# optimize the model with 'hidet' backend
-# uncomment the following line to enable kernel tuning, which will takes tens of minutes
-# but achieves better performance.
+# uncomment the following line to enable kernel tuning
 # hidet.torch.dynamo_config.search_space(2)
+
+# optimize the model with 'hidet' backend
 model_opt = torch.compile(model, backend='hidet')
 
 # run the optimized model
@@ -64,6 +64,27 @@ for name, model in [('eager', model), ('hidet', model_opt)]:
     end_event.record()
     torch.cuda.synchronize()
     print('{:>10}: {:.3f} ms'.format(name, start_event.elapsed_time(end_event) / 100.0))
+
+# %%
+# One operator can have multiple equivalent implementations (i.e., kernel programs) with different performance. We
+# usually need to try different implementations for each concrete input shape to find the best one for the specific
+# input shape. This process is called `kernel tuning`. To enable kernel tuning, we can use the following config in
+# hidet:
+#
+# .. code-block:: python
+#
+#    # 0 - no tuning, default kernel will be used
+#    # 1 - tuning in a small search space
+#    # 2 - tuning in a large search space, will take longer time and achieves better performance
+#    hidet.torch.dynamo_config.search_space(2)
+#
+# When kernel tuning is enabled, hidet can achieve the following performance on NVIDIA RTX 4090:
+#
+# .. code-block:: text
+#
+#    eager: 1.176 ms
+#    hidet: 0.286 ms
+#
 
 
 # %%
@@ -207,5 +228,6 @@ print(y2)
 # %%
 # Next Step
 # ---------
-# It is time to learn how to use hidet in your project. A good start is to :ref:`Run ONNX Model with Hidet`.
+# It is time to learn how to use hidet in your project. A good start is to :ref:`Optimize PyTorch Model` and
+# :ref:`Optimize ONNX Model` with Hidet.
 #
