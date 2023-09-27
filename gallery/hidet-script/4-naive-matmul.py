@@ -14,6 +14,7 @@ from hidet.lang.cuda import threadIdx, blockIdx
 hidet.option.cache_dir('./outs/cache')
 
 with hidet.script_module() as script_module:
+
     @hidet.script
     def matmul_kernel(a_ptr: ~f32, b_ptr: ~f32, c_ptr: ~f32, m_size: i32, n_size: i32, k_size: i32):
         attrs.func_kind = 'cuda_kernel'
@@ -33,11 +34,13 @@ with hidet.script_module() as script_module:
             for k in range(k_size):
                 c[i, j] += a[i, k] * b[k, j]
 
+
 module = script_module.build()
 
 
 # %%
 # Hidet compiled module can be called directly with pytorch tensors.
+
 
 def matmul(a: torch.Tensor, b: torch.Tensor):
     m_size, n_size, k_size = a.shape[0], b.shape[1], a.shape[1]

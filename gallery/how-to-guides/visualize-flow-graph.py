@@ -34,9 +34,7 @@ class SelfAttention(nn.Module):
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
         batch_size, seq_length, hidden_size = x.shape
-        x = x.reshape(
-            [batch_size, seq_length, self.num_attention_heads, self.attention_head_size]
-        )
+        x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
         x = x.rearrange([[0, 2], [1], [3]])
         return x  # [batch_size * num_attention_heads, seq_length, attention_head_size]
 

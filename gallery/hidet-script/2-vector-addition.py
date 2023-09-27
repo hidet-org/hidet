@@ -18,12 +18,14 @@ hidet.option.cache_dir('./outs/cache')
 #
 # We can use ``for i in range(extent)`` to iterate over a range, where ``extent`` is the extent of the loop.
 with hidet.script_module() as script_module:
+
     @hidet.script
     def launch(a: f32[3], b: f32[3], c: f32[3]):
         attrs.func_kind = 'public'
 
         for i in range(10):
             c[i] = a[i] + b[i]
+
 
 module = script_module.build()
 

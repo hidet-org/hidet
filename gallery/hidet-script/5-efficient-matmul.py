@@ -44,8 +44,12 @@ with hidet.lang.script_module() as script_module:
 
     @hidet.script
     def matmul_relu_kernel(
-        a_ptr: ~float32, b_ptr: ~float32, c_ptr: ~float32,
-        m_size: int32, n_size: int32, k_size: int32,
+        a_ptr: ~float32,
+        b_ptr: ~float32,
+        c_ptr: ~float32,
+        m_size: int32,
+        n_size: int32,
+        k_size: int32,
     ):
         attrs.func_name = 'matmul_kernel'
         attrs.cuda.block_dim = num_threads
@@ -89,31 +93,17 @@ with hidet.lang.script_module() as script_module:
         num_k_tiles = (k_size + block_k_size - 1) // block_k_size
         for k_tile in range(num_k_tiles):
             # load smem_a [block_m_size, block_k_size] from global memory
-            for i, k in auto_map(block_m_size, block_k_size, workers=num_threads).on(
-                threadIdx.x
-            ):
-                global_i, global_k = (
-                    i + blockIdx.x * block_m_size,
-                    k + k_tile * block_k_size,
-                )
+            for i, k in auto_map(block_m_size, block_k_size, workers=num_threads).on(threadIdx.x):
+                global_i, global_k = (i + blockIdx.x * block_m_size, k + k_tile * block_k_size)
                 smem_a[i, k] = (
-                    a[global_i, global_k]
-                    if global_i < m_size and global_k < k_size
-                    else 0.0
+                    a[global_i, global_k] if global_i < m_size and global_k < k_size else 0.0
                 )
 
             # load smem_b [block_k_size, block_n_size] from global memory
-            for k, j in auto_map(block_k_size, block_n_size, workers=num_threads).on(
-                threadIdx.x
-            ):
-                global_k, global_j = (
-                    k + k_tile * block_k_size,
-                    j + blockIdx.y * block_n_size,
-                )
+            for k, j in auto_map(block_k_size, block_n_size, workers=num_threads).on(threadIdx.x):
+                global_k, global_j = (k + k_tile * block_k_size, j + blockIdx.y * block_n_size)
                 smem_b[k, j] = (
-                    b[global_k, global_j]
-                    if global_k < k_size and global_j < n_size
-                    else 0.0
+                    b[global_k, global_j] if global_k < k_size and global_j < n_size else 0.0
                 )
 
             # synchronize all threads in the block
@@ -164,9 +154,7 @@ for m, n, k in [(1024, 1024, 1024), (256, 256, 256), (32, 32, 32)]:
 
     torch.testing.assert_close(c1, c2, atol=1e-4, rtol=1e-4)
 
-    hidet_latency = hidet.utils.benchmark_func(
-        lambda: hidet_matmul_relu(a, b), repeat=50
-    )
+    hidet_latency = hidet.utils.benchmark_func(lambda: hidet_matmul_relu(a, b), repeat=50)
     print(f'{m}x{k}x{n}:')
     print(' torch: {:.3f} ms'.format(hidet.utils.benchmark_func(lambda: torch_matmul_relu(a, b))))
     print(' hidet: {:.3f} ms'.format(hidet.utils.benchmark_func(lambda: hidet_matmul_relu(a, b))))
@@ -174,4 +162,3 @@ for m, n, k in [(1024, 1024, 1024), (256, 256, 256), (32, 32, 32)]:
 # %%
 # Get the source code:
 print(module.source())
-

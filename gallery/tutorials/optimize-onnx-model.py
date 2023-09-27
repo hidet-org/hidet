@@ -23,9 +23,7 @@ import torch
 onnx_path = './resnet50.onnx'
 
 # load pretrained resnet50 and create a random input
-torch_model = torch.hub.load(
-    'pytorch/vision:v0.9.0', 'resnet50', pretrained=True, verbose=False
-)
+torch_model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet50', pretrained=True, verbose=False)
 torch_model = torch_model.cuda().eval()
 torch_data = torch.randn([1, 3, 224, 224]).cuda()
 
@@ -119,10 +117,7 @@ def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
     (output,) = cuda_graph.run([data])
     np.testing.assert_allclose(
-        actual=output.cpu().numpy(),
-        desired=torch_output.cpu().numpy(),
-        rtol=1e-2,
-        atol=1e-2,
+        actual=output.cpu().numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
     )
     print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: cuda_graph.run())))
 

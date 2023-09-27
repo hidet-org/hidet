@@ -36,6 +36,7 @@ with hidet.script_module() as script_module:
         # print a message to the standard output.
         printf("Hello World!\n")
 
+
 # %%
 # With the script module defined, we can build the script module with ``build()`` method. The returned ``module`` is
 # an instance of ``hidet.runtime.CompiledModule``, which contains the compiled binary.

@@ -34,9 +34,7 @@ import torch
 
 # take resnet18 as an example
 x = torch.randn(1, 3, 224, 224).cuda()
-model = torch.hub.load(
-    'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
-)
+model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
 model = model.cuda().eval()
 
 # uncomment the following line to enable kernel tuning

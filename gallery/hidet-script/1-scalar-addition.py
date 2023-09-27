@@ -24,6 +24,7 @@ from hidet.lang.types import f32
 # function is also ``f32``. In hidet script, it is **required** to annotate the data type of each parameter. If the
 # return type is not annotated, it will be treated as ``void`` data type.
 with hidet.script_module() as script_module:
+
     @hidet.script
     # In the following example, the datatype of a and b is 32-bit floating point number (f32),
     # and the function returns a f32 number.
@@ -31,6 +32,7 @@ with hidet.script_module() as script_module:
         attrs.func_kind = 'public'
 
         return a + b
+
 
 module = script_module.build()
 

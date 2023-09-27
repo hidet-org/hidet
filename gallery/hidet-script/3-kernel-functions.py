@@ -35,6 +35,7 @@ from hidet.lang.types import f32
 hidet.option.cache_dir('./outs/cache')
 
 with hidet.script_module() as script_module:
+
     @hidet.script
     def matmul(a: f32[16, 16], b: f32[16, 16], c: f32[16, 16]):
         # specify the function kind as 'cpu_kernel'
@@ -74,6 +75,7 @@ n_size = 1024
 k_size = 1024
 
 with hidet.script_module() as script_module:
+
     @hidet.script
     def matmul(a: f32[m_size, k_size], b: f32[k_size, n_size], c: f32[m_size, n_size]):
         # specify the function kind as 'cuda_kernel'
@@ -113,4 +115,3 @@ hidet.utils.assert_close(c, a.torch() @ b.torch(), atol=1e-4, rtol=1e-4)
 #    You can find that there is no boundary checking in the kernel function. This is because hidet infers the value
 #    range for each index variable and finds that the if condition is always true, so it simplifies the if-statement.
 print(module.source())
-
