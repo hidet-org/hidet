@@ -34,7 +34,8 @@ setup(
         "requests",
         "filelock",
         "cuda-python>=11.6.1; platform_system=='Linux'",
-        "lark"
+        "lark",
+        "tomlkit"
     ],
     platforms=["linux"],
     entry_points={
