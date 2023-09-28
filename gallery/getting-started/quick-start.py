@@ -12,10 +12,9 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # .. note::
 #   :class: margin
 #
-#   Torch dynamo is a feature introduced in PyTorch 2.0, which has not been officially released yet. Please install the
-#   nightly build of PyTorch to use this feature.
+#   ``torch.compile(...)`` requires PyTorch 2.0+.
 #
-# The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend, such as
+# The easiest way to use Hidet is to use the :func:`torch.compile` function with ``hidet`` as the backend, such as
 #
 # .. code-block:: python
 #
@@ -27,7 +26,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 #   :class: margin
 #
 #   Because tf32 is enabled by default for torch's cudnn backend, the torch's precision is slightly low.
-#   You could disable the tf32 via ``torch.backends.cudnn.allow_tf32 = False``. See also `PyTorch TF32`_.
+#   You could disable the tf32 (See also `PyTorch TF32`_).
 # .. _PyTorch TF32: https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
 
 import hidet
@@ -35,10 +34,11 @@ import torch
 
 # take resnet18 as an example
 x = torch.randn(1, 3, 224, 224).cuda()
-model = torch.hub.load(
-    'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
-)
+model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
 model = model.cuda().eval()
+
+# uncomment the following line to enable kernel tuning
+# hidet.torch.dynamo_config.search_space(2)
 
 # optimize the model with 'hidet' backend
 model_opt = torch.compile(model, backend='hidet')
@@ -62,6 +62,27 @@ for name, model in [('eager', model), ('hidet', model_opt)]:
     end_event.record()
     torch.cuda.synchronize()
     print('{:>10}: {:.3f} ms'.format(name, start_event.elapsed_time(end_event) / 100.0))
+
+# %%
+# One operator can have multiple equivalent implementations (i.e., kernel programs) with different performance. We
+# usually need to try different implementations for each concrete input shape to find the best one for the specific
+# input shape. This process is called `kernel tuning`. To enable kernel tuning, we can use the following config in
+# hidet:
+#
+# .. code-block:: python
+#
+#    # 0 - no tuning, default kernel will be used
+#    # 1 - tuning in a small search space
+#    # 2 - tuning in a large search space, will take longer time and achieves better performance
+#    hidet.torch.dynamo_config.search_space(2)
+#
+# When kernel tuning is enabled, hidet can achieve the following performance on NVIDIA RTX 4090:
+#
+# .. code-block:: text
+#
+#    eager: 1.176 ms
+#    hidet: 0.286 ms
+#
 
 
 # %%
@@ -205,5 +226,6 @@ print(y2)
 # %%
 # Next Step
 # ---------
-# It is time to learn how to use hidet in your project. A good start is to :ref:`Run ONNX Model with Hidet`.
+# It is time to learn how to use hidet in your project. A good start is to :ref:`Optimize PyTorch Model` and
+# :ref:`Optimize ONNX Model` with Hidet.
 #

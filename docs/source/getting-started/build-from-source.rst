@@ -33,7 +33,7 @@ shared library:
 After building, you could find two libraries ``libhidet.so`` and ``libhidet_runtime.so`` under ``build/lib`` directory.
 
 Install the Hidet Python package
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Next we will install the Python package of Hidet in the develop mode via pip:
 

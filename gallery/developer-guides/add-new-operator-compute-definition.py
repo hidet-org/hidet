@@ -344,9 +344,7 @@ def reduce_sum_example():
     b = compute(
         'b',
         shape=[4],
-        fcompute=lambda i: reduce(
-            shape=[3], fcompute=lambda j: a[i, j], reduce_type='sum'
-        ),
+        fcompute=lambda i: reduce(shape=[3], fcompute=lambda j: a[i, j], reduce_type='sum'),
     )
     task = Task('reduce_sum', inputs=[a], outputs=[b])
     run_task(task, [hidet.randn([4, 3])])
@@ -365,9 +363,7 @@ def arg_max_example():
     b = compute(
         'b',
         shape=[4],
-        fcompute=lambda i: arg_reduce(
-            extent=3, fcompute=lambda j: a[i, j], reduce_type='max'
-        ),
+        fcompute=lambda i: arg_reduce(extent=3, fcompute=lambda j: a[i, j], reduce_type='max'),
     )
     task = Task('arg_max', inputs=[a], outputs=[b])
     run_task(task, [hidet.randn([4, 3])])
