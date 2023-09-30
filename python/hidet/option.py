@@ -257,6 +257,12 @@ def register_hidet_options():
         default_value='auto',
         description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). "auto" for auto-detect.',
     )
+    register_option(
+        name='imperative',
+        type_hint='bool',
+        default_value=True,
+        description='Whether to enable imperative execution when op arguments allows',
+    )
 
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
     if not os.path.exists(config_file_path):
@@ -732,6 +738,30 @@ def get_runtime_check() -> bool:
         Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
     """
     return OptionContext.current().get_option('runtime_check')
+
+
+def imperative(enable: bool = True):
+    """
+    Whether to enable imperative execution when op arguments allows.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to enable imperative execution when op arguments allows.
+    """
+    OptionContext.current().set_option('imperative', enable)
+
+
+def get_imperative() -> bool:
+    """
+    Get whether to enable imperative execution when op arguments allows.
+
+    Returns
+    -------
+    ret: bool
+        Get whether to enable imperative execution when op arguments allows.
+    """
+    return OptionContext.current().get_option('imperative')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):
