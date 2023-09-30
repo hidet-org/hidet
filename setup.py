@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="hidet",
-    version="0.3.0.dev",
+    version="0.3.1.dev",
     description="Hidet: a compilation-based DNN inference framework.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
