@@ -6,6 +6,8 @@ from hidet.graph.ops import matmul_x86_refactored
 from hidet.testing import check_binary
 from hidet.option import debug_cache_tuning
 
+import torch
+
 import tvm
 from tvm import te, auto_scheduler
 
@@ -30,10 +32,35 @@ hidet.option.cache_dir("./wtf")
 target = tvm.target.Target("llvm -mcpu=core-avx2")
 debug_cache_tuning(True)
 hidet.option.search_space(0)
-# for m, n, k in [(768, 768, 768), (111, 333, 222)]:
-for m, n, k in [(64, 64, 64)]:
-    a = hidet.randn([m, k], device='cpu')
-    b = hidet.randn([k, n], device='cpu')
+
+np.random.seed(42)
+for m, n, k in [(6, 17, 1)]:
+# for m, n, k in [(64, 64, 64)]:
+# for m, n, k in [(16, 16, 16), (64, 64, 64), (211, 333, 222), (768, 768, 768)]:
+    a = hidet.ones([m, k], device='cpu')
+    b = hidet.ones([k, n], device='cpu')
+
+    # a = hidet.randn([m, k], device='cpu')
+    # b = hidet.randn([k, n], device='cpu')
+    an = torch.ones(m, k, dtype=torch.float32)
+    bn = torch.ones(k, n, dtype=torch.float32)
+
+    counter=0
+    for i in range(m):
+        for j in range(k):
+            an[i, j] = counter
+            counter += 1
+    counter = 0
+    for i in range(k):
+        for j in range(n):
+            bn[i, j] = counter
+            counter += 1
+
+    a = hidet.from_torch(an)
+    b = hidet.from_torch(bn)
+
+    
+
     x1 = hidet.symbol_like(a)
     x2 = hidet.symbol_like(b)
     y = matmul_x86_refactored(x1, x2)
@@ -47,10 +74,12 @@ for m, n, k in [(64, 64, 64)]:
     actual = c.numpy()
     desired = a.numpy() @ b.numpy()
 
-    # for i in range(m):
-    #     for j in range(n):
-    #         if abs(actual[i, j] - desired[i, j]) < 1e-3:
-    #             print(f"Actually passed for i={i}, j={j}")
+    for i in range(m):
+        for j in range(n):
+            if abs(actual[i, j] - desired[i, j]) < 1e-3:
+                print(f"Actually passed for i={i}, j={j}")
+            else: 
+                print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
 
     # for i in range(m):
     #     for j in range(n):
