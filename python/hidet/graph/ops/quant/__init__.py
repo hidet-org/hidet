@@ -10,4 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .symmetric import symmetric_quantize, symmetric_dequantize
-from .matmul import symmetric_quant_matmul
+from .matmul import symmetric_quant_matmul, symmetric_quant_matmulf16
