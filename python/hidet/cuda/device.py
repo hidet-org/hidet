@@ -172,3 +172,48 @@ def profiler_stop():
     """
     (err,) = cudart.cudaProfilerStop()
     assert err == 0, err
+
+
+def create_event():
+    """
+    Create an event object.
+    """
+    (err, event) = cudart.cudaEventCreate()
+    assert err == 0, err
+    return event
+
+
+def event_record(event, stream=0):
+    """
+    Record an event.
+
+    Parameters
+    ----------
+    event: int
+        The event to record.
+    stream: int
+        The stream to record the event.
+    """
+    (err,) = cudart.cudaEventRecord(event, stream)
+    assert err == 0, err
+
+
+def event_elapsed_time(start, end):
+    """
+    Compute the elapsed time between two events.
+
+    Parameters
+    ----------
+    start: int
+        The start event.
+    end: int
+        The end event.
+
+    Returns
+    -------
+    elapsed: float
+        The elapsed time in milliseconds.
+    """
+    (err, t) = cudart.cudaEventElapsedTime(start, end)
+    assert err == 0, err
+    return t
