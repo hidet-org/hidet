@@ -11,7 +11,6 @@
 # limitations under the License.
 from .capability import capability
 from .device import available, device_count, synchronize, compute_capability, properties, profiler_start, profiler_stop
-from .device import create_event, event_record, event_elapsed_time
 from .device import cudaDeviceProp, set_device, current_device, device
 from .stream import Stream, ExternalStream, stream, default_stream, current_stream
 from .memory import malloc, free, malloc_async, free_async, malloc_host, free_host, memcpy_peer, memcpy_peer_async

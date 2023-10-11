@@ -37,36 +37,31 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
 
     fn()
     hidet.cuda.synchronize()
-    start_event = hidet.cuda.create_event()
-    end_event = hidet.cuda.create_event()
-    hidet.cuda.event_record(start_event)
+    start_event = hidet.cuda.Event(enable_timing=True)
+    end_event = hidet.cuda.Event(enable_timing=True)
+    start_event.record()
     for _ in range(5):
         fn()
-    hidet.cuda.event_record(end_event)
+    end_event.record()
     hidet.cuda.synchronize()
-    estimate_ms = hidet.cuda.event_elapsed_time(start_event, end_event) / 5
-    # compute number of warmup and repeat
+    estimate_ms = end_event.elapsed_time(start_event) / 5
     n_warmup = max(1, int(warmup / estimate_ms))
     n_repeat = max(1, int(rep / estimate_ms))
-    # We maintain a buffer of 256 MB that we clear
-    # before each kernel call to make sure that the L2
-    # doesn't contain any input data before the run
-    start_event = [hidet.cuda.create_event() for i in range(n_repeat)]
-    end_event = [hidet.cuda.create_event() for i in range(n_repeat)]
+
+    start_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
+    end_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
 
     # Warm-up
     for _ in range(n_warmup):
         fn()
     # Benchmark
     for i in range(n_repeat):
-        # we clear the L2 cache before each run
-        # record time of `fn`
-        hidet.cuda.event_record(start_event[i])
+        start_event[i].record()
         fn()
-        hidet.cuda.event_record(end_event[i])
+        end_event[i].record()
     # Record clocks
     hidet.cuda.synchronize()
-    times = np.array([hidet.cuda.event_elapsed_time(s, e) for s, e in zip(start_event, end_event)])
+    times = np.array([e.elapsed_time(s) for s, e in zip(start_event, end_event)])
     if percentiles:
         percentiles = np.quantile(times, percentiles)
         return tuple(percentiles)
