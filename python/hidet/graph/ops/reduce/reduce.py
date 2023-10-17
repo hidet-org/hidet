@@ -200,7 +200,7 @@ class ReduceTask(Task):
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int, tensor_type
         from hidet.ir.expr import cast, address, is_constant
-        from hidet.ir.layout import row_major, local_layout
+        from hidet.ir.layout import row_major
         from hidet.lang import spatial, repeat, attrs, tensor_pointer
         from hidet.lang.cuda import dynamic_shared_memory, syncthreads
 
@@ -236,7 +236,6 @@ class ReduceTask(Task):
         else:
             write_remain_shape = read_remain_shape[:]
         y_vectorized_shape = write_remain_shape
-        write_layout = row_major(*write_remain_shape)
         reduce_shape = [v for i, v in enumerate(shape) if i in dims]
         reduce_extent = hidet.utils.prod(reduce_shape)
         remain_extent = hidet.utils.prod(read_remain_shape)
@@ -251,11 +250,13 @@ class ReduceTask(Task):
         num_warps = reduce_warps * remain_warps
         block_size = num_warps * WARP_SIZE
         grid_size = cdiv(remain_extent, remain_warps * WARP_SIZE)
-        read_task_mapping = spatial(1, grid_size) * spatial(reduce_warps, remain_warps * WARP_SIZE) * repeat(repeats_per_reduce, 1)
+        read_task_mapping = (
+            spatial(1, grid_size) * spatial(reduce_warps, remain_warps * WARP_SIZE) * repeat(repeats_per_reduce, 1)
+        )
         write_task_mapping = spatial(1, grid_size) * spatial(reduce_warps, remain_warps * WARP_SIZE)
         remain_write_mapping = spatial(*write_remain_shape)
 
-        use_smem = False if (is_constant(reduce_warps) and reduce_warps == 1) else True
+        use_smem = not (is_constant(reduce_warps) and reduce_warps == 1)
         smem_length = remain_warps * WARP_SIZE * lanes
         smem_flattened_layout = row_major(smem_length)
         smem_task_mapping = spatial(reduce_warps, remain_warps * WARP_SIZE) * repeat(1, lanes)
@@ -333,9 +334,11 @@ class ReduceTask(Task):
                                 reduce_round = indices[0]
                                 if reduce_round == k:
                                     remain_idx = indices[1]
-                                    smem_staging[remain_idx] = ro.combine(smem_staging[remain_idx], rv[remain_idx % lanes])
+                                    smem_staging[remain_idx] = ro.combine(
+                                        smem_staging[remain_idx], rv[remain_idx % lanes]
+                                    )
                             syncthreads()
-                
+
                 # At this point, the shared memory (or rv, if not using smem) contains the final reduction value.
                 # Next, need to write back to global memory
                 if threadIdx.x < remain_warps * WARP_SIZE:
@@ -344,9 +347,13 @@ class ReduceTask(Task):
                         if lanes > 1:
                             lane_vec = cast(~write_val, ~vtype.lane_type)
                             if use_smem:
-                                lane_vec[remain_idx % lanes] = ro.finalize(acc=smem_staging[remain_idx], size=reduce_extent)
+                                lane_vec[remain_idx % lanes] = ro.finalize(
+                                    acc=smem_staging[remain_idx], size=reduce_extent
+                                )
                             else:
-                                lane_vec[remain_idx % lanes] = ro.finalize(acc=rv[remain_idx % lanes], size=reduce_extent)
+                                lane_vec[remain_idx % lanes] = ro.finalize(
+                                    acc=rv[remain_idx % lanes], size=reduce_extent
+                                )
                         else:
                             if use_smem:
                                 write_val[0] = ro.finalize(acc=smem_staging[remain_idx], size=reduce_extent)

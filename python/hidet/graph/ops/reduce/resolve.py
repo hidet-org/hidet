@@ -58,7 +58,6 @@ class ReduceResolveRule(ResolveRule):
 
     def resolve_decompose(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
-        keepdims = op.attrs['keepdims']
         x: Tensor = op.inputs[0]
         shape = x.shape
         dims = normalize_dim(dims, len(shape))
@@ -66,7 +65,7 @@ class ReduceResolveRule(ResolveRule):
             # start from highest dim to support keepdims=True
             dims.sort(reverse=True)
             for dim in dims:
-                x = op.reforward([x], {'dims':[dim]})[0]
+                x = op.reforward([x], {'dims': [dim]})[0]
             return [x]
         return None
 
