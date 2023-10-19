@@ -434,7 +434,7 @@ class SymmetricQuantizedMatmulF16Task(Task):
                 smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
                 smem_b = dynamic_shared_memory(byte_offset=n_stages * block_m * block_k * 2, dtype=int8)
                 smem_scale = dynamic_shared_memory(
-                    byte_offset=n_stages * block_m * block_k * 2 + n_stages * block_k * block_n, dtype=float16
+                    byte_offset=max(n_stages * block_m * block_k * 2 + n_stages * block_k * block_n, 2 * block_n * block_m), dtype=float16
                 )
 
                 regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
