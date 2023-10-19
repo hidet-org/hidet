@@ -77,15 +77,11 @@ def register_reduce_functions():
                 func_name = resolve_reduce_func_name(dtype, vec, scope, 'add')
 
                 def erase_type(v):
-                    erased_dtype = {
-                        8: u8,
-                        16: u16,
-                        32: u32,
-                        64: u64
-                    }[dtype.nbytes * 8]
+                    erased_dtype = {8: u8, 16: u16, 32: u32, 64: u64}[dtype.nbytes * 8]
                     return deref(cast(~v, ~erased_dtype))
 
                 if vec == 1:
+
                     @script
                     def reduce_op(addr: ~dtype, v0: dtype):
                         attrs.func_kind = 'cuda_internal'
@@ -95,6 +91,7 @@ def register_reduce_functions():
                         asm(template, inputs=inputs, is_volatile=True)
 
                 elif vec == 2:
+
                     @script
                     def reduce_op(addr: ~dtype, v0: dtype, v1: dtype):
                         attrs.func_kind = 'cuda_internal'
@@ -104,6 +101,7 @@ def register_reduce_functions():
                         asm(template, inputs=inputs, is_volatile=True)
 
                 elif vec == 4:
+
                     @script
                     def reduce_op(addr: ~dtype, v0: dtype, v1: dtype, v2: dtype, v3: dtype):
                         attrs.func_kind = 'cuda_internal'
@@ -113,11 +111,18 @@ def register_reduce_functions():
                         asm(template, inputs=inputs, is_volatile=True)
 
                 elif vec == 8:
+
                     @script
                     def reduce_op(
                         addr: ~dtype,
-                        v0: dtype, v1: dtype, v2: dtype, v3: dtype,
-                        v4: dtype, v5: dtype, v6: dtype, v7: dtype
+                        v0: dtype,
+                        v1: dtype,
+                        v2: dtype,
+                        v3: dtype,
+                        v4: dtype,
+                        v5: dtype,
+                        v6: dtype,
+                        v7: dtype,
                     ):
                         attrs.func_kind = 'cuda_internal'
                         attrs.func_name = func_name
