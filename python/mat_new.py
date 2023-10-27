@@ -34,31 +34,24 @@ debug_cache_tuning(True)
 hidet.option.search_space(0)
 
 np.random.seed(42)
-for m, n, k in [(6, 17, 1)]:
-# for m, n, k in [(64, 64, 64)]:
-# for m, n, k in [(16, 16, 16), (64, 64, 64), (211, 333, 222), (768, 768, 768)]:
-    a = hidet.ones([m, k], device='cpu')
-    b = hidet.ones([k, n], device='cpu')
-
+# for m, n, k in [(33, 65, 60), (32, 92, 128)]:
+for m, n, k in [(7, 1, 17)]:
     # a = hidet.randn([m, k], device='cpu')
     # b = hidet.randn([k, n], device='cpu')
-    an = torch.ones(m, k, dtype=torch.float32)
-    bn = torch.ones(k, n, dtype=torch.float32)
 
-    counter=0
-    for i in range(m):
-        for j in range(k):
-            an[i, j] = counter
-            counter += 1
-    counter = 0
-    for i in range(k):
-        for j in range(n):
-            bn[i, j] = counter
-            counter += 1
+    a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
+    b_torch = torch.arange(0, k*n).reshape(k, n).float().to('cpu')
+    #
+    # print(f"a_torch: {a_torch}")
+    # print(f"b_torch: {b_torch}")
 
-    a = hidet.from_torch(an)
-    b = hidet.from_torch(bn)
+    a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
+    b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
+    print(f"a: {a}")
+    print(f"b: {b}")
 
+    # a = hidet.ones([m, k], device='cpu')
+    # b = hidet.ones([k, n], device='cpu')
     
 
     x1 = hidet.symbol_like(a)
@@ -74,12 +67,18 @@ for m, n, k in [(6, 17, 1)]:
     actual = c.numpy()
     desired = a.numpy() @ b.numpy()
 
+    fails = 0
+
     for i in range(m):
         for j in range(n):
             if abs(actual[i, j] - desired[i, j]) < 1e-3:
-                print(f"Actually passed for i={i}, j={j}")
-            else: 
+                # print(f"Actually passed for i={i}, j={j}")
+                continue
+            else:
                 print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
+                fails += 1
+
+    print(f"Total fails: {fails}")
 
     # for i in range(m):
     #     for j in range(n):
