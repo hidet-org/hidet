@@ -1023,13 +1023,16 @@ def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
 def ne(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a != b
 
+
 @register_function(operator.mod)
 def mod(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a % b
 
+
 @register_function(operator.lshift)
 def lshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a << b
+
 
 @register_function(operator.rshift)
 def rshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
