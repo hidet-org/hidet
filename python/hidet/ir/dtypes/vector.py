@@ -12,7 +12,7 @@
 from typing import Any, Sequence
 from hidet.ir.type import DataType
 from .floats import float32, float16
-from .integer import int8
+from .integer import int8, uint8
 
 
 class VectorType(DataType):
@@ -75,6 +75,9 @@ class VectorType(DataType):
 int8x4 = VectorType(int8, 4)
 i8x4 = int8x4
 
+uint8x4 = VectorType(uint8, 4)
+u8x4 = uint8x4
+
 float32x4 = VectorType(float32, 4)
 f32x4 = float32x4
 
@@ -86,7 +89,13 @@ f16x2 = float16x2
 
 
 def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
-    table = {(float32, 4): float32x4, (float32, 8): float32x8, (float16, 2): float16x2, (int8, 4): int8x4}
+    table = {
+        (float32, 4): float32x4,
+        (float32, 8): float32x8,
+        (float16, 2): float16x2,
+        (int8, 4): int8x4,
+        (uint8, 4): uint8x4,
+    }
     if (base_dtype, num_lanes) in table:
         return table[(base_dtype, num_lanes)]
     else:

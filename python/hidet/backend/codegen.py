@@ -621,6 +621,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'float32x4': '__m128',
             'float32x8': '__m256',
             'int8x4': 'char4',
+            'uint8x4': 'uint4',
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']

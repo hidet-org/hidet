@@ -1046,6 +1046,7 @@ def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     return ops.rsqrt(x)
 
 
+@register_function(operator.pow)
 @register_function(torch.pow)
 @register_method(torch.Tensor.pow)
 def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> Tensor:
