@@ -15,7 +15,7 @@ from hidet.ir.compute import cops
 from hidet.lang import grid
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.ir.type import DataType
-from hidet.ir.dtypes.vector import VectorType
+from hidet.ir.dtypes.vector import VectorType, vectorize
 from hidet.ir.library import tune
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
@@ -85,7 +85,7 @@ class ReduceTask(Task):
             num_eles: int = 4 // xdtype.nbytes
             if is_constant(shape[-1]) and shape[-1] % num_eles == 0:
                 lanes = num_eles
-                vtype = VectorType(xdtype, lanes)
+                vtype = vectorize(xdtype, lanes)
         read_shape = shape[:]
         read_shape[-1] /= lanes
         block_size = (read_shape[-1] + warp_size - 1) // warp_size * warp_size
