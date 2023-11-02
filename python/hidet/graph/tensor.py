@@ -476,7 +476,33 @@ class Tensor:
         from .impl.dlpack import to_dlpack
 
         if stream is not None:
-            consumer_stream = hidet.cuda.ExternalStream(stream)
+            """
+            The stream specification follows the Python array API standard 2022.
+            None: producer must assume the legacy default stream
+            1: the legacy default stream
+            2: the per-thread default stream
+            > 2: stream number represented as a Python integer
+            0: is not allowed due to ambiguity: 0 could mean either None, 1, or 2.
+            For details, please refer to the following link
+            data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html?highlight=stream
+            Note:
+            1. The above convention is specified for CUDA. The specification for ROCm should be added later.
+            """
+            if stream == 0:
+                raise ValueError(f"Stream({stream}) is not allowed due to its ambiguity.")
+            elif stream == 1:
+                consumer_stream = hidet.cuda.default_stream()
+            elif stream == 2:
+                """
+                Currently, the per-thread default stream is not enabled in Hidet. We need to change both the runtime code
+                and compilation options to enable it. For details, please refer to the CUDA document
+                https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html\?highlight\=default%20stream\#default-stream
+                """
+                raise NotImplementedError("Currently, Hidet doesn't support per-thread default stream")
+            elif stream > 2:
+                consumer_stream = hidet.cuda.ExternalStream(stream)
+            else:
+                raise ValueError(f"Invalid stream number({stream})")
             provider_stream = hidet.cuda.current_stream()
             if consumer_stream != provider_stream:
                 event = hidet.cuda.Event()
