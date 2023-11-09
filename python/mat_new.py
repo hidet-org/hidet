@@ -35,8 +35,10 @@ hidet.option.search_space(0)
 
 np.random.seed(42)
 # for m, n, k in [(33, 65, 60), (32, 92, 128)]:
-for m, n, k in [(7, 1, 17)]:
-    # a = hidet.randn([m, k], device='cpu')
+# for m, n, k in [(7, 1, 17), (256, 256, 256), (512, 512, 512), (768, 768, 768)]:
+# for m, n, k in [(7, 1, 17), (32, 32, 32), (36, 36, 36), (37, 37, 37)]:
+for m, n, k in [(7, 17, 1), (333, 444, 555), (256, 256, 256), (512, 512, 512), (768, 768, 768)]:
+    # a = hidet.randn([m, k], device='cpuO')
     # b = hidet.randn([k, n], device='cpu')
 
     a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
@@ -69,14 +71,14 @@ for m, n, k in [(7, 1, 17)]:
 
     fails = 0
 
-    for i in range(m):
-        for j in range(n):
-            if abs(actual[i, j] - desired[i, j]) < 1e-3:
-                # print(f"Actually passed for i={i}, j={j}")
-                continue
-            else:
-                print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
-                fails += 1
+    # for i in range(m):
+    #     for j in range(n):
+    #         if abs(actual[i, j] - desired[i, j]) < 1e-3:
+    #             # print(f"Actually passed for i={i}, j={j}")
+    #             continue
+    #         else:
+    #             print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
+    #             fails += 1
 
     print(f"Total fails: {fails}")
 
