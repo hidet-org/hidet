@@ -49,8 +49,8 @@ for m, n, k in [(7, 17, 1), (333, 444, 555), (256, 256, 256), (512, 512, 512), (
 
     a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
     b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
-    print(f"a: {a}")
-    print(f"b: {b}")
+    # print(f"a: {a}")
+    # print(f"b: {b}")
 
     # a = hidet.ones([m, k], device='cpu')
     # b = hidet.ones([k, n], device='cpu')
@@ -80,7 +80,7 @@ for m, n, k in [(7, 17, 1), (333, 444, 555), (256, 256, 256), (512, 512, 512), (
     #             print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
     #             fails += 1
 
-    print(f"Total fails: {fails}")
+    # print(f"Total fails: {fails}")
 
     # for i in range(m):
     #     for j in range(n):
