@@ -267,10 +267,6 @@ class MatmulF32Taskx86_refactored(Task):
                 c5 = avx_f32x8_load(~c[5, 0])
                 c58 = avx_f32x8_load(~c[5, 8])
 
-                # printf("The msize in the micro kernel: %d\n", msize)
-                # printf("The nsize in the micro kernel: %d\n", nsize)
-                # printf("The pb in the micro kernel: %d\n", pb)
-
                 # if is_first:
                 #     c0 = avx_f32x8_setzero()
                 #     c08 = avx_f32x8_setzero()
@@ -315,11 +311,11 @@ class MatmulF32Taskx86_refactored(Task):
                     aa6 = avx_f32x8_broadcast(a_ptr + 5)
                     c5 = avx_f32x8_fmadd(aa6, bb0to7, c5)
                     c58 = avx_f32x8_fmadd(aa6, bb8to15, c58)
-                    printf(
-                        "List of all the aa's broadcasted in this iteration: %lf %lf %lf %lf %lf %lf\n, bb0 to to bb15: %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n\n",
-                        a_ptr[0], a_ptr[1], a_ptr[2], a_ptr[3], a_ptr[4], a_ptr[5], b_ptr[0], b_ptr[1], b_ptr[2],
-                        b_ptr[3], b_ptr[4], b_ptr[5], b_ptr[6], b_ptr[7], b_ptr[8], b_ptr[9], b_ptr[10], b_ptr[11],
-                        b_ptr[12], b_ptr[13], b_ptr[14], b_ptr[15])
+                    # printf(
+                    #     "List of all the aa's broadcasted in this iteration: %lf %lf %lf %lf %lf %lf\n, bb0 to to bb15: %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n\n",
+                    #     a_ptr[0], a_ptr[1], a_ptr[2], a_ptr[3], a_ptr[4], a_ptr[5], b_ptr[0], b_ptr[1], b_ptr[2],
+                    #     b_ptr[3], b_ptr[4], b_ptr[5], b_ptr[6], b_ptr[7], b_ptr[8], b_ptr[9], b_ptr[10], b_ptr[11],
+                    #     b_ptr[12], b_ptr[13], b_ptr[14], b_ptr[15])
 
                     a_ptr = a_ptr + 6
                     b_ptr = b_ptr + 16
@@ -403,14 +399,8 @@ class MatmulF32Taskx86_refactored(Task):
                            column_major(MR, packed_a_width)
                 )
 
-                # printf("work_id_packa: %d, packa_nways: %d, loop3_partition_a_width: %d, loop3_partition_a_height: %d\n",
-                #     work_id_packa, packa_nways, loop3_partition_a_width, loop3_partition_a_height)
-
                 npanels_full_a = loop3_partition_a_height // MR
                 panel_a_remainder = loop3_partition_a_height % MR
-
-                # printf("loop3_partition_a_height: %d\n", loop3_partition_a_height)
-                # printf("npanels_full_a: %d\n", npanels_full_a)
 
                 npanels_a = npanels_full_a + (1 if panel_a_remainder > 0 else 0)
 
@@ -421,8 +411,6 @@ class MatmulF32Taskx86_refactored(Task):
                     a_curr_panel_row_start = ii_panel * MR
                     a_curr_panel_height = min(MR,
                                               loop3_partition_a_height - a_curr_panel_row_start)
-                    # printf("packing of a: the panel %d is taken care of by the thread with pack a work id: %d; the a_curr_panel_row_start: %d, a_curr_panel_height: %d\n\n",
-                    #        ii_panel, work_id_packa, a_curr_panel_row_start, a_curr_panel_height)
 
                     if a_curr_panel_height == MR:  # unroll the packing by 8
                         k_iters = loop3_partition_a_width // 8
@@ -433,10 +421,6 @@ class MatmulF32Taskx86_refactored(Task):
                             a_curr_panel_col = loop3_partition_a + (
                                     a_curr_panel_row_start * k_size + col
                             )
-
-                            # printf("In the packing of A: the offset a_curr_panel_row_start * k_size + col for id %d: %d\n", work_id_packa, a_curr_panel_row_start * k_size + col)
-                            # printf("work_id_packa: %d, a_curr_panel_row_start: %d, a_curr_panel_height: %d, the offset a_curr_panel_row_start * k_size + col: %d\n",
-                            #        work_id_packa, a_curr_panel_row_start, a_curr_panel_height, a_curr_panel_row_start * k_size + col)
 
                             v0 = avx_f32x8_load(a_curr_panel_col)
                             v1 = avx_f32x8_load(a_curr_panel_col + k_size)
@@ -522,8 +506,6 @@ class MatmulF32Taskx86_refactored(Task):
                                 packed_a_tensor[
                                     remain_start_row + remain_row, remain_col] = 0.0
                                 remain_row += 1
-                # printf("The end of the pack a, comm id: %d, work id: %d\n",
-                #        comm_id_packa, work_id_packa)
 
             @hidet.script
             def gemm_pack_b(
@@ -536,13 +518,10 @@ class MatmulF32Taskx86_refactored(Task):
             ):
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
-                # if comm_id_packb == 0:
-                #     printf("loop4_partition_b_width: %d; loop4_partition_b_height: %d\n", loop4_partition_b_width, loop4_partition_b_height)
 
                 npanels_b = npanels_full_b + (1 if npanels_b_remainder != 0 else 0)
                 packedb_panel_stride = packed_b_height * NR
 
-                # printf("work_id_packb: %d; npabels_b: %d, packedb_panel_stride: %d\n\n", work_id_packb, npanels_b, packedb_panel_stride)
 
                 # Loop for the packing of B
                 for i_panel in range(npanels_b):
@@ -553,10 +532,6 @@ class MatmulF32Taskx86_refactored(Task):
                     curr_panel_start = i_panel * NR
                     curr_panel_width = min(NR,
                                            loop4_partition_b_width - curr_panel_start)
-
-                    # printf(
-                    #     "work_id_packb: %d; curr_panel_start: %d; curr_panel_width: %d; the offset i_panel * packedb_panel_stride: %d\n\n",
-                    #     work_id_packb, curr_panel_start, curr_panel_width, i_panel * packedb_panel_stride)
 
                     if curr_panel_width == NR:
                         k_iters = loop4_partition_b_height // 8
@@ -656,7 +631,6 @@ class MatmulF32Taskx86_refactored(Task):
                                     packed_b_remaining_buf_curr[0] = 0.0
                                     packed_b_remaining_buf_curr += 1
                                     zero_fill_col += 1
-                # printf("The end of pack B, comm_id_packb: %d, work_id_packb: %d\n", comm_id_packb, work_id_packb)
 
             gemm_pack_b.kind = "cpu_internal"
             gemm_pack_a.kind = "cpu_internal"
@@ -686,11 +660,6 @@ class MatmulF32Taskx86_refactored(Task):
                 n_remainder = macro_n % NR
                 m_iter = macro_m // MR
                 m_remainder = macro_m % MR
-
-                # printf(
-                #     "The macro kernel with comm_id_macro: %d, work_id_macro: %d , macro_m: %d, macro_n: %d, macro_k: %d, c_row_off: %d, c_col_off: %d, ps_packed_a: %d, ps_packed_b: %d\n",
-                #     comm_id_macro, work_id_macro, macro_m, macro_n, macro_k, c_row_off, c_col_off, ps_packed_a,
-                #     ps_packed_b)
 
                 if n_remainder > 0:
                     n_iter += 1
@@ -724,14 +693,6 @@ class MatmulF32Taskx86_refactored(Task):
                     ~ir_inc
                 )
 
-                # printf(
-                #     "jr_start: %d, jr_end: %d, jr_inc: %d, ir_start: %d, ir_end: %d, ir_inc: %d, work_id_macro: %d, work_id_1st_loop: %d\n\n",
-                #     jr_start, jr_end, jr_inc, ir_start, ir_end, ir_inc, work_id_macro, work_id_1st_loop)
-                #
-                # printf(
-                #     "work_id_macro: %d, work_id_1st_loop: %d, jr_start: %d, jr_end: %d, jr_inc: %d, ir_start: %d, ir_end: %d, ir_inc: %d\n\n",
-                #     work_id_macro, work_id_1st_loop, jr_start, jr_end, jr_inc, ir_start, ir_end, ir_inc)
-
                 rs_packeda = 1
                 rstep_a = ps_packed_a
                 cstep_b = ps_packed_b
@@ -756,7 +717,6 @@ class MatmulF32Taskx86_refactored(Task):
 
                     i = ir_start
                     while i < ir_end:
-                        # printf("i = %d\n", i)
                         a1 = packed_a + i * rstep_a
                         c11 = c1 + i * rstep_c
                         c11 = as_tensor_pointer(c11, dtype=float32, shape=(m_size, n_size))
@@ -778,10 +738,6 @@ class MatmulF32Taskx86_refactored(Task):
                                ir_start, ir_end, ir_inc,
                                rstep_a, cstep_b, cstep_c, rstep_c,
                                n_cur, m_cur)
-
-                        # printf(
-                        #     "The i value is %d for the macro work id %d. The offset i * rstep_a: %d, the offset i * rstep_c: %d, m_cur: %d\n\n",
-                        #     i, work_id_macro, i * rstep_a, i * rstep_c, m_cur)
 
                         if m_cur == MR and n_cur == NR:
                             # micro_kernel(a1, b1, c11, macro_k, macro_m, macro_n, is_first)
@@ -833,16 +789,6 @@ class MatmulF32Taskx86_refactored(Task):
                     ~m_end_loop3
                 )
 
-                # printf(
-                #     "loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, loop3_partition_a_width: %d, loop3_partition_b_width: %d, comm_id_3rd_loop: %d, work_id_3rd_loop: %d, is_first: %d,"
-                #     "m_start_loop3: %d, m_end_loop3: %d\n\n",
-                #     loop3_partition_a_start_col, loop3_partition_b_start_col, loop3_partition_a_width,
-                #     loop3_partition_b_width, comm_id_3rd_loop, work_id_3rd_loop, is_first,
-                #     m_start_loop3, m_end_loop3)
-
-                # printf("comm_id_3rd_loop: %d, work_id_3rd_loop: %d, loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, m_start_loop3: %d, m_end_loop3: %d, is_first: %d\n\n",
-                #        comm_id_3rd_loop, work_id_3rd_loop, loop3_partition_a_start_col, loop3_partition_b_start_col, m_start_loop3, m_end_loop3, is_first)
-
                 ii = m_start_loop3
                 while ii < m_end_loop3:
                     b_alg_loop3 = determine_blocksize_f_sub(
@@ -856,8 +802,6 @@ class MatmulF32Taskx86_refactored(Task):
                             loop3_partition_a_start_row * k_size +
                             loop3_partition_a_start_col
                     )
-                    # printf("comm_id_3rd_loop: %d, work_id_3rd_loop: %d, ii: %d, b_alg_loop3: %d\n\n",
-                    #        comm_id_3rd_loop, work_id_3rd_loop, ii, b_alg_loop3)
                     printf(
                         "work_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, "
                         "loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, "
@@ -985,10 +929,6 @@ class MatmulF32Taskx86_refactored(Task):
                                         (loop4_partition_b_start_row * n_size +
                                          loop4_partition_b_start_col)
 
-                    # printf("work_id_4th_loop: %d, comm_id_4th_loop: %d, the offset packed_b_individual_size * work_id_5th_loop: %d, "
-                    #        "the offset loop4_partition_b_start_row * n_size + loop4_partition_b_start_col: %d,"
-                    #        "loop4_partition_b_start_row: %d, loop4_partition_b_start_col: %d, \n\n",
-                    #        work_id_4th_loop, comm_id_4th_loop, packed_b_individual_size * work_id_5th_loop, loop4_partition_b_start_row * n_size + loop4_partition_b_start_col)
 
                     # # # TODO: If passed, see if this barrier is really needed
                     # printf("Begin: calling the first barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
