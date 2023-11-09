@@ -157,6 +157,8 @@ class MatmulF32Taskx86_refactored(Task):
             packb_nthreads = loop3_nthreads
             packa_nthreads = macro_nthreads
 
+            packed_a_buffers_needed = loop3_nways * loop5_nways
+
             @hidet.script
             def thread_range_sub(n_way: int32, work_id: int32, n: int32, bf: int32, start: ~int32, end: ~int32):
                 if n_way == 1:
@@ -226,6 +228,12 @@ class MatmulF32Taskx86_refactored(Task):
                 return i != n_iter - 1 or n_left == 0
 
             not_edge.kind = 'cpu_internal'
+
+            # TODO: Is this the way to find out the "index" of the packed A buffer?
+            @hidet.script
+            def packa_index(work_id_loop5: int32, work_id_loop3: int32):
+                return work_id_loop5 * loop3_nways + work_id_loop3
+            packa_index.kind = 'cpu_internal'
 
             # Thread barrier
             @hidet.script
@@ -355,7 +363,8 @@ class MatmulF32Taskx86_refactored(Task):
             if packed_a_individual_height > m_size:
                 packed_a_individual_height = (m_size + MR - 1) // MR * MR
             # packed_a_total_height = packed_a_individual_height * loop3_nways
-            packed_a_total_height = packed_a_individual_height * loop5_nways
+            # packed_a_total_height = packed_a_individual_height * loop5_nways
+            packed_a_total_height = packed_a_individual_height * packed_a_buffers_needed
 
             packed_a_width = KC
             if packed_a_width > k_size:
@@ -521,7 +530,6 @@ class MatmulF32Taskx86_refactored(Task):
 
                 npanels_b = npanels_full_b + (1 if npanels_b_remainder != 0 else 0)
                 packedb_panel_stride = packed_b_height * NR
-
 
                 # Loop for the packing of B
                 for i_panel in range(npanels_b):
@@ -816,6 +824,8 @@ class MatmulF32Taskx86_refactored(Task):
 
                     # packed_a_buf = packa_buf + (work_id_3rd_loop * packed_a_individual_size)
                     packed_a_buf = packa_buf + (work_id_5th_loop * packed_a_individual_size)
+                    # packed_a_idx = packa_index(work_id_5th_loop, work_id_3rd_loop)
+                    # packed_a_buf = packa_buf + (packed_a_idx * packed_a_individual_size)
 
                     # TODO: If passed, see if this barrier is necessary
                     # printf(
@@ -929,7 +939,6 @@ class MatmulF32Taskx86_refactored(Task):
                                         (loop4_partition_b_start_row * n_size +
                                          loop4_partition_b_start_col)
 
-
                     # # # TODO: If passed, see if this barrier is really needed
                     # printf("Begin: calling the first barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
                     # thrcomm_barrier(
@@ -950,8 +959,8 @@ class MatmulF32Taskx86_refactored(Task):
                     #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
                     thrcomm_barrier(
                         comm_id_packb,
-                        ~packb_thrcomm_barrier_sense[work_id_4th_loop],
-                        ~packb_thrcomm_barrier_threads_arrived[work_id_4th_loop],
+                        ~packb_thrcomm_barrier_sense[work_id_5th_loop],
+                        ~packb_thrcomm_barrier_threads_arrived[work_id_5th_loop],
                         packb_nthreads
                     )
                     # printf(
@@ -978,8 +987,8 @@ class MatmulF32Taskx86_refactored(Task):
                     #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
                     thrcomm_barrier(
                         comm_id_packb,
-                        ~packb_thrcomm_barrier_sense[work_id_4th_loop],
-                        ~packb_thrcomm_barrier_threads_arrived[work_id_4th_loop],
+                        ~packb_thrcomm_barrier_sense[work_id_5th_loop],
+                        ~packb_thrcomm_barrier_threads_arrived[work_id_5th_loop],
                         packb_nthreads
                     )
                     # printf(
