@@ -231,8 +231,9 @@ class MatmulF32Taskx86_refactored(Task):
 
             # TODO: Is this the way to find out the "index" of the packed A buffer?
             @hidet.script
-            def packa_index(work_id_loop5: int32, work_id_loop3: int32):
+            def packa_index(work_id_loop5: int32, work_id_loop3: int32) -> int32:
                 return work_id_loop5 * loop3_nways + work_id_loop3
+
             packa_index.kind = 'cpu_internal'
 
             # Thread barrier
@@ -823,9 +824,9 @@ class MatmulF32Taskx86_refactored(Task):
                     #     m_start_loop3, m_end_loop3, ii, b_alg_loop3)
 
                     # packed_a_buf = packa_buf + (work_id_3rd_loop * packed_a_individual_size)
-                    packed_a_buf = packa_buf + (work_id_5th_loop * packed_a_individual_size)
-                    # packed_a_idx = packa_index(work_id_5th_loop, work_id_3rd_loop)
-                    # packed_a_buf = packa_buf + (packed_a_idx * packed_a_individual_size)
+                    # packed_a_buf = packa_buf + (work_id_5th_loop * packed_a_individual_size)
+                    packed_a_idx = packa_index(work_id_5th_loop, work_id_3rd_loop)
+                    packed_a_buf = packa_buf + (packed_a_idx * packed_a_individual_size)
 
                     # TODO: If passed, see if this barrier is necessary
                     # printf(
