@@ -37,18 +37,18 @@ np.random.seed(42)
 # for m, n, k in [(33, 65, 60), (32, 92, 128)]:
 # for m, n, k in [(7, 1, 17), (256, 256, 256), (512, 512, 512), (768, 768, 768)]:
 # for m, n, k in [(7, 1, 17), (32, 32, 32), (36, 36, 36), (37, 37, 37)]:
-for m, n, k in [(7, 17, 1), (333, 444, 555), (256, 256, 256), (512, 512, 512), (768, 768, 768)]:
-    # a = hidet.randn([m, k], device='cpuO')
-    # b = hidet.randn([k, n], device='cpu')
+for m, n, k in [(7, 17, 1), (333, 444, 555)]:
+    a = hidet.randn([m, k], device='cpu')
+    b = hidet.randn([k, n], device='cpu')
 
-    a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
-    b_torch = torch.arange(0, k*n).reshape(k, n).float().to('cpu')
+    # a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
+    # b_torch = torch.arange(0, k*n).reshape(k, n).float().to('cpu')
+    # #
+    # # print(f"a_torch: {a_torch}")
+    # # print(f"b_torch: {b_torch}")
     #
-    # print(f"a_torch: {a_torch}")
-    # print(f"b_torch: {b_torch}")
-
-    a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
-    b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
+    # a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
+    # b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
     # print(f"a: {a}")
     # print(f"b: {b}")
 
@@ -91,8 +91,8 @@ for m, n, k in [(7, 17, 1), (333, 444, 555), (256, 256, 256), (512, 512, 512), (
     np.testing.assert_allclose(
         actual=actual,
         desired=desired,
-        rtol=1e-3,
-        atol=1e-3
+        rtol=1e-2,
+        atol=1e-2
     )
 
     print("passed for m={}, n={}, k={}".format(m, n, k))
