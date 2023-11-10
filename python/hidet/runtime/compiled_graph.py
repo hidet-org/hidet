@@ -420,6 +420,9 @@ def save_compiled_graph(model: CompiledGraph, path: str):
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
 
+        if hidet.option.get_store_dispatch_table():
+            zf.write(model.dispatch_table_path, arcname="dispatch_table.txt")
+
 
 def load_compiled_graph(path: str) -> CompiledGraph:
     from hidet.utils.dataclass import from_dict
@@ -455,6 +458,10 @@ def load_compiled_graph(path: str) -> CompiledGraph:
             # to indicate whether the graph is already in the cache
             zf.extractall(cache_dir, files_to_extract)
 
+        dispatch_table_path = os.path.join(os.path.dirname(path), "dispatch_table.txt")
+        if hidet.option.get_store_dispatch_table() and not os.path.isfile(dispatch_table_path):
+            zf.extract("dispatch_table.txt", path=dispatch_table_path)
+
     # load kernels (i.e., compiled tasks)
     num_kernels = meta_data.num_kernels
     compiled_tasks = [CompiledTask(task_dir=os.path.join(cache_dir, 'kernels', str(i))) for i in range(num_kernels)]
@@ -468,5 +475,8 @@ def load_compiled_graph(path: str) -> CompiledGraph:
 
     # construct the compiled graph
     ret = CompiledGraph(meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string)
+
+    if hidet.option.get_store_dispatch_table():
+        ret.dispatch_table_path = os.path.abspath('./dispatch_table')
 
     return ret
