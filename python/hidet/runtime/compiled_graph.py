@@ -416,6 +416,10 @@ def save_compiled_graph(model: CompiledGraph, path: str):
             ge_bytes = json.dumps(asdict(model.graph_execution), indent=4).encode('utf-8')
             f.write(ge_bytes)
 
+        # save dispatch table file
+        if hidet.option.get_store_dispatch_table() and os.path.exists(model.dispatch_table_path):
+            zf.write(model.dispatch_table_path, arcname="dispatch_table.txt")
+
         # save graph string
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
@@ -448,7 +452,6 @@ def load_compiled_graph(path: str) -> CompiledGraph:
 
         # extract all files except weights
         cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
-
         if not os.path.exists(os.path.join(cache_dir, 'graph_string.txt')):
             # only extract files if the graph_string.txt is not in the cache
             # here 'graph_string.txt' is just the last file we usually save to disk, we use it as a flag
