@@ -37,23 +37,25 @@ np.random.seed(42)
 # for m, n, k in [(33, 65, 60), (32, 92, 128)]:
 # for m, n, k in [(7, 1, 17), (256, 256, 256), (512, 512, 512), (768, 768, 768)]:
 # for m, n, k in [(7, 1, 17), (32, 32, 32), (36, 36, 36), (37, 37, 37)]:
-for m, n, k in [(7, 17, 1), (333, 444, 555), (768, 768, 768)]:
-    a = hidet.randn([m, k], device='cpu')
-    b = hidet.randn([k, n], device='cpu')
+# for m, n, k in [(7, 17, 1), (16, 16, 16), (333, 444, 555), (768, 768, 768)]:
+# for m, n, k in [(7, 17, 1), (16, 16, 16), (17, 17, 17), (36, 36, 36), (37, 37, 37), (128, 128, 128), (256, 256, 256), (333, 444, 555), (768, 768, 768)]:
+for m, n, k in [(7, 17, 1), (36, 20, 20), (128, 128, 128), (768, 768, 768)]:
+    # a = hidet.randn([m, k], device='cpu')
+    # b = hidet.randn([k, n], device='cpu')
 
-    # a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
-    # b_torch = torch.arange(0, k*n).reshape(k, n).float().to('cpu')
+    a_torch = torch.arange(0, m*k).reshape(m, k).float().to('cpu')
+    b_torch = torch.arange(0, k*n).reshape(k, n).float().to('cpu')
     # #
     # # print(f"a_torch: {a_torch}")
     # # print(f"b_torch: {b_torch}")
     #
-    # a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
-    # b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
+    a = hidet.from_torch(a_torch).to(dtype='float32', device='cpu')
+    b = hidet.from_torch(b_torch).to(dtype='float32', device='cpu')
     # print(f"a: {a}")
     # print(f"b: {b}")
 
-    # a = hidet.ones([m, k], device='cpu')
-    # b = hidet.ones([k, n], device='cpu')
+    a = hidet.randn([m, k], device='cpu')
+    b = hidet.randn([k, n], device='cpu')
     
 
     x1 = hidet.symbol_like(a)
@@ -71,16 +73,16 @@ for m, n, k in [(7, 17, 1), (333, 444, 555), (768, 768, 768)]:
 
     fails = 0
 
-    # for i in range(m):
-    #     for j in range(n):
-    #         if abs(actual[i, j] - desired[i, j]) < 1e-3:
-    #             # print(f"Actually passed for i={i}, j={j}")
-    #             continue
-    #         else:
-    #             print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
-    #             fails += 1
+    for i in range(m):
+        for j in range(n):
+            if abs(actual[i, j] - desired[i, j]) < 1e-3:
+                # print(f"Actually passed for i={i}, j={j}")
+                continue
+            else:
+                print(f"Failed for i={i}, j={j}, and we have [i, j] = {actual[i, j]} and desired [i, j] = {desired[i, j]}")
+                fails += 1
 
-    # print(f"Total fails: {fails}")
+    print(f"Total fails: {fails}")
 
     # for i in range(m):
     #     for j in range(n):
@@ -91,8 +93,8 @@ for m, n, k in [(7, 17, 1), (333, 444, 555), (768, 768, 768)]:
     np.testing.assert_allclose(
         actual=actual,
         desired=desired,
-        rtol=1e-2,
-        atol=1e-2
+        rtol=1e-3,
+        atol=1e-3
     )
 
     print("passed for m={}, n={}, k={}".format(m, n, k))
