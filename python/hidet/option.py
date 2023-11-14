@@ -263,12 +263,6 @@ def register_hidet_options():
         default_value=True,
         description='Whether to enable imperative execution when op arguments allows',
     )
-    register_option(
-        name='store_dispatch_table',
-        type_hint='bool',
-        default_value=False,
-        description="Whether to save and load the CompiledGraph's dispatch table",
-    )
 
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
     if not os.path.exists(config_file_path):
@@ -779,30 +773,6 @@ def debug_show_verbose_flow_graph(enable: bool = True):
         Whether to show verbose information when we convert flow graph in to human-readable text.
     """
     OptionContext.current().set_option('debug_show_verbose_flow_graph', enable)
-
-
-def store_dispatch_table(enable: bool = True):
-    """
-    Whether to save and load the CompiledGraph's dispatch table.
-
-    Parameters
-    ----------
-    enable: bool
-        Whether to save and load the CompiledGraph's dispatch table.
-    """
-    OptionContext.current().set_option('store_dispatch_table', enable)
-
-
-def get_store_dispatch_table() -> bool:
-    """
-    Get whether to save and load the CompiledGraph's dispatch table.
-
-    Returns
-    -------
-    ret: bool
-        Whether to save and load the CompiledGraph's dispatch table.
-    """
-    return OptionContext.current().get_option('store_dispatch_table')
 
 
 class cuda:

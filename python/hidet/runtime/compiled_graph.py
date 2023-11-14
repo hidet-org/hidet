@@ -376,7 +376,7 @@ class CompiledGraph:
         save_compiled_graph(self, path)
 
 
-def save_compiled_graph(model: CompiledGraph, path: str):
+def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bool = False):
     from hidet.utils.dataclass import asdict
 
     dirname = os.path.dirname(path)
@@ -417,8 +417,10 @@ def save_compiled_graph(model: CompiledGraph, path: str):
             f.write(ge_bytes)
 
         # save dispatch table file
-        if hidet.option.get_store_dispatch_table() and os.path.exists(model.dispatch_table_path):
-            zf.write(model.dispatch_table_path, arcname="dispatch_table.txt")
+        if save_dispatch_table and os.path.exists(model.dispatch_table_path):
+            with zf.open('dispatch_table.txt', 'w') as f:
+                with open(model.dispatch_table_path, 'rb') as f2:
+                    f.write(f2.read())
 
         # save graph string
         with zf.open('graph_string.txt', 'w') as f:
