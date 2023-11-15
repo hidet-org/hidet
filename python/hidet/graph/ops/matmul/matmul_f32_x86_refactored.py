@@ -85,7 +85,7 @@ class MatmulF32Taskx86_refactored(Task):
 
     @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 1, 1, 1)])
     def schedule_matmulf32_x86(
-            self, MC=2016, NC=256, KC=560, ways=(1, 8, 2, 1)
+            self, MC=2016, NC=256, KC=560, ways=(4, 1, 2, 2)
     ) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -371,6 +371,8 @@ class MatmulF32Taskx86_refactored(Task):
             packed_a_width = KC
             if packed_a_width > k_size:
                 packed_a_width = k_size
+                # FIXME: Can this allow us to use align versions of loads once and for all?
+                packed_a_width = (packed_a_width + 8 - 1) // 8 * 8
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
 
@@ -467,30 +469,30 @@ class MatmulF32Taskx86_refactored(Task):
                             res5 = avx_f32x8_permute2f32x4(shf3, shf4, 0x31)
 
                             # TODO: Now I changed to unaligned to debug...
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start, col],
                                 res0
                             )
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start + 2,
                                                  col + 1],
                                 res2
                             )
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start + 4,
                                                  col + 2],
                                 res4)
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start,
                                 col + 4],
                                 res1
                             )
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start + 2,
                                                  col + 5],
                                 res3
                             )
-                            avx_f32x8_store(
+                            avx_f32x8_store_aligned(
                                 ~packed_a_tensor[a_curr_panel_row_start + 4,
                                                  col + 6],
                                 res5
@@ -555,57 +557,57 @@ class MatmulF32Taskx86_refactored(Task):
                             b00 = avx_f32x8_load(b_panel)
                             b08 = avx_f32x8_load(b_panel + 8)
 
-                            avx_f32x8_store(packed_b_buff_curr, b00)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b08)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
                             packed_b_buff_curr += 16
 
                             b10 = avx_f32x8_load(b_panel + n_size)
                             b18 = avx_f32x8_load(b_panel + (n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b10)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b18)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b10)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b18)
                             packed_b_buff_curr += 16
 
                             b20 = avx_f32x8_load(b_panel + (2 * n_size))
                             b28 = avx_f32x8_load(b_panel + (2 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b20)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b28)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b20)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b28)
                             packed_b_buff_curr += 16
 
                             b30 = avx_f32x8_load(b_panel + (3 * n_size))
                             b38 = avx_f32x8_load(b_panel + (3 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b30)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b38)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b30)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b38)
                             packed_b_buff_curr += 16
 
                             b40 = avx_f32x8_load(b_panel + (4 * n_size))
                             b48 = avx_f32x8_load(b_panel + (4 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b40)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b48)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b40)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b48)
                             packed_b_buff_curr += 16
 
                             b50 = avx_f32x8_load(b_panel + (5 * n_size))
                             b58 = avx_f32x8_load(b_panel + (5 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b50)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b58)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b50)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b58)
                             packed_b_buff_curr += 16
 
                             b60 = avx_f32x8_load(b_panel + (6 * n_size))
                             b68 = avx_f32x8_load(b_panel + (6 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b60)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b68)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b60)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b68)
                             packed_b_buff_curr += 16
 
                             b70 = avx_f32x8_load(b_panel + (7 * n_size))
                             b78 = avx_f32x8_load(b_panel + (7 * n_size + 8))
 
-                            avx_f32x8_store(packed_b_buff_curr, b70)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b78)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b70)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b78)
 
                             packed_b_buff_curr += 16
 
@@ -615,8 +617,8 @@ class MatmulF32Taskx86_refactored(Task):
                                     row * n_size + curr_panel_start)
                             b00 = avx_f32x8_load(b_panel)
                             b08 = avx_f32x8_load(b_panel + 8)
-                            avx_f32x8_store(packed_b_buff_curr, b00)
-                            avx_f32x8_store(packed_b_buff_curr + 8, b08)
+                            avx_f32x8_store_aligned(packed_b_buff_curr, b00)
+                            avx_f32x8_store_aligned(packed_b_buff_curr + 8, b08)
                             packed_b_buff_curr += 16
                             row += 1
 
@@ -731,25 +733,6 @@ class MatmulF32Taskx86_refactored(Task):
                         c11 = c1 + i * rstep_c
                         c11 = as_tensor_pointer(c11, dtype=float32, shape=(m_size, n_size))
                         m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
-                        #
-                        # printf(''' work_id_macro: %d, work_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, c_row_off: %d, c_col_off: %d,
-                        #        macro_m: %d, macro_n: %d, macro_k: %d,
-                        #        ps_packed_a: %d, ps_packed_b: %d, ,
-                        #        n_iter: %d, n_remainder: %d, m_iter: %d, m_remainder: %d,
-                        #        jr_start: %d, jr_end: %d, jr_inc: %d,
-                        #        ir_start: %d, ir_end: %d, ir_inc: %d,
-                        #        i: %d, j: %d,
-                        #        rstep_a: %d, cstep_b: %d, cstep_c: %d, rstep_c: %d,
-                        #        n_cur: %d, m_cur: %d \n\n''',
-                        #        work_id_macro, work_id_3rd_loop, work_id_4th_loop, work_id_5th_loop, c_row_off, c_col_off,
-                        #        macro_m, macro_n, macro_k,
-                        #        ps_packed_a, ps_packed_b,
-                        #        n_iter, n_remainder, m_iter, m_remainder,
-                        #        jr_start, jr_end, jr_inc,
-                        #        ir_start, ir_end, ir_inc,
-                        #        i, j,
-                        #        rstep_a, cstep_b, cstep_c, rstep_c,
-                        #        n_cur, m_cur)
 
                         if m_cur == MR and n_cur == NR:
                             # micro_kernel(a1, b1, c11, macro_k, macro_m, macro_n, is_first)
@@ -815,22 +798,9 @@ class MatmulF32Taskx86_refactored(Task):
                             loop3_partition_a_start_col
                     )
 
-                    # packed_a_buf = packa_buf + (work_id_3rd_loop * packed_a_individual_size)
-                    # packed_a_buf = packa_buf + (work_id_5th_loop * packed_a_individual_size)
                     packed_a_idx = packa_index(work_id_5th_loop, work_id_3rd_loop)
                     packed_a_buf = packa_buf + (packed_a_idx * packed_a_individual_size)
 
-                    # printf(
-                    #     "work_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, "
-                    #     "loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, "
-                    #     "loop3_partition_a_width: %d, loop3_partition_b_width: %d, "
-                    #     "loop3_partition_a_start_row: %d, loop3_partition_a_height: %d, "
-                    #     "m_start_loop3: %d, m_end_loop3: %d, ii: %d, b_alg_loop3: %d, packed_a_idx: %d\n\n",
-                    #     work_id_3rd_loop, work_id_4th_loop, work_id_5th_loop,
-                    #     loop3_partition_a_start_col, loop3_partition_b_start_col,
-                    #     loop3_partition_a_width, loop3_partition_b_width,
-                    #     loop3_partition_a_start_row, loop3_partition_a_height,
-                    #     m_start_loop3, m_end_loop3, ii, b_alg_loop3, packed_a_idx)
 
                     # TODO: If passed, see if this barrier is necessary
                     # printf(
