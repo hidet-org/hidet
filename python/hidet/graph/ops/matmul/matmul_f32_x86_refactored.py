@@ -85,7 +85,7 @@ class MatmulF32Taskx86_refactored(Task):
 
     @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 1, 1, 1)])
     def schedule_matmulf32_x86(
-            self, MC=2016, NC=256, KC=560, ways=(2, 2, 4, 1)
+            self, MC=2016, NC=256, KC=560, ways=(1, 8, 2, 1)
     ) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -277,19 +277,19 @@ class MatmulF32Taskx86_refactored(Task):
                 c5 = avx_f32x8_load(~c[5, 0])
                 c58 = avx_f32x8_load(~c[5, 8])
 
-                # if is_first:
-                #     c0 = avx_f32x8_setzero()
-                #     c08 = avx_f32x8_setzero()
-                #     c1 = avx_f32x8_setzero()
-                #     c18 = avx_f32x8_setzero()
-                #     c2 = avx_f32x8_setzero()
-                #     c28 = avx_f32x8_setzero()
-                #     c3 = avx_f32x8_setzero()
-                #     c38 = avx_f32x8_setzero()
-                #     c4 = avx_f32x8_setzero()
-                #     c48 = avx_f32x8_setzero()
-                #     c5 = avx_f32x8_setzero()
-                #     c58 = avx_f32x8_setzero()
+                if is_first:
+                    c0 = avx_f32x8_setzero()
+                    c08 = avx_f32x8_setzero()
+                    c1 = avx_f32x8_setzero()
+                    c18 = avx_f32x8_setzero()
+                    c2 = avx_f32x8_setzero()
+                    c28 = avx_f32x8_setzero()
+                    c3 = avx_f32x8_setzero()
+                    c38 = avx_f32x8_setzero()
+                    c4 = avx_f32x8_setzero()
+                    c48 = avx_f32x8_setzero()
+                    c5 = avx_f32x8_setzero()
+                    c58 = avx_f32x8_setzero()
                 a_ptr = cast(a, ~float32)
                 b_ptr = cast(b, ~float32)
 
@@ -764,8 +764,8 @@ class MatmulF32Taskx86_refactored(Task):
                                     c11[mm, nn] += temp_c[mm, nn]
                             else:
                                 for mm, nn in grid(m_cur, n_cur):
-                                    # c11[mm, nn] = temp_c[mm, nn] FIXME: temporarily changed to see if zero-initing is the problem(well, it is not.....)
-                                    c11[mm, nn] += temp_c[mm, nn]
+                                    c11[mm, nn] = temp_c[mm, nn]
+                                    # c11[mm, nn] += temp_c[mm, nn]
 
                         i += ir_inc
                     j += jr_inc
@@ -1073,9 +1073,9 @@ class MatmulF32Taskx86_refactored(Task):
                 # printf("packed_b_total_size: %d, packed_a_total_size: %d\n", packed_b_total_size, packed_a_total_size)
                 # printf("packed_b_individual_size: %d, packed_a_individual_size: %d\n", packed_b_individual_size, packed_a_individual_size)
 
-                for i in grid(m_size):
-                    for j in grid(n_size):
-                        c[i, j] = 0.0
+                # for i in grid(m_size):
+                #     for j in grid(n_size):
+                #         c[i, j] = 0.0
 
                 parallel_attr = 'p' + str(nthreads)
                 # The outermost loop spawning threads
