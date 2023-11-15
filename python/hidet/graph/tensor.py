@@ -486,7 +486,7 @@ class Tensor:
         1. The above convention is specified for CUDA. The specification for ROCm should be added later.
         2. The per-thread default stream is currently not enabled in Hidet. We need to change both the runtime
         code and compilation options to enable it. For details, please refer to the CUDA document
-        https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html\?highlight\=default%20stream\#default-stream
+        https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html?highlight\=default%20stream\#default-stream
         """
         from .impl.dlpack import to_dlpack
 
