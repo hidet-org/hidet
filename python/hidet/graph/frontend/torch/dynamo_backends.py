@@ -74,7 +74,6 @@ def get_compiled_graph(flow_graph: FlowGraph):
     parallel_k = dynamo_config['parallel_k']
     tensor_core = dynamo_config['use_tensor_core']
     save_dir = dynamo_config['dump_graph_ir']
-
     with PassContext() as ctx:
         if use_fp16:
             ctx.set_precision('float16')
@@ -98,6 +97,17 @@ def get_compiled_graph(flow_graph: FlowGraph):
     return cgraph
 
 
+def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
+    torch_inputs: List[torch.Tensor] = []
+    for x in inputs:
+        if not x.is_contiguous():
+            # warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
+            x = x.contiguous()
+        torch_inputs.append(x)
+    hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
+    return hidet_inputs
+
+
 def get_wrapper(cgraph: CompiledGraph, inputs, output_format):
     use_cuda_graph = dynamo_config['use_cuda_graph']
     if use_cuda_graph:
@@ -107,16 +117,6 @@ def get_wrapper(cgraph: CompiledGraph, inputs, output_format):
             runner = cgraph
     else:
         runner = cgraph
-
-    def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
-        torch_inputs: List[torch.Tensor] = []
-        for x in inputs:
-            if not x.is_contiguous():
-                # warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
-                x = x.contiguous()
-            torch_inputs.append(x)
-        hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
-        return hidet_inputs
 
     def run(*inputs: torch.Tensor):
         hidet_inputs = preprocess_inputs(inputs)
