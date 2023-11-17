@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union
 
-from hidet.ir.expr import Expr, Call
+from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType, VoidType, PointerType
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.utils import initialize
@@ -40,20 +40,3 @@ def cpu_atomic_add_fetch(ptr: Expr, val: Union[Expr, int], order: Union[Expr, in
 
 def cpu_atomic_fetch_xor(ptr: Expr, val: Union[Expr, int], order: Union[Expr, int]) -> Expr:
     return call_primitive_func('cpu_atomic_fetch_xor', [ptr, val, order])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

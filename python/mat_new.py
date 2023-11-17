@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import hidet
-from hidet.graph.ops import matmul_x86_refactored
+from hidet.graph.ops import matmul_x86
 from hidet.testing import check_binary
 from hidet.option import debug_cache_tuning
 
@@ -63,7 +63,7 @@ for m, n, k in [(20, 20, 20), (333,  444, 555), (768, 768, 768), (555, 256, 3072
 
     x1 = hidet.symbol_like(a)
     x2 = hidet.symbol_like(b)
-    y = matmul_x86_refactored(x1, x2)
+    y = matmul_x86(x1, x2)
     graph = hidet.trace_from(
         y, inputs=[x1, x2]
     )

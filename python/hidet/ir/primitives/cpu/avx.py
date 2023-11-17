@@ -27,15 +27,21 @@ def register_primitive_functions():
         ('avx_x86_float32x4_load_aligned', '_mm_load_ps', FuncType([PointerType('float32')], 'float32x4')),
         ('avx_x86_float32x4_store', '_mm_storeu_ps', FuncType([PointerType('float32'), 'float32x4'], VoidType())),
         (
-        'avx_x86_float32x4_store_aligned', '_mm_store_ps', FuncType([PointerType('float32'), 'float32x4'], VoidType())),
+            'avx_x86_float32x4_store_aligned',
+            '_mm_store_ps',
+            FuncType([PointerType('float32'), 'float32x4'], VoidType()),
+        ),
         ('avx_x86_float32x4_setzero', '_mm_setzero_ps', FuncType([], 'float32x4')),
         ('avx_x86_float32x8_broadcast', '_mm256_broadcast_ss', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_fmadd', '_mm256_fmadd_ps', FuncType(['float32x8', 'float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_load', '_mm256_loadu_ps', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_load_aligned', '_mm256_load_ps', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_store', '_mm256_storeu_ps', FuncType([PointerType('float32'), 'float32x8'], VoidType())),
-        ('avx_x86_float32x8_store_aligned', '_mm256_store_ps',
-         FuncType([PointerType('float32'), 'float32x8'], VoidType())),
+        (
+            'avx_x86_float32x8_store_aligned',
+            '_mm256_store_ps',
+            FuncType([PointerType('float32'), 'float32x8'], VoidType()),
+        ),
         ('avx_x86_float32x8_setzero', '_mm256_setzero_ps', FuncType([], 'float32x8')),
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
         ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
@@ -52,12 +58,12 @@ def register_primitive_functions():
         (
             'avx_x86_float32x8_insert_float32x4',
             '_mm256_insertf128_ps',
-            FuncType(['float32x8', 'float32x4', 'int32'], 'float32x8')
+            FuncType(['float32x8', 'float32x4', 'int32'], 'float32x8'),
         ),
         (
             'avx_x86_float32x8_permute2float32x4',
             '_mm256_permute2f128_ps',
-            FuncType(['float32x8', 'float32x8', 'int32'], 'float32x8')
+            FuncType(['float32x8', 'float32x8', 'int32'], 'float32x8'),
         ),
     ]
     for name, codegen_name, func_type in functions:
@@ -162,8 +168,3 @@ def avx_f32x8_insert_f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
 
 def avx_f32x8_permute2f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
     return call_primitive_func('avx_x86_float32x8_permute2float32x4', [a, b, imm])
-
-
-
-
-

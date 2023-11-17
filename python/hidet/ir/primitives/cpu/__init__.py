@@ -26,4 +26,3 @@ from .avx import (
 )
 
 from .atomic import cpu_atomic_load_n, cpu_atomic_add_fetch, cpu_atomic_fetch_xor
-
