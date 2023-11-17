@@ -21,6 +21,7 @@ from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broa
 from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.utils import broadcast_indices
+from hidet.lang import attrs
 
 
 class MatmulF32Taskx86(Task):
@@ -123,11 +124,10 @@ class MatmulF32Taskx86(Task):
 
             @hidet.script
             def init_thr(sense: ~int32, arrived: ~int32, size: int32):
+                attrs.func_kind = 'cpu_internal'
                 for i in range(size):
                     sense[i] = 0
                     arrived[i] = 0
-
-            init_thr.kind = "cpu_internal"
 
             # Helpers
             packed_a_type = tensor_type('float32', layout=row_major(MC // MR, 1) * column_major(MR, KC))
@@ -146,6 +146,7 @@ class MatmulF32Taskx86(Task):
 
             @hidet.script
             def thread_range_sub(n_way: int32, work_id: int32, n: int32, bf: int32, start: ~int32, end: ~int32):
+                attrs.func_kind = "cpu_internal"
                 if n_way == 1:
                     start[0] = 0
                     end[0] = n
@@ -186,20 +187,18 @@ class MatmulF32Taskx86(Task):
                         end[0] += n_bf_left
                         end[0] = min(end[0], all_end)
 
-            thread_range_sub.kind = "cpu_internal"
-
             @hidet.script
             def thread_range_jrir(
                 work_id: int32, n_way: int32, n: int32, bf: int32, start: ~int32, end: ~int32, inc: ~int32
             ):
+                attrs.func_kind = "cpu_internal"
                 start[0] = work_id
                 end[0] = n
                 inc[0] = n_way
 
-            thread_range_jrir.kind = "cpu_internal"
-
             @hidet.script
             def determine_blocksize_f_sub(i: int32, dim: int32, b_alg: int32) -> int32:
+                attrs.func_kind = 'cpu_internal'
                 dim_left_now = dim - i
                 b_now = -1
                 if dim_left_now <= b_alg:
@@ -209,23 +208,20 @@ class MatmulF32Taskx86(Task):
                 assert b_now >= 0
                 return b_now
 
-            determine_blocksize_f_sub.kind = "cpu_internal"
-
             @hidet.script
             def not_edge(i: int32, n_iter: int32, n_left: int32) -> bool:
+                attrs.func_kind = 'cpu_internal'
                 return i != n_iter - 1 or n_left == 0
-
-            not_edge.kind = 'cpu_internal'
 
             @hidet.script
             def packa_index(work_id_loop5: int32, work_id_loop3: int32) -> int32:
+                attrs.func_kind = 'cpu_internal'
                 return work_id_loop5 * loop3_nways + work_id_loop3
-
-            packa_index.kind = 'cpu_internal'
 
             # Thread barrier
             @hidet.script
             def thrcomm_barrier(barrier_sense: ~int32, barrier_threads_arrived: ~int32, num_threads: int32):
+                attrs.func_kind = 'cpu_internal'
                 if num_threads == 1:
                     return
                 orig_sense = cpu_atomic_load_n(barrier_sense, 0)  # _ATOMIC_RELAXED
@@ -240,8 +236,6 @@ class MatmulF32Taskx86(Task):
                     while cpu_atomic_load_n(barrier_sense, 2) == orig_sense:  # _ATOMIC_ACQUIRE
                         pass
 
-            thrcomm_barrier.kind = 'cpu_internal'
-
             @hidet.script
             def micro_kernel(
                 a: packed_a_type,
@@ -252,6 +246,7 @@ class MatmulF32Taskx86(Task):
                 nsize: int32,
                 is_first: bool,
             ):
+                attrs.func_kind = 'cpu_internal'
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
                 c0 = avx_f32x8_load(~c[0, 0])
                 c08 = avx_f32x8_load(~c[0, 8])
@@ -343,11 +338,6 @@ class MatmulF32Taskx86(Task):
             packed_a_individual_height = min(MC, (m_size + MR - 1) // MR * MR)
             packed_a_total_height = packed_a_individual_height * packed_a_buffers_needed
 
-            # packed_a_width = KC
-            # if packed_a_width > k_size:
-            #     packed_a_width = k_size
-            #     # pad this to be able to use the aligned version of the avx store
-            #     packed_a_width = (packed_a_width + 8 - 1) // 8 * 8
             packed_a_width = min(KC, (k_size + 8 - 1) // 8 * 8)
 
             packed_a_total_size = packed_a_total_height * packed_a_width
@@ -369,6 +359,7 @@ class MatmulF32Taskx86(Task):
                 packed_a_buf: ~float32,
                 work_id_packa: int32,
             ):
+                attrs.func_kind = 'cpu_internal'
                 packed_a_tensor = as_tensor_pointer(
                     packed_a_buf,
                     float32,
@@ -463,6 +454,7 @@ class MatmulF32Taskx86(Task):
                 packed_b_buf: ~float32,
                 work_id_packb: int32,
             ):
+                attrs.func_kind = 'cpu_internal'
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
 
@@ -569,10 +561,6 @@ class MatmulF32Taskx86(Task):
                                     packed_b_remaining_buf_curr += 1
                                     zero_fill_col += 1
 
-            gemm_pack_b.kind = "cpu_internal"
-            gemm_pack_a.kind = "cpu_internal"
-            micro_kernel.kind = "cpu_internal"
-
             @hidet.script
             def gemm_macro(
                 packed_a: ~float32,
@@ -589,6 +577,7 @@ class MatmulF32Taskx86(Task):
                 work_id_macro: int32,
                 is_first: bool,
             ):
+                attrs.func_kind = 'cpu_internal'
                 comm_id_1st_loop = comm_id_macro % loop1_nthreads
                 work_id_1st_loop = comm_id_1st_loop // (loop1_nthreads // loop1_nways)
 
@@ -650,8 +639,6 @@ class MatmulF32Taskx86(Task):
                         i += ir_inc
                     j += jr_inc
 
-            gemm_macro.kind = "cpu_internal"
-
             @hidet.script
             def gemm_3rd_loop(
                 a: float32[m_size, k_size],
@@ -666,6 +653,7 @@ class MatmulF32Taskx86(Task):
                 is_first: bool,
                 work_id_5th_loop: int32,
             ):
+                attrs.func_kind = 'cpu_internal'
                 comm_id_macro = comm_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
                 work_id_packa = comm_id_macro
@@ -727,8 +715,6 @@ class MatmulF32Taskx86(Task):
                     )
                     ii += b_alg_loop3
 
-            gemm_3rd_loop.kind = "cpu_internal"
-
             @hidet.script
             def gemm_4th_loop(
                 a: float32[m_size, k_size],
@@ -739,6 +725,7 @@ class MatmulF32Taskx86(Task):
                 comm_id_4th_loop: int32,
                 work_id_5th_loop: int32,
             ):
+                attrs.func_kind = 'cpu_internal'
                 i_loop4 = 0
 
                 comm_id_3rd_loop = comm_id_4th_loop % loop3_nthreads
@@ -805,8 +792,6 @@ class MatmulF32Taskx86(Task):
 
                     i_loop4 += b_alg_loop4
 
-            gemm_4th_loop.kind = "cpu_internal"
-
             @hidet.script
             def gemm_5th_loop(
                 a: float32[m_size, k_size],
@@ -815,6 +800,7 @@ class MatmulF32Taskx86(Task):
                 work_id_5th_loop: int32,
                 comm_id_5th_loop: int32,
             ):
+                attrs.func_kind = 'cpu_internal'
                 comm_id_4th_loop = comm_id_5th_loop % loop4_nthreads
 
                 loop5_my_start = -1
@@ -839,13 +825,12 @@ class MatmulF32Taskx86(Task):
                     )
                     loop5_iter += b_alg_loop5
 
-            gemm_5th_loop.kind = 'cpu_internal'
-
             ################### Start of the main kernel ###################
             @hidet.script
             def matmul_kernel_x86_v3(
                 a: float32[m_size, k_size], b: float32[k_size, n_size], c: float32[m_size, n_size]
             ):
+                attrs.func_kind = 'cpu_kernel'
 
                 init_thr(packa_thrcomm_barrier_sense, packa_thrcomm_threads_arrived, loop3_nways)
                 init_thr(packb_thrcomm_barrier_sense, packb_thrcomm_barrier_threads_arrived, loop5_nways)
@@ -860,7 +845,7 @@ class MatmulF32Taskx86(Task):
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
-            matmul_kernel_x86_v3.kind = "cpu_kernel"
+            # matmul_kernel_x86_v3.kind = "cpu_kernel"
             ir_module = module.ir_module()
             return ir_module
 
