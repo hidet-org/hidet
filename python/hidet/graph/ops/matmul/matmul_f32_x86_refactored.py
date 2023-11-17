@@ -14,8 +14,6 @@ from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
-from hidet.ir.primitives import printf
-from hidet.ir.primitives.cpu import avx_f32x8_setzero, avx_f32x8_load_aligned, avx_free, avx_malloc
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
@@ -83,16 +81,16 @@ class MatmulF32Taskx86_refactored(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 1, 1, 1)])
+    @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 4, 2, 1)])
     def schedule_matmulf32_x86(
-            self, MC=2016, NC=256, KC=560, ways=(4, 1, 2, 2)
+            self, MC=2016, NC=384, KC=560, ways=(1, 4, 2, 1)
     ) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
         from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_major, column_major
         from hidet.lang.cpu import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
-        from hidet.lang.cpu import avx_f32x8_store_aligned, avx_f32x8_load_aligned
+        from hidet.lang.cpu import avx_f32x8_store_aligned, avx_f32x8_load_aligned, avx_f32x8_setzero
         from hidet.lang.cpu import avx_f32x8_unpacklo, avx_f32x8_unpackhi
         from hidet.lang.cpu import avx_f32x8_shuffle, avx_f32x8_cast_f32x4
         from hidet.lang.cpu import avx_f32x8_insert_f32x4, avx_f32x8_permute2f32x4
@@ -148,7 +146,6 @@ class MatmulF32Taskx86_refactored(Task):
                 KC, NR))
 
             # Get the number of threads remaining at each level
-            loop5_nthreads = nthreads
             loop4_nthreads = nthreads // loop5_nways
             loop3_nthreads = loop4_nthreads
             macro_nthreads = loop3_nthreads // loop3_nways
@@ -239,7 +236,7 @@ class MatmulF32Taskx86_refactored(Task):
 
             # Thread barrier
             @hidet.script
-            def thrcomm_barrier(tid: int32, barrier_sense: ~int32,
+            def thrcomm_barrier(barrier_sense: ~int32,
                                 barrier_threads_arrived: ~int32, num_threads: int32):
                 if num_threads == 1:
                     return
@@ -321,11 +318,6 @@ class MatmulF32Taskx86_refactored(Task):
                     aa6 = avx_f32x8_broadcast(a_ptr + 5)
                     c5 = avx_f32x8_fmadd(aa6, bb0to7, c5)
                     c58 = avx_f32x8_fmadd(aa6, bb8to15, c58)
-                    # printf(
-                    #     "List of all the aa's broadcasted in this iteration: %lf %lf %lf %lf %lf %lf\n, bb0 to to bb15: %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n\n",
-                    #     a_ptr[0], a_ptr[1], a_ptr[2], a_ptr[3], a_ptr[4], a_ptr[5], b_ptr[0], b_ptr[1], b_ptr[2],
-                    #     b_ptr[3], b_ptr[4], b_ptr[5], b_ptr[6], b_ptr[7], b_ptr[8], b_ptr[9], b_ptr[10], b_ptr[11],
-                    #     b_ptr[12], b_ptr[13], b_ptr[14], b_ptr[15])
 
                     a_ptr = a_ptr + 6
                     b_ptr = b_ptr + 16
@@ -364,14 +356,12 @@ class MatmulF32Taskx86_refactored(Task):
             packed_a_individual_height = MC
             if packed_a_individual_height > m_size:
                 packed_a_individual_height = (m_size + MR - 1) // MR * MR
-            # packed_a_total_height = packed_a_individual_height * loop3_nways
-            # packed_a_total_height = packed_a_individual_height * loop5_nways
             packed_a_total_height = packed_a_individual_height * packed_a_buffers_needed
 
             packed_a_width = KC
             if packed_a_width > k_size:
                 packed_a_width = k_size
-                # FIXME: Can this allow us to use align versions of loads once and for all?
+                # pad this to be able to use the aligned version of the avx store
                 packed_a_width = (packed_a_width + 8 - 1) // 8 * 8
             packed_a_total_size = packed_a_total_height * packed_a_width
             packed_a_individual_size = packed_a_width * packed_a_individual_height
@@ -388,11 +378,6 @@ class MatmulF32Taskx86_refactored(Task):
             packb_buf = cast(packb_buf_ptr, ~float32)
             packa_buf = cast(packa_buf_ptr, ~float32)
 
-            packed_a_type = tensor_type(
-                dtype='float32',
-                layout=row_major(packed_a_individual_height // MR, 1) * column_major(MR, packed_a_width)
-            )
-
             ##### Start of the loops around micro kernel #####
 
             @hidet.script
@@ -401,9 +386,7 @@ class MatmulF32Taskx86_refactored(Task):
                     loop3_partition_a_width: int32,
                     loop3_partition_a_height: int32,
                     packed_a_buf: ~float32,
-                    comm_id_packa: int32,
                     work_id_packa: int32,
-                    packa_nways: int32
             ):
                 packed_a_tensor = as_tensor_pointer(
                     packed_a_buf,
@@ -526,8 +509,7 @@ class MatmulF32Taskx86_refactored(Task):
                     loop4_partition_b_width: int32,
                     loop4_partition_b_height: int32,
                     packed_b_buf: ~float32,
-                    comm_id_packb: int32, work_id_packb: int32,
-                    packb_nways: int32
+                    work_id_packb: int32
             ):
                 npanels_full_b = loop4_partition_b_width // NR
                 npanels_b_remainder = loop4_partition_b_width % NR
@@ -662,9 +644,8 @@ class MatmulF32Taskx86_refactored(Task):
                     ps_packed_b: int32,
                     comm_id_macro: int32,
                     work_id_macro: int32,
-                    is_first: bool, work_id_3rd_loop: int32, work_id_4th_loop: int32, work_id_5th_loop: int32
+                    is_first: bool
             ):
-                # assert loop1_nthreads == 1
                 comm_id_1st_loop = comm_id_macro % loop1_nthreads
                 work_id_1st_loop = comm_id_1st_loop // (loop1_nthreads // loop1_nways)
 
@@ -705,7 +686,6 @@ class MatmulF32Taskx86_refactored(Task):
                     ~ir_inc
                 )
 
-                rs_packeda = 1
                 rstep_a = ps_packed_a
                 cstep_b = ps_packed_b
 
@@ -735,12 +715,10 @@ class MatmulF32Taskx86_refactored(Task):
                         m_cur = MR if not_edge(i, m_iter, m_remainder) else m_remainder
 
                         if m_cur == MR and n_cur == NR:
-                            # micro_kernel(a1, b1, c11, macro_k, macro_m, macro_n, is_first)
                             micro_kernel(a1, b1, c11, macro_k, m_size, n_size, is_first)
                         else:
                             for i, j in grid(MR, NR):
                                 temp_c[i, j] = 0.0
-                            # micro_kernel(a1, b1, cast(temp_c, ~float32), macro_k, MR, NR, is_first)
                             micro_kernel(a1, b1, cast(temp_c, ~float32), macro_k, MR, NR, is_first)
                             if not is_first:
                                 for mm, nn in grid(m_cur, n_cur):
@@ -748,7 +726,6 @@ class MatmulF32Taskx86_refactored(Task):
                             else:
                                 for mm, nn in grid(m_cur, n_cur):
                                     c11[mm, nn] = temp_c[mm, nn]
-                                    # c11[mm, nn] += temp_c[mm, nn]
 
                         i += ir_inc
                     j += jr_inc
@@ -766,12 +743,10 @@ class MatmulF32Taskx86_refactored(Task):
                     loop3_partition_b_width: int32,
                     comm_id_3rd_loop: int32,
                     work_id_3rd_loop: int32,
-                    is_first: bool, work_id_4th_loop: int32, work_id_5th_loop: int32):
+                    is_first: bool, work_id_5th_loop: int32):
                 comm_id_macro = comm_id_3rd_loop % macro_nthreads
                 work_id_macro = comm_id_macro // (macro_nthreads // macro_nways)
-                comm_id_packa = comm_id_macro
                 work_id_packa = comm_id_macro
-                packa_nways = macro_nthreads
 
                 m_start_loop3 = 0
                 m_end_loop3 = 0
@@ -802,52 +777,27 @@ class MatmulF32Taskx86_refactored(Task):
                     packed_a_buf = packa_buf + (packed_a_idx * packed_a_individual_size)
 
 
-                    # TODO: If passed, see if this barrier is necessary
-                    # printf(
-                    #     "Begin: calling the first barrier for the 3rd loop; work_id_3rd_loop: %d, comm_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, ii: %d, loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, packed_a_idx: %d\n",
-                    #     work_id_3rd_loop, comm_id_3rd_loop, work_id_4th_loop, work_id_5th_loop, ii,
-                    #     loop3_partition_a_start_col,
-                    #     loop3_partition_b_start_col, packed_a_idx)
                     thrcomm_barrier(
-                        comm_id_packa,
                         ~packa_thrcomm_barrier_sense[packed_a_idx],
                         ~packa_thrcomm_threads_arrived[packed_a_idx],
                         packa_nthreads
                     )
-                    # printf(
-                    #     "End: calling the first barrier for the 3rd loop; work_id_3rd_loop: %d, comm_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, ii: %d, loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d, packed_a_idx: %d\n",
-                    #     work_id_3rd_loop, comm_id_3rd_loop, work_id_4th_loop, work_id_5th_loop, ii,
-                    #     loop3_partition_a_start_col,
-                    #     loop3_partition_b_start_col, packed_a_idx)
 
                     gemm_pack_a(
                         loop3_partition_a,
                         loop3_partition_a_width,
                         loop3_partition_a_height,
                         packed_a_buf,
-                        comm_id_packa,
                         work_id_packa,
-                        packa_nways
                     )
 
                     # This marks the end of the packing of A,
                     # so a barrier is needed
-                    # printf(
-                    #     "Begin: calling the second barrier for the 3rd loop; work_id_3rd_loop: %d, comm_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, ii: %d, loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d\n",
-                    #     work_id_3rd_loop, comm_id_3rd_loop, work_id_4th_loop, work_id_5th_loop, ii,
-                    #     loop3_partition_a_start_col,
-                    #     loop3_partition_b_start_col)
                     thrcomm_barrier(
-                        comm_id_packa,
                         ~packa_thrcomm_barrier_sense[packed_a_idx],
                         ~packa_thrcomm_threads_arrived[packed_a_idx],
                         packa_nthreads
                     )
-                    # printf(
-                    #     "End: calling the second barrier for the 3rd loop; work_id_3rd_loop: %d, comm_id_3rd_loop: %d, work_id_4th_loop: %d, work_id_5th_loop: %d, ii: %d, loop3_partition_a_start_col: %d, loop3_partition_b_start_col: %d\n",
-                    #     work_id_3rd_loop, comm_id_3rd_loop, work_id_4th_loop, work_id_5th_loop, ii,
-                    #     loop3_partition_a_start_col,
-                    #     loop3_partition_b_start_col)
 
                     gemm_macro(packed_a_buf,
                                packed_b,
@@ -861,10 +811,7 @@ class MatmulF32Taskx86_refactored(Task):
                                packed_b_height * NR,
                                comm_id_macro,
                                work_id_macro,
-                               is_first,
-                               work_id_3rd_loop,
-                               work_id_4th_loop,
-                               work_id_5th_loop,
+                               is_first
                                )
                     ii += b_alg_loop3
 
@@ -877,14 +824,11 @@ class MatmulF32Taskx86_refactored(Task):
                               loop5_partition_b_width: int32,
                               loop5_partition_b_start_col: int32,
                               comm_id_4th_loop: int32,
-                              work_id_4th_loop: int32,
                               work_id_5th_loop: int32):
-                b_alg_loop4 = KC
                 i_loop4 = 0
 
                 comm_id_3rd_loop = comm_id_4th_loop % loop3_nthreads
                 work_id_3rd_loop = comm_id_3rd_loop // (loop3_nthreads // loop3_nways)
-                comm_id_packb = comm_id_3rd_loop
                 work_id_packb = comm_id_3rd_loop
 
                 while i_loop4 < k_size:
@@ -899,13 +843,6 @@ class MatmulF32Taskx86_refactored(Task):
                     loop4_partition_a_start_col = i_loop4
                     is_first = (i_loop4 == 0)
 
-                    # printf(
-                    #     "work_id_5th_loop: %d, work_id_4th_loop: %d, i_loop4: %d, b_alg_loop4: %d, loop4_partition_b_height: %d, loop4_partition_b_width: %d,"
-                    #     "loop4_partition_b_start_row: %d, loop4_partition_b_start_col: %d, loop4_partition_a_start_col: %d, is_first: %d\n",
-                    #     work_id_5th_loop, work_id_4th_loop, i_loop4, b_alg_loop4, loop4_partition_b_height, loop4_partition_b_width,
-                    #     loop4_partition_b_start_row,
-                    #     loop4_partition_b_start_col, loop4_partition_a_start_col, is_first)
-
                     packed_b_buf = packb_buf + (
                             packed_b_individual_size * work_id_5th_loop
                     )
@@ -914,35 +851,22 @@ class MatmulF32Taskx86_refactored(Task):
                                         (loop4_partition_b_start_row * n_size +
                                          loop4_partition_b_start_col)
 
-                    # # # TODO: If passed, see if this barrier is really needed
-                    # printf("Begin: calling the first barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
                     thrcomm_barrier(
-                        comm_id_packb,
                         ~packb_thrcomm_barrier_sense[work_id_5th_loop],
                         ~packb_thrcomm_barrier_threads_arrived[work_id_5th_loop],
                         packb_nthreads
                     )
-                    # printf("End: calling the first barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d\n", work_id_4th_loop, comm_id_4th_loop)
 
                     gemm_pack_b(loop4_partition_b, loop4_partition_b_width,
                                 loop4_partition_b_height, packed_b_buf,
-                                comm_id_packb, work_id_packb, loop3_nthreads)
+                                work_id_packb)
 
-                    # The barrier at the end of the packing of B
-                    # printf(
-                    #     "Begin: calling the second barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d, work_id_5th_loop: %d, i_loop4: %d, loop5_partition_b_start_col: %d\n",
-                    #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
                     thrcomm_barrier(
-                        comm_id_packb,
                         ~packb_thrcomm_barrier_sense[work_id_5th_loop],
                         ~packb_thrcomm_barrier_threads_arrived[work_id_5th_loop],
                         packb_nthreads
                     )
-                    # printf(
-                    #     "End: calling the second barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d, work_id_5th_loop: %d, i_loop4: %d, loop5_partition_b_start_col: %d\n",
-                    #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
 
-                    # TODO: The loop3 and beyond should start here?
                     gemm_3rd_loop(
                         a, packed_b_buf, c,
                         loop4_partition_a_start_col,
@@ -952,23 +876,14 @@ class MatmulF32Taskx86_refactored(Task):
                         comm_id_3rd_loop,
                         work_id_3rd_loop,
                         is_first,
-                        work_id_4th_loop,
                         work_id_5th_loop
                     )
 
-                    # # TODO: Is not adding this barrier at the end the problem?
-                    # printf(
-                    #     "Begin: calling the third barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d, work_id_5th_loop: %d, i_loop4: %d, loop5_partition_b_start_col: %d, work_id_5th_loop: %d\n",
-                    #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
                     thrcomm_barrier(
-                        comm_id_packb,
                         ~packb_thrcomm_barrier_sense[work_id_5th_loop],
                         ~packb_thrcomm_barrier_threads_arrived[work_id_5th_loop],
                         packb_nthreads
                     )
-                    # printf(
-                    #     "End: calling the third barrier for the 4th loop; work_id_4th_loop: %d, comm_id_4th_loop: %d, work_id_5th_loop: %d, i_loop4: %d, loop5_partition_b_start_col: %d\n",
-                    #     work_id_4th_loop, comm_id_4th_loop, work_id_5th_loop, i_loop4, loop5_partition_b_start_col)
 
                     i_loop4 += b_alg_loop4
 
@@ -981,7 +896,6 @@ class MatmulF32Taskx86_refactored(Task):
                               work_id_5th_loop: int32,
                               comm_id_5th_loop: int32):
                 comm_id_4th_loop = comm_id_5th_loop % loop4_nthreads
-                work_id_4th_loop = comm_id_4th_loop // (loop4_nthreads // loop4_nways)
 
                 loop5_my_start = -1
                 loop5_my_end = -1
@@ -994,20 +908,12 @@ class MatmulF32Taskx86_refactored(Task):
                                                             loop5_my_end, NC)
                     b_alg_loop5 = min(b_alg_loop5, loop5_my_end - loop5_iter)
 
-                    loop5_partition_c_width = b_alg_loop5
-                    loop5_partition_c_start_col = loop5_iter
                     loop5_partition_b_width = b_alg_loop5,
                     loop5_partition_b_start_col = loop5_iter
-                    #
-                    # printf(
-                    #     "work_id_5th_loop: %d, comm_id_5th_loop: %d, b_alg_loop5: %d, loop5_partition_b_width: %d, loop5_partition_b_start_col: %d, loop5_iter: %d, loop5_my_start: %d, loop5_my_end: %d\n\n",
-                    #     work_id_5th_loop, comm_id_5th_loop, b_alg_loop5, loop5_partition_b_width,
-                    #     loop5_partition_b_start_col, loop5_iter, loop5_my_start, loop5_my_end)
                     gemm_4th_loop(a, b, c,
                                   loop5_partition_b_width,
                                   loop5_partition_b_start_col,
                                   comm_id_4th_loop,
-                                  work_id_4th_loop,
                                   work_id_5th_loop)
                     loop5_iter += b_alg_loop5
 
@@ -1025,35 +931,12 @@ class MatmulF32Taskx86_refactored(Task):
                          packb_thrcomm_barrier_threads_arrived,
                          loop5_nways)
 
-                # the nthreads and nways print for each loop
-                # printf("nthreads: %d\n", nthreads)
-                # printf("loop5_nthreads: %d, loop5_nways: %d\n", loop5_nthreads, loop5_nways)
-                # printf("loop4_nthreads: %d, loop4_nways: %d\n", loop4_nthreads, loop4_nways)
-                # printf("loop3_nthreads: %d, loop3_nways: %d\n", loop3_nthreads, loop3_nways)
-                # printf("macro_nthreads: %d, macro_nways: %d\n", macro_nthreads, macro_nways)
-                # printf("loop1_nthreads: %d, loop1_nways: %d\n", loop1_nthreads, loop1_nways)
-                #
-                # printf("packb_nthreads: %d, packa_nthreads: %d\n", packb_nthreads, packa_nthreads)
-                #
-                # printf("packed_b_width: %d, packed_b_total_width: %d, packed_b_height: %d\n", packed_b_width,
-                #        packed_b_total_width, packed_b_height)
-                # printf("packed_a_width: %d, packed_a_individual_height: %d, packed_a_total_height: %d\n",
-                #        packed_a_width, packed_a_individual_height, packed_a_total_height)
-                #
-                # printf("packed_b_total_size: %d, packed_a_total_size: %d\n", packed_b_total_size, packed_a_total_size)
-                # printf("packed_b_individual_size: %d, packed_a_individual_size: %d\n", packed_b_individual_size, packed_a_individual_size)
-
-                # for i in grid(m_size):
-                #     for j in grid(n_size):
-                #         c[i, j] = 0.0
-
                 parallel_attr = 'p' + str(nthreads)
                 # The outermost loop spawning threads
                 for tidx in grid(nthreads, attrs=parallel_attr):
                     tid_5th_loop = tidx
                     work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
                     comm_id_5th_loop = tid_5th_loop
-                    # printf("tidx: %d, tid_5th_loop: %d, work_id_5th_loop: %d, comm_id_5th_loop: %d\n", tidx, tid_5th_loop, work_id_5th_loop, comm_id_5th_loop)
 
                     gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
 
