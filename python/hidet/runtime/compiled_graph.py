@@ -350,19 +350,21 @@ class CompiledGraph:
                 raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
-            dummy_inputs = []
-            for meta_input in self.meta.inputs:
-                dtype = hidet.ir.data_type(meta_input.dtype)
-                if dtype.is_float():
-                    inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                elif dtype.is_integer():
-                    inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                else:
-                    warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
-                    inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                dummy_inputs.append(inp)
+            with hidet.option.context():
+                hidet.option.imperative(True)
+                dummy_inputs = []
+                for meta_input in self.meta.inputs:
+                    dtype = hidet.ir.data_type(meta_input.dtype)
+                    if dtype.is_float():
+                        inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    elif dtype.is_integer():
+                        inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    else:
+                        warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                        inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    dummy_inputs.append(inp)
 
-            return dummy_inputs
+                return dummy_inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
