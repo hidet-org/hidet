@@ -211,7 +211,7 @@ class CompiledGraph:
             if sig.alias is not None:
                 outputs.append(outputs[sig.alias])
                 continue
-            
+
             if exec_idx in self.graph_execution.inputs_index:
                 outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
             elif exec_idx in self.graph_execution.weights_index:
