@@ -27,6 +27,7 @@ class TensorSignature:
     device: str
     dtype: str
     shape: List[Union[str, int]]
+    alias: Optional[int] = None
 
 
 @dataclass

@@ -208,6 +208,10 @@ class CompiledGraph:
 
         outputs = []
         for output_index, (exec_idx, sig) in enumerate(zip(self.graph_execution.outputs_index, self.meta.outputs)):
+            if sig.alias is not None:
+                outputs.append(outputs[sig.alias])
+                continue
+            
             if exec_idx in self.graph_execution.inputs_index:
                 outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
             elif exec_idx in self.graph_execution.weights_index:
