@@ -65,6 +65,8 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
 
     def add_index_for_tensor(x):
         nonlocal index_count
+        if x in tensor_index:
+            return
         tensor_index[x] = index_count
         index_tensor[index_count] = x
         tensor_device.append(x.device.kind)
@@ -124,14 +126,9 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
 
     # output tensor signature
     outputs = []
-    for i, y in enumerate(graph.outputs):
+    for y in graph.outputs:
         shape = [int(d) if isinstance(d, int) else str(d) for d in y.shape]
-        alias = None
-        for j in range(i):
-            if graph.outputs[j] is y:
-                alias = j
-                break
-        outputs.append(TensorSignature(device=y.device.kind, dtype=y.dtype.name, shape=shape, alias=alias))
+        outputs.append(TensorSignature(device=y.device.kind, dtype=y.dtype.name, shape=shape))
 
     # graph hash
     lines = []
