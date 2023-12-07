@@ -1045,11 +1045,13 @@ def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
         raise NotImplementedError("hidet: does not support torch.rsqrt(..., out=...)")
     return ops.rsqrt(x)
 
+
 @register_function(torch.sqrt)
-def sqrt(x: Tensor, *, out: Optional[Tensor]=None) -> Tensor:
+def sqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.sqrt(..., out=...)")
     return ops.sqrt(x)
+
 
 @register_function(operator.pow)
 @register_function(torch.pow)
