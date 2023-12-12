@@ -15,6 +15,7 @@ import os
 import json
 from dataclasses import dataclass
 import warnings
+import tempfile
 
 from tabulate import tabulate
 import numpy
@@ -389,7 +390,9 @@ def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bo
     dirname = os.path.dirname(path)
     os.makedirs(dirname, exist_ok=True)
 
-    with zipfile.ZipFile(path, 'w') as zf:
+    temp_path = os.path.join(dirname, next(tempfile._get_candidate_names()))
+
+    with zipfile.ZipFile(temp_path, 'w') as zf:
 
         def _save_under(dir_path: str, dir_in_zip: str, exclude: Optional[List[str]] = None):
             for root, _, files in os.walk(dir_path):
@@ -432,6 +435,8 @@ def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bo
         # save graph string
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
+
+    os.rename(temp_path, path)
 
 
 def load_compiled_graph(path: str) -> CompiledGraph:
