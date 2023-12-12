@@ -66,7 +66,7 @@ class MatmulF32Taskx86(Task):
         )
 
         super().__init__(
-            name='matmul_f32_x86_v2',
+            name='matmul_f32_x86',
             inputs=[a, b],
             outputs=[c],
             attributes={'m_size': a_shape[-2], 'n_size': b_shape[-1], 'k_size': a_shape[-1]},
