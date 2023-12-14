@@ -201,7 +201,8 @@ def register_hidet_options():
         name='debug_show_var_id',
         type_hint='bool',
         default_value=False,
-        description='Whether to show the variable id in the IR. Hint: all variable ids will be 0 unless the debug_enable_var_id option is set to True.',
+        description='Whether to show the variable id in the IR.\
+                     Hint: all variable ids will be 0 unless the debug_enable_var_id option is set to True.',
         choices=[True, False],
     )
     register_option(
