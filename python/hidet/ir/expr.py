@@ -19,6 +19,7 @@ import numpy as np
 from .node import Node
 from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
+import hidet.option
 
 PyScalar = Union[bool, int, float, complex, str]
 
@@ -561,7 +562,7 @@ class Var(Expr):
         self.hint: Optional[str] = hint
         self.name: Optional[str] = name
         self.type: Union[BaseType, TensorType, TensorPointerType, FuncType] = type
-        self.id: int = self.new_id()
+        self.id: int = self.new_id() if hidet.option.get_option('debug_show_var_id') else 0
 
     @staticmethod
     def new_id():

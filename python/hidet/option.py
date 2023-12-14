@@ -191,10 +191,17 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='debug_enable_var_id',
+        type_hint='bool',
+        default_value=False,
+        description='Assign a variable id to each variable in the IR. If set to false, all variable IDs will be 0',
+        choices=[True, False],
+    )
+    register_option(
         name='debug_show_var_id',
         type_hint='bool',
         default_value=False,
-        description='Whether to show the variable id in the IR.',
+        description='Whether to show the variable id in the IR. Hint: all variable ids will be 0 unless the debug_enable_var_id option is set to True.',
         choices=[True, False],
     )
     register_option(
@@ -700,6 +707,19 @@ def debug_cache_tuning(enabled: bool = True):
     """
     OptionContext.current().set_option('debug_cache_tuning', enabled)
 
+def debug_enable_var_id(enable: bool = True):
+    """
+    Whether to enable var id in the IR.
+
+    When this option is enabled, each variable (i.e., hidet.ir.Var) will have a unique id.
+    Otherwise, each variable's ID will be 0.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to enable var id in the IR.
+    """
+    OptionContext.current().set_option('debug_enable_var_id', enable)
 
 def debug_show_var_id(enable: bool = True):
     """
@@ -707,6 +727,7 @@ def debug_show_var_id(enable: bool = True):
 
     When this option is enabled, the IR will show the var id with the format `var@id`, like `x@1` and `d_1@1732`.
     Variable (i.e., hidet.ir.Var) a and b is the same var if and only if `a is b` evaluates to True in Python).
+    Hint: all variable ids will always be 0 unless the debug_enable_var_id option is set to True.',
 
     Parameters
     ----------
