@@ -16,10 +16,10 @@ from typing import Optional, Union, Sequence, Tuple, Dict, Type, Callable
 import string
 import operator
 import numpy as np
+import hidet.option
 from .node import Node
 from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
-import hidet.option
 
 PyScalar = Union[bool, int, float, complex, str]
 

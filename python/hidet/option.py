@@ -707,6 +707,7 @@ def debug_cache_tuning(enabled: bool = True):
     """
     OptionContext.current().set_option('debug_cache_tuning', enabled)
 
+
 def debug_enable_var_id(enable: bool = True):
     """
     Whether to enable var id in the IR.
@@ -720,6 +721,7 @@ def debug_enable_var_id(enable: bool = True):
         Whether to enable var id in the IR.
     """
     OptionContext.current().set_option('debug_enable_var_id', enable)
+
 
 def debug_show_var_id(enable: bool = True):
     """
