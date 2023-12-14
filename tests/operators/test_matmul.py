@@ -17,7 +17,7 @@ from hidet import ops
 from hidet.testing import check_binary, check_binary_dynamic
 
 
-@pytest.mark.skip(reason="when running matmul_x86 multiple times, it will produce wrong result. need fix.")
+# @pytest.mark.skip(reason="when running matmul_x86 multiple times, it will produce wrong result. need fix.")
 @pytest.mark.parametrize("a_shape, b_shape", [[[333, 444], [444, 555]], [[133, 1], [1, 177]]])
 def test_matmul_x86(a_shape, b_shape):
     # TODO: Doesn't support broadcasting yet; need to add it later?

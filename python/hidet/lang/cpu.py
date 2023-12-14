@@ -26,3 +26,23 @@ from hidet.ir.primitives.cpu import (
     avx_f32x8_setzero,
 )
 from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
+
+# from hidet.ir.primitives.cpu import openmp_get_thread_num, openmp_get_num_threads
+
+from hidet.ir.primitives.cpu import (
+    avx_f32x8_store_aligned,
+    avx_f32x8_load_aligned,
+    avx_f32x4_store_aligned,
+    avx_f32x4_load_aligned,
+)
+
+from hidet.ir.primitives.cpu import (
+    avx_f32x8_unpackhi,
+    avx_f32x8_unpacklo,
+    avx_f32x8_shuffle,
+    avx_f32x8_cast_f32x4,
+    avx_f32x8_insert_f32x4,
+    avx_f32x8_permute2f32x4,
+)
+
+from hidet.ir.primitives.cpu import cpu_atomic_load_n, cpu_atomic_add_fetch, cpu_atomic_fetch_xor

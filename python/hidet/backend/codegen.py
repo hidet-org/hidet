@@ -496,9 +496,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 doc += NewLine() + '#pragma unroll'
         elif stmt.attr.parallel:
             if stmt.attr.parallel_threads:
-                doc += NewLine() + '#pragma omp parallel for schedule(dynamic) num_threads({})'.format(
-                    stmt.attr.parallel_threads
-                )
+                doc += NewLine() + '#pragma omp parallel for num_threads({})'.format(stmt.attr.parallel_threads)
             else:
                 doc += NewLine() + '#pragma omp parallel for'
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
