@@ -11,6 +11,7 @@
 # limitations under the License.
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple, Union
+import warnings
 import os
 import tomlkit
 
@@ -191,10 +192,18 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='debug_enable_var_id',
+        type_hint='bool',
+        default_value=False,
+        description='Assign a variable id to each variable in the IR. If set to false, all variable IDs will be 0',
+        choices=[True, False],
+    )
+    register_option(
         name='debug_show_var_id',
         type_hint='bool',
         default_value=False,
-        description='Whether to show the variable id in the IR.',
+        description='Whether to show the variable id in the IR.\
+                     Hint: all variable ids will be 0 unless the debug_enable_var_id option is set to True.',
         choices=[True, False],
     )
     register_option(
@@ -701,6 +710,21 @@ def debug_cache_tuning(enabled: bool = True):
     OptionContext.current().set_option('debug_cache_tuning', enabled)
 
 
+def debug_enable_var_id(enable: bool = True):
+    """
+    Whether to enable var id in the IR.
+
+    When this option is enabled, each variable (i.e., hidet.ir.Var) will have a unique id.
+    Otherwise, each variable's ID will be 0.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to enable var id in the IR.
+    """
+    OptionContext.current().set_option('debug_enable_var_id', enable)
+
+
 def debug_show_var_id(enable: bool = True):
     """
     Whether to show the var id in the IR.
@@ -713,6 +737,8 @@ def debug_show_var_id(enable: bool = True):
     enable: bool
         Whether to show the var id in the IR.
     """
+    if not OptionContext.current().get_option('debug_enable_var_id'):
+        warnings.warn("Please use `hidet.option.debug_enable_var_id()` to enable the id first")
     OptionContext.current().set_option('debug_show_var_id', enable)
 
 
