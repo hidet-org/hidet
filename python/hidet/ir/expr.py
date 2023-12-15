@@ -562,10 +562,12 @@ class Var(Expr):
         self.hint: Optional[str] = hint
         self.name: Optional[str] = name
         self.type: Union[BaseType, TensorType, TensorPointerType, FuncType] = type
-        self.id: int = self.new_id() if hidet.option.get_option('debug_show_var_id') else 0
+        self.id: int = self.new_id()
 
     @staticmethod
     def new_id():
+        if not hidet.option.get_option('debug_enable_var_id'):
+            return 0
         Var.id_clock += 1
         return Var.id_clock
 

@@ -11,6 +11,7 @@
 # limitations under the License.
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple, Union
+import warnings
 import os
 import tomlkit
 
@@ -730,13 +731,14 @@ def debug_show_var_id(enable: bool = True):
 
     When this option is enabled, the IR will show the var id with the format `var@id`, like `x@1` and `d_1@1732`.
     Variable (i.e., hidet.ir.Var) a and b is the same var if and only if `a is b` evaluates to True in Python).
-    Hint: all variable ids will always be 0 unless the debug_enable_var_id option is set to True.',
 
     Parameters
     ----------
     enable: bool
         Whether to show the var id in the IR.
     """
+    if not OptionContext.current().get_option('debug_enable_var_id'):
+        warnings.warn("Please use `hidet.option.debug_enable_var_id()` to enable the id first")
     OptionContext.current().set_option('debug_show_var_id', enable)
 
 
