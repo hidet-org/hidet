@@ -23,8 +23,15 @@ from .core import api_url, access_token
 
 def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):
     # upload the IRModule
-    if 'cuda' in target and 'arch' not in target:
-        arch = hidet.option.cuda.get_arch()
+    if 'cuda' in target:
+        if 'arch' not in target:
+            arch = hidet.option.cuda.get_arch()
+            target = '{} --arch={}'.format(target, arch)
+        if 'cpu_arch' not in target:
+            cpu_arch = hidet.option.cpu.get_arch()
+            target = '{} --cpu_arch={}'.format(target, cpu_arch)
+    elif 'cpu' in target and 'arch' not in target:
+        arch = hidet.option.cpu.get_arch()
         target = '{} --arch={}'.format(target, arch)
     job_data = pickle.dumps(
         {

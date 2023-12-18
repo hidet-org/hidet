@@ -2,7 +2,7 @@
 # Necessary packages
 ################################################################################
 gitpython
-numpy
+numpy >= 1.23
 
 # used for query available memory
 psutil
