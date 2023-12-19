@@ -11,20 +11,15 @@ external_models = ['llama-7b', 'gpt2']
 def run_command(cmd):
     cmd = " ".join(cmd)
     print("Running command: " + cmd)
-    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
-    outputs = []
-    for line in popen.stdout:
-        print(line, end='')
-        outputs.append(line)
-    popen.stdout.close()
-    ret = popen.wait()
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+    stdout, stderr = process.communicate()
+    ret = process.returncode
     if ret:
         print('STDERR:')
-        for line in popen.stderr:
+        for line in stderr:
             print(line, end='')
-        print(f'Command {cmd} failed with return code {ret}.')
-        return None
-    return outputs
+        raise RuntimeError(f'Command {cmd} failed with return code {ret}.')
+    return stdout
 
 def get_bench_cmd(run_type, run_id, run_name, run_param_name, dtype):
     # Get the name of the benchmark script from DB
