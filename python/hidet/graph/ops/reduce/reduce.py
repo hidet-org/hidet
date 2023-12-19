@@ -222,7 +222,7 @@ class ReduceTask(Task):
             num_eles: int = 4 // xdtype.nbytes
             if shape[-1] % num_eles == 0:
                 lanes = num_eles
-                vtype = VectorType(xdtype, lanes)
+                vtype = vectorize(xdtype, lanes)
 
         read_shape = shape[:]
         read_shape[-1] //= lanes
