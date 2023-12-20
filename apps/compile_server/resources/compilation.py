@@ -53,11 +53,15 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
 
         # `version` is either a branch name, or 'pull/{n}' if coming from a pull request
         if should_update(repo_timestamp):
+            branches = repo.git.branch("--all").split()
+            # If local branch already exists, delete it as we prepare to do a new fresh checkout
+            # This is because the local branch might be divergent with remote, so we just discard it
+            if version in branches:
+                repo.git.checkout('main')
+                repo.git.branch('-D', version)
             if 'pull/' in version:
-                branches = repo.git.branch("--all").split()
-                if version not in branches:
-                    # `git fetch origin pull/{n}/head:pull/{n}` checks out PR#n into branch 'pull/{n}'
-                    repo.remotes.origin.fetch(version + '/head:' + version)
+                # Equivalent to `git fetch origin pull/{n}/head:pull/{n}`. Checks out PR#n into branch 'pull/{n}'
+                repo.remotes.origin.fetch(version + '/head:' + version)
                 repo.git.checkout(version)
                 repo.remotes.origin.pull(version + '/head')
             else:
