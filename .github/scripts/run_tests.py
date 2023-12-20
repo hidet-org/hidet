@@ -57,7 +57,8 @@ if __name__ == '__main__':
         cmd = get_bench_cmd(run_type, run_id, run_name, run_param_name, run_dtype_name)
         outputs = run_command(cmd)
         if outputs:
-            latency = float(outputs[-1].split('\n')[0]) # Get last line
+            # The second last line of All benchmark scripts' stdout is the latency. (Last line is empty)
+            latency = float(outputs.split('\n')[-2])
             run_config['latency'] = latency
         else:
             run_config['latency'] = 999.99

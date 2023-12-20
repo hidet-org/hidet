@@ -13,7 +13,7 @@ from typing import List, Optional, Callable, Any
 
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.graph.ops.utils import is_contiguous_dims
+from hidet.graph.ops.utils import is_contiguous_dims, normalize_dim
 from hidet.utils import prod
 from .reduce import ReduceBaseOp
 
@@ -56,9 +56,22 @@ class ReduceResolveRule(ResolveRule):
 
         return None
 
+    def resolve_decompose(self, op: Operator) -> Optional[List[Tensor]]:
+        dims = op.attrs['dims']
+        x: Tensor = op.inputs[0]
+        shape = x.shape
+        dims = normalize_dim(dims, len(shape))
+        if (len(shape) - 1) not in dims and len(dims) > 1:
+            # start from highest dim to support keepdims=True
+            dims.sort(reverse=True)
+            for dim in dims:
+                x = op.reforward([x], {'dims': [dim]})[0]
+            return [x]
+        return None
+
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, ReduceBaseOp)
-        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify]
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify, self.resolve_decompose]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:
