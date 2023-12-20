@@ -19,6 +19,8 @@ def run_command(cmd):
         for line in stderr:
             print(line, end='')
         raise RuntimeError(f'Command {cmd} failed with return code {ret}.')
+    print('STDOUT:')
+    print(stdout)
     return stdout
 
 def get_bench_cmd(run_type, run_id, run_name, run_param_name, dtype):
