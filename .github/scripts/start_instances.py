@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     # e.g., ' 1, 2, ,3,,' -> ['1', '2', '3']
     hw_config_ids = os.environ.get('HW_CONFIG').replace(' ', '')
+    repo_org = os.environ.get('REPO_NAME').split('/')[0]
     if hw_config_ids == 'all':
         query = (
             'SELECT id FROM hardware_config'
@@ -34,7 +35,7 @@ if __name__ == '__main__':
         query = (
             'SELECT cloud_provider_id, instance_id, hardware_config.name as hw_config FROM cloud_instance '
             'JOIN hardware_config ON cloud_instance.hardware_config_id = hardware_config.id '
-            f'WHERE hardware_config_id = {hw_config_id} LIMIT 1'
+            f'WHERE hardware_config_id = {hw_config_id} AND cloud_instance.org = \'{repo_org}\' LIMIT 1'
         )
         cursor.execute(query)
         rows = cursor.fetchall()
