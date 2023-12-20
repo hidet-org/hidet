@@ -269,47 +269,53 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_Function(self, func: Function) -> Doc:
         raise NotImplementedError()
 
+    def binary_arith_op(self, e, op: str):
+        c_type = self.type_infer(e)
+        if isinstance(c_type, DataType) and c_type.is_integer() and c_type.nbytes < 4:
+            return '(' + self(c_type) + ')(' + self(e.a) + ' {} '.format(op) + self(e.b) + ')'
+        return '(' + self(e.a) + ' {} '.format(op) + self(e.b) + ')'
+
     def visit_Add(self, e: Add):
-        return Text('(') + self(e.a) + ' + ' + self(e.b) + ')'
+        return self.binary_arith_op(e, '+')
 
     def visit_Sub(self, e: Sub):
-        return Text('(') + self(e.a) + ' - ' + self(e.b) + ')'
+        return self.binary_arith_op(e, '-')
 
     def visit_Multiply(self, e: Multiply):
-        return Text('(') + self(e.a) + ' * ' + self(e.b) + ')'
+        return self.binary_arith_op(e, '*')
 
     def visit_Div(self, e: Div):
-        return Text('(') + self(e.a) + ' / ' + self(e.b) + ')'
+        return self.binary_arith_op(e, '/')
 
     def visit_Mod(self, e: Mod):
-        return Text('(') + self(e.a) + ' % ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' % ' + self(e.b) + ')'
 
     def visit_FloorDiv(self, e: FloorDiv):
-        return Text('(') + self(e.a) + ' / ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' / ' + self(e.b) + ')'
 
     def visit_LessThan(self, e: LessThan):
-        return Text('(') + self(e.a) + ' < ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' < ' + self(e.b) + ')'
 
     def visit_Neg(self, e: Neg):
         return '(-' + self(e.a) + ')'
 
     def visit_LessEqual(self, e: LessThan):
-        return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' <= ' + self(e.b) + ')'
 
     def visit_NotEqual(self, e: NotEqual):
-        return Text('(') + self(e.a) + ' != ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' != ' + self(e.b) + ')'
 
     def visit_Equal(self, e: Equal):
-        return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' == ' + self(e.b) + ')'
 
     def visit_And(self, e: LogicalAnd):
-        return Text('(') + self(e.a) + ' && ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' && ' + self(e.b) + ')'
 
     def visit_Or(self, e: LogicalOr):
-        return Text('(') + self(e.a) + ' || ' + self(e.b) + ')'
+        return '(' + self(e.a) + ' || ' + self(e.b) + ')'
 
     def visit_Not(self, e: LogicalNot):
-        return Text('!') + self(e.a)
+        return '!' + self(e.a)
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):
         return '(' + self(e.a) + ' & ' + self(e.b) + ')'

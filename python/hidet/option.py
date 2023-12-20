@@ -11,7 +11,9 @@
 # limitations under the License.
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple, Union
+import warnings
 import os
+import subprocess
 import tomlkit
 
 
@@ -191,10 +193,18 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='debug_enable_var_id',
+        type_hint='bool',
+        default_value=False,
+        description='Assign a variable id to each variable in the IR. If set to false, all variable IDs will be 0',
+        choices=[True, False],
+    )
+    register_option(
         name='debug_show_var_id',
         type_hint='bool',
         default_value=False,
-        description='Whether to show the variable id in the IR.',
+        description='Whether to show the variable id in the IR.\
+                     Hint: all variable ids will be 0 unless the debug_enable_var_id option is set to True.',
         choices=[True, False],
     )
     register_option(
@@ -256,6 +266,18 @@ def register_hidet_options():
         type_hint='str',
         default_value='auto',
         description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). "auto" for auto-detect.',
+    )
+    register_option(
+        name='cuda.cpu_arch',
+        type_hint='str',
+        default_value='auto',
+        description='The CPU architecture to compile the host code for (e.g., "x86-64"). "auto" for auto-detect.',
+    )
+    register_option(
+        name='cpu.arch',
+        type_hint='str',
+        default_value='auto',
+        description='The CPU architecture to compile the kernels for (e.g., "x86-64"). "auto" for auto-detect.',
     )
     register_option(
         name='imperative',
@@ -701,6 +723,21 @@ def debug_cache_tuning(enabled: bool = True):
     OptionContext.current().set_option('debug_cache_tuning', enabled)
 
 
+def debug_enable_var_id(enable: bool = True):
+    """
+    Whether to enable var id in the IR.
+
+    When this option is enabled, each variable (i.e., hidet.ir.Var) will have a unique id.
+    Otherwise, each variable's ID will be 0.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to enable var id in the IR.
+    """
+    OptionContext.current().set_option('debug_enable_var_id', enable)
+
+
 def debug_show_var_id(enable: bool = True):
     """
     Whether to show the var id in the IR.
@@ -713,6 +750,8 @@ def debug_show_var_id(enable: bool = True):
     enable: bool
         Whether to show the var id in the IR.
     """
+    if not OptionContext.current().get_option('debug_enable_var_id'):
+        warnings.warn("Please use `hidet.option.debug_enable_var_id()` to enable the id first")
     OptionContext.current().set_option('debug_show_var_id', enable)
 
 
@@ -820,6 +859,40 @@ class cuda:
         """
         arch = cuda.get_arch()
         return int(arch[3]), int(arch[4])
+
+
+class cpu:
+    @staticmethod
+    def arch(arch: str = 'auto'):
+        """
+        Set the CPU architecture to use when building CPU kernels.
+
+        Parameters
+        ----------
+        arch: Optional[str]
+            The CPU architecture, e.g., 'x86-64', 'alderlake', etc. "auto" means
+            using the architecture of the CPU on the current machine. Default "auto".
+        """
+        OptionContext.current().set_option('cpu.arch', arch)
+
+    @staticmethod
+    def get_arch() -> str:
+        """
+        Get the CPU architecture to use when building CPU kernels.
+
+        Returns
+        -------
+        ret: str
+            The CPU architecture, e.g., 'x86-64', 'alderlake', etc.
+        """
+        arch: Optional[str] = OptionContext.current().get_option('cpu.arch')
+        if arch == "auto":
+            cmd = ['gcc', '-march=native', '-Q', '--help=target']
+            out = subprocess.check_output(cmd, text=True)
+            begin = out.find('march=') + len('march=')
+            end = out.find('\n', begin)
+            arch = out[begin:end].strip()
+        return arch
 
 
 class compile_server:

@@ -16,6 +16,7 @@ from typing import Optional, Union, Sequence, Tuple, Dict, Type, Callable
 import string
 import operator
 import numpy as np
+import hidet.option
 from .node import Node
 from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
@@ -565,6 +566,8 @@ class Var(Expr):
 
     @staticmethod
     def new_id():
+        if not hidet.option.get_option('debug_enable_var_id'):
+            return 0
         Var.id_clock += 1
         return Var.id_clock
 
