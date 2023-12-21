@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Union
 from hidet.ir.dtypes import float32, int32
-from hidet.ir.expr import cast
+from hidet.ir.expr import cast, is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.stmt import DeclareScope
@@ -26,42 +26,19 @@ from hidet.lang import attrs
 
 class MatmulF32Taskx86(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
-        a_shape = a.const_shape
-        b_shape = b.const_shape
 
-        if not a.type.dtype == float32 or not b.type.dtype == float32:
-            raise ValueError('Both inputs must be float32 tensors')
-
-        if len(a_shape) < 2 or len(b_shape) < 2:
-            raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a_shape, b_shape))
-
-        self._assert(
-            a_shape[-1] == b_shape[-2],
-            msg=(
-                'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
-                ', got {} and {}'.format(a_shape, b_shape)
-            ),
-        )
-
-        self._assert(
-            can_mutually_broadcast(a_shape[:-2], b_shape[:-2]),
-            msg=(
-                'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
-                'got {} and {}'.format(a_shape, b_shape)
-            ),
-        )
-
-        k_size = a_shape[-1]
-        c_shape = broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        batch_size, m_size, k_size = a.shape
+        batch_size, k_size, n_size = b.shape
+        self.batch_size = batch_size
+        self.m_size = m_size
+        self.n_size = n_size
+        self.k_size = k_size
 
         c = compute(
             name='c',
-            shape=c_shape,
-            fcompute=lambda *indices: reduce(
-                shape=[k_size],
-                fcompute=lambda k: a[broadcast_indices(indices[:-2], a_shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
-                * b[broadcast_indices(indices[:-2], b_shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
-                reduce_type='sum',
+            shape=[batch_size, m_size, n_size],
+            fcompute = lambda r, i, j: reduce(
+                shape=[k_size], fcompute=lambda k: a[r, i, k] * b[r, k, j], reduce_type='sum'
             ),
         )
 
@@ -69,8 +46,9 @@ class MatmulF32Taskx86(Task):
             name='matmul_f32_x86',
             inputs=[a, b],
             outputs=[c],
-            attributes={'m_size': a_shape[-2], 'n_size': b_shape[-1], 'k_size': a_shape[-1]},
+            attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size},
         )
+
 
     def allow_epilogue(self) -> bool:
         return True
@@ -81,7 +59,9 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 4, 2, 1)])
+    # @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 4, 2, 1)])
+    @tune.space(2, MC=[144, 288, 432, 576, 720], NC=[800], KC=[256, 560, 768, 384],
+                ways=[(1, 4, 2, 1), (2, 4, 4, 1), (1, 4, 4, 1), (1, 2, 4, 2), (1, 4, 4, 2), (2, 4, 2, 2)])
     def schedule_matmulf32_x86(self, MC=2016, NC=384, KC=560, ways=(1, 4, 2, 1)) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -94,10 +74,15 @@ class MatmulF32Taskx86(Task):
         from hidet.lang.cpu import avx_f32x8_insert_f32x4, avx_f32x8_permute2f32x4
         from hidet.lang.cpu import cpu_atomic_load_n, cpu_atomic_add_fetch, cpu_atomic_fetch_xor
 
+        task = self
         node_a, node_b = self.inputs[0], self.inputs[1]
         a_shape = node_a.const_shape
         b_shape = node_b.const_shape
-        m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
+
+        batch_size = task.batch_size
+        m_size = task.m_size
+        n_size = task.n_size
+        k_size = task.k_size
 
         MR, NR = 6, 16
 
@@ -828,21 +813,32 @@ class MatmulF32Taskx86(Task):
             ################### Start of the main kernel ###################
             @hidet.script
             def matmul_kernel_x86_v3(
-                a: float32[m_size, k_size], b: float32[k_size, n_size], c: float32[m_size, n_size]
+                a: float32[batch_size, m_size, k_size], b: float32[batch_size, k_size, n_size], c: float32[batch_size, m_size, n_size]
             ):
                 attrs.func_kind = 'cpu_kernel'
-
-                init_thr(packa_thrcomm_barrier_sense, packa_thrcomm_threads_arrived, loop3_nways)
-                init_thr(packb_thrcomm_barrier_sense, packb_thrcomm_barrier_threads_arrived, loop5_nways)
+                a_ptr = cast(a, ~float32)
+                b_ptr = cast(b, ~float32)
+                c_ptr = cast(c, ~float32)
 
                 parallel_attr = 'p' + str(nthreads)
                 # The outermost loop spawning threads
-                for tidx in grid(nthreads, attrs=parallel_attr):
-                    tid_5th_loop = tidx
-                    work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
-                    comm_id_5th_loop = tid_5th_loop
+                for batch in range(batch_size):
+                    init_thr(packa_thrcomm_barrier_sense, packa_thrcomm_threads_arrived, loop3_nways)
+                    init_thr(packb_thrcomm_barrier_sense, packb_thrcomm_barrier_threads_arrived, loop5_nways)
+                    # Iterate through the batch dimension, and for each batch,
+                    # locate the corresponding a, b, and c matrices, and then call the single matmul kernel
+                    a_matrix_size = m_size * k_size
+                    b_matrix_size = k_size * n_size
+                    c_matrix_size = m_size * n_size
+                    a_matrix = as_tensor_pointer(a_ptr + (batch * a_matrix_size), dtype=float32, shape=[m_size, k_size])
+                    b_matrix = as_tensor_pointer(b_ptr + (batch * b_matrix_size), dtype=float32, shape=[k_size, n_size])
+                    c_matrix = as_tensor_pointer(c_ptr + (batch * c_matrix_size), dtype=float32, shape=[m_size, n_size])
+                    for tidx in grid(nthreads, attrs=parallel_attr):
+                        tid_5th_loop = tidx
+                        work_id_5th_loop = tid_5th_loop // (nthreads // loop5_nways)
+                        comm_id_5th_loop = tid_5th_loop
 
-                    gemm_5th_loop(a, b, c, work_id_5th_loop, comm_id_5th_loop)
+                        gemm_5th_loop(a_matrix, b_matrix, c_matrix, work_id_5th_loop, comm_id_5th_loop)
 
             assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
             # matmul_kernel_x86_v3.kind = "cpu_kernel"
@@ -852,8 +848,16 @@ class MatmulF32Taskx86(Task):
 
 class Matmulx86Op(Operator):
     def __init__(self, a: Tensor, b: Tensor):
-        if not (len(a.shape) == len(b.shape) == 2 and a.shape[1] == b.shape[0]):
-            raise ValueError('Matrix multiplication: incompatible sizes: {} and {}'.format(a.shape, b.shape))
+        # if not (len(a.shape) == len(b.shape) == 2 and a.shape[1] == b.shape[0]):
+        #     raise ValueError('Matrix multiplication: incompatible sizes: {} and {}'.format(a.shape, b.shape))
+        if not (
+            len(a.shape) == len(b.shape) == 3
+            and (not is_constant(a.shape[0], b.shape[0]) or a.shape[0] == b.shape[0])
+            and (not is_constant(a.shape[2], b.shape[1]) or a.shape[2] == b.shape[1])
+        ):
+            raise ValueError("Matrix multiplication expects tensor A and B with shape [B, M, K] and [B, K, N]"
+                             + ", got {} and {}".format(a.shape, b.shape)
+                )
         task = MatmulF32Taskx86(input_like(a, 'a'), input_like(b, 'b'))
         super().__init__(inputs=[a, b], attributes={}, task=task)
 
