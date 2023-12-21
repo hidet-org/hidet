@@ -44,15 +44,14 @@ if __name__ == '__main__':
         instances.append(rows[0])
 
     # Fetch the compile server instance ID from DB and add it to list of instances to launch
-    for hw_config_id in hw_config_ids:
-        query = (
-            'SELECT cloud_provider_id, instance_id, 0 FROM compile_server LIMIT 1'
-        )
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        if len(rows) == 0:
-            raise ValueError(f'No compile server found in DB.')
-        instances.append(rows[0])
+    query = (
+        'SELECT cloud_provider_id, instance_id, 0 FROM compile_server LIMIT 1'
+    )
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        raise ValueError(f'No compile server found in DB.')
+    instances.append(rows[0])
 
     # Store a json containing all the required model/OPs (and inputs) for this regression run
     # This json will be uploaded as an artifact, and will be filled in by subsequent jobs
