@@ -47,9 +47,9 @@ jobs:
         id: run_py_script
         run: timeout 900 python ./.github/scripts/start_instances.py
         env:
+          # TODO: Allow launching only specified GPU instances
           HW_CONFIG: all
           REPO_NAME: ${{ github.repository }}
-          # TODO: Allow launching only specified GPU instances
       
       - name: Upload run configs
         uses: actions/upload-artifact@v3
