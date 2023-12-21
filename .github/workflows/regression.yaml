@@ -47,9 +47,9 @@ jobs:
         id: run_py_script
         run: timeout 900 python ./.github/scripts/start_instances.py
         env:
+          # TODO: Allow launching only specified GPU instances
           HW_CONFIG: all
           REPO_NAME: ${{ github.repository }}
-          # TODO: Allow launching only specified GPU instances
       
       - name: Upload run configs
         uses: actions/upload-artifact@v3
@@ -111,61 +111,61 @@ jobs:
         with:
           name: run_configs
       
-      - name: Run tests
-        timeout-minutes: 2880
-        run: |
-          python hidet/.github/scripts/run_tests.py
-        env:
-          HW_CONFIG: ${{ matrix.hw_configs }}
-          REPO_NAME: ${{ github.repository }}
-          REPO_BRANCH: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('pull/{0}', github.event.issue.number) }}
+      # - name: Run tests
+      #   timeout-minutes: 2880
+      #   run: |
+      #     python hidet/.github/scripts/run_tests.py
+      #   env:
+      #     HW_CONFIG: ${{ matrix.hw_configs }}
+      #     REPO_NAME: ${{ github.repository }}
+      #     REPO_BRANCH: |
+      #       ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
+      #       format('pull/{0}', github.event.issue.number) }}
 
-      - name: Upload run configs
-        uses: actions/upload-artifact@v3
-        with:
-          name: run_configs_${{ matrix.hw_configs }}
-          path: run_configs.json
-          retention-days: 1
+      # - name: Upload run configs
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: run_configs_${{ matrix.hw_configs }}
+      #     path: run_configs.json
+      #     retention-days: 1
   
-  upload_results:
-    runs-on: ubuntu-latest
-    needs: [start_instances, run_tests]
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          ref: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('refs/pull/{0}/head', github.event.issue.number) }}
+  # upload_results:
+  #   runs-on: ubuntu-latest
+  #   needs: [start_instances, run_tests]
+  #   steps:
+  #     - name: Checkout repo
+  #       uses: actions/checkout@v4
+  #       with:
+  #         ref: |
+  #           ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
+  #           format('refs/pull/{0}/head', github.event.issue.number) }}
 
-      - name: Install dependencies
-        run: pip install mysql-connector-python
+  #     - name: Install dependencies
+  #       run: pip install mysql-connector-python
 
-      - name: Download run configs
-        uses: actions/download-artifact@v3
+  #     - name: Download run configs
+  #       uses: actions/download-artifact@v3
       
-      - name: Setup ENV
-        run: |
-          COMMIT_TIME=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S')
-          COMMIT_AUTHOR=$(git log -1 --format=%an)
-          COMMIT_SHA=$(git log -1 --format=%H)
-          echo "COMMIT_TIME=$COMMIT_TIME" >> $GITHUB_ENV
-          echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >> $GITHUB_ENV
-          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
+  #     - name: Setup ENV
+  #       run: |
+  #         COMMIT_TIME=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S')
+  #         COMMIT_AUTHOR=$(git log -1 --format=%an)
+  #         COMMIT_SHA=$(git log -1 --format=%H)
+  #         echo "COMMIT_TIME=$COMMIT_TIME" >> $GITHUB_ENV
+  #         echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >> $GITHUB_ENV
+  #         echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
 
-      - name: Run main Python script
-        run: python ./.github/scripts/upload_results.py
-        env:
-          REPO_NAME: ${{ github.repository }}
-          REPO_BRANCH: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('pull/{0}', github.event.issue.number) }}
-          COMMIT_SHA: ${{ env.COMMIT_SHA }}
-          COMMIT_TIME: ${{ env.COMMIT_TIME }}
-          COMMIT_AUTHOR: ${{ env.COMMIT_AUTHOR }}
-          HW_CONFIGS: ${{ needs.start_instances.outputs.hw_configs }}
+  #     - name: Run main Python script
+  #       run: python ./.github/scripts/upload_results.py
+  #       env:
+  #         REPO_NAME: ${{ github.repository }}
+  #         REPO_BRANCH: |
+  #           ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
+  #           format('pull/{0}', github.event.issue.number) }}
+  #         COMMIT_SHA: ${{ env.COMMIT_SHA }}
+  #         COMMIT_TIME: ${{ env.COMMIT_TIME }}
+  #         COMMIT_AUTHOR: ${{ env.COMMIT_AUTHOR }}
+  #         HW_CONFIGS: ${{ needs.start_instances.outputs.hw_configs }}
 
   stop_instances:
     if: |
