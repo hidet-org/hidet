@@ -493,7 +493,7 @@ def avg_pool1d(
     count_include_pad: bool = True,
     divisor_override: Optional[int] = None,
 ) -> Tensor:
-    return AvgPool1dOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+    return AvgPool1dOp(x, kernel, stride, padding, ceil_mode, count_include_pad, divisor_override).outputs[0]
 
 
 def avg_pool2d(
@@ -557,16 +557,40 @@ def max_pool3d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False)
     return MaxPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
 
 
-def avg_pool1d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
-    return AvgPool1dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+def avg_pool1d_channel_last(
+    x: Tensor,
+    kernel,
+    stride,
+    padding,
+    ceil_mode=False,
+    count_include_pad: bool = True,
+    divisor_override: Optional[int] = None,
+) -> Tensor:
+    return AvgPool1dChannelLastOp(x, kernel, stride, padding, ceil_mode, count_include_pad, divisor_override).outputs[0]
 
 
-def avg_pool2d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
-    return AvgPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+def avg_pool2d_channel_last(
+    x: Tensor,
+    kernel,
+    stride,
+    padding,
+    ceil_mode=False,
+    count_include_pad: bool = True,
+    divisor_override: Optional[int] = None,
+) -> Tensor:
+    return AvgPool2dChannelLastOp(x, kernel, stride, padding, ceil_mode, count_include_pad, divisor_override).outputs[0]
 
 
-def avg_pool3d_channel_last(x: Tensor, kernel, stride, padding, ceil_mode=False) -> Tensor:
-    return AvgPool3dChannelLastOp(x, kernel, stride, padding, ceil_mode).outputs[0]
+def avg_pool3d_channel_last(
+    x: Tensor,
+    kernel,
+    stride,
+    padding,
+    ceil_mode=False,
+    count_include_pad: bool = True,
+    divisor_override: Optional[int] = None,
+) -> Tensor:
+    return AvgPool3dChannelLastOp(x, kernel, stride, padding, ceil_mode, count_include_pad, divisor_override).outputs[0]
 
 
 def adaptive_avg_pool2d_channel_last(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
@@ -576,19 +600,21 @@ def adaptive_avg_pool2d_channel_last(x: Tensor, output_size: Union[int, Sequence
 @register_resolve_rule(AdaptivePoolNdOp)
 class AdaptivePoolResolveRule(ResolveRule):
     def resolve(self, op: AdaptivePoolNdOp) -> Optional[List[Tensor]]:
+        from hidet import ops
+
         assert isinstance(op, AdaptivePoolNdOp)
-        if not op.last_channel:
-            return None
         x: Tensor = op.inputs[0]
-        output_size = op.attrs['output_size']
         reduce_type = op.reduce_type
-        resolve_to_reduce = output_size == 1 if isinstance(output_size, int) else all(d == 1 for d in output_size)
-        if resolve_to_reduce:
-            dims = [i for i in range(len(x.shape))]
-            from hidet.graph.ops import mean, max
+        if op.last_channel:
+            spatial_dims = [i for i in range(1, len(x.shape) - 1)]
+        else:
+            spatial_dims = [i for i in range(2, len(x.shape))]
+
+        if all(op.outputs[0].shape[i] == 1 for i in spatial_dims):
 
             if reduce_type == 'max':
-                return [max(x, dims=dims[2:], keep_dim=True)]
+                return [ops.max(x, dims=spatial_dims, keep_dim=True)]
             elif reduce_type == 'avg':
-                return [mean(x, dims=dims[2:], keep_dim=True)]
+                return [ops.mean(x, dims=spatial_dims, keep_dim=True)]
+
         return None

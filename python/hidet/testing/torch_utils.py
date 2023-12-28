@@ -12,6 +12,7 @@
 from typing import Sequence
 import numpy.testing
 import torch
+import torch.backends.cudnn
 from torch import nn
 
 
@@ -30,7 +31,11 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
     args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
     # we use a lambda to make sure the model is compiled by pytorch
     model_opt = torch.compile(lambda *args, **kwargs: model(*args, **kwargs), backend='hidet', dynamic=dynamic)
+
+    torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
     torch_outputs = model(*args)
+    torch.backends.cudnn.allow_tf32 = True
+
     hidet_outputs = model_opt(*args)
     if isinstance(torch_outputs, torch.Tensor):
         torch_outputs = (torch_outputs,)

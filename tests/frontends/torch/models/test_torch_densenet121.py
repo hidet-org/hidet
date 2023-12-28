@@ -10,18 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import torch
-import torch.backends.cudnn
 import pytest
 from hidet.testing.torch_utils import check_module
 
 
 @pytest.mark.parametrize('shape', [[1, 3, 224, 224]])
-@pytest.mark.parametrize('dynamic', [False, True])
-@pytest.mark.parametrize('dtype, tol', [(torch.float16, 2e-2), (torch.float32, 1e-4)])
-def test_resnet50(shape, dynamic, dtype, tol):
-    model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet50', pretrained=True).cuda().eval().to(dtype)
-    x = torch.randn(*shape).cuda().to(dtype) * 0.1796 + 0.5491
-    check_module(model, [x], atol=tol, rtol=tol, dynamic=dynamic)
+def test_densenet121(shape):
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'densenet121', pretrained=True).cuda().eval().to(torch.float16)
+    x = torch.randn(*shape).cuda().to(torch.float16) * 0.1796 + 0.5491
+    check_module(model, [x], atol=2e-2, rtol=2e-2, dynamic=False)
 
 
 if __name__ == '__main__':
