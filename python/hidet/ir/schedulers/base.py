@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
+from collections import defaultdict
 
 from hidet.ir.type import DataType, tensor_pointer_type
 from hidet.ir.expr import TensorElement, Expr, Var, SymbolVar, Constant, scalar_var, convert, cast
@@ -18,7 +19,7 @@ from hidet.ir.task import Task
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter
+from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter, IRVisitor
 from hidet.ir.tools import IRPrinter, collect, rewrite, infer_type, simplify, collect_free_vars
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
@@ -30,6 +31,26 @@ from hidet.utils.namer import Namer
 
 class ScalarComputeFound(Exception):
     pass
+
+
+class UsageCounter(IRVisitor):
+    def __init__(self):
+        super().__init__()
+        self.usage: Dict[Union[TensorNode, ScalarNode], int] = defaultdict(int)
+
+    def visit_TensorInput(self, node: TensorInput):
+        self.usage[node] += 1
+
+    def visit_ScalarInput(self, node: ScalarInput):
+        self.usage[node] += 1
+
+    def visit_GridCompute(self, node: GridCompute):
+        self.usage[node] += 1
+        super().visit_GridCompute(node)
+
+    def visit_ReduceCompute(self, node: ReduceCompute):
+        self.usage[node] += 1
+        super().visit_ReduceCompute(node)
 
 
 class GridComputeInlineChecker(ExprVisitor, ComputeVisitor):
@@ -75,8 +96,9 @@ def can_inline_grid_compute(gc: GridCompute) -> bool:
 
 
 class GridComputeInliner(ExprRewriter, ComputeRewriter):
-    def __init__(self):
+    def __init__(self, usage_count: Dict[Union[TensorNode, ScalarNode], int]):
         super().__init__()
+        self.usage_count: Dict[Union[TensorNode, ScalarNode], int] = usage_count
 
     def inline(self, node: TensorNode):
         return self.visit(node)
@@ -88,7 +110,8 @@ class GridComputeInliner(ExprRewriter, ComputeRewriter):
         base = self(e.base)
         indices = [self(index) for index in e.indices]
         if isinstance(base, GridCompute):
-            if can_inline_grid_compute(base):
+            assert isinstance(e.base, TensorNode)
+            if can_inline_grid_compute(base) or self.usage_count[e.base] == 1:
                 return rewrite(base.value, {axis: index for axis, index in zip(base.axes, indices)})
         return ExprRewriter.visit_TensorElement(self, e)
 
@@ -120,7 +143,11 @@ def inline_grid_compute(nodes: List[TensorNode]) -> List[TensorNode]:
     ret: List[TensorNode]
         The nodes after inlining.
     """
-    inliner = GridComputeInliner()
+    usage_counter = UsageCounter()
+    usage_counter.visit(nodes)
+
+    inliner = GridComputeInliner(usage_counter.usage)
+
     return [inliner.inline(node) for node in nodes]
 
 
