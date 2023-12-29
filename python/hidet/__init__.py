@@ -22,6 +22,7 @@ from . import drivers
 from . import logging
 from . import cuda
 from . import distributed
+from . import ffi
 
 from .version import __version__
 

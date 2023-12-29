@@ -30,7 +30,7 @@ from .utils import symbol_like_torch
 logger = logging.getLogger(__name__)
 
 
-def get_flow_graph(interpreter, example_inputs) -> FlowGraph:
+def get_flow_graph(interpreter, example_inputs):
     # prepare dummy and symbolic inputs for correctness and flow graph construction
     inputs: List[Union[Tensor, SymbolVar, int, bool, float]] = []  # for flow graph construction
     for example_input in example_inputs:
@@ -63,7 +63,7 @@ def get_flow_graph(interpreter, example_inputs) -> FlowGraph:
     output_format, output_tensors = serialize_output(output)
     input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
 
-    return (hidet.trace_from(output_tensors, inputs=input_tensors), inputs, output_format)
+    return hidet.trace_from(output_tensors, inputs=input_tensors), inputs, output_format
 
 
 def get_compiled_graph(flow_graph: FlowGraph):

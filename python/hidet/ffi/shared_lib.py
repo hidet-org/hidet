@@ -22,30 +22,39 @@ class SharedLibrary:
     """
     Manage the loaded dynamic libraries.
 
-    Why we need this module?
-    ------------------------
+    **Why we need this module?**
 
     The ctypes.CDLL class does not provide a way to unload the loaded library. When a library is loaded, it will never
     be unloaded until the program exits. However, when we tune an operator, we need to generate hundreds of kernels, and
     each kernel will be compiled into a shared library. If we do not unload the shared library, we would load tens of
-    thousands of shared libraries, which will trigger memory error like:
-      "cannot apply additional memory protection after relocation"
-    (I also see other error messages).
+    thousands of shared libraries, which will trigger memory error like (I also see other error messages):
+
+    | "cannot apply additional memory protection after relocation"
+
     To solve this problem, we need to unload the shared library after we use it. Thus, whenever we need to load a shared
     library, we should use this module instead of the ctypes.CDLL class. The SharedLibrary class will keep track of the
     loaded libraries, and unload them when no one references them.
 
-    The current implementation only supports *nix systems. Will add support for Windows when we plan to support Windows
+    The current implementation only supports Linux systems. Will add support for Windows when we plan to support Windows
     in the project-level.
 
-    Usage
-    -----
+    **Usage**
 
-    >>> lib = SharedLibrary('./libhidet.so')
-    >>> func = lib['func_name']
-    >>> del func
-    >>> del lib
-    >>> # the 'libhidet.so' will be unloaded via dlclose after the last reference to it is deleted.
+    .. code-block::
+
+      lib = SharedLibrary('./libhidet.so')
+      func = lib['func_name']
+      del lib
+      # at this point, the lib will not be unloaded because we still
+      # hold a reference to a function in the library.
+      del func
+      # the 'libhidet.so' will be unloaded via dlclose after the last
+      # reference to it or its functions are deleted.
+
+    Parameters
+    ----------
+    lib_path: str
+        The path to the shared library (e.g., './lib.so')
     """
 
     loaded_cdll_libraries: Dict[str, ctypes.CDLL] = {}
