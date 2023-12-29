@@ -352,11 +352,11 @@ class Conv2dGemmFp16Task(Task):
             f"expected groups * WC == C, got groups: {groups}, WC: {WC}, C: {C}; make sure the image is channels last!",
         )
         self._assert(
-            DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0,
+            logical_and(DILX > 0, DILY > 0, STRX > 0, STRY > 0),
             f"dilations and strides must be larger than 0, got strides={(STRY, STRX)}, dilations={(DILY, DILX)}",
         )
         self._assert(parallel_k_parts > 0, "expected parallel_k_parts to be greater than 0")
-        self._assert(H >= KY and W >= KX, "expected image dimensions to be greater than filter dimensions")
+        self._assert(logical_and(H >= KY, W >= KX), "expected image dimensions to be greater than filter dimensions")
 
         OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
         OUT_W = (W - DILX * (KX - 1) - 1) // STRX + 1

@@ -12,6 +12,7 @@
 # pylint: disable=unused-import
 from typing import List, Optional, Dict, Tuple, Set
 import logging
+import warnings
 
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.transforms import GraphPass, PassContext
@@ -53,7 +54,7 @@ class SubgraphRewritePass(GraphPass):
             if not updated:
                 graph.update_nodes()
                 return graph
-        print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_num_transforms))
+        warnings.warn('Exceeded maximum number of sub-graph transforms {}, stop early.'.format(self.max_num_transforms))
         graph.update_nodes()
         return graph
 
