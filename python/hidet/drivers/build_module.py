@@ -26,6 +26,7 @@ from hidet.ir.type import FuncType
 from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.utils.multiprocess import parallel_imap
+from hidet.utils.stack_limit import set_stack_limit
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -99,6 +100,10 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
         src_path = os.path.join(output_dir, 'source.cc')
     else:
         raise ValueError(f'Invalid target: {target}')
+
+    # set the recursion limit before every lowering, because some other packages might change this value to a lower
+    # value that we need
+    set_stack_limit()
 
     # lower ir module
     instruments = []
