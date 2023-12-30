@@ -67,6 +67,33 @@ class GraphExecution:
 
 
 class CompiledGraph:
+    """
+    A compiled graph that can be directly called in Python.
+
+    This class should not be instantiated directly. Instead, use :func:`load_compiled_graph` to load a compiled graph
+    from disk, or build a compiled graph from :class:`FlowGraph` using :func:`hidet.drivers.build_flow_graph`.
+
+    Parameters
+    ----------
+    meta: GraphMetaData
+        The meta-data of the graph.
+
+    graph_module: CompiledModule
+        The graph compiled module that contains execution logic of the computation graph.
+
+    weights: List[hidet.Tensor]
+        The weights of the graph.
+
+    compiled_tasks: List[CompiledTask]
+        The compiled tasks of the graph that correspond to the operators in the computation graph.
+
+    graph_execution: GraphExecution
+        The execution plan of the graph (the order and connections of the compiled tasks).
+
+    graph_string: str
+        The string representation of the computation graph.
+    """
+
     def __init__(
         self,
         meta: GraphMetaData,
@@ -107,6 +134,14 @@ class CompiledGraph:
         self._init_compiled_graph()
 
     def __str__(self):
+        """
+        Get the basic information of this compiled graph.
+
+        Returns
+        -------
+        ret: str
+            The human readable basic information.
+        """
         rows = []
         for i, sig in enumerate(self.meta.inputs):
             dtype = data_type(sig.dtype)
@@ -129,6 +164,19 @@ class CompiledGraph:
         return tabulate(rows, colalign=('right', 'left'), tablefmt='simple')
 
     def __call__(self, *args):
+        """
+        Run the model asynchronously with the given inputs.
+
+        Parameters
+        ----------
+        args: Sequence[hidet.Tensor]
+            The input tensors.
+
+        Returns
+        -------
+        ret: Union[hidet.Tensor, List[hidet.Tensor]]
+            The output tensor(s).
+        """
         outs = self.run_async(args)
         if len(outs) == 1:
             return outs[0]
@@ -380,11 +428,47 @@ class CompiledGraph:
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 
-    def save(self, path: str):
-        save_compiled_graph(self, path)
+    def save(self, path: str, save_dispatch_table: bool = False):
+        """
+        Save the compiled graph to disk.
+
+        See Also
+        --------
+        load_compiled_graph
+
+        Parameters
+        ----------
+        path: str
+            The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+        save_dispatch_table:
+            Whether to save the dispatch table to disk. See `save_compiled_graph` for details.
+        """
+        save_compiled_graph(self, path, save_dispatch_table)
 
 
 def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bool = False):
+    """
+    Save the compiled graph to disk.
+
+    Parameters
+    ----------
+    model: CompiledGraph
+        The compiled graph to save.
+
+    path: str
+        The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+    save_dispatch_table:
+        Whether to save the dispatch table to disk.
+
+        When we run the model that contains alternative kernels for the same operator, we will pick the best kernel
+        by benchmarking all the alternatives. The dispatch table is used to record the best kernel for the given
+        input shapes. If the dispatch table is not saved, we will benchmark all the alternatives again when we load
+        the model next time.
+
+        Default: False
+    """
     from hidet.utils.dataclass import asdict
 
     dirname = os.path.dirname(path)
@@ -441,6 +525,19 @@ def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bo
 
 
 def load_compiled_graph(path: str) -> CompiledGraph:
+    """
+    Load a compiled graph from disk.
+
+    Parameters
+    ----------
+    path: str
+        The path to load the compiled graph.
+
+    Returns
+    -------
+    ret: CompiledGraph
+        The loaded compiled graph.
+    """
     from hidet.utils.dataclass import from_dict
 
     with zipfile.ZipFile(path, 'r') as zf:

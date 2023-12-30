@@ -27,6 +27,20 @@ class CompiledModuleLoadError(Exception):
 class CompiledFunction:
     """
     A compiled function that can be directly called.
+
+    This class should not be instantiated directly. Instead, use the :attr:`CompiledModule.functions` attribute of
+    :class:`CompiledModule` to get the compiled function.
+
+    Parameters
+    ----------
+    name: str
+        The name of the function.
+
+    func_type: FuncType
+        The type of the function.
+
+    ctypes_func:
+        The ctypes function, which holds the actual function pointer loaded in memory.
     """
 
     def __init__(self, name, func_type: FuncType, ctypes_func):
@@ -37,6 +51,19 @@ class CompiledFunction:
         self._update_func_signature()
 
     def __call__(self, *args):
+        """
+        Call the compiled function.
+
+        Parameters
+        ----------
+        args: a sequence of int, float, bool or hidet.Tensor
+            The arguments to the function.
+
+        Returns
+        -------
+        ret: Optional[Union[int, float, bool]]
+            The return value of the function.
+        """
         from hidet.ffi.ffi import BackendException, get_last_error
 
         ret = self.ctypes_func(*args)
@@ -83,6 +110,31 @@ class CompiledFunction:
         self.ctypes_func.restype = self._parse_type(self.func_type.ret_type)
 
     def profile(self, *args, warmup=1, number=2, repeat=10):
+        """
+        Profile the compiled function.
+
+        In total, the function will be called warmup + number * repeat times. We will group the calls into repeat
+        groups, and measure the average time of each group.
+
+        Parameters
+        ----------
+        args: a sequence of int, float, bool or hidet.Tensor
+            The arguments to the function.
+
+        warmup: int
+            The number of warmup runs.
+
+        number: int
+            The number of runs to measure the average time.
+
+        repeat: int
+            The number of times to repeat the measurement.
+
+        Returns
+        -------
+        results: List[float]
+            The measured time in milliseconds (we have len(results) == repeat)).
+        """
         from hidet.cuda import current_stream
 
         for _ in range(warmup):
@@ -102,17 +154,98 @@ class CompiledFunction:
 
 
 class CompiledModule:
+    """
+    A compiled module that can be directly called.
+
+    We can use the module like:
+
+    .. code-block:: python
+
+        module: CompiledModule = load_compiled_module(...)
+
+        # check the function names
+        print(module.functions.keys())
+
+        # call the `launch` function
+        module(...)
+        # or equivalently
+        module['launch'](...)
+
+        # call the `foo` function (if exists)
+        module['foo'](...)
+
+        # get the source code
+        source: str = module.source(color=True)  # colorized source code
+
+    This class should not be instantiated directly. Instead, use the `load_compiled_module` function to load a compiled
+    module from the given directory. Or build a CompiledModule from scratch like
+
+    .. code-block:: python
+
+      with hidet.script_module() as script_module:
+          ...
+
+      compiled_module = script_module.build()
+
+
+    Parameters
+    ----------
+    module_dir: str
+        The directory of the module.
+
+    Attributes
+    ----------
+    module_dir: str
+        The directory of the module.
+
+    shared_library: SharedLibrary
+        The shared library of the module.
+
+    functions: Dict[str, CompiledFunction]
+        The functions in the module.
+    """
+
     def __init__(self, module_dir: str):
+        """
+        Construct a compiled module.
+
+        """
         self.module_dir: str = module_dir
         self.shared_library: SharedLibrary = self._load_shared_library()
         self.functions: Dict[str, CompiledFunction] = self._load_functions()
 
     def __call__(self, *args):
+        """
+        Call the `launch` function in the module.
+
+        Parameters
+        ----------
+        args: a sequence of int, float, bool or hidet.Tensor
+            The arguments to the function.
+
+        Returns
+        -------
+        ret: Optional[Union[int, float, bool]]
+            The return value of the function.
+        """
         if 'launch' not in self.functions:
             raise RuntimeError('Launch function not found.')
         return self.functions['launch'](*args)
 
     def __getitem__(self, item: str) -> CompiledFunction:
+        """
+        Get the function with the given name.
+
+        Parameters
+        ----------
+        item: str
+            The name of the function.
+
+        Returns
+        -------
+        func: CompiledFunction
+            The compiled function.
+        """
         return self.functions[item]
 
     def _load_shared_library(self):
@@ -133,6 +266,19 @@ class CompiledModule:
         return functions
 
     def source(self, color=False) -> Optional[str]:
+        """
+        Get the source code of the module.
+
+        Parameters
+        ----------
+        color: bool
+            Whether to colorize the source code.
+
+        Returns
+        -------
+        source: Optional[str]
+            The source code of the module if the source file exists, otherwise None.
+        """
         if os.path.exists(os.path.join(self.module_dir, 'source.cc')):
             src_path = os.path.join(self.module_dir, 'source.cc')
         elif os.path.exists(os.path.join(self.module_dir, 'source.cu')):
@@ -159,14 +305,65 @@ class CompiledModule:
         return src_code
 
     def profile(self, *args, warmup=1, number=2, repeat=10):
+        """
+        Profile the `launch` function in the module.
+
+        In total, the function will be called warmup + number * repeat times. We will group the calls into repeat
+        groups, and measure the average time of each group.
+
+        Parameters
+        ----------
+        args: a sequence of int, float, bool or hidet.Tensor
+            The arguments to the function.
+
+        warmup: int
+            The number of warmup runs.
+
+        number: int
+            The number of runs to measure the average time.
+
+        repeat: int
+            The number of times to repeat the measurement.
+
+        Returns
+        -------
+        results: List[float]
+            The measured time in milliseconds (we have len(results) == repeat)).
+        """
         return self['launch'].profile(*args, warmup=warmup, number=number, repeat=repeat)
 
 
 def load_compiled_module(module_dir: str) -> CompiledModule:
+    """
+    Load a compiled module from the given directory.
+
+    Parameters
+    ----------
+    module_dir: str
+        The directory of the module.
+
+    Returns
+    -------
+    module: CompiledModule
+        The compiled module.
+    """
     return CompiledModule(module_dir)
 
 
 def compiled_module_exists(module_dir: str) -> bool:
+    """
+    Check whether the compiled module exists in the given module directory.
+
+    Parameters
+    ----------
+    module_dir: str
+        The directory of the module.
+
+    Returns
+    -------
+    exists: bool
+        Whether the compiled module exists.
+    """
     required_files = ['lib.so', 'func_types.pickle']
     for file in required_files:
         if not os.path.exists(os.path.join(module_dir, file)):

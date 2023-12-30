@@ -9,7 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# from __future__ import annotations
 
 from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List, Union
 import logging
@@ -38,6 +37,12 @@ class OverloadedFunction:
         if dispatched is None:
             raise RuntimeError('Can not dispatch function')
         return dispatched(*args, **kwargs)
+
+    @staticmethod
+    def from_lambda(func: Callable):
+        of = OverloadedFunction()
+        of.overload(func)
+        return of
 
     def resolve(self, *args, **kwargs) -> Optional[Callable]:
         for sig, func in zip(self.signatures, self.functions):
@@ -236,11 +241,19 @@ class Interpreter:
                     not_supported.add(node.target)
 
         if len(not_supported) > 0:
-            lines = []
-            lines.append("The following modules/functions are not supported by hidet yet:")
-            for target in not_supported:
-                lines.append(f"  {self._get_callable_name(target)}")
-            raise NotImplementedError("\n".join(lines))
+            self._raise_unsupported_error(not_supported)
+
+    def _raise_unsupported_error(self, not_supported):
+        lines = []
+        lines.append("The following operators are not supported or mapped by hidet yet:")
+        for target in not_supported:
+            lines.append(f"  {self._get_callable_name(target)}")
+        lines.append('Please see the following guide to add the conversion rules:')
+        lines.append('  https://docs.hidet.org/stable/gallery/developer-guides/add-torch-operator-mapping.html')
+        lines.append('You are also welcome to submit a PR or an issue with reproducible script to:')
+        lines.append('  https://github.com/hidet-org/hidet')
+        lines.append('Thanks for your contribution!')
+        raise NotImplementedError("\n".join(lines))
 
     def _lookup_hidet_module(self, target: str) -> HidetModule:
         if target not in self.hidet_modules:
@@ -252,14 +265,15 @@ class Interpreter:
 
     def _lookup_hidet_method(self, torch_method) -> Callable:
         if torch_method not in Registry.registered_methods:
-            method_name = self._get_callable_name(torch_method)
-            raise NotImplementedError(f"hidet: method {method_name} is not supported yet.")
+            self._raise_unsupported_error([torch_method])
         return Registry.registered_methods[torch_method]
 
-    def _lookup_hidet_function(self, torch_func) -> Optional[Callable]:
+    def _lookup_hidet_function(self, torch_func) -> Optional[OverloadedFunction]:
         if torch_func not in Registry.registered_functions:
             name = self._get_callable_name(torch_func)
-            pattern2func = {'_dynamo_get_item_lambda': lambda target, index: target[index]}
+            pattern2func = {
+                '_dynamo_get_item_lambda': OverloadedFunction.from_lambda(lambda target, index: target[index])
+            }
             for pattern, func in pattern2func.items():
                 if pattern in name:
                     return func
@@ -397,7 +411,7 @@ class Interpreter:
 
         return graph_hidet_output
 
-    def forward_with_check(self, *args) -> str:
+    def forward_with_check(self, *args):
         # pylint: disable=broad-except
         def to_hidet(value):
             if isinstance(value, torch.Tensor):
@@ -420,6 +434,8 @@ class Interpreter:
         torch_env: Dict[str, Any] = {}
         hidet_env: Dict[str, Any] = {}
         check_report: List[Tuple[str, str, str, str, str]] = [('kind', 'operator', 'dtype', 'error', 'attention')]
+
+        torch_graph_output = None
 
         for idx, node in enumerate(self.graph.nodes):
             assert isinstance(node, torch.fx.Node)

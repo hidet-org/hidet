@@ -11,6 +11,7 @@
 # limitations under the License.
 from .ffi import _LIB
 from .runtime_api import runtime_api
+from .shared_lib import SharedLibrary
 
 from . import callbacks
 from . import crt
