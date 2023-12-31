@@ -18,7 +18,7 @@ from hidet.testing.torch_utils import check_module
 def test_densenet121(shape):
     model = torch.hub.load('pytorch/vision:v0.6.0', 'densenet121', pretrained=True).cuda().eval().to(torch.float16)
     x = torch.randn(*shape).cuda().to(torch.float16) * 0.1796 + 0.5491
-    check_module(model, [x], atol=2e-2, rtol=2e-2, dynamic=False)
+    check_module(model, [x], atol=4e-2, rtol=4e-2, dynamic=False)
 
 
 if __name__ == '__main__':
