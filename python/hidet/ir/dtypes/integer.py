@@ -54,6 +54,9 @@ class IntegerType(DataType):
             raise ValueError('Value {} is out of range for {}.'.format(value, self.name))
         return constant(value, self)
 
+    def signedness(self):
+        return self._min_value < 0
+
     @property
     def one(self):
         return self.constant(1)

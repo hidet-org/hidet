@@ -19,9 +19,16 @@ class IntegerSubbyteType(IntegerType):
         super().__init__(name, short_name, nbytes, min_value, max_value)
         self._storage: DataType = storage
         self._nbits: int = nbits
-        self._signed: bool = signed
         self._bits_mask: int = (1 << self._nbits) - 1
-        self._sign_mask: int = 1 << (self._nbits - 1) if self._signed else 0
+        self._sign_mask: int = 1 << (self._nbits - 1) if self.signedness() else 0
+
+    @property
+    def bits_mask(self):
+        return self._bits_mask
+
+    @property
+    def sign_mask(self):
+        return self._sign_mask
 
     def iinfo(self) -> IntInfo:
         return IntInfo(self._nbits, self._max_value, self._min_value, self)

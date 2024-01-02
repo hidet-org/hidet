@@ -20,7 +20,9 @@ class VectorType(DataType):
     def __init__(self, lane_type: DataType, num_lanes: int):
         name = '{}x{}'.format(lane_type.name, num_lanes)
         short_name = '{}x{}'.format(lane_type.short_name, num_lanes)
-        nbytes = lane_type.nbytes * num_lanes if not lane_type.is_integer_subbyte() else lane_type.nbits * num_lanes // 8
+        nbytes = (
+            lane_type.nbytes * num_lanes if not lane_type.is_integer_subbyte() else lane_type.nbits * num_lanes // 8
+        )
         super().__init__(name, short_name, nbytes)
         self._num_lanes: int = num_lanes
         self._lane_type: DataType = lane_type

@@ -14,8 +14,8 @@ from typing import Dict, List, Union, Tuple
 
 from hidet.ir.tools import infer_type, simplify
 from hidet.ir.type import DataType, TensorType, PointerType
-from hidet.ir.dtypes import i8, u8, i16, i32
-from hidet.ir.expr import Var, Expr, Add, TensorElement, Address, Constant, Cast, var, cast, deref, bitwise_not
+from hidet.ir.dtypes import i32
+from hidet.ir.expr import Var, Expr, Add, TensorElement, Address, Constant, Cast, var, cast, bitwise_not
 from hidet.ir.stmt import (
     Stmt,
     DeclareStmt,
@@ -99,7 +99,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
             raise TypeError(f"data type not supported yet(got:{dtype})")
         idx = simplify(offset // divisor)
         offset_ = simplify(offset & (divisor - 1))
-        mask = storage_ty.constant(dtype._bits_mask)
+        mask = storage_ty.constant(dtype.bits_mask)
         return (base[idx] >> (offset_ * dtype_bits)) & mask
 
     def _set_subbyte_value(self, dtype: DataType, base: Var, offset: Expr, value: Expr):
@@ -113,17 +113,18 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         offset_ = simplify(offset & (divisor - 1))
         value_ty = infer_type(value)
         assert value_ty == storage_ty
-        mask = storage_ty.constant(dtype._bits_mask)
+        mask = storage_ty.constant(dtype.bits_mask)
         item = self.auto_var(hint="item", e=value & mask)
         updated_mask = self.auto_var(hint="updated_mask", e=bitwise_not(mask << (offset_ * dtype_bits)))
         new_bits = self.auto_var(hint="new_bits", e=item << (offset_ * dtype_bits))
 
-        from hidet.ir.dtypes import i32, u32, u16
+        from hidet.ir.dtypes import u32, u16
 
         if self.var2scope[base].is_memory():
-            if not any([storage_ty is ty for ty in [i32, u32, u16]]):
+            if not any(storage_ty is ty for ty in [i32, u32, u16]):
                 raise NotImplementedError(
-                    "writing subbyte data to memory requires the storage type must be int32, uint32, or uint16 due to atomicCAS, but got({storage_ty})"
+                    "writing subbyte data to memory requires the storage type must be"
+                    " int32, uint32, or uint16 due to atomicCAS, but got({storage_ty})"
                 )
             original = self.auto_var(hint="original", e=storage_ty.zero)
             updated = self.auto_var(hint="updated", e=storage_ty.zero)
@@ -173,7 +174,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
                 value = self.visit(e.value)
                 dtype = e.type
                 storage_ty = dtype.storage
-                mask = storage_ty.constant(dtype._bits_mask)
+                mask = storage_ty.constant(dtype.bits_mask)
                 value = value & mask
                 return Constant(value, ty)
         return super().visit_Constant(e)
@@ -207,10 +208,10 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
                         idx = simplify(offset // divisor)
                         base = self.visit(base)
                         return ~base[idx]
-        return super().visit_Address()
+        return super().visit_Address(e)
 
     def _cast_int(self, dtype: DataType, expr: Expr):
-        if not dtype._signed:
+        if not dtype.signedness():
             return expr
         int_type = i32
         int_data = cast(expr, int_type)
@@ -226,11 +227,12 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
             return cast(self._cast_int(expr_ty, expr), e.target_type)
         elif e.target_type.is_integer_subbyte():
             from hidet.ir.expr import if_then_else
+
             expr = self.visit(e.expr)
             dtype = e.target_type
             expr = if_then_else(expr < dtype.min_value, expr_ty(dtype.min_value), expr)
             expr = if_then_else(expr >= dtype.max_value, expr_ty(dtype.max_value), expr)
-            if not dtype._signed:
+            if not dtype.signedness():
                 return cast(expr, dtype.storage)
             storage_ty = dtype.storage
             int_type = i32

@@ -11,7 +11,16 @@
 # limitations under the License.
 from typing import Dict
 
-from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType, ArrayType, FuncType, func_type
+from hidet.ir.type import (
+    TensorType,
+    tensor_type,
+    tensor_pointer_type,
+    PointerType,
+    TensorPointerType,
+    ArrayType,
+    FuncType,
+    func_type,
+)
 from hidet.ir.expr import Var, TensorElement, TensorSlice, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_major
@@ -51,7 +60,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
                 self.memo[var] = Var(var.hint, tensor_pointer_type(var.type.tensor_type.dtype, [size]))
         body = self(func.body)
         params = [self(p) for p in func.params]
-        if body is func.body and all([p is p1 for p, p1 in zip(params, func.params)]):
+        if body is func.body and all(p is p1 for p, p1 in zip(params, func.params)):
             return func
         else:
             new_func = Function(func.name, params, body, func.ret_type, kind=func.kind, attrs=func.attrs)

@@ -9,6 +9,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
+
 import hidet
 
 
@@ -62,6 +64,7 @@ def test_int_4bit():
 
     func = script_module.build()
     import torch
+
     data = torch.empty((4, 4), dtype=torch.float32, device="cuda")
     data = hidet.from_torch(data)
     inp = torch.empty((4, 2), dtype=torch.int8, device="cuda")
@@ -71,7 +74,7 @@ def test_int_4bit():
 
 
 def test_int_2bit():
-    from hidet.ir.dtypes import i4, u4, i4x8, i8, f16, f32
+    from hidet.ir.dtypes import i2, u2, i8, f16, f32
     from hidet.ir.expr import constant, cast
     from hidet.lang import attrs
     from hidet.lang import shared_tensor, register_tensor
@@ -80,54 +83,41 @@ def test_int_2bit():
     with hidet.script_module() as script_module:
 
         @hidet.script
-        def func(out: f32[4, 4]):
+        def func(out: f32[2, 2]):
             attrs.func_kind = "cuda_kernel"
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 4
 
-            a = constant(1, i4)
-            b = register_tensor('int4b', shape=[8, 2])
-            ptr = ~b[3, 1]
-            ptr = ptr + 4
-            ptr = ptr + (threadIdx.x * 444 + blockIdx.x * 888 + 555)
-            c = register_tensor('i4x8', shape=[1])
-            b[0, 1] = a
-            b[0, 1] = b[0, 2]
-            d = b[0, 1]
-            s = shared_tensor('uint4b', shape=[7, 8])
-            e = i8(b[3, 0])
-            s1 = shared_tensor('float32', shape=[64, 64])
-            s1[3, 4] = f16(b[4, 0])
+            a = constant(1, i2)
 
-            data = register_tensor('int4b', shape=[4, 4])
+            data = register_tensor('int2b', shape=[2, 2])
 
-            for i in range(4):
-                for j in range(4):
+            for i in range(2):
+                for j in range(2):
                     if i == 0 and j == 0:
-                        data[i, j] = i4(-8)
+                        data[i, j] = i2(-2)
                     elif j == 0:
-                        data[i, j] = i4(f32(data[i - 1, 3]) + 1)
+                        data[i, j] = i2(f32(data[i - 1, 1]) + 1)
                     else:
-                        data[i, j] = i4(f32(data[i, j - 1]) + 1)
+                        data[i, j] = i2(f32(data[i, j - 1]) + 1)
 
             if threadIdx.x == 0 and blockIdx.x == 0:
-                for i in range(4):
-                    for j in range(4):
+                for i in range(2):
+                    for j in range(2):
                         d = data[i, j]
-                        d = i4(f32(d) + 1)
                         out[i, j] = f32(d)
 
     func = script_module.build()
     import torch
-    data = torch.empty((4, 4), dtype=torch.float32, device="cuda")
+
+    data = torch.empty((2, 2), dtype=torch.float32, device="cuda")
     data = hidet.from_torch(data)
     func(data)
     print(data.cpu().numpy())
-
 
 
 if __name__ == "__main__":
     hidet.option.cache_dir("./demo_int_subbyte")
     hidet.option.save_lower_ir(True)
 
-    test_int_4bit()
+    pytest.main(__file__)

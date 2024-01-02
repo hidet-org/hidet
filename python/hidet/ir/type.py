@@ -210,7 +210,7 @@ class TensorType(BaseType):
 
     def storage_bytes(self) -> Expr:
         if self.dtype.is_integer_subbyte():
-            return self.layout.size * self.dtype._nbits // 8
+            return self.layout.size * self.dtype.nbits // 8
         else:
             return self.layout.size * self.dtype.nbytes
 
