@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.dtypes import int32, boolean
+from hidet.ir.dtypes import int32, int64, boolean
 from hidet.ir.type import FuncType, void_p, void
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.utils import initialize
@@ -39,7 +39,7 @@ def register_cublas_kernels():
         codegen_name='hidet_cublas_gemm',
     )
     register_primitive_function(
-        name='cublas.bgemm',
+        name='cublas.strided_gemm',
         func_or_type=FuncType(
             param_types=[
                 int32,  # bs
@@ -52,11 +52,14 @@ def register_cublas_kernels():
                 void_p,  # a
                 void_p,  # b
                 void_p,  # c
+                int64,  # stride_a
+                int64,  # stride_b
+                int64,  # stride_c
                 boolean,  # trans_a
                 boolean,  # trans_b
                 int32,  # compute_type (cublasComputeType)
             ],
             ret_type=void,
         ),
-        codegen_name='hidet_cublas_bgemm',
+        codegen_name='hidet_cublas_strided_gemm',
     )

@@ -11,10 +11,11 @@
 # limitations under the License.
 import numpy as np
 import pytest
+import torch
 
 import hidet
 from hidet import ops
-from hidet.testing import check_binary, check_binary_dynamic
+from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary
 
 
 # @pytest.mark.skip(reason="when running matmul_x86 multiple times, it will produce wrong result. need fix.")
@@ -127,6 +128,21 @@ def test_matmul_fp16_dynamic(a_shape, b_shape):
         atol=1e-1,
         rtol=1e-1,
         device='cuda',
+    )
+
+
+@pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, 128], [128, 128]]])
+@pytest.mark.parametrize("dtype, tol", [("float32", 1e-5), ("float16", 1e-1)])
+def test_matmul_cublas(a_shape, b_shape, dtype, tol):
+    check_torch_binary(
+        a_shape,
+        b_shape,
+        torch_func=lambda x, y: torch.matmul(x, y),
+        hidet_func=lambda x, y: ops.matmul_cublas(x, y),
+        device="cuda",
+        dtype=dtype,
+        atol=tol,
+        rtol=tol,
     )
 
 

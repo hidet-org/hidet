@@ -26,9 +26,9 @@ def gemm(
     a,
     b,
     c,
+    trans_a: bool,
+    trans_b: bool,
     compute_type: Union[int, cublasComputeType],
-    trans_a: bool = False,
-    trans_b: bool = False,
 ):
     """
     Matrix multiplication of two matrices using cublas in row major by default.
@@ -54,18 +54,18 @@ def gemm(
         Type of elements in matrix B.
     type_c: Union[int, cudaDataType, DataType]
         Type of elements in matrix C.
-    a: Tensor or int
+    a: hidet.Tensor or int
         Matrix A, can be either a Tensor or an integer (the address of the matrix).
-    b: Tensor or int
+    b: hidet.Tensor or int
         Matrix B, can be either a Tensor or an integer (the address of the matrix).
-    c: Tensor or int
+    c: hidet.Tensor or int
         Matrix C, can be either a Tensor or an integer (the address of the matrix).
-    compute_type: Union[int, cublasComputeType]
-        The compute type of the operation.
     trans_a: bool
         Whether matrix A is transposed.
     trans_b: bool
         Whether matrix B is transposed.
+    compute_type: Union[int, cublasComputeType]
+        The compute type of the operation.
     """
     ffi.gemm(
         m,
@@ -97,9 +97,9 @@ def strided_gemm(
     stride_a: int,
     stride_b: int,
     stride_c: int,
+    trans_a: bool,
+    trans_b: bool,
     compute_type: Union[int, cublasComputeType],
-    trans_a: bool = False,
-    trans_b: bool = False,
 ):
     """
     Batch matrix multiplication of two matrices using cublas in row major order by default.
