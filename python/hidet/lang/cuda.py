@@ -27,3 +27,5 @@ from hidet.ir.primitives.cuda.atomic import atomic_add, atomic_sub, atomic_min, 
 from hidet.ir.primitives.cuda.shfl import shfl_sync, shfl_up_sync, shfl_xor_sync, shfl_down_sync
 from hidet.ir.primitives.cuda.mutex import acquire_lock, release_lock, acquire_seq_semaphore, release_seq_semaphore
 from hidet.lang.constructs.declare import register_tensor, shared_tensor
+
+from hidet.ir.library.cuda import cublas

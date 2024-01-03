@@ -9,14 +9,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <hidet/packedfunc.h>
-
-extern "C" {
-
-DLL void CallPackedFunc(PackedFunc func, void** args) {
-    auto f = PackedFunc_t(func.func_pointer);
-    f(func.num_args, func.arg_types, args);
-}
-
-}
-
