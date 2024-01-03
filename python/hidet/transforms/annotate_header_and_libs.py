@@ -63,7 +63,7 @@ class AnnotateCUBLAS(Annotator):
     def predicate(self, ir_module: IRModule) -> bool:
         for func in ir_module.functions.values():
             calls: List[Call] = collect(func.body, [Call])
-            if any(call.func_var.name.startswith('cublas.') for call in calls):
+            if any(call.func_var.name and call.func_var.name.startswith('cublas.') for call in calls):
                 return True
         return False
 
