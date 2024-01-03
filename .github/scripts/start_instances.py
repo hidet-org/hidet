@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     # Fetch the compile server instance ID from DB and add it to list of instances to launch
     query = (
-        'SELECT cloud_provider_id, instance_id, 0 FROM compile_server LIMIT 1'
+        f'SELECT cloud_provider_id, instance_id, 0 FROM compile_server WHERE org = \'{repo_org}\' LIMIT 1'
     )
     cursor.execute(query)
     rows = cursor.fetchall()
