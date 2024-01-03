@@ -9,5 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from . import cuda
-from .cuda import cublas
+from hidet.cuda.cublas.utils import as_type_code
+from hidet.cuda.cublas.kernels import cublasComputeType, cudaDataType
+from .kernels import gemm, bgemm
+from . import regs as _regs  # register functions
