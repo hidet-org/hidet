@@ -54,6 +54,7 @@ class cudaDataType(IntEnum):
     CUDA_R_8F_E4M3 = 28  # real as a nv_fp8_e4m3
     CUDA_R_8F_E5M2 = 29  # real as a nv_fp8_e5m2
 
+
 class cublasComputeType(IntEnum):
     """
     See Also: https://docs.nvidia.com/cuda/cublas/index.html#cublascomputetype-t
