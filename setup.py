@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="hidet",
-    version="0.3.0.dev",
+    version="0.3.1.dev",
     description="Hidet: a compilation-based DNN inference framework.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -34,7 +34,8 @@ setup(
         "requests",
         "filelock",
         "cuda-python>=11.6.1; platform_system=='Linux'",
-        "lark"
+        "lark",
+        "tomlkit"
     ],
     platforms=["linux"],
     entry_points={

@@ -3,7 +3,7 @@ sphinx
 sphinx-gallery
 sphinx-copybutton
 autodocsumm
-sphinx-book-theme
+sphinx-book-theme==1.0.1
 matplotlib
 sphinxcontrib-bibtex
 sphinxcontrib-googleanalytics

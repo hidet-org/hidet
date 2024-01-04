@@ -21,29 +21,33 @@ Hidet is an open-source DNN inference framework, it features
   :caption: Tutorials
 
   gallery/tutorials/optimize-pytorch-model
-  gallery/tutorials/run-onnx-model
+  gallery/tutorials/optimize-onnx-model
 
 .. toctree::
   :maxdepth: 1
-  :caption: How-to Guide
+  :caption: Hidet Script
 
-  how-to-guides/add-new-operator/index
-  gallery/how-to-guides/add-operator-resolve-rule
-  gallery/how-to-guides/add-subgraph-rewrite-rule
-  gallery/how-to-guides/visualize-flow-graph
+  hidet-script/index
+  hidet-script/examples/index
+  hidet-script/reference/index
+
 
 .. toctree::
   :maxdepth: 1
   :caption: Developer Guide
 
+  gallery/developer-guides/add-torch-operator-mapping
+  how-to-guides/add-new-operator/index
+  gallery/developer-guides/add-operator-resolve-rule
+  gallery/developer-guides/add-subgraph-rewrite-rule
   developer-guides/contributing.rst
-  developer-guides/hidet-script/index
 
 .. toctree::
   :maxdepth: 1
   :caption: Notes
 
   notes/operator-cache
+  gallery/how-to-guides/visualize-flow-graph
 
 .. toctree::
   :maxdepth: 1

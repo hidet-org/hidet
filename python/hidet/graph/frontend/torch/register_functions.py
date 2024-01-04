@@ -328,27 +328,23 @@ def unsqueeze(x: Tensor, dim: int):
 def avg_pool2d(
     x: Tensor, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None
 ):
-    if ceil_mode:
-        raise NotImplementedError("ceil_mode=True")
-    if not count_include_pad:
-        raise NotImplementedError("count_include_pad=False")
-    if divisor_override is not None:
-        raise NotImplementedError("divisor_override is not None")
     if stride is None:
         stride = kernel_size
-    y = ops.avg_pool2d(x, kernel_size, stride, padding)
+    y = ops.avg_pool2d(
+        x,
+        kernel_size,
+        stride,
+        padding,
+        ceil_mode=ceil_mode,
+        count_include_pad=count_include_pad,
+        divisor_override=divisor_override,
+    )
     return y
 
 
 @register_function(torch.nn.functional.avg_pool3d)
 def avg_pool3d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_include_pad=True, divisor_override=None):
-    if ceil_mode:
-        raise NotImplementedError("ceil_mode=True")
-    if not count_include_pad:
-        raise NotImplementedError("count_include_pad=False")
-    if divisor_override is not None:
-        raise NotImplementedError("divisor_override is not None")
-    y = ops.avg_pool3d(x, kernel_size, stride, padding)
+    y = ops.avg_pool3d(x, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
     return y
 
 
@@ -1024,6 +1020,21 @@ def ne(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
     return a != b
 
 
+@register_function(operator.mod)
+def mod(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a % b
+
+
+@register_function(operator.lshift)
+def lshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a << b
+
+
+@register_function(operator.rshift)
+def rshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a >> b
+
+
 @register_function(torch.rsqrt)
 def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
@@ -1031,6 +1042,14 @@ def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     return ops.rsqrt(x)
 
 
+@register_function(torch.sqrt)
+def sqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.sqrt(..., out=...)")
+    return ops.sqrt(x)
+
+
+@register_function(operator.pow)
 @register_function(torch.pow)
 @register_method(torch.Tensor.pow)
 def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> Tensor:
@@ -1215,7 +1234,7 @@ def isinf(x: Tensor) -> Tensor:
 
 
 @register_function(torch.nn.functional.pad)
-def torch_pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
+def torch_pad(x: Tensor, pad: Union[Tuple[int, ...], List[int]], mode: str = 'constant', value=0):
     if isinstance(pad, tuple):
         pad = list(pad)
     # Torch's pad list has form [p2left, p2right, p1left, p1right, p0left, p0right]

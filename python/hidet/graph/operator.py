@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Dict, Any
+
+import hidet.option
 from hidet.ir.type import TensorType
 from hidet.ir.task import Task
 from hidet.runtime.compiled_task import CompiledTask
@@ -119,11 +121,14 @@ class Operator:
     def run(self) -> List[Tensor]:
         from hidet.ir.tools import collect
 
-        # we imperatively run the operator if
+        # We imperatively run the operator if
         # 1. all inputs are concrete tensors (i.e., t.storage is not None)
         # 2. there is no symbol variable in the task
+        # 3. configuration option "imperative" is True
         could_imperative_run = (
-            all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0
+            all(t.storage is not None for t in self.inputs)
+            and len(collect(self.task, SymbolVar)) == 0
+            and hidet.option.get_option('imperative')
         )
 
         if could_imperative_run:

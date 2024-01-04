@@ -86,28 +86,18 @@ def matmul_simt_kernel():
                 for i, k in auto_map(block_m_size, block_k_size, workers=num_threads).on(
                     threadIdx.x
                 ):
-                    global_i, global_k = (
-                        i + blockIdx.x * block_m_size,
-                        k + k_tile * block_k_size,
-                    )
+                    global_i, global_k = (i + blockIdx.x * block_m_size, k + k_tile * block_k_size)
                     smem_a[i, k] = (
-                        a[global_i, global_k]
-                        if global_i < m_size and global_k < k_size
-                        else 0.0
+                        a[global_i, global_k] if global_i < m_size and global_k < k_size else 0.0
                     )
 
                 # load smem_b [block_k_size, block_n_size] from global memory
                 for k, j in auto_map(block_k_size, block_n_size, workers=num_threads).on(
                     threadIdx.x
                 ):
-                    global_k, global_j = (
-                        k + k_tile * block_k_size,
-                        j + blockIdx.y * block_n_size,
-                    )
+                    global_k, global_j = (k + k_tile * block_k_size, j + blockIdx.y * block_n_size)
                     smem_b[k, j] = (
-                        b[global_k, global_j]
-                        if global_k < k_size and global_j < n_size
-                        else 0.0
+                        b[global_k, global_j] if global_k < k_size and global_j < n_size else 0.0
                     )
 
                 # synchronize all threads in the block
@@ -142,15 +132,10 @@ def main():
         c = hidet.zeros([m, n]).cuda()
         func(a, b, c, m, n, k)
         numpy.testing.assert_allclose(
-            actual=c.cpu().numpy(),
-            desired=a.cpu().numpy() @ b.cpu().numpy(),
-            rtol=1e-4,
-            atol=1e-4,
+            actual=c.cpu().numpy(), desired=a.cpu().numpy() @ b.cpu().numpy(), rtol=1e-4, atol=1e-4
         )
 
-        hidet_latency = hidet.utils.benchmark_func(
-            lambda: func(a, b, c, m, n, k), repeat=50
-        )
+        hidet_latency = hidet.utils.benchmark_func(lambda: func(a, b, c, m, n, k), repeat=50)
         print(f'{m}x{k}x{n}: hidet takes {hidet_latency:.2f} ms')
 
 

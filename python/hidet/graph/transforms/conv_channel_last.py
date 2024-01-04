@@ -43,7 +43,6 @@ class PermutedOp:
         node = self.op
         new_inputs: List[Tensor] = []
         update_attributes: Dict[str, Any] = {}
-        new_perms: List[List[int]] = []
         for x in node.inputs:
             if x in tensor_map:
                 current_x, current_perm = tensor_map[x]
@@ -55,13 +54,20 @@ class PermutedOp:
                 new_perm = current_perm
             else:
                 # Input is not channel last, convert it to channel last
-                new_perm = [0, 2, 3, 1]
+                x_rank = len(x.shape)
+                if x_rank == 4:
+                    new_perm = [0, 2, 3, 1]
+                elif x_rank == 3:
+                    new_perm = [1, 2, 0]
+                elif x_rank == 2:
+                    new_perm = [1, 0]
+                elif x_rank == 1:
+                    new_perm = [0]
+                else:
+                    raise ValueError('Channel Last Pass met input tensor of scoped operator with shape > 4.')
                 new_x = transpose(current_x, new_perm)
                 tensor_map[x] = (new_x, new_perm)
             new_inputs.append(new_x)
-            new_perms.append(new_perm)
-        new_perm = new_perms[0]
-        assert all(p == new_perm for p in new_perms)
         if 'axis' in node.attrs and isinstance(node.attrs['axis'], int):
             update_attributes['axis'] = new_perm.index(node.attrs['axis'])
         outputs = node.reforward(new_inputs, update_attributes)
@@ -215,10 +221,15 @@ class ConvChannelLastPass(GraphPass):
         # TODO: Deal with FP16/FP32
         from hidet.graph.ops.conv2d import Conv2dOp
         from hidet.graph.ops.transform import transpose
+        from hidet.ir.dtypes import float16
 
         nodes: List[Operator] = graph.nodes
-        # Start from all conv2d operators as seeds
-        seeds = [node for node in nodes if isinstance(node, Conv2dOp)]
+        # Start from all fp16 conv2d operators as seeds
+        seeds: List[Operator] = []
+        for node in nodes:
+            if isinstance(node, Conv2dOp):
+                if node.inputs[0].dtype == float16 and node.inputs[1].dtype == float16:
+                    seeds.append(node)
 
         # Only use this pass if there is convolution in the graph
         if len(seeds) == 0:

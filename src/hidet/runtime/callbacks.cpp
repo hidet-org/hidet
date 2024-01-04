@@ -45,7 +45,7 @@ static FuncType* get_callback_ptr() {
     auto pool = CallbackRegistryPool::global();
     assert(id < pool->id2name.size());
     if(id >= pool->id2ptr.size() || pool->id2ptr[id] == nullptr) {
-        LOG(FATAL) << "Callback function " << pool->id2name[id] << " has not been registered.";
+        LOG(ERROR) << "Callback function " << pool->id2name[id] << " has not been registered.";
     }
     void* ptr = pool->id2ptr[id];
     typedef FuncType* FuncPointerType;
@@ -56,7 +56,7 @@ DLL void register_callback(const char* name, void *func_ptr) {
     try {
         auto pool = CallbackRegistryPool::global();
         if (pool->name2id.count(name) == 0) {
-            LOG(FATAL) << "Function " << std::string(name) << " is not a callback function.";
+            LOG(ERROR) << "Function " << std::string(name) << " is not a callback function.";
         }
         int id = pool->name2id[name];
         if(id >= pool->id2ptr.size()) {

@@ -65,6 +65,8 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
 
     def add_index_for_tensor(x):
         nonlocal index_count
+        if x in tensor_index:
+            return
         tensor_index[x] = index_count
         index_tensor[index_count] = x
         tensor_device.append(x.device.kind)

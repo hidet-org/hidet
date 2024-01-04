@@ -132,6 +132,11 @@ class NVCC(SourceCompiler):
         else:
             arch = hidet.option.cuda.get_arch()
 
+        if 'cpu_arch' in target.attrs:
+            cpu_arch = target.attrs['cpu_arch']
+        else:
+            cpu_arch = hidet.option.cpu.get_arch()
+
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
         # for more information about nvcc compilation.
@@ -146,7 +151,7 @@ class NVCC(SourceCompiler):
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
-            '-Xcompiler -fPIC,-m64,-O3,-funroll-loops,-ffast-math',
+            '-Xcompiler -fPIC,-m64,-march={cpu_arch},-O3,-funroll-loops,-ffast-math'.format(cpu_arch=cpu_arch),
             # use c++11 standard
             '-std=c++11',
             # the target PTX and SASS version.
@@ -215,6 +220,12 @@ class GCC(SourceCompiler):
     ) -> None:
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
+
+        if 'arch' in target.attrs:
+            arch = target.attrs['arch']
+        else:
+            arch = hidet.option.cpu.get_arch()
+
         command = [
             # the path to nvcc compiler
             self.gcc_path,
@@ -230,8 +241,8 @@ class GCC(SourceCompiler):
             # support avx intrinsics
             '-mavx2',
             '-m64',
-            '-march=native',
             '-ffast-math',
+            '-march={arch}'.format(arch=arch),
             # compile into position independent code.
             '-fPIC',
             # enable OpenMP.

@@ -33,47 +33,40 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
     """
 
     # Estimate the runtime of the function
-    import torch
+    import hidet
 
     fn()
-    torch.cuda.synchronize()
-    start_event = torch.cuda.Event(enable_timing=True)
-    end_event = torch.cuda.Event(enable_timing=True)
+    hidet.cuda.synchronize()
+    start_event = hidet.cuda.Event(enable_timing=True)
+    end_event = hidet.cuda.Event(enable_timing=True)
     start_event.record()
     for _ in range(5):
         fn()
     end_event.record()
-    torch.cuda.synchronize()
-    estimate_ms = start_event.elapsed_time(end_event) / 5
-    # compute number of warmup and repeat
+    hidet.cuda.synchronize()
+    estimate_ms = end_event.elapsed_time(start_event) / 5
     n_warmup = max(1, int(warmup / estimate_ms))
     n_repeat = max(1, int(rep / estimate_ms))
-    # We maintain a buffer of 256 MB that we clear
-    # before each kernel call to make sure that the L2
-    # doesn't contain any input data before the run
-    start_event = [torch.cuda.Event(enable_timing=True) for i in range(n_repeat)]
-    end_event = [torch.cuda.Event(enable_timing=True) for i in range(n_repeat)]
 
-    cache = torch.empty(int(256e6), dtype=torch.int8, device='cuda')
+    start_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
+    end_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
+
     # Warm-up
     for _ in range(n_warmup):
         fn()
     # Benchmark
     for i in range(n_repeat):
-        # we clear the L2 cache before each run
-        cache.zero_()
-        # record time of `fn`
         start_event[i].record()
         fn()
         end_event[i].record()
     # Record clocks
-    torch.cuda.synchronize()
-    times = torch.tensor([s.elapsed_time(e) for s, e in zip(start_event, end_event)])
+    hidet.cuda.synchronize()
+    times = np.array([e.elapsed_time(s) for s, e in zip(start_event, end_event)])
     if percentiles:
-        percentiles = torch.quantile(times, torch.tensor(percentiles)).tolist()
+        percentiles = np.quantile(times, percentiles)
         return tuple(percentiles)
     else:
-        return torch.mean(times).item()
+        return np.mean(times).item()
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:

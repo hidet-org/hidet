@@ -16,7 +16,8 @@ the same input and one addition with a concatenation and a single matrix multipl
 .. seealso::
     :class: margin
 
-    TASO :cite:`taso` systematically studies the sub-graph rewrite optimization for deep learning workloads.
+    `TASO <https://dl.acm.org/doi/10.1145/3341301.3359630>`_ systematically studies the sub-graph rewrite optimization
+    for deep learning workloads.
 
 After the rewrite, the graph becomes more efficient as we only need to run a single kernel and the `fused` matrix
 multiplication usually exposes more parallelism to utilize the underlying hardware. We can also fuse multiple
@@ -133,10 +134,7 @@ class FuseTwoMatmulRewriteRule(SubgraphRewriteRule):
 
 # %%
 # We can check that the rewrite rule has been registered:
-from hidet.graph.transforms import (
-    registered_rewrite_rules,
-    clear_registered_rewrite_rules,
-)
+from hidet.graph.transforms import registered_rewrite_rules, clear_registered_rewrite_rules
 
 print('Registered rewrite rules:')
 for rule in registered_rewrite_rules():
@@ -150,9 +148,7 @@ for rule in registered_rewrite_rules():
 # last line. In this tutorial, to prevent the default rewrite rules from being applied, we first clear the registered
 # rewrite rules and then register the rewrite rule we just defined:
 clear_registered_rewrite_rules()
-register_rewrite_rule(
-    FuseTwoMatmulRewriteRule()
-)  # a second way to register the rewrite rule
+register_rewrite_rule(FuseTwoMatmulRewriteRule())  # a second way to register the rewrite rule
 
 # %%
 # The rewrite process is done in a graph optimization pass called `subgraph_rewrite_pass`.
@@ -176,8 +172,3 @@ print(graph_opt)
 # -------
 # In this tutorial, we have learned how to define and register a sub-graph rewrite rule. It is an important
 # component of the graph optimization framework. Hidet uses it to implement some horizontal fusion rules.
-
-# %%
-# References
-# ----------
-# .. bibliography::

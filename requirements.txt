@@ -2,7 +2,7 @@
 # Necessary packages
 ################################################################################
 gitpython
-numpy
+numpy >= 1.23
 
 # used for query available memory
 psutil
@@ -36,6 +36,9 @@ cuda-python
 filelock
 
 requests
+
+# for configuration
+tomlkit
 
 # for parser
 lark

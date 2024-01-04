@@ -41,3 +41,9 @@ flask-restful
 flask-jwt-extended
 gunicorn
 GitPython
+
+# for configuration
+tomlkit
+
+# for parser
+lark

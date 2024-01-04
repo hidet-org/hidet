@@ -50,9 +50,7 @@ class BatchMatmulTask(Task):
             name='c',
             shape=[batch_size, m_size, n_size],
             fcompute=lambda p, i, j: reduce(
-                shape=[k_size],
-                fcompute=lambda k: a[p, i, k] * b[p, k, j],
-                reduce_type='sum',
+                shape=[k_size], fcompute=lambda k: a[p, i, k] * b[p, k, j], reduce_type='sum'
             ),
         )
 

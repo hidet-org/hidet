@@ -12,13 +12,13 @@ Python API
 
    root
    option
-   driver
    cuda
    tensor
    data_types
+   drivers
    ops/index
-   ir/index
    graph/index
    runtime/index
+   ffi/index
    utils/index
    testing/index

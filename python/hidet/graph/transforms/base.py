@@ -300,6 +300,7 @@ class PassContext:
     def reduce_cuda_compile_mem(self, enable: Optional[bool] = None):
         """
         Reduce CUDA memory used during compilation by using vcuda tensors, might incur compile time cost
+
         Parameters
         ----------
         enable: Optional[bool]

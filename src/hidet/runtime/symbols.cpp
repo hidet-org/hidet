@@ -23,7 +23,7 @@ DLL int32_t get_symbol_value(const char* symbol_name) {
     try {
         auto it = symbol_mapping.find(symbol_name);
         if (it == symbol_mapping.end()) {
-            LOG(FATAL) << "Symbol " << symbol_name << " not found";
+            LOG(ERROR) << "Symbol " << symbol_name << " not found";
         }
         return it->second;
     } catch (HidetException &e) {

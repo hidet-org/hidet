@@ -114,8 +114,8 @@ html_theme = 'sphinx_book_theme'
 html_theme_options = {
     "repository_url": "https://github.com/hidet-org/hidet",
     "use_repository_button": True,
-    'logo_only': True,
-    "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
+    # 'logo_only': True,
+    # "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
     "show_navbar_depth": 1,
     # "home_page_in_toc": True
 }

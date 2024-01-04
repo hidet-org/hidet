@@ -9,23 +9,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Sequence
 from collections import defaultdict
 import os
 
 import hidet.option
-from hidet.ir.compute import TensorNode, GridCompute, TensorInput
+from hidet.ir.compute import TensorNode, GridCompute, TensorInput, tensor_input
+from hidet.ir.type import BaseType, tensor_pointer_type
 from hidet.ir.expr import Expr, Var, TensorElement, Call, tensor_element, var, tensor_pointer_var
-from hidet.ir.stmt import BufferStoreStmt, LaunchKernelStmt
+from hidet.ir.dtypes import int64
+from hidet.ir.stmt import BufferStoreStmt, LaunchKernelStmt, AssignStmt, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
-from hidet.ir.task import Task, InverseMap
+from hidet.ir.builders import StmtBuilder
+from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
+from hidet.ir.task import Task, InverseMap, Target
 from hidet.ir.functors import IRRewriter, IRVisitor
-from hidet.ir.tools import rewrite, collect
+from hidet.ir.tools import rewrite, collect, rename_funcs
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.transforms import Pass
 from hidet.graph import FlowGraph, Operator, Tensor
-from hidet.utils import strict_zip
+from hidet.utils import strict_zip, prod
+from hidet.utils.structure import DirectedGraph
 from .fused_operator import FusedTask
 
 
@@ -317,7 +322,11 @@ class FuncParamRecord:
         self.tensor_to_updated_param: Dict[Tensor, Var] = tensor_to_updated_param
 
 
-class PrologueEpilogueRewriter(IRRewriter):
+class CanNotFuseError(Exception):
+    pass
+
+
+class PrologueEpilogueFuseRewriter(IRRewriter):
     def __init__(
         self,
         fused_task: FusedTask,
@@ -400,7 +409,9 @@ class PrologueEpilogueRewriter(IRRewriter):
             func: Function = node.func
             self.visit(func)
 
-        return module
+        return module.copy().reset_funcs(
+            functions=self.visit(module.functions), global_vars=self.visit(module.global_vars)
+        )
 
     def visit_Function(self, func: Function):
         if func.name not in self.func_records:
@@ -411,22 +422,24 @@ class PrologueEpilogueRewriter(IRRewriter):
         self.current_record = record
 
         # update the parameters of the function
-        func.params = record.updated_params
-        func.body = self.visit(func.body)
-        return func
+        params = record.updated_params
+        body = self.visit(func.body)
+        return Function(
+            name=func.name, params=params, body=body, ret_type=func.ret_type, kind=func.kind, attrs=func.attrs
+        )
 
     def visit_Var(self, e: Var):
         if e in self.current_record.param_to_tensor:
             tensor = self.current_record.param_to_tensor[e]
             if tensor in self.prologues:
                 # we encounter a usage of an input tensor of the task other than TensorElement and BufferStoreStmt
-                raise ValueError(
+                raise CanNotFuseError(
                     'Did you used a tensor in expression other than pure tensor indexing (e.g., tensor[...])'
                     ' while marking the task as allowing prologue?'
                 )
             elif tensor in self.epilogues:
                 # we encounter a usage of an output tensor of the task other than TensorElement and BufferStoreStmt
-                raise ValueError(
+                raise CanNotFuseError(
                     'Did you used a tensor in expression other than tensor storing (e.g., tensor[...] = ...)'
                     ' while marking the task as allowing epilogue?'
                 )
@@ -493,10 +506,260 @@ class PrologueEpilogueRewriter(IRRewriter):
         return super().visit_BufferStoreStmt(stmt)
 
 
-class FusePrologueEpiloguePass(Pass):
-    def __init__(self, fused_task: FusedTask):
+class PrologueEpilogueNotFuseRewriter(IRRewriter):
+    """
+    Given a fused graph with anchor operator, we generate separate kernels for each prologue and epilogue around
+    the anchor operator, and generate a new launch function that calls these kernels in correct order.
+
+    For example, consider the following fused graph:
+
+    ```
+    x1: input
+    x2: input
+    x3 = matmul(x1 + 1, relu(x2) + x1)   # signature: c = matmul(a, b)
+    x4 = gelu(x3)
+    x5 = x4 + x1
+    ```
+
+    where `matmul` is the anchor operator.
+
+    The given ir module would be like:
+
+    ```
+    def launch(a, b, c):
+        ...
+    ```
+
+    We will generate three new kernels for the prologue for a and b, as well as the epilogue for c.
+
+    ```
+    original_launch = launch    # rename the original launch function
+
+    def prologue_a(x1, a):
+        a = x1 + 1
+
+    def prologue_b(x1, x2, b):
+        b = relu(x2) + x1
+
+    def epilogue_c(c, x1, x5):
+        x5 = gelu(c) + x1
+
+    def launch(x1, x2, x5):
+        buf = allocate work space for all intermediate tensors
+        a = &buf[offset of a]
+        b = &buf[offset of b]
+        prologue_a(x1, a)
+        prologue_b(x1, x2, b)
+        original_launch(a, b, c)
+        epilogue_c(c, x1, x5)
+    ```
+
+    We will implement the above algorithm in the following steps:
+    1. Generate the Task for each prologue and epilogue.
+    2. Use auto-scheduler to generate the kernel for each prologue and epilogue.
+    3. Generate the new launch function.
+    """
+
+    class SubGraph:
+        def __init__(
+            self,
+            inputs: List[Tensor],
+            outputs: List[Tensor],
+            nodes: List[Operator],
+            ir_module: Optional[IRModule] = None,
+        ):
+            self.inputs: List[Tensor] = inputs
+            self.outputs: List[Tensor] = outputs
+            self.nodes: List[Operator] = nodes
+            self.ir_module: Optional[IRModule] = ir_module
+
+        @staticmethod
+        def from_trace(output: Tensor, stop_nodes: List[Tensor]):
+            # get the inputs by traversing the sub-graph from the output until we reach the stop nodes
+            inputs: List[Tensor] = []
+            visited: List[Tensor] = [output]
+            queue: List[Tensor] = [output]
+            operators: List[Operator] = []
+            while len(queue) > 0:
+                tensor: Tensor = queue.pop()
+                if tensor.trace is None or tensor in stop_nodes:
+                    inputs.append(tensor)
+                else:
+                    if tensor.op not in operators:
+                        operators.append(tensor.op)
+                    for x in tensor.op.inputs:
+                        if x not in visited:
+                            visited.append(x)
+                            queue.append(x)
+
+            # get a topological order of the nodes in the sub-graph
+            directed_graph = DirectedGraph()
+            for u in operators:
+                directed_graph.add_node(u)
+            for u in operators:
+                for x in u.inputs:
+                    if x.trace and x.op in operators:
+                        v = x.op
+                        directed_graph.add_edge(v, u)
+            nodes: List[Operator] = directed_graph.topological_order()
+
+            return PrologueEpilogueNotFuseRewriter.SubGraph(inputs, [output], nodes)
+
+        def generate_ir_module(self, target, working_dir) -> IRModule:
+            input_nodes: List[TensorNode] = [tensor_input('x', tensor.dtype, tensor.shape) for tensor in self.inputs]
+            tensor2compute: Dict[Tensor, TensorNode] = {a: b for a, b in zip(self.inputs, input_nodes)}
+
+            for op in self.nodes:
+                task: Task = op.task
+                remap: Dict[TensorNode, TensorNode] = {
+                    task.inputs[i]: tensor2compute[op.inputs[i]] for i in range(len(task.inputs))
+                }
+                for tensor_output, compute_output in zip(op.outputs, task.outputs):
+                    tensor2compute[tensor_output] = rewrite(compute_output, remap)
+            fused_outputs: List[TensorNode] = [tensor2compute[tensor] for tensor in self.outputs]
+            task = Task(name='fused_sub_graph', inputs=input_nodes, outputs=fused_outputs)
+            ir_modules = task.implement(target=target, working_dir=working_dir)
+            assert len(ir_modules) == 1
+            return ir_modules[0]
+
+    def __init__(self, fused_task: FusedTask, target: Target, working_dir: str):
         super().__init__()
         self.fused_task: FusedTask = fused_task
+        self.fused_graph: FlowGraph = fused_task.fused_graph
+        self.anchor_operator: Operator = self.fused_graph.nodes[fused_task.anchor]
+        self.target: Target = target
+        self.working_dir: str = working_dir
+
+    def generate_sub_graphs(self, anchor_module: IRModule) -> List[SubGraph]:
+        SubGraph = self.SubGraph
+        sub_graphs: List[SubGraph] = []
+        for output in self.fused_graph.outputs:
+            if output in self.anchor_operator.outputs:
+                # the graph output is one of the output of the anchor operator, no epilogue, skip
+                continue
+            sub_graphs.append(SubGraph.from_trace(output, self.anchor_operator.outputs + self.fused_graph.inputs))
+        sub_graphs.append(
+            SubGraph(self.anchor_operator.inputs, self.anchor_operator.outputs, [self.anchor_operator], anchor_module)
+        )
+        for anchor_input in self.anchor_operator.inputs:
+            if anchor_input in self.fused_graph.inputs:
+                # the graph input is one of the input of the anchor operator, no prologue, skip
+                continue
+            sub_graphs.append(SubGraph.from_trace(anchor_input, self.fused_graph.inputs))
+
+        sub_graphs = list(reversed(sub_graphs))  # sort the sub-graphs in topological order
+        return sub_graphs
+
+    def schedule_sub_graphs(self, sub_graphs: List[SubGraph]):
+        for sub_graph in sub_graphs:
+            if sub_graph.ir_module is not None:
+                # this is the sub-graph corresponding to the anchor operator, we already have the kernel
+                continue
+            sub_graph.ir_module = sub_graph.generate_ir_module(self.target, self.working_dir)
+        # rename the functions in each sub-graph to avoid name conflict
+        for idx, sub_graph in enumerate(sub_graphs):
+            sub_graph.ir_module = rename_funcs(
+                ir_module=sub_graph.ir_module,
+                rmap={name: 'module_{}_{}'.format(idx, name) for name in sub_graph.ir_module.functions.keys()},
+            )
+
+    def generate_wrapper_module(self, sub_graphs: List[SubGraph]) -> IRModule:
+        from hidet.lang import attrs, meta
+
+        device = sub_graphs[0].outputs[0].device
+        with hidet.script_module() as script_module:
+            param_types: List[BaseType] = []
+            for t in self.fused_graph.inputs + self.fused_graph.outputs:
+                param_types.append(tensor_pointer_type(t.dtype, t.shape))
+
+            def generate(params: Sequence[Var]):
+                sb = StmtBuilder()
+
+                param_tensors = self.fused_graph.inputs + self.fused_graph.outputs
+                tensor2var: Dict[Tensor, Var] = {tensor: param for tensor, param in zip(param_tensors, params)}
+
+                # allocate work space for all intermediate tensors
+                intermediate_tensors: List[Tensor] = []
+                tensor2offset: Dict[Tensor, Expr] = {}
+                workspace_size: Expr = int64.zero
+                alignment: int = 128  # 128 bytes alignment
+                for sub_graph in sub_graphs:
+                    for tensor in sub_graph.outputs:
+                        if tensor not in tensor2var:
+                            intermediate_tensors.append(tensor)
+                            tensor2var[tensor] = tensor_pointer_var('buf', tensor.shape, tensor.dtype)
+                            tensor2offset[tensor] = workspace_size
+                            tensor_size = tensor.dtype.nbytes * prod([int64(v) for v in tensor.shape])
+                            workspace_size = workspace_size + (tensor_size + alignment - 1) // alignment * alignment
+                            sb += DeclareStmt(tensor2var[tensor])
+
+                buffer_var: Var = tensor_pointer_var('workspace', [workspace_size], 'uint8')
+                sb += DeclareStmt(buffer_var)
+                if device.is_cpu():
+                    sb += AssignStmt(buffer_var, request_cpu_workspace(workspace_size))
+                elif device.is_cuda():
+                    sb += AssignStmt(buffer_var, request_cuda_workspace(workspace_size))
+                else:
+                    raise NotImplementedError(f'Unsupported device {device}')
+
+                for tensor in intermediate_tensors:
+                    sb += AssignStmt(tensor2var[tensor], ~buffer_var[tensor2offset[tensor]])
+
+                # launch the sub-graphs launch function in order
+                for idx, sub_graph in enumerate(sub_graphs):
+                    launch_func_name = 'module_{}_{}'.format(idx, 'launch')
+                    func_var = sub_graph.ir_module.lookup_var(launch_func_name)
+                    args = [tensor2var[tensor] for tensor in sub_graph.inputs + sub_graph.outputs]
+                    sb += Call(func_var, tuple(args))
+
+                return sb.finish()
+
+            @hidet.script
+            def launch(p: meta.types(param_types)):
+                attrs.func_kind = 'public'
+                generate(p)
+
+        # include all the functions and variables in the ir module of sub-graphs into the new module
+        ir_module = script_module.ir_module()
+        for sub_graph in sub_graphs:
+            ir_module.functions.update(sub_graph.ir_module.functions)
+            ir_module.global_vars.update(sub_graph.ir_module.global_vars)
+            ir_module.extern_functions.update(sub_graph.ir_module.extern_functions)
+            ir_module.include_headers.extend(sub_graph.ir_module.include_headers)
+            ir_module.include_dirs.extend(sub_graph.ir_module.include_dirs)
+            ir_module.linking_dirs.extend(sub_graph.ir_module.linking_dirs)
+            ir_module.linking_libs.extend(sub_graph.ir_module.linking_libs)
+            ir_module.object_files.extend(sub_graph.ir_module.object_files)
+
+        # unique the include headers and dirs
+        ir_module.include_headers = list(set(ir_module.include_headers))
+        ir_module.include_dirs = list(set(ir_module.include_dirs))
+        ir_module.linking_dirs = list(set(ir_module.linking_dirs))
+        ir_module.linking_libs = list(set(ir_module.linking_libs))
+        ir_module.object_files = list(set(ir_module.object_files))
+
+        return ir_module
+
+    def visit_IRModule(self, module: IRModule) -> IRModule:
+        # 1. Generate the Task for each prologue and epilogue.
+        SubGraph = self.SubGraph
+        sub_graphs: List[SubGraph] = self.generate_sub_graphs(module)
+
+        # 2. Use auto-scheduler to generate the kernel for each prologue and epilogue.
+        self.schedule_sub_graphs(sub_graphs)
+
+        # 3. Generate the new launch function.
+        ir_module = self.generate_wrapper_module(sub_graphs)
+
+        return ir_module
+
+
+class FusePrologueEpiloguePass(Pass):
+    def __init__(self, fused_task: FusedTask, target: Target, working_dir: str):
+        super().__init__()
+        self.fused_task: FusedTask = fused_task
+        self.target: Target = target
+        self.working_dir: str = working_dir
 
     def process_module(self, ir_module: IRModule) -> IRModule:
         extractor = PrologueEpilogueExtractor(self.fused_task)
@@ -505,15 +768,24 @@ class FusePrologueEpiloguePass(Pass):
         marker = PrologueEpilogueMarker(self.fused_task, prologues, epilogues)
         marks: Dict[str, Dict[Var, Tensor]] = marker.mark(ir_module)
 
-        rewriter = PrologueEpilogueRewriter(self.fused_task, prologues, epilogues, tensor_map, marks)
+        try:
+            rewriter = PrologueEpilogueFuseRewriter(self.fused_task, prologues, epilogues, tensor_map, marks)
+            ir_module = rewriter.rewrite(ir_module)
+            print('success')
+            return ir_module
+        except CanNotFuseError:
+            pass
+        # there are some invalid usages of tensors with prologue/epilogue, we can not fuse them
+        # fallback to generate separate kernels for all prologue/epilogue
+        rewriter = PrologueEpilogueNotFuseRewriter(self.fused_task, self.target, self.working_dir)
         return rewriter.rewrite(ir_module)
 
 
-def fuse_prologue_epilogue_pass(fused_task: FusedTask):
-    return FusePrologueEpiloguePass(fused_task)
+def fuse_prologue_epilogue_pass(fused_task: FusedTask, target: Target, working_dir: str):
+    return FusePrologueEpiloguePass(fused_task, target, working_dir)
 
 
-def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_dir: str) -> IRModule:
+def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, target: Target, working_dir: str) -> IRModule:
     from hidet.transforms import inline_function_pass, declare_to_let_pass, inline_let_stmt_pass
     from hidet.transforms import flatten_tensor_slice_pass, lower_with, PassContext, SaveIRInstrument, ProfileInstrument
     from hidet.transforms import generate_launch_func_pass
@@ -524,7 +796,7 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_
         inline_function_pass(),
         declare_to_let_pass(),
         inline_let_stmt_pass(inline_all=False),
-        fuse_prologue_epilogue_pass(fused_task),
+        fuse_prologue_epilogue_pass(fused_task, target, working_dir),
     ]
     instruments = []
     if hidet.option.get_save_lower_ir():

@@ -15,6 +15,7 @@ import os
 import json
 from dataclasses import dataclass
 import warnings
+import tempfile
 
 from tabulate import tabulate
 import numpy
@@ -66,6 +67,33 @@ class GraphExecution:
 
 
 class CompiledGraph:
+    """
+    A compiled graph that can be directly called in Python.
+
+    This class should not be instantiated directly. Instead, use :func:`load_compiled_graph` to load a compiled graph
+    from disk, or build a compiled graph from :class:`FlowGraph` using :func:`hidet.drivers.build_flow_graph`.
+
+    Parameters
+    ----------
+    meta: GraphMetaData
+        The meta-data of the graph.
+
+    graph_module: CompiledModule
+        The graph compiled module that contains execution logic of the computation graph.
+
+    weights: List[hidet.Tensor]
+        The weights of the graph.
+
+    compiled_tasks: List[CompiledTask]
+        The compiled tasks of the graph that correspond to the operators in the computation graph.
+
+    graph_execution: GraphExecution
+        The execution plan of the graph (the order and connections of the compiled tasks).
+
+    graph_string: str
+        The string representation of the computation graph.
+    """
+
     def __init__(
         self,
         meta: GraphMetaData,
@@ -106,6 +134,14 @@ class CompiledGraph:
         self._init_compiled_graph()
 
     def __str__(self):
+        """
+        Get the basic information of this compiled graph.
+
+        Returns
+        -------
+        ret: str
+            The human readable basic information.
+        """
         rows = []
         for i, sig in enumerate(self.meta.inputs):
             dtype = data_type(sig.dtype)
@@ -128,6 +164,19 @@ class CompiledGraph:
         return tabulate(rows, colalign=('right', 'left'), tablefmt='simple')
 
     def __call__(self, *args):
+        """
+        Run the model asynchronously with the given inputs.
+
+        Parameters
+        ----------
+        args: Sequence[hidet.Tensor]
+            The input tensors.
+
+        Returns
+        -------
+        ret: Union[hidet.Tensor, List[hidet.Tensor]]
+            The output tensor(s).
+        """
         outs = self.run_async(args)
         if len(outs) == 1:
             return outs[0]
@@ -207,11 +256,14 @@ class CompiledGraph:
         from hidet.graph.tensor import empty
 
         outputs = []
+        output_to_input = {}
         for output_index, (exec_idx, sig) in enumerate(zip(self.graph_execution.outputs_index, self.meta.outputs)):
             if exec_idx in self.graph_execution.inputs_index:
                 outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
             elif exec_idx in self.graph_execution.weights_index:
                 outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
+            elif exec_idx in output_to_input:
+                outputs.append(outputs[output_to_input[exec_idx]])
             else:
                 if self.is_dynamic:
                     shape_buffer = Array(i32, len(sig.shape))
@@ -219,6 +271,8 @@ class CompiledGraph:
                     outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
                 else:
                     outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
+                output_to_input[exec_idx] = len(outputs) - 1
+
         return outputs
 
     def _prepare_workspace(self):
@@ -350,19 +404,21 @@ class CompiledGraph:
                 raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
-            dummy_inputs = []
-            for meta_input in self.meta.inputs:
-                dtype = hidet.ir.data_type(meta_input.dtype)
-                if dtype.is_float():
-                    inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                elif dtype.is_integer():
-                    inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                else:
-                    warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
-                    inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                dummy_inputs.append(inp)
+            with hidet.option.context():
+                hidet.option.imperative(True)
+                dummy_inputs = []
+                for meta_input in self.meta.inputs:
+                    dtype = hidet.ir.data_type(meta_input.dtype)
+                    if dtype.is_float():
+                        inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    elif dtype.is_integer():
+                        inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    else:
+                        warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                        inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    dummy_inputs.append(inp)
 
-            return dummy_inputs
+                return dummy_inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
@@ -372,56 +428,116 @@ class CompiledGraph:
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 
-    def save(self, path: str):
-        save_compiled_graph(self, path)
+    def save(self, path: str, save_dispatch_table: bool = False):
+        """
+        Save the compiled graph to disk.
+
+        See Also
+        --------
+        load_compiled_graph
+
+        Parameters
+        ----------
+        path: str
+            The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+        save_dispatch_table:
+            Whether to save the dispatch table to disk. See `save_compiled_graph` for details.
+        """
+        save_compiled_graph(self, path, save_dispatch_table)
 
 
-def save_compiled_graph(model: CompiledGraph, path: str):
+def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bool = False):
+    """
+    Save the compiled graph to disk.
+
+    Parameters
+    ----------
+    model: CompiledGraph
+        The compiled graph to save.
+
+    path: str
+        The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+    save_dispatch_table:
+        Whether to save the dispatch table to disk.
+
+        When we run the model that contains alternative kernels for the same operator, we will pick the best kernel
+        by benchmarking all the alternatives. The dispatch table is used to record the best kernel for the given
+        input shapes. If the dispatch table is not saved, we will benchmark all the alternatives again when we load
+        the model next time.
+
+        Default: False
+    """
     from hidet.utils.dataclass import asdict
 
     dirname = os.path.dirname(path)
     os.makedirs(dirname, exist_ok=True)
 
-    with zipfile.ZipFile(path, 'w') as zf:
+    with tempfile.NamedTemporaryFile(dir=dirname, delete=False) as temp_file:
+        temp_path = temp_file.name
 
-        def _save_under(dir_path: str, dir_in_zip: str, exclude: Optional[List[str]] = None):
-            for root, _, files in os.walk(dir_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    file_in_zip = os.path.join(dir_in_zip, os.path.relpath(file_path, dir_path))
-                    with zf.open(file_in_zip, 'w') as f1:
-                        if exclude and file in exclude:
-                            continue
-                        with open(file_path, 'rb') as f2:
-                            f1.write(f2.read())
+        with zipfile.ZipFile(temp_path, 'w') as zf:
 
-        # meta info
-        with zf.open('meta.json', 'w') as f:
-            meta_bytes = json.dumps(asdict(model.meta), indent=4).encode('utf-8')
-            f.write(meta_bytes)
+            def _save_under(dir_path: str, dir_in_zip: str, exclude: Optional[List[str]] = None):
+                for root, _, files in os.walk(dir_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        file_in_zip = os.path.join(dir_in_zip, os.path.relpath(file_path, dir_path))
+                        with zf.open(file_in_zip, 'w') as f1:
+                            if exclude and file in exclude:
+                                continue
+                            with open(file_path, 'rb') as f2:
+                                f1.write(f2.read())
 
-        # save the modules
-        _save_under(model.graph_module.module_dir, 'graph_module/')
+            # meta info
+            with zf.open('meta.json', 'w') as f:
+                meta_bytes = json.dumps(asdict(model.meta), indent=4).encode('utf-8')
+                f.write(meta_bytes)
 
-        # save weights
-        with zf.open('weights.npz', 'w', force_zip64=True) as f:  # force_zip64 is required for >4GB weights
-            numpy.savez(f, *[weight.cpu().numpy() for weight in model.weights])
+            # save the modules
+            _save_under(model.graph_module.module_dir, 'graph_module/')
 
-        # save the kernels (i.e., compiled tasks)
-        for i, compiled_task in enumerate(model.compiled_tasks):
-            _save_under(compiled_task.task_dir, 'kernels/{}/'.format(i))
+            # save weights
+            with zf.open('weights.npz', 'w', force_zip64=True) as f:  # force_zip64 is required for >4GB weights
+                numpy.savez(f, *[weight.cpu().numpy() for weight in model.weights])
 
-        # save graph execution
-        with zf.open('graph_execution.json', 'w') as f:
-            ge_bytes = json.dumps(asdict(model.graph_execution), indent=4).encode('utf-8')
-            f.write(ge_bytes)
+            # save the kernels (i.e., compiled tasks)
+            for i, compiled_task in enumerate(model.compiled_tasks):
+                _save_under(compiled_task.task_dir, 'kernels/{}/'.format(i))
 
-        # save graph string
-        with zf.open('graph_string.txt', 'w') as f:
-            f.write(model.graph_string.encode('utf-8'))
+            # save graph execution
+            with zf.open('graph_execution.json', 'w') as f:
+                ge_bytes = json.dumps(asdict(model.graph_execution), indent=4).encode('utf-8')
+                f.write(ge_bytes)
+
+            # save dispatch table file
+            if save_dispatch_table and os.path.exists(model.dispatch_table_path):
+                with zf.open('dispatch_table.txt', 'w') as f:
+                    with open(model.dispatch_table_path, 'rb') as f2:
+                        f.write(f2.read())
+
+            # save graph string
+            with zf.open('graph_string.txt', 'w') as f:
+                f.write(model.graph_string.encode('utf-8'))
+
+    os.rename(temp_path, path)
 
 
 def load_compiled_graph(path: str) -> CompiledGraph:
+    """
+    Load a compiled graph from disk.
+
+    Parameters
+    ----------
+    path: str
+        The path to load the compiled graph.
+
+    Returns
+    -------
+    ret: CompiledGraph
+        The loaded compiled graph.
+    """
     from hidet.utils.dataclass import from_dict
 
     with zipfile.ZipFile(path, 'r') as zf:
@@ -448,7 +564,6 @@ def load_compiled_graph(path: str) -> CompiledGraph:
 
         # extract all files except weights
         cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
-
         if not os.path.exists(os.path.join(cache_dir, 'graph_string.txt')):
             # only extract files if the graph_string.txt is not in the cache
             # here 'graph_string.txt' is just the last file we usually save to disk, we use it as a flag
