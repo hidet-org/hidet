@@ -99,6 +99,8 @@ if __name__ == '__main__':
         cloud_provider_id, instance_id, _ = instance
         if cloud_provider_id == 1: # AWS
             cmd = ['aws', 'ec2', 'start-instances', '--instance-ids', instance_id]
+        elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
+            cmd = [':']
         else:
             raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
         output = run_command(cmd)
@@ -118,6 +120,8 @@ if __name__ == '__main__':
                     raise RuntimeError(f'Failed to check status for {instance_id} on cloud provider {cloud_provider_id}.')
                 if output.stdout.count('ok') >= 2:
                     started = True
+            elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
+                started = True
             else:
                 raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
 
