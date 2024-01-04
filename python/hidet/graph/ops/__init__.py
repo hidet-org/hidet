@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=redefined-builtin
-from .matmul import batch_matmul, matmul, matmul_x86
+from .matmul import batch_matmul, matmul, matmul_x86, matmul_cublas
 from .conv1d import conv1d, conv1d_gemm
 from .conv1d_transpose import conv1d_transpose
 from .conv2d import conv2d, conv2d_channel_last, conv2d_winograd, conv2d_gemm, conv2d_gemm_fp16
