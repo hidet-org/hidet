@@ -22,7 +22,6 @@ from hidet.utils.py import gcd, factorize, prod, cdiv
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
-from .matmul_f32_x86 import matmul_x86
 from .matmul_f16 import matmul_f16
 from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
@@ -98,40 +97,33 @@ class MatmulResolveRule(ResolveRule):
     """
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
-        if a.device.is_cpu():
-            cc = [matmul_x86(a[i], b[i]).unsqueeze(0) for i in range(a.shape[0])]
-            c = cc[0]
-            for i in range(1, a.shape[0]):
-                c = hidet.ops.concat([cc[i], c], axis=0)
-            return c
+        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
+
+        if any(not isinstance(v, int) for v in a.shape + b.shape):
+            nparts = 1
         else:
-            parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
-            mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
-
-            if any(not isinstance(v, int) for v in a.shape + b.shape):
+            batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
+            if parallel_k == 'default':
+                nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
+            elif parallel_k == 'search':
+                nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
+            elif parallel_k == 'disabled':
                 nparts = 1
+            elif isinstance(parallel_k, int):
+                nparts = gcd(parallel_k, k_size)
             else:
-                batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
-                if parallel_k == 'default':
-                    nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
-                elif parallel_k == 'search':
-                    nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
-                elif parallel_k == 'disabled':
-                    nparts = 1
-                elif isinstance(parallel_k, int):
-                    nparts = gcd(parallel_k, k_size)
-                else:
-                    raise ValueError(f'invalid parallel_k: {parallel_k}')
+                raise ValueError(f'invalid parallel_k: {parallel_k}')
 
-            if nparts == 1:
-                c = batch_matmul(a, b, mma=mma)
-            else:
-                # [batch_size * nparts, m_size, k_size // nparts]
-                aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
-                # [batch_size * nparts, k_size // nparts, n_size]
-                bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])
-                c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
-            return c
+        if nparts == 1:
+            c = batch_matmul(a, b, mma=mma)
+        else:
+            # [batch_size * nparts, m_size, k_size // nparts]
+            aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
+            # [batch_size * nparts, k_size // nparts, n_size]
+            bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])
+            c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
+        return c
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, MatmulOp)
@@ -185,9 +177,6 @@ class MatmulResolveRule(ResolveRule):
             return None
         # if op.task.has_symbolic_shape():
         #     return None
-
-        if op.device.is_cpu():
-            return None
 
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -251,9 +240,12 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        if op.device.is_cpu():
+            return None
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:
                 return outs
         return None
+    
