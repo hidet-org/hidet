@@ -4,7 +4,6 @@ import subprocess
 import pathlib
 import argparse
 from tabulate import tabulate
-from db_utils import get_db_conn
 
 external_models = ['llama-7b', 'gpt2']
 
@@ -21,15 +20,7 @@ def run_command(cmd):
         raise RuntimeError(f'Command {cmd} failed with return code {ret}.')
     return stdout
 
-def get_bench_cmd(run_type, run_id, run_name, run_param_name, dtype):
-    # Get the name of the benchmark script from DB
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    query = f'SELECT runfile FROM {run_type} WHERE id = {run_id}'
-    cursor.execute(query)
-    runfile = cursor.fetchall()[0][0]
-    cursor.close()
-    conn.close()
+def get_bench_cmd(run_type, run_id, run_name, runfile, run_param_name, dtype):
     if run_name in external_models:
         runfile = './models/bench/' + runfile
     else:
@@ -64,11 +55,12 @@ if __name__ == '__main__':
         run_type = run_config['type']
         run_id = run_config['id']
         run_name = run_config['name']
+        runfile = run_config['runfile']
         run_param_id = run_config['param_id']
         run_param_name = run_config['param_name']
         run_dtype_id = run_config['dtype_id']
         run_dtype_name = run_config['dtype_name']
-        cmd = get_bench_cmd(run_type, run_id, run_name, run_param_name, run_dtype_name)
+        cmd = get_bench_cmd(run_type, run_id, run_name, runfile, run_param_name, run_dtype_name)
         outputs = run_command(cmd)
         if outputs:
             # The second last line of All benchmark scripts' stdout is the latency. (Last line is empty)
