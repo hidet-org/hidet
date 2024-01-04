@@ -20,7 +20,7 @@ if __name__ == '__main__':
         if cloud_provider_id == 1: # AWS
             cmd = ['aws', 'ec2', 'stop-instances', '--instance-ids', instance_id]
         elif cloud_provider_id == 2: # Always on, no need to stop. Do Nothing.
-            cmd = [':']
+            cmd = ['true']
         else:
             raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
         output = run_command(cmd)
