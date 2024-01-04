@@ -55,5 +55,28 @@ def test_fusion_v2():
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy())
 
 
+def test_fusion_cublas_matmul():
+    bs, m, n, k = 2, 1024, 1024, 1024
+    a = hidet.symbol(shape=[bs, m, k], dtype='float32', device='cuda')
+    b = hidet.randn(shape=[bs, k, n], dtype='float32', device='cuda')
+
+    def optimize_and_build(op):
+        c = op(a + 1.0, b) + 1.0
+        graph = hidet.trace_from(c)
+        graph_opt = hidet.graph.optimize(graph)
+        compiled = graph_opt.build()
+        return compiled
+
+    graph_2 = optimize_and_build(hidet.ops.matmul_cublas)
+    graph_1 = optimize_and_build(hidet.ops.batch_matmul)
+
+    a = hidet.randn_like(a)
+
+    y1 = graph_1(a)
+    y2 = graph_2(a)
+
+    hidet.utils.assert_close(y1, y2, atol=1e-5, rtol=1e-5)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -16,5 +16,6 @@ from .free_var_collector import collect_free_vars
 from .printer import IRPrinter, astext
 from .simplifier import simplify, simplify_to_int
 from .hasher import ExprHash
+from .renamer import rename_funcs
 
 # from .ir_dumper import astext2, parse
