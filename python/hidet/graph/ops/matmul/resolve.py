@@ -248,4 +248,3 @@ class MatmulResolveRule(ResolveRule):
             if outs is not None:
                 return outs
         return None
-    
