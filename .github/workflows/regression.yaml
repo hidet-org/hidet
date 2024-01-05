@@ -110,6 +110,10 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: run_configs
+
+      - name: Clear cache
+        run: |
+          hidet cache clear --all
       
       - name: Run tests
         timeout-minutes: 2880

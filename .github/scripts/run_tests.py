@@ -2,9 +2,8 @@ import os
 import json
 import subprocess
 import pathlib
-import numpy as np
-import tqdm
-from db_utils import get_db_conn
+import argparse
+from tabulate import tabulate
 
 external_models = ['llama-7b', 'gpt2']
 
@@ -21,15 +20,7 @@ def run_command(cmd):
         raise RuntimeError(f'Command {cmd} failed with return code {ret}.')
     return stdout
 
-def get_bench_cmd(run_type, run_id, run_name, run_param_name, dtype):
-    # Get the name of the benchmark script from DB
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    query = f'SELECT runfile FROM {run_type} WHERE id = {run_id}'
-    cursor.execute(query)
-    runfile = cursor.fetchall()[0][0]
-    cursor.close()
-    conn.close()
+def get_bench_cmd(run_type, run_id, run_name, runfile, run_param_name, dtype):
     if run_name in external_models:
         runfile = './models/bench/' + runfile
     else:
@@ -38,11 +29,25 @@ def get_bench_cmd(run_type, run_id, run_name, run_param_name, dtype):
     return cmd
 
 if __name__ == '__main__':
-    fh = open('run_configs.json')
+    parser = argparse.ArgumentParser(prog='Run Benchmarks')
+    parser.add_argument(
+        '--print',
+        action='store_true',
+        default=False,
+        help='Print results'
+    )
+    parser.add_argument(
+        '--configs',
+        type=str,
+        default='run_configs.json',
+        help='Specify configurations file to use for benchmarking'
+    )
+    args = parser.parse_args()
+    configs_file = args.configs
+    fh = open(configs_file)
     run_configs = json.load(fh)
     fh.close()
     hw_config = os.environ.get('HW_CONFIG')
-    print('hw:', hw_config)
     for run_config in run_configs:
         # Append hardware_config column
         run_config['hardware_config'] = hw_config
@@ -50,11 +55,12 @@ if __name__ == '__main__':
         run_type = run_config['type']
         run_id = run_config['id']
         run_name = run_config['name']
+        runfile = run_config['runfile']
         run_param_id = run_config['param_id']
         run_param_name = run_config['param_name']
         run_dtype_id = run_config['dtype_id']
         run_dtype_name = run_config['dtype_name']
-        cmd = get_bench_cmd(run_type, run_id, run_name, run_param_name, run_dtype_name)
+        cmd = get_bench_cmd(run_type, run_id, run_name, runfile, run_param_name, run_dtype_name)
         outputs = run_command(cmd)
         if outputs:
             # The second last line of All benchmark scripts' stdout is the latency. (Last line is empty)
@@ -62,5 +68,8 @@ if __name__ == '__main__':
             run_config['latency'] = latency
         else:
             run_config['latency'] = 999.99
-    with open('run_configs.json', 'w') as fh:
+    with open(configs_file, 'w') as fh:
         json.dump(run_configs, fh)
+
+    if args.print:
+       print(tabulate(run_configs, headers="keys")) 
