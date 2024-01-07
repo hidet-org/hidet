@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 import json
 import dataclasses
 import os
@@ -10,7 +10,6 @@ from dataclasses import asdict
 import numpy as np
 
 import hidet.utils
-from hidet.graph.tensor import Tensor
 from hidet.runtime.compiled_graph import CompiledGraph, save_compiled_graph, load_compiled_graph, GraphExecution
 
 
@@ -26,6 +25,37 @@ class CompiledApp:
     def __init__(self, meta: AppMetaData, graphs: Dict[str, CompiledGraph] = None):
         self.meta: AppMetaData = meta
         self.graphs: Dict[str, CompiledGraph] = graphs
+
+
+def create_compiled_app(graphs: Dict[str, CompiledGraph], name: Optional[str] = None) -> CompiledApp:
+    """
+    Create a compiled app from a dict of compiled graphs.
+
+    Parameters
+    ----------
+    graphs: Dict[str, CompiledGraph]
+        The compiled graphs.
+
+    name: Optional[str]
+        The name of the app. If None, the name will be set to 'app'.
+
+    Returns
+    -------
+    ret: CompiledApp
+        The compiled app.
+    """
+    if name is None:
+        name = 'app'
+
+    hash_obj = hashlib.sha256()
+    hash_obj.update(name.encode())
+    for graph_name, graph in graphs.items():
+        hash_obj.update(graph_name.encode())
+        hash_obj.update(graph.meta.graph_hash.encode())
+    app_hash: str = hash_obj.hexdigest()[:16]
+
+    meta = AppMetaData(name=name, hidet_version=hidet.__version__, graphs=list(graphs.keys()), app_hash=app_hash)
+    return CompiledApp(meta=meta, graphs=graphs)
 
 
 def save_compiled_app(app: CompiledApp, path: str):
@@ -96,6 +126,7 @@ def load_compiled_app(path: str) -> CompiledApp:
     ret: CompiledApp
         The loaded compiled app.
     """
+    from hidet import Tensor
     from hidet.utils.dataclass import from_dict
 
     with zipfile.ZipFile(path, 'r') as zip_file:
