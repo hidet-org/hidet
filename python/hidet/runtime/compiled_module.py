@@ -56,7 +56,7 @@ class CompiledFunction:
 
         Parameters
         ----------
-        args: a sequence of int, float, bool or hidet.Tensor
+        args: a sequence of int, float, bool, hidet.Tensor or hidet.ffi.utils.Array
             The arguments to the function.
 
         Returns
