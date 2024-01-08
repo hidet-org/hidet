@@ -183,9 +183,8 @@ class CPUSoftmaxTask(SoftmaxTask):
             avx_f32x8_max,
             avx_f32x8_set1,
             avx_f32x8_divide,
-            avx_f32x8_sum,
-            avx_f32x8_scalar_max,
         )
+        from hidet.ir.primitives.cpu.avx_helper import avx_f32x8_sum, avx_f32x8_scalar_max
         from hidet.lang import tensor, attrs, grid
         from hidet.ir.stmt import DeclareScope
         from hidet.lang.mapping import spatial

@@ -379,9 +379,9 @@ class CPUNormalizeTask(NormalizeTask):
             avx_f32x8_set1,
             avx_f32x8_divide,
             avx_f32x8_multiply,
-            avx_f32x8_sum,
             avx_f32x8_sqrt,
         )
+        from hidet.ir.primitives.cpu.avx_helper import avx_f32x8_sum
         from hidet.lang import tensor
 
         shape = self.inputs[0].shape

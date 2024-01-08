@@ -54,11 +54,6 @@ def register_primitive_functions():
         ('avx_x86_float32x8_sqrt', '_mm256_sqrt_ps', FuncType(['float32x8'], 'float32x8')),
         ('avx_x86_float32x8_max', '_mm256_max_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_permute', '_mm256_permute_ps', FuncType(['float32x8', 'int8'], 'float32x8')),
-        (
-            'avx_x86_float32x8_permute_2f128',
-            '_mm256_permute2f128_ps',
-            FuncType(['float32x8', 'float32x8', 'int8'], 'float32x8'),
-        ),
         ('avx_x86_float32x8_extract_last', '_mm256_cvtss_f32', FuncType(['float32x8'], 'float32')),
         ('avx_x86_float32x8_extract_half', '_mm256_extractf128_ps', FuncType(['float32x8', 'int8'], 'float32x4')),
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
@@ -86,51 +81,6 @@ def register_primitive_functions():
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
-
-    from hidet.lang import script, attrs
-    from hidet.ir.dtypes import f32x8, f32
-    from hidet.ir.func import Function
-
-    @script
-    def avx_x86_f32x8_sum(x: f32x8) -> f32:
-        attrs.func_kind = "cpu_internal"
-        attrs.func_name = "avx_x86_float32x8_sum"
-        sum_vec = call_primitive_func(
-            'avx_x86_float32x4_add',
-            [
-                call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b0]),
-                call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b1]),
-            ],
-        )
-        sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
-        sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
-        return call_primitive_func('avx_x86_float32x4_extract_last', [sum_vec])
-
-    assert isinstance(avx_x86_f32x8_sum, Function)
-    register_primitive_function(avx_x86_f32x8_sum.name, avx_x86_f32x8_sum)
-
-    @script
-    def avx_x86_f32x8_scalar_max(x: f32x8) -> f32:
-        attrs.func_kind = "cpu_internal"
-        attrs.func_name = "avx_x86_float32x8_scalar_max"
-        y = call_primitive_func('avx_x86_float32x8_permute_2f128', [x, x, 1])
-        m1 = call_primitive_func('avx_x86_float32x8_max', [x, y])
-        m2 = call_primitive_func('avx_x86_float32x8_permute', [m1, 0b01001110])
-        m3 = call_primitive_func('avx_x86_float32x8_max', [m1, m2])
-        m4 = call_primitive_func('avx_x86_float32x8_permute', [m3, 0b10110001])
-        m = call_primitive_func('avx_x86_float32x8_max', [m3, m4])
-        return call_primitive_func('avx_x86_float32x8_extract_last', [m])
-
-    assert isinstance(avx_x86_f32x8_scalar_max, Function)
-    register_primitive_function(avx_x86_f32x8_scalar_max.name, avx_x86_f32x8_scalar_max)
-
-
-def avx_f32x8_sum(x: Expr) -> Call:
-    return call_primitive_func('avx_x86_float32x8_sum', [x])
-
-
-def avx_f32x8_scalar_max(x: Expr) -> Call:
-    return call_primitive_func('avx_x86_float32x8_scalar_max', [x])
 
 
 def aligned_alloc(alignment: Union[int, Expr], size: Union[int, Expr]):
@@ -171,6 +121,10 @@ def avx_f32x4_broadcast(addr: Expr) -> Call:
 
 def avx_f32x8_broadcast(addr: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_broadcast', [addr])
+
+
+def avx_f32x4_add(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x4_add', [a, b])
 
 
 def avx_f32x8_add(a: Expr, b: Expr) -> Call:
@@ -263,3 +217,19 @@ def avx_f32x8_insert_f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
 
 def avx_f32x8_permute2f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
     return call_primitive_func('avx_x86_float32x8_permute2float32x4', [a, b, imm])
+
+
+def avx_f32x8_permute(a: Expr, imm: Union[int, Expr]) -> Call:
+    return call_primitive_func('avx_x86_float32x8_permute', [a, imm])
+
+
+def avx_f32x8_extract_half(a: Expr, imm: Union[int, Expr]) -> Call:
+    return call_primitive_func('avx_x86_float32x8_extract_half', [a, imm])
+
+
+def avx_f32x4_extract_last(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x4_extract_last', [a])
+
+
+def avx_f32x8_extract_last(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_extract_last', [a])
