@@ -54,4 +54,3 @@ def avx_f32x8_sum(x: Expr) -> Call:
 
 def avx_f32x8_scalar_max(x: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_scalar_max', [x])
-
