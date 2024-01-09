@@ -11,20 +11,6 @@ on:
   issue_comment:
     types: [created]
 
-env:
-  CI_DB_HOSTNAME: ${{ secrets.CI_DB_HOSTNAME }}
-  CI_DB_PORT: ${{ secrets.CI_DB_PORT }}
-  CI_DB_USERNAME: ${{ secrets.CI_DB_USERNAME }}
-  CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
-  CI_CS_HOSTNAME: ${{ secrets.CI_CS_HOSTNAME }}
-  CI_CS_PORT: ${{ secrets.CI_CS_PORT }}
-  CI_CS_USERNAME: ${{ secrets.CI_CS_USERNAME }}
-  CI_CS_PASSWORD: ${{ secrets.CI_CS_PASSWORD }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_DEFAULT_REGION: us-east-1
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-
 jobs:
   start_instances:
     if: |
@@ -50,6 +36,13 @@ jobs:
           # TODO: Allow launching only specified GPU instances
           HW_CONFIG: all
           REPO_NAME: ${{ github.repository }}
+          CI_DB_HOSTNAME: ${{ secrets.CI_DB_HOSTNAME }}
+          CI_DB_PORT: ${{ secrets.CI_DB_PORT }}
+          CI_DB_USERNAME: ${{ secrets.CI_DB_USERNAME }}
+          CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
       
       - name: Upload run configs
         uses: actions/upload-artifact@v3
@@ -125,6 +118,11 @@ jobs:
           REPO_BRANCH: |
             ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
             format('pull/{0}', github.event.issue.number) }}
+          CI_CS_HOSTNAME: ${{ secrets.CI_CS_HOSTNAME }}
+          CI_CS_PORT: ${{ secrets.CI_CS_PORT }}
+          CI_CS_USERNAME: ${{ secrets.CI_CS_USERNAME }}
+          CI_CS_PASSWORD: ${{ secrets.CI_CS_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Upload run configs
         uses: actions/upload-artifact@v3
@@ -139,10 +137,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          ref: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('refs/pull/{0}/head', github.event.issue.number) }}
 
       - name: Install dependencies
         run: pip install mysql-connector-python
@@ -170,6 +164,10 @@ jobs:
           COMMIT_TIME: ${{ env.COMMIT_TIME }}
           COMMIT_AUTHOR: ${{ env.COMMIT_AUTHOR }}
           HW_CONFIGS: ${{ needs.start_instances.outputs.hw_configs }}
+          CI_DB_HOSTNAME: ${{ secrets.CI_DB_HOSTNAME }}
+          CI_DB_PORT: ${{ secrets.CI_DB_PORT }}
+          CI_DB_USERNAME: ${{ secrets.CI_DB_USERNAME }}
+          CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
 
   stop_instances:
     if: |
@@ -186,3 +184,6 @@ jobs:
         run: timeout 900 python ./.github/scripts/stop_instances.py
         env:
           STARTED_INSTANCES: ${{ needs.start_instances.outputs.started_instances }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
