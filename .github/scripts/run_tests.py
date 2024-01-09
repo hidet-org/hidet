@@ -29,6 +29,10 @@ def get_bench_cmd(run_type, run_id, run_name, runfile, run_param_name, dtype):
     return cmd
 
 if __name__ == '__main__':
+    sec = os.environ.get('TEST_SEC')
+    print("testing sec, run_tests.py: " + sec + ";")
+    exit()
+
     parser = argparse.ArgumentParser(prog='Run Benchmarks')
     parser.add_argument(
         '--print',

@@ -13,6 +13,9 @@ def run_command(cmd):
 
 
 if __name__ == '__main__':
+    sec = os.environ.get('TEST_SEC')
+    print("testing sec, start_instances.py: " + sec + ";")
+    exit()
     conn = get_db_conn()
     cursor = conn.cursor()
 

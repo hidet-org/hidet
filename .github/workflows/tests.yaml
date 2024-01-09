@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_call:
 
+env:
+  TEST_SEC: ${{ secrets.TEST_SEC }}
+
 jobs:
   tests:
     if: github.repository == 'hidet-org/hidet'
@@ -18,6 +21,10 @@ jobs:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
     steps:
+      - name: testing sec
+        run: |
+          echo "testing sec: $TEST_SEC"
+
       - name: Install dependencies via apt
         run: |
           apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
