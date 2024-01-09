@@ -7,6 +7,8 @@ on:
   pull_request:
   workflow_call:
 
+env: 
+  TEST_SEC: ${{ secrets.TEST_SEC }}
 jobs:
   tests:
     if: github.repository == 'hidet-org/hidet'
@@ -21,6 +23,7 @@ jobs:
       - name: Install dependencies via apt
         run: |
           apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+          echo "testing $TEST_SEC "
 
       - uses: actions/checkout@v3
 
