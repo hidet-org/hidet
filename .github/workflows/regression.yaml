@@ -11,9 +11,6 @@ on:
   issue_comment:
     types: [created]
 
-env:
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-
 jobs:
   start_instances:
     if: |
@@ -125,6 +122,7 @@ jobs:
           CI_CS_PORT: ${{ secrets.CI_CS_PORT }}
           CI_CS_USERNAME: ${{ secrets.CI_CS_USERNAME }}
           CI_CS_PASSWORD: ${{ secrets.CI_CS_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Upload run configs
         uses: actions/upload-artifact@v3
