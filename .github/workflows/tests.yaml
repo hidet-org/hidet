@@ -29,6 +29,10 @@ jobs:
         with:
           python-version: "3.8"
 
+      - name: Shutdown machine
+        run: |
+          sudo shutdown now
+
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v1.13
         with:
