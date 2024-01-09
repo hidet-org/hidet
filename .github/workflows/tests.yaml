@@ -31,7 +31,7 @@ jobs:
 
       - name: Shutdown machine
         run: |
-          sudo shutdown now
+          shutdown now
 
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v1.13
