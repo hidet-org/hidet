@@ -439,7 +439,6 @@ class Call(Expr):
     def __init__(self, func_var, args):
         self.func_var: Var = func_var
         self.args: Tuple[Expr, ...] = args
-
         assert isinstance(func_var, Var) and isinstance(args, tuple)
         for arg in args:
             assert isinstance(arg, Expr)

@@ -241,6 +241,7 @@ class GCC(SourceCompiler):
             # support avx intrinsics
             '-mavx2',
             '-m64',
+            '-ffast-math',
             '-march={arch}'.format(arch=arch),
             # compile into position independent code.
             '-fPIC',
