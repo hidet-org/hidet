@@ -812,7 +812,7 @@ class MatmulF32Taskx86(Task):
 
             ################### Start of the main kernel ###################
             @hidet.script
-            def matmul_kernel_x86_v3(
+            def matmul_kernel_x86(
                 a: float32[batch_size, m_size, k_size], b: float32[batch_size, k_size, n_size], c: float32[batch_size, m_size, n_size]
             ):
                 attrs.func_kind = 'cpu_kernel'
@@ -840,8 +840,8 @@ class MatmulF32Taskx86(Task):
 
                         gemm_5th_loop(a_matrix, b_matrix, c_matrix, work_id_5th_loop, comm_id_5th_loop)
 
-            assert isinstance(matmul_kernel_x86_v3, hidet.ir.Function)
-            # matmul_kernel_x86_v3.kind = "cpu_kernel"
+            assert isinstance(matmul_kernel_x86, hidet.ir.Function)
+            # matmul_kernel_x86.kind = "cpu_kernel"
             ir_module = module.ir_module()
             return ir_module
 
@@ -862,5 +862,5 @@ class Matmulx86Op(Operator):
         super().__init__(inputs=[a, b], attributes={}, task=task)
 
 
-def matmul_x86(a: Tensor, b: Tensor) -> Tensor:
+def batch_matmul_x86(a: Tensor, b: Tensor) -> Tensor:
     return Matmulx86Op(a, b).outputs[0]

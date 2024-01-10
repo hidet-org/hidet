@@ -22,6 +22,7 @@ from hidet.utils.py import gcd, factorize, prod, cdiv
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
+from .matmul_f32_x86 import batch_matmul_x86
 from .matmul_f16 import matmul_f16
 from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
@@ -90,7 +91,7 @@ class MatmulResolveRule(ResolveRule):
     The generic matrix multiplication operator has the same semantics as numpy.matmul that accepts
     variable dimensions of inputs.
 
-    On ther other hand, the batched matrix multiplication operator accepts inputs with shape:
+    On the other hand, the batched matrix multiplication operator accepts inputs with shape:
     [batch_size, m_size, k_size] x [batch_size, k_size, n_size]
 
     This resolve rule also parallelize k dimension when possible, and determine the mma instruction.
@@ -125,6 +126,9 @@ class MatmulResolveRule(ResolveRule):
             c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
         return c
 
+    def run_batch_matmul_cpu(self, a: Tensor, b: Tensor) -> Tensor:
+        return batch_matmul_x86(a, b)
+
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
@@ -133,30 +137,38 @@ class MatmulResolveRule(ResolveRule):
         if a.dtype.nbytes > 4 or b.dtype.nbytes > 4:
             return None
 
+        run_func = self.run_batch_matmul
+        if op.device.is_cpu():
+            run_func = self.run_batch_matmul_cpu
+
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
             if len(b.shape) == 2:  # shape: [a, b]
                 # [a] x [a, b] -> [b]
                 b = b.unsqueeze([0])  # [1, a, b]
-                c = self.run_batch_matmul(a, b)  # [1, 1, b]
+                # c = self.run_batch_matmul(a, b)  # [1, 1, b] FIXME: Delete later
+                c = run_func(a, b)  # [1, 1, b]
                 c = c.squeeze([0, 1])  # [b]
             else:
                 assert len(b.shape) >= 3  # shape example: [b, c, a, d]
                 # [a] x [b, c, a, d] -> [b, c, d]
                 b = flatten(b, start_dim=0, end_dim=-3)  # [b * c, a, d]
-                c = self.run_batch_matmul(a, b)  # [b * c, 1, d]
+                # c = self.run_batch_matmul(a, b)  # [b * c, 1, d] FIXME: Delete later
+                c = run_func(a, b)  # [b * c, 1, d]
                 c = c.reshape(c_shape)  # [b, c, d]
         elif len(b.shape) == 1:  # shape: [b]
             b = b.unsqueeze([0, 2])  # [1, b, 1]
             if len(a.shape) == 2:  # shape: [a, b]
                 a = a.unsqueeze([0])  # [1, a, b]
-                c = self.run_batch_matmul(a, b)  # [1, a, 1]
+                # c = self.run_batch_matmul(a, b)  # [1, a, 1]  FIXME: Delete later
+                c = run_func(a, b)  # [1, a, 1]
                 c = c.squeeze([0, 2])  # [a]
             else:
                 assert len(a.shape) >= 3  # shape example: [a, c, d, b]
                 # [a, c, d, b] x [b] -> [a, c, d]
                 a = flatten(a, start_dim=0, end_dim=-3)  # [a * c, d, b]
-                c = self.run_batch_matmul(a, b)  # [a * c, d, 1]
+                # c = self.run_batch_matmul(a, b)  # [a * c, d, 1]  FIXME: Delete later
+                c = run_func(a, b)  # [a * c, d, 1]
                 c = c.reshape(c_shape)  # [a, c, d]
         else:
             # example: [a, b, c] x [c, d] -> [a, b, d]
@@ -168,7 +180,8 @@ class MatmulResolveRule(ResolveRule):
             b_broadcast_shape = c_head + list(b.shape[-2:])
             a = flatten(broadcast(a, a_broadcast_shape), start_dim=0, end_dim=-3)
             b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
-            c = self.run_batch_matmul(a, b)
+            # c = self.run_batch_matmul(a, b)  FIXME: Delete later
+            c = run_func(a, b)
             c = c.reshape(c_shape)
         return [c]
 
@@ -238,6 +251,7 @@ class MatmulResolveRule(ResolveRule):
             raise ValueError(f'invalid parallel_k: {parallel_k}')
         c = matmul_f16(a, b, parallel_k_parts=k_parts).sum(0)
         return [c]
+
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         if op.device.is_cpu():
