@@ -439,7 +439,6 @@ class Call(Expr):
     def __init__(self, func_var, args):
         self.func_var: Var = func_var
         self.args: Tuple[Expr, ...] = args
-
         assert isinstance(func_var, Var) and isinstance(args, tuple)
         for arg in args:
             assert isinstance(arg, Expr)
@@ -549,14 +548,14 @@ class Var(Expr):
         """
         A variable may have a hint, name, and id.
 
-        Hint is used to determine the name in codegen. Different vars may have the
+        self.hint is used to determine the name in codegen. Different vars may have the
         same hint. If two vars have the same hint such as 'x', the final name would be like 'x1', 'x2'.
 
-        OUTDATED:
-        Name is the determined name in the final code. Used by primitive variables such as 'threadIdx.x'. No variable
-        should have a same name as primitive objects (including primitive variables and primitive functions).
+        self.name is used to store the name of the variables that will be used directly in codegen, such as
+        "threadIdx.x". The field self.name and self.hint are used exclusively. If self.name is not None,
+        self.hint will be ignored, otherwise, self.hint will be used to determine the name in codegen.
 
-        ID is used to track the allocation of Var object in python, which is only used to help us to distinguish
+        self.id is used to track the allocation of Var object in python, which is only used to help us to distinguish
         different Var in python debugger.
         """
         self.hint: Optional[str] = hint

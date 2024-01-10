@@ -26,7 +26,7 @@ static void reserve_cpu_workspace(Workspace &workspace, size_t nbytes) {
         }
         workspace.base = reinterpret_cast<void*>(allocate_cpu_storage(nbytes));
         if(workspace.base == nullptr) {
-            LOG(FATAL) << "allocate workspace failed.";
+            LOG(ERROR) << "allocate workspace failed.";
         }
         memset(workspace.base, 0, nbytes);
     }

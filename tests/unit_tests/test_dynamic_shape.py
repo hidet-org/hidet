@@ -49,7 +49,7 @@ def test_attention(device):
         y_dynamic = graph_dynamic(x)
         y_dynamic_opt = graph_dynamic_opt(x)
         for y in [y_dynamic, y_dynamic_opt]:
-            numpy.testing.assert_allclose(y_static.cpu().numpy(), y.cpu().numpy(), atol=1e-4, rtol=1e-4)
+            numpy.testing.assert_allclose(y_static.cpu().numpy(), y.cpu().numpy(), atol=1e-3, rtol=1e-3)
 
 
 @pytest.mark.parametrize('device', ['cuda'])

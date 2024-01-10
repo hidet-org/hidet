@@ -15,8 +15,10 @@ Python API
    cuda
    tensor
    data_types
+   drivers
    ops/index
    graph/index
    runtime/index
+   ffi/index
    utils/index
    testing/index

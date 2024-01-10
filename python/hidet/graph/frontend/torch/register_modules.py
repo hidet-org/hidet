@@ -162,6 +162,13 @@ class HidetMaxPool3d(HidetModule):
         )
 
 
+@register_module(torch.nn.ZeroPad2d)
+class HidetZeroPad2d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ZeroPad2d)
+        return regs.torch_pad(x=x, pad=self.mod.padding, mode='constant', value=0.0)
+
+
 @register_module(torch.nn.Linear)
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):

@@ -16,3 +16,5 @@ from .stream import Stream, ExternalStream, stream, default_stream, current_stre
 from .memory import malloc, free, malloc_async, free_async, malloc_host, free_host, memcpy_peer, memcpy_peer_async
 from .memory import memcpy, memcpy_async, memset, memset_async, memory_info
 from .event import Event
+
+from . import cublas

@@ -33,4 +33,4 @@ class Conv2d(Module):
 
     def forward(self, x):
         x = ops.pad(x, ops.utils.normalize_padding(self.padding))
-        return ops.conv2d(x, self.weight, self.stride, self.groups)
+        return ops.conv2d(x, self.weight, stride=self.stride, groups=self.groups)

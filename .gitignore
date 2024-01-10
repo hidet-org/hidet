@@ -204,3 +204,12 @@ build-release
 
 # intermediate files
 /gallery/**/*.json
+
+# hidet model files
+*.hidet
+
+# lock files
+*.lock
+
+# experiments folder
+/experiments

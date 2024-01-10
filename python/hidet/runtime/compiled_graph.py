@@ -67,6 +67,33 @@ class GraphExecution:
 
 
 class CompiledGraph:
+    """
+    A compiled graph that can be directly called in Python.
+
+    This class should not be instantiated directly. Instead, use :func:`load_compiled_graph` to load a compiled graph
+    from disk, or build a compiled graph from :class:`FlowGraph` using :func:`hidet.drivers.build_flow_graph`.
+
+    Parameters
+    ----------
+    meta: GraphMetaData
+        The meta-data of the graph.
+
+    graph_module: CompiledModule
+        The graph compiled module that contains execution logic of the computation graph.
+
+    weights: List[hidet.Tensor]
+        The weights of the graph.
+
+    compiled_tasks: List[CompiledTask]
+        The compiled tasks of the graph that correspond to the operators in the computation graph.
+
+    graph_execution: GraphExecution
+        The execution plan of the graph (the order and connections of the compiled tasks).
+
+    graph_string: str
+        The string representation of the computation graph.
+    """
+
     def __init__(
         self,
         meta: GraphMetaData,
@@ -104,9 +131,19 @@ class CompiledGraph:
         self.cuda_workspace: Optional[Storage] = None
         self.cpu_workspace: Optional[Storage] = None
 
-        self._init_compiled_graph()
+        if len(self.weights) == len(graph_execution.weights_index):
+            # the weights are already loaded, initialize the graph directly
+            self._init_compiled_graph()
 
     def __str__(self):
+        """
+        Get the basic information of this compiled graph.
+
+        Returns
+        -------
+        ret: str
+            The human readable basic information.
+        """
         rows = []
         for i, sig in enumerate(self.meta.inputs):
             dtype = data_type(sig.dtype)
@@ -129,6 +166,19 @@ class CompiledGraph:
         return tabulate(rows, colalign=('right', 'left'), tablefmt='simple')
 
     def __call__(self, *args):
+        """
+        Run the model asynchronously with the given inputs.
+
+        Parameters
+        ----------
+        args: Sequence[hidet.Tensor]
+            The input tensors.
+
+        Returns
+        -------
+        ret: Union[hidet.Tensor, List[hidet.Tensor]]
+            The output tensor(s).
+        """
         outs = self.run_async(args)
         if len(outs) == 1:
             return outs[0]
@@ -307,6 +357,38 @@ class CompiledGraph:
 
         return outputs
 
+    def set_weights(self, weights):
+        """
+        Set the weights of the model.
+
+        When the weights exist in the model file, the user does not need to set the weights manually.
+        However, when the weights are not saved in the model file, the user needs to set the weights manually before
+        running the model.
+
+        Parameters
+        ----------
+        weights: List[hidet.Tensor]
+            The weights to set.
+        """
+        from hidet.runtime.device import instantiate_device
+
+        if len(self.weights) == len(self.graph_execution.weights_index):
+            raise RuntimeError('The weights are already set.')
+        if len(weights) != len(self.graph_execution.weights_index):
+            raise ValueError('Expect {} weights, got {}.'.format(len(self.graph_execution.weights_index), len(weights)))
+        if any(not isinstance(w, hidet.Tensor) for w in weights):
+            raise ValueError('Expect all weights to be hidet.Tensor, got {}'.format([type(w) for w in weights]))
+        for idx, weight in enumerate(weights):
+            expected_device = instantiate_device(
+                self.graph_execution.tensor_device[self.graph_execution.weights_index[idx]]
+            )
+            if expected_device != weight.device:
+                raise ValueError(
+                    'Expect weight {} to be on device {}, got {}.'.format(idx, expected_device, weight.device)
+                )
+        self.weights = weights
+        self._init_compiled_graph()
+
     def run_async(self, inputs):
         """
         Run the model asynchronously.
@@ -323,6 +405,8 @@ class CompiledGraph:
         """
         if hidet.option.get_runtime_check():
             _check_inputs(self.meta.inputs, inputs)
+        if len(self.weights) != len(self.graph_execution.weights_index):
+            raise RuntimeError('Please set the weights before running the model with compiled_graph.set_weights(...).')
 
         symbol_dims = self._update_symbol_dims(inputs)
 
@@ -380,14 +464,56 @@ class CompiledGraph:
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 
-    def save(self, path: str):
-        save_compiled_graph(self, path)
+    def save(self, path: str, save_dispatch_table: bool = False):
+        """
+        Save the compiled graph to disk.
+
+        See Also
+        --------
+        load_compiled_graph
+
+        Parameters
+        ----------
+        path: str
+            The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+        save_dispatch_table:
+            Whether to save the dispatch table to disk. See `save_compiled_graph` for details.
+        """
+        save_compiled_graph(self, path, save_dispatch_table)
 
 
-def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bool = False):
+def save_compiled_graph(model: CompiledGraph, file: str, save_dispatch_table: bool = False, save_weights: bool = True):
+    """
+    Save the compiled graph to disk.
+
+    Parameters
+    ----------
+    model: CompiledGraph
+        The compiled graph to save.
+
+    file: str
+        The path to save the compiled graph. By convention, the path should end with '.hidet'.
+
+    save_dispatch_table:
+        Whether to save the dispatch table to disk.
+
+        When we run the model that contains alternative kernels for the same operator, we will pick the best kernel
+        by benchmarking all the alternatives. The dispatch table is used to record the best kernel for the given
+        input shapes. If the dispatch table is not saved, we will benchmark all the alternatives again when we load
+        the model next time.
+
+        Default: False
+
+    save_weights:
+        Whether to save the weights to disk. If False, the weights will not be saved, and the users can save the
+        weights separately. This is useful when we want to save the weights separately.
+
+        Default: True
+    """
     from hidet.utils.dataclass import asdict
 
-    dirname = os.path.dirname(path)
+    dirname = os.path.dirname(file)
     os.makedirs(dirname, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(dir=dirname, delete=False) as temp_file:
@@ -415,8 +541,10 @@ def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bo
             _save_under(model.graph_module.module_dir, 'graph_module/')
 
             # save weights
-            with zf.open('weights.npz', 'w', force_zip64=True) as f:  # force_zip64 is required for >4GB weights
-                numpy.savez(f, *[weight.cpu().numpy() for weight in model.weights])
+            if save_weights:
+                # zip.open(..., force_zip64=True) is required for >4GB weights
+                with zf.open('weights.npz', 'w', force_zip64=True) as f:
+                    numpy.savez(f, *[weight.cpu().numpy() for weight in model.weights])
 
             # save the kernels (i.e., compiled tasks)
             for i, compiled_task in enumerate(model.compiled_tasks):
@@ -437,51 +565,88 @@ def save_compiled_graph(model: CompiledGraph, path: str, save_dispatch_table: bo
             with zf.open('graph_string.txt', 'w') as f:
                 f.write(model.graph_string.encode('utf-8'))
 
-    os.rename(temp_path, path)
+    os.rename(temp_path, file)
 
 
 def load_compiled_graph(path: str) -> CompiledGraph:
+    """
+    Load a compiled graph from disk.
+
+    The compiled graph is saved with zip format. The path can be either a single file to the zip file, or a directory
+    that contains the contents of the zip file.
+
+    Parameters
+    ----------
+    path: str
+        The path to load the compiled graph (can be either a single file or a directory).
+
+    Returns
+    -------
+    ret: CompiledGraph
+        The loaded compiled graph.
+    """
     from hidet.utils.dataclass import from_dict
 
-    with zipfile.ZipFile(path, 'r') as zf:
-        files_to_extract: List[str] = zf.namelist()
-        files_to_extract.remove('weights.npz')  # weights are loaded directly from the zip file
+    if os.path.isfile(path):
+        with zipfile.ZipFile(path, 'r') as zf:
+            # load meta data
+            with zf.open('meta.json', 'r') as f:
+                meta_data: GraphMetaData = from_dict(GraphMetaData, json.load(f))
 
-        # load meta data
-        with zf.open('meta.json', 'r') as f:
-            meta_data: GraphMetaData = from_dict(GraphMetaData, json.load(f))
+            # extract all files except weights
+            files_to_extract: List[str] = zf.namelist()
+            if 'weights.npz' in files_to_extract:
+                files_to_extract.remove('weights.npz')
+            cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
+            if not os.path.exists(os.path.join(cache_dir, 'graph_string.txt')):
+                # only extract files if the graph_string.txt is not in the cache
+                # here 'graph_string.txt' is just the last file we usually save to disk, we use it as a flag
+                # to indicate whether the graph is already in the cache
+                zf.extractall(cache_dir, files_to_extract)
 
-        # load graph execution
-        with zf.open('graph_execution.json', 'r') as f:
-            graph_execution: GraphExecution = from_dict(GraphExecution, json.load(f))
+            graph_path = cache_dir
+    else:
+        graph_path = path
 
-        # load weights as numpy arrays
-        with zf.open('weights.npz', 'r') as f:
-            with zipfile.ZipFile(f, 'r') as npz:
-                weights = []
-                for weight_idx, name in enumerate(npz.namelist()):
-                    with npz.open(name, 'r') as npy_file:
-                        npy_file: Any  # used to suppress type checker warning
-                        device = graph_execution.tensor_device[graph_execution.weights_index[weight_idx]]
-                        weights.append(hidet.asarray(numpy.load(npy_file), device=device))
+    # load meta data
+    with open(os.path.join(graph_path, 'meta.json'), 'r') as f:
+        meta_data: GraphMetaData = from_dict(GraphMetaData, json.load(f))
 
-        # extract all files except weights
-        cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
-        if not os.path.exists(os.path.join(cache_dir, 'graph_string.txt')):
-            # only extract files if the graph_string.txt is not in the cache
-            # here 'graph_string.txt' is just the last file we usually save to disk, we use it as a flag
-            # to indicate whether the graph is already in the cache
-            zf.extractall(cache_dir, files_to_extract)
+    # load graph execution
+    with open(os.path.join(graph_path, 'graph_execution.json'), 'r') as f:
+        graph_execution: GraphExecution = from_dict(GraphExecution, json.load(f))
+
+    # load weights if it exists
+    weights = []
+
+    def load_weights_from_npz(npz: zipfile.ZipFile):
+        for weight_idx, name in enumerate(npz.namelist()):
+            with npz.open(name, 'r') as npy_file:
+                npy_file: Any  # used to suppress type checker warning
+                device = graph_execution.tensor_device[graph_execution.weights_index[weight_idx]]
+                weights.append(hidet.asarray(numpy.load(npy_file), device=device))
+
+    if os.path.exists(os.path.join(graph_path, 'weights.npz')):
+        with zipfile.ZipFile(os.path.join(graph_path, 'weights.npz'), 'r') as npz:
+            load_weights_from_npz(npz)
+    elif os.path.isfile(path):
+        with zipfile.ZipFile(path, 'r') as zf:
+            if 'weights.npz' in zf.namelist():
+                # weights are loaded directly from the zip file to memory
+                # avoid extracting the weights to disk and then loading them from disk
+                with zf.open('weights.npz', 'r') as f:
+                    with zipfile.ZipFile(f, 'r') as npz:
+                        load_weights_from_npz(npz)
 
     # load kernels (i.e., compiled tasks)
     num_kernels = meta_data.num_kernels
-    compiled_tasks = [CompiledTask(task_dir=os.path.join(cache_dir, 'kernels', str(i))) for i in range(num_kernels)]
+    compiled_tasks = [CompiledTask(task_dir=os.path.join(graph_path, 'kernels', str(i))) for i in range(num_kernels)]
 
     # load graph module
-    graph_module = CompiledModule(module_dir=os.path.join(cache_dir, 'graph_module'))
+    graph_module = CompiledModule(module_dir=os.path.join(graph_path, 'graph_module'))
 
     # load graph string
-    with open(os.path.join(cache_dir, 'graph_string.txt'), 'r') as f:
+    with open(os.path.join(graph_path, 'graph_string.txt'), 'r') as f:
         graph_string = f.read()
 
     # construct the compiled graph

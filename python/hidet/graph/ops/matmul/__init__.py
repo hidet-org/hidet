@@ -11,6 +11,7 @@
 # limitations under the License.
 from .matmul import matmul, MatmulOp, MatmulTask
 from .batch_matmul import batch_matmul, BatchMatmulOp, BatchMatmulTask
+from .matmul_cublas import matmul_cublas
 from . import resolve
 
 

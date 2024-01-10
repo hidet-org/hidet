@@ -10,3 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from . import cuda
+from .cuda import cublas

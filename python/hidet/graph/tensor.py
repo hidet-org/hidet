@@ -516,6 +516,32 @@ class Tensor:
 
         return to_dlpack_device(self)
 
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        """
+        This function is used to support interoperability with PyTorch.
+
+        We can use hidet Tensor as the input of PyTorch function:
+        ```
+        import torch
+        import hidet
+        a = hidet.randn([2, 3], dtype='float16', device='cuda')
+        b = torch.abs(a)
+        ```
+
+        See the following documentation for more information:
+        https://pytorch.org/docs/stable/notes/extending.html#extending-torch-with-a-tensor-like-type
+        """
+        import torch
+
+        if kwargs is None:
+            kwargs = {}
+        if not all(issubclass(t, (torch.Tensor, Tensor)) for t in types):
+            return NotImplemented
+        args = (arg.torch() if isinstance(arg, Tensor) else arg for arg in args)
+        kwargs = {k: v.torch() if isinstance(v, Tensor) else v for k, v in kwargs.items()}
+        return func(*args, **kwargs)
+
     def tolist(self):
         """
         Convert the tensor to a nested list of numbers.
