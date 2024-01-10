@@ -36,6 +36,7 @@ Hidet is an open-source DNN inference framework, it features
   :maxdepth: 1
   :caption: Developer Guide
 
+  gallery/developer-guides/add-torch-operator-mapping
   how-to-guides/add-new-operator/index
   gallery/developer-guides/add-operator-resolve-rule
   gallery/developer-guides/add-subgraph-rewrite-rule

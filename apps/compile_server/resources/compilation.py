@@ -56,7 +56,8 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
             branches = repo.git.branch("--all").split()
             # If local branch already exists, delete it as we prepare to do a new fresh checkout
             # This is because the local branch might be divergent with remote, so we just discard it
-            if version in branches:
+            # The exception is the main branch, since it should never diverge
+            if version in branches and version != 'main':
                 repo.git.checkout('main')
                 repo.git.branch('-D', version)
             if 'pull/' in version:

@@ -75,9 +75,6 @@ def can_inline_grid_compute(gc: GridCompute) -> bool:
 
 
 class GridComputeInliner(ExprRewriter, ComputeRewriter):
-    def __init__(self):
-        super().__init__()
-
     def inline(self, node: TensorNode):
         return self.visit(node)
 
@@ -88,6 +85,7 @@ class GridComputeInliner(ExprRewriter, ComputeRewriter):
         base = self(e.base)
         indices = [self(index) for index in e.indices]
         if isinstance(base, GridCompute):
+            assert isinstance(e.base, TensorNode)
             if can_inline_grid_compute(base):
                 return rewrite(base.value, {axis: index for axis, index in zip(base.axes, indices)})
         return ExprRewriter.visit_TensorElement(self, e)
@@ -121,6 +119,7 @@ def inline_grid_compute(nodes: List[TensorNode]) -> List[TensorNode]:
         The nodes after inlining.
     """
     inliner = GridComputeInliner()
+
     return [inliner.inline(node) for node in nodes]
 
 

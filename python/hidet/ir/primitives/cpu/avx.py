@@ -22,6 +22,8 @@ from hidet.ir.primitives.func import call_primitive_func
 def register_primitive_functions():
     functions = [
         ('avx_x86_float32x4_broadcast', '_mm_broadcast_ss', FuncType([PointerType('float32')], 'float32x4')),
+        ('avx_x86_float32x4_add', '_mm_add_ps', FuncType(['float32x4', 'float32x4'], 'float32x4')),
+        ('avx_x86_float32x4_hadd', '_mm_hadd_ps', FuncType(['float32x4', 'float32x4'], 'float32x4')),
         ('avx_x86_float32x4_fmadd', '_mm_fmadd_ps', FuncType(['float32x4', 'float32x4', 'float32x4'], 'float32x4')),
         ('avx_x86_float32x4_load', '_mm_loadu_ps', FuncType([PointerType('float32')], 'float32x4')),
         ('avx_x86_float32x4_load_aligned', '_mm_load_ps', FuncType([PointerType('float32')], 'float32x4')),
@@ -32,6 +34,8 @@ def register_primitive_functions():
             FuncType([PointerType('float32'), 'float32x4'], VoidType()),
         ),
         ('avx_x86_float32x4_setzero', '_mm_setzero_ps', FuncType([], 'float32x4')),
+        ('avx_x86_float32x4_extract_last', '_mm_cvtss_f32', FuncType(['float32x4'], 'float32')),
+        ('avx_x86_float32x8_set1', '_mm256_set1_ps', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_broadcast', '_mm256_broadcast_ss', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_fmadd', '_mm256_fmadd_ps', FuncType(['float32x8', 'float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_load', '_mm256_loadu_ps', FuncType([PointerType('float32')], 'float32x8')),
@@ -43,6 +47,15 @@ def register_primitive_functions():
             FuncType([PointerType('float32'), 'float32x8'], VoidType()),
         ),
         ('avx_x86_float32x8_setzero', '_mm256_setzero_ps', FuncType([], 'float32x8')),
+        ('avx_x86_float32x8_add', '_mm256_add_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_subtract', '_mm256_sub_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_multiply', '_mm256_mul_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_divide', '_mm256_div_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_sqrt', '_mm256_sqrt_ps', FuncType(['float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_max', '_mm256_max_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_permute', '_mm256_permute_ps', FuncType(['float32x8', 'int8'], 'float32x8')),
+        ('avx_x86_float32x8_extract_last', '_mm256_cvtss_f32', FuncType(['float32x8'], 'float32')),
+        ('avx_x86_float32x8_extract_half', '_mm256_extractf128_ps', FuncType(['float32x8', 'int8'], 'float32x4')),
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
         ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
         ('x86_memset', 'memset', FuncType([PointerType(VoidType()), 'int32', 'uint64'], PointerType(VoidType()))),
@@ -98,12 +111,48 @@ def avx_f32x8_setzero() -> Call:
     return call_primitive_func('avx_x86_float32x8_setzero', [])
 
 
+def avx_f32x8_set1(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_set1', [a])
+
+
 def avx_f32x4_broadcast(addr: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_broadcast', [addr])
 
 
 def avx_f32x8_broadcast(addr: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_broadcast', [addr])
+
+
+def avx_f32x4_add(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x4_add', [a, b])
+
+
+def avx_f32x8_add(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_add', [a, b])
+
+
+def avx_f32x8_subtract(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_subtract', [a, b])
+
+
+def avx_f32x8_multiply(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_multiply', [a, b])
+
+
+def avx_f32x8_divide(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_divide', [a, b])
+
+
+def avx_f32x8_sqrt(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_sqrt', [a])
+
+
+def avx_f32x4_hadd(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x4_hadd', [a, b])
+
+
+def avx_f32x8_max(a: Expr, b: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_max', [a, b])
 
 
 def avx_f32x4_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
@@ -168,3 +217,19 @@ def avx_f32x8_insert_f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
 
 def avx_f32x8_permute2f32x4(a: Expr, b: Expr, imm: Union[int, Expr]) -> Call:
     return call_primitive_func('avx_x86_float32x8_permute2float32x4', [a, b, imm])
+
+
+def avx_f32x8_permute(a: Expr, imm: Union[int, Expr]) -> Call:
+    return call_primitive_func('avx_x86_float32x8_permute', [a, imm])
+
+
+def avx_f32x8_extract_half(a: Expr, imm: Union[int, Expr]) -> Call:
+    return call_primitive_func('avx_x86_float32x8_extract_half', [a, imm])
+
+
+def avx_f32x4_extract_last(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x4_extract_last', [a])
+
+
+def avx_f32x8_extract_last(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_extract_last', [a])

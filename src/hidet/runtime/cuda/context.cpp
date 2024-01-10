@@ -25,7 +25,7 @@ static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
         }
         workspace.base = reinterpret_cast<void*>(allocate_cuda_storage(nbytes));
         if(workspace.base == nullptr) {
-            LOG(FATAL) << "allocate workspace failed.";
+            LOG(ERROR) << "allocate workspace failed.";
         }
 
         cuda_memset(reinterpret_cast<uint64_t>(workspace.base), 0, nbytes);
@@ -64,7 +64,7 @@ DLL void set_nccl_comms(int num_comms, void** comms) {
 DLL void* get_nccl_comm(int idx) {
     const int num_comms = CudaContext::global()->num_comms;
     if (idx >= num_comms) {
-        LOG(FATAL) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
+        LOG(ERROR) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
     }
     return CudaContext::global()->nccl_comms[idx];
 }

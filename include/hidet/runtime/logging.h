@@ -47,8 +47,9 @@ public:
         return this->stream_;
     }
 
-    [[noreturn]] ~FATALMessage() noexcept(false) {
-        throw HidetException(this->stream_.str().c_str());
+    [[noreturn]] ~FATALMessage() {
+        std::cerr << this->stream_.str() << std::endl;
+        std::abort();
     }
 };
 
@@ -67,8 +68,8 @@ public:
         return this->stream_;
     }
 
-    ~ERRORMessage() {
-        hidet_set_last_error(this->stream_.str().c_str());
+    ~ERRORMessage() noexcept(false) {
+        throw HidetException(this->stream_.str().c_str());
     }
 };
 
