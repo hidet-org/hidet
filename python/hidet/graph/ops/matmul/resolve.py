@@ -252,7 +252,6 @@ class MatmulResolveRule(ResolveRule):
         c = matmul_f16(a, b, parallel_k_parts=k_parts).sum(0)
         return [c]
 
-
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         if op.device.is_cpu():
             return None

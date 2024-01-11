@@ -17,10 +17,9 @@ from hidet.ir.compute import TensorNode
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
-from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
+from hidet.graph.ops.utils import input_like
 from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
-from hidet.graph.ops.utils import broadcast_indices
 from hidet.lang import attrs
 
 
@@ -37,7 +36,7 @@ class MatmulF32Taskx86(Task):
         c = compute(
             name='c',
             shape=[batch_size, m_size, n_size],
-            fcompute = lambda r, i, j: reduce(
+            fcompute=lambda r, i, j: reduce(
                 shape=[k_size], fcompute=lambda k: a[r, i, k] * b[r, k, j], reduce_type='sum'
             ),
         )
@@ -49,7 +48,6 @@ class MatmulF32Taskx86(Task):
             attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size},
         )
 
-
     def allow_epilogue(self) -> bool:
         return True
 
@@ -59,9 +57,14 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    # @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(1, 4, 2, 1)])
-    @tune.space(2, MC=[144, 288, 432, 576, 720], NC=[800], KC=[256, 560, 768, 384],
-                ways=[(1, 4, 2, 1), (2, 4, 4, 1), (1, 4, 4, 1), (1, 2, 4, 2), (1, 4, 4, 2), (2, 4, 2, 2)])
+    @tune.space(1, MC=[2016], NC=[256, 384, 512], KC=[384, 512, 560], ways=[(2, 4, 2, 2)])
+    @tune.space(
+        2,
+        MC=[144, 288, 432, 576, 720],
+        NC=[800],
+        KC=[256, 560, 768, 384],
+        ways=[(1, 4, 2, 1), (2, 4, 4, 1), (1, 4, 4, 1), (1, 2, 4, 2), (1, 4, 4, 2), (2, 4, 2, 2)],
+    )
     def schedule_matmulf32_x86(self, MC=2016, NC=384, KC=560, ways=(1, 4, 2, 1)) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -75,9 +78,6 @@ class MatmulF32Taskx86(Task):
         from hidet.lang.cpu import cpu_atomic_load_n, cpu_atomic_add_fetch, cpu_atomic_fetch_xor
 
         task = self
-        node_a, node_b = self.inputs[0], self.inputs[1]
-        a_shape = node_a.const_shape
-        b_shape = node_b.const_shape
 
         batch_size = task.batch_size
         m_size = task.m_size
@@ -813,7 +813,9 @@ class MatmulF32Taskx86(Task):
             ################### Start of the main kernel ###################
             @hidet.script
             def matmul_kernel_x86(
-                a: float32[batch_size, m_size, k_size], b: float32[batch_size, k_size, n_size], c: float32[batch_size, m_size, n_size]
+                a: float32[batch_size, m_size, k_size],
+                b: float32[batch_size, k_size, n_size],
+                c: float32[batch_size, m_size, n_size],
             ):
                 attrs.func_kind = 'cpu_kernel'
                 a_ptr = cast(a, ~float32)
@@ -855,9 +857,10 @@ class Matmulx86Op(Operator):
             and (not is_constant(a.shape[0], b.shape[0]) or a.shape[0] == b.shape[0])
             and (not is_constant(a.shape[2], b.shape[1]) or a.shape[2] == b.shape[1])
         ):
-            raise ValueError("Matrix multiplication expects tensor A and B with shape [B, M, K] and [B, K, N]"
-                             + ", got {} and {}".format(a.shape, b.shape)
-                )
+            raise ValueError(
+                "Matrix multiplication expects tensor A and B with shape [B, M, K] and [B, K, N]"
+                + ", got {} and {}".format(a.shape, b.shape)
+            )
         task = MatmulF32Taskx86(input_like(a, 'a'), input_like(b, 'b'))
         super().__init__(inputs=[a, b], attributes={}, task=task)
 
