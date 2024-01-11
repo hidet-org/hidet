@@ -28,15 +28,47 @@ def get_operator_name(op):
 
 
 class Operator:
-    """An operator that takes tensor as input and output."""
+    """
+    An operator that takes tensor as input and output.
 
-    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task]):
+    Attributes
+    ----------
+    name: str
+        The name of this operator. The name will be used when we print the operator.
+
+    inputs: List[Tensor]
+        The input tensors of this operator.
+
+    attrs: Dict[str, Any]
+        The attributes of this operator.
+
+    task: Optional[Task]
+        The task of this operator. The task is used to compile the operator to binary.
+
+    share_map: Optional[Dict[int, int]]
+        By default, the output tensors of an operator are allocated. When we want to share the output tensor memory
+        with some input tensor of this operator, we can specify the relationship between the output tensor and the
+        input tensor by share_map. For example, `share_map = {0: 0, 1: 2}` means that the output tensor 0 shares the
+        memory with input tensor 0, and output tensor 1 shares the memory with input tensor 2.
+
+    outputs: List[Tensor]
+        The output tensors of this operator.
+    """
+
+    def __init__(
+        self,
+        inputs: List[Tensor],
+        attributes: Dict[str, Any],
+        task: Optional[Task],
+        share_map: Optional[Dict[int, int]] = None
+    ):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
         self.attrs: Dict[str, Any] = attributes
         self.task: Optional[Task] = task
+        self.share_map: Optional[Dict[int, int]] = share_map
         self.outputs: List[Tensor] = []
 
         # cache
