@@ -128,7 +128,7 @@ class Task(Node):
 
         # check all TensorInput used in outputs are placed in inputs
         used_inputs = collect(self.outputs, TensorInput)
-        if any(x not in self.inputs for x in used_inputs):
+        if any(x not in self.inputs + self.outputs for x in used_inputs):
             raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
 
         # check assertions for correctness
