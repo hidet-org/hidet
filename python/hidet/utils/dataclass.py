@@ -36,8 +36,8 @@ def from_dict(cls, data):
                 assert len(cls.__args__) == len(data)
                 return tuple(from_dict(item_hint, v) for item_hint, v in zip(cls.__args__, data))
         elif name == 'typing.Dict':
-            _, value_type = cls.__args__
-            return {k: from_dict(value_type, v) for k, v in data.items()}
+            key_type, value_type = cls.__args__
+            return {key_type(k): from_dict(value_type, v) for k, v in data.items()}
         elif name == 'typing.Union':
             return data
         else:

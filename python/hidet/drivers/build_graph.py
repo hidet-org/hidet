@@ -46,6 +46,9 @@ def get_graph_weights(graph):
 
 
 def get_graph_intermediates(graph):
+    """
+    Get the intermediate tensors of the graph: {output tensors of nodes} - {output tensors of the graph}
+    """
     intermediates: List[Tensor] = []
     for node in graph.nodes:
         for y in node.outputs:
@@ -145,7 +148,12 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
-        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash
+        inputs=inputs,
+        outputs=outputs,
+        hidet_version=hidet.__version__,
+        num_kernels=num_kernels,
+        graph_hash=graph_hash,
+        share_map=graph.share_map,
     )
 
 
@@ -191,11 +199,15 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
             for idx in [cpu_idx, cuda_idx]:
                 sb += memory_planner_init(idx)
             for node in graph_nodes:
-                for y in node.outputs:
+                for output_idx, y in enumerate(node.outputs):
                     if y in graph_intermediates:
-                        sb += DeclareStmt(
-                            tensor_ptr[y], init=memory_planner_allocate(device2idx[y.device.kind], tensor_size[y])
-                        )
+                        if node.share_map and y in node.share_map:
+                            # share the memory with input tensor
+                            input_idx: int = node.share_map[output_idx]
+                            init_addr = tensor_ptr[node.inputs[input_idx]]
+                        else:
+                            init_addr = memory_planner_allocate(device2idx[y.device.kind], tensor_size[y])
+                        sb += DeclareStmt(tensor_ptr[y], init=init_addr)
                 sb += AssignStmt(cpu_size, primitives.max(cpu_size, memory_planner_used(cpu_idx)))
                 sb += AssignStmt(cuda_size, primitives.max(cuda_size, memory_planner_used(cuda_idx)))
                 for x in node.inputs:
@@ -247,11 +259,15 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
                         node_params.append(d2w[x.device.kind] + tensor_ptr[x])
                     else:
                         raise RuntimeError("Unknown tensor {}".format(x))
-                for y in node.outputs:
+                for output_idx, y in enumerate(node.outputs):
                     if y in graph_intermediates:
-                        sb += DeclareStmt(
-                            tensor_ptr[y], init=memory_planner_allocate(d2i[y.device.kind], tensor_size[y])
-                        )
+                        if node.share_map and y in node.share_map:
+                            # share the memory with input tensor
+                            input_idx: int = node.share_map[output_idx]
+                            init_addr = tensor_ptr[node.inputs[input_idx]]
+                        else:
+                            init_addr = memory_planner_allocate(d2i[y.device.kind], tensor_size[y])
+                        sb += DeclareStmt(tensor_ptr[y], init=init_addr)
                         node_params.append(d2w[y.device.kind] + tensor_ptr[y])
                     elif y in graph.outputs:
                         node_params.append(outputs[graph.outputs.index(y)])

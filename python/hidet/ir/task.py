@@ -69,17 +69,50 @@ class InverseMap(Node):
 class Task(Node):
     """
     A task defines the operator computation.
+
+    Attributes
+    ----------
+    name: str
+        The name of the task.
+
+    inputs: List[TensorInput]
+        The input tensors of this task.
+
+    outputs: List[TensorNode]
+        The output tensors of this task. They are derived by applying computation on the input tensors.
+
+    inverse_map: Dict[TensorInput, InverseMap]
+        The inverse map. It records how the input tensors are derived from the output tensor (when there is only one
+        output tensor). This is used to support epilogue fusion.
+
+    attrs: Dict[str, Union[str, float, int, bool]]
+        The attributes of this task.
+
+    assertions: List[Tuple[Expr, Optional[str]]]
+        The assertions of this task. Each assertion is a tuple of an expression and an optional message. The
+        expression is evaluated at runtime. If the expression is not true, the program will abort and print the
+        message.
+
+    share_map: Dict[int, int]
+        The share map. If one output tensor shares memory with one input tensor, it is specified in this map. For
+        example, `share_map = {0: 0, 1: 2}` means that the output tensor 0 shares the memory with input tensor 0, and
+        output tensor 1 shares the memory with input tensor 2.
+
+    symbols: List[SymbolVar]
+        The list of symbols used in this task.
     """
 
-    def __init__(self, name, inputs, outputs, *, inverse_map=None, attributes=None):
+    def __init__(self, name, inputs, outputs, *, inverse_map=None, attributes=None, share_map=None):
         inverse_map = inverse_map if inverse_map else {}
         attributes = attributes if attributes else {}
+        share_map = share_map if share_map else {}
         self.name: str = name
         self.inputs: List[TensorInput] = list(inputs)
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
         self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
+        self.share_map: Dict[int, int] = share_map
 
         from hidet.ir.tools import collect
 

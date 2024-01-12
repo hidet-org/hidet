@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence, Tuple
+from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant
 from hidet.ir.expr import Int
@@ -135,7 +135,7 @@ class RearrangeTask(Task):
         x_shape = x.shape
         y_shape = [prod([x_shape[i] for i in dims]) for dims in plan]
 
-        def index_split(total_index, dim_sizes: List[int]) -> List:
+        def index_split(total_index, dim_sizes: List[Expr]) -> List:
             bases = [prod(dim_sizes[i + 1 :]) for i in range(len(dim_sizes))]
             return [(total_index // base) % dim for dim, base in zip(dim_sizes, bases)]
 
@@ -181,7 +181,7 @@ class RearrangeTask(Task):
 
 class ConcatTask(Task):
     def __init__(self, inputs: List[TensorNode], axis: int):
-        shapes: List[Tuple[Expr, ...]] = [t.shape for t in inputs]
+        shapes: List[List[Expr]] = [t.shape for t in inputs]
         n = len(shapes)
         assert n > 0
         for i in range(1, n):
@@ -324,15 +324,6 @@ class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
         super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
-
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        x = inputs[0]
-        if x.layout is None or isinstance(x.layout, RowMajorLayout):
-            outputs = self.compiled_task.create_outputs()
-            outputs[0]._storage = x.storage  # pylint: disable=protected-access
-            return outputs
-        else:
-            return Operator.imperative_run(self, inputs)
 
 
 class RearrangeOp(Operator):
@@ -562,7 +553,7 @@ def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
 
 
 def permute_dims(x: Tensor, /, axes: Sequence[int]) -> Tensor:
-    return PermuteDimsOp(x, axes).outputs[0]
+    return PermuteDimsOp(x, list(axes)).outputs[0]
 
 
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
