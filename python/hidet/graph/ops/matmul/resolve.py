@@ -178,7 +178,6 @@ class MatmulResolveRule(ResolveRule):
             b_broadcast_shape = c_head + list(b.shape[-2:])
             a = flatten(broadcast(a, a_broadcast_shape), start_dim=0, end_dim=-3)
             b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
-            # c = self.run_batch_matmul(a, b)  FIXME: Delete later
             c = run_func(a, b)
             c = c.reshape(c_shape)
         return [c]
