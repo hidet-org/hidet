@@ -55,20 +55,13 @@ class Operator:
         The output tensors of this operator.
     """
 
-    def __init__(
-        self,
-        inputs: List[Tensor],
-        attributes: Dict[str, Any],
-        task: Optional[Task],
-        share_map: Optional[Dict[int, int]] = None
-    ):
+    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task]):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
         self.attrs: Dict[str, Any] = attributes
         self.task: Optional[Task] = task
-        self.share_map: Optional[Dict[int, int]] = share_map
         self.outputs: List[Tensor] = []
 
         # cache
@@ -149,6 +142,10 @@ class Operator:
         if self._compiled_task is None:
             self._compiled_task = self.task.build(target=self.build_target)
         return self._compiled_task
+
+    @property
+    def share_map(self) -> Dict[int, int]:
+        return self.task.share_map.copy()
 
     def run(self) -> List[Tensor]:
         from hidet.ir.tools import collect

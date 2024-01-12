@@ -35,6 +35,7 @@ class TaskMetaData:
     symbols: List[str]
     inputs: List[TensorSignature]
     outputs: List[TensorSignature]
+    share_map: Dict[int, int]
     target: str
     num_candidates: int
     hidet_version: str
@@ -142,7 +143,7 @@ class CompiledTask:
     def _get_symbol_values(self) -> Tuple[int, ...]:
         return tuple(runtime_api.get_symbol_value(symbol) for symbol in self.meta_data.symbols)
 
-    def create_outputs(self):
+    def create_outputs(self, inputs):
         import hidet
 
         outputs = []
@@ -151,7 +152,16 @@ class CompiledTask:
             shape_buffer = Array(i32, len(sig.shape))
             self._get_output_shape(idx, shape_buffer)
             shape: List[int] = list(shape_buffer)
-            outputs.append(hidet.empty(shape, sig.dtype, sig.device))
+            if idx not in self.meta_data.share_map:
+                outputs.append(hidet.empty(shape, sig.dtype, sig.device))
+            else:
+                input_tensor = hidet.Tensor(
+                    shape=shape,
+                    dtype=sig.dtype,
+                    device=sig.device,
+                    storage=inputs[self.meta_data.share_map[idx]].storage,
+                )
+                outputs.append(input_tensor)
         return outputs
 
     def pick_best_candidate(self, inputs, outputs) -> int:
@@ -229,7 +239,7 @@ class CompiledTask:
         if option.get_runtime_check():
             _check_inputs(self.meta_data.inputs, inputs)
 
-        outputs = self.create_outputs()
+        outputs = self.create_outputs(inputs)
 
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         candidate(*inputs, *outputs)

@@ -148,7 +148,12 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
-        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash
+        inputs=inputs,
+        outputs=outputs,
+        hidet_version=hidet.__version__,
+        num_kernels=num_kernels,
+        graph_hash=graph_hash,
+        share_map=graph.share_map,
     )
 
 

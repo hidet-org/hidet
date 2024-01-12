@@ -15,7 +15,6 @@ from typing import List, Union, Dict, Set, Optional, Tuple, Sequence
 import logging
 import os
 import pickle
-from collections import defaultdict
 
 import hidet.graph.operator
 import hidet.cuda
@@ -119,16 +118,18 @@ class FlowGraph:
 
     """
 
-    def __init__(
-        self,
-        outputs: Sequence[Tensor],
-        inputs: Optional[Sequence[Tensor]]
-    ):
+    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]]):
         self.outputs: List[Tensor] = list(outputs)
-        self.inputs: List[Tensor] = list(inputs) if inputs else []
+        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs else None
         self._share_map: Optional[Dict[int, int]] = None
         self._nodes: Optional[List[Operator]] = None
         self._usage_count: Optional[Dict[Tensor, int]] = None
+
+        if self.inputs is None:
+            # analyze the graph to get the inputs, when the inputs are not given, there should be only one input
+            # when there are multiple inputs, it is mandatory to specify the "inputs" argument explicitly to avoid
+            # ambiguity in the order of inputs
+            self.update_nodes()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -148,9 +149,9 @@ class FlowGraph:
         return outputs[0] if len(outputs) == 1 else outputs
 
     def __str__(self):
-        from .graph_utils import flow_graph_as_text
+        from .impl.graph_impl import graph_as_text
 
-        return flow_graph_as_text(self)
+        return graph_as_text(self)
 
     @property
     def nodes(self) -> List[Operator]:
@@ -175,7 +176,9 @@ class FlowGraph:
         The output tensor does not allow sharing memory with intermediate tensors in the graph.
         """
         if self._share_map is None:
-            self._update_share_map()
+            from hidet.graph.impl.graph_impl import graph_analyze_share_map
+
+            self._share_map = graph_analyze_share_map(self)
         return self._share_map.copy()
 
     def invalid_cache(self):
@@ -352,6 +355,7 @@ class FlowGraph:
 
     def update_nodes(self):
         from hidet.graph.impl.graph_impl import graph_analyze
+
         free_vars, self._nodes, self._usage_count = graph_analyze(self.outputs, stop_tensors=self.inputs)
 
         if self.inputs:
@@ -451,7 +455,6 @@ class FlowGraph:
 
         # return the median
         return do_bench(lambda: self.forward(dummy_inputs), warmup=warmup, rep=repeat)[1]
-
 
     def vcuda_(self) -> None:
         """

@@ -202,6 +202,7 @@ def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candida
         symbols=[v.name for v in task.symbols],
         inputs=[get_signature(t, input_device) for t in task.inputs],
         outputs=[get_signature(t, output_device) for t in task.outputs],
+        share_map=task.share_map,
         target=build_target,
         num_candidates=num_candidates,
         hidet_version=hidet.__version__,
