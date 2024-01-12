@@ -164,7 +164,6 @@ class MatmulResolveRule(ResolveRule):
                 assert len(a.shape) >= 3  # shape example: [a, c, d, b]
                 # [a, c, d, b] x [b] -> [a, c, d]
                 a = flatten(a, start_dim=0, end_dim=-3)  # [a * c, d, b]
-                # c = self.run_batch_matmul(a, b)  # [a * c, d, 1]  FIXME: Delete later
                 c = run_func(a, b)  # [a * c, d, 1]
                 c = c.reshape(c_shape)  # [a, c, d]
         else:
