@@ -850,8 +850,6 @@ class MatmulF32Taskx86(Task):
 
 class Matmulx86Op(Operator):
     def __init__(self, a: Tensor, b: Tensor):
-        # if not (len(a.shape) == len(b.shape) == 2 and a.shape[1] == b.shape[0]):
-        #     raise ValueError('Matrix multiplication: incompatible sizes: {} and {}'.format(a.shape, b.shape))
         if not (
             len(a.shape) == len(b.shape) == 3
             and (not is_constant(a.shape[0], b.shape[0]) or a.shape[0] == b.shape[0])
