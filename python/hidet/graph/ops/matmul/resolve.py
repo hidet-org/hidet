@@ -158,7 +158,6 @@ class MatmulResolveRule(ResolveRule):
             b = b.unsqueeze([0, 2])  # [1, b, 1]
             if len(a.shape) == 2:  # shape: [a, b]
                 a = a.unsqueeze([0])  # [1, a, b]
-                # c = self.run_batch_matmul(a, b)  # [1, a, 1]  FIXME: Delete later
                 c = run_func(a, b)  # [1, a, 1]
                 c = c.squeeze([0, 2])  # [a]
             else:
