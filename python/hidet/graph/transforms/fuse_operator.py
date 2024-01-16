@@ -324,7 +324,8 @@ def construct_fused_graph(graph: FlowGraph, sub_graphs: Sequence[FusibleGraph]) 
     graph_output_tensors: List[Tensor] = [
         tensor_remap[tensor] if tensor in tensor_remap else tensor for tensor in graph.outputs
     ]
-    return FlowGraph(graph_output_tensors, inputs=graph_input_tensors, nodes=graph_nodes)
+    # return FlowGraph(graph_output_tensors, inputs=graph_input_tensors, nodes=graph_nodes)
+    return FlowGraph(graph_output_tensors, inputs=graph_input_tensors)
 
 
 class FuseOperatorPass(GraphPass):

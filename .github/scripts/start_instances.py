@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     # Fetch the compile server instance ID from DB and add it to list of instances to launch
     query = (
-        'SELECT cloud_provider_id, instance_id, 0 FROM compile_server LIMIT 1'
+        f'SELECT cloud_provider_id, instance_id, 0 FROM compile_server WHERE org = \'{repo_org}\' LIMIT 1'
     )
     cursor.execute(query)
     rows = cursor.fetchall()
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     # For now, we run all model/input combinations by default
     run_configs = []
     query = (
-        'SELECT model.id as model_id, model.name as model_name, input_parameter.id as param_id, '
+        'SELECT model.id as model_id, model.name as model_name, model.runfile as runfile, input_parameter.id as param_id, '
         'input_parameter.parameter as param_name, dtype.id as dtype_id, dtype.name as dtype_name '
         'FROM model JOIN model_input_parameter ON '
         'model.id = model_input_parameter.model_id JOIN input_parameter ON '
@@ -67,13 +67,13 @@ if __name__ == '__main__':
     cursor.execute(query)
     rows = cursor.fetchall()
     for row in rows:
-        model_id, model_name, param_id, param_name, dtype_id, dtype_name = row
-        run_configs.append({'type': 'model', 'id': int(model_id), 'name': model_name, 
+        model_id, model_name, model_runfile, param_id, param_name, dtype_id, dtype_name = row
+        run_configs.append({'type': 'model', 'id': int(model_id), 'name': model_name, 'runfile': model_runfile,
                             'param_id': int(param_id), 'param_name': param_name,
                             'dtype_id': int(dtype_id), 'dtype_name': dtype_name,
                             })
     query = (
-        'SELECT operator.id as operator_id, operator.name as operator_name, input_parameter.id as param_id, '
+        'SELECT operator.id as operator_id, operator.name as operator_name, operator.runfile as runfile, input_parameter.id as param_id, '
         'input_parameter.parameter as param_name, dtype.id as dtype_id, dtype.name as dtype_name '
         'FROM operator JOIN operator_input_parameter ON '
         'operator.id = operator_input_parameter.operator_id JOIN input_parameter ON '
@@ -82,8 +82,8 @@ if __name__ == '__main__':
     cursor.execute(query)
     rows = cursor.fetchall()
     for row in rows:
-        op_id, op_name, param_id, param_name, dtype_id, dtype_name = row
-        run_configs.append({'type': 'operator', 'id': int(op_id), 'name': op_name, 
+        op_id, op_name, op_runfile, param_id, param_name, dtype_id, dtype_name = row
+        run_configs.append({'type': 'operator', 'id': int(op_id), 'name': op_name, 'runfile': op_runfile,
                             'param_id': int(param_id), 'param_name': param_name,
                             'dtype_id': int(dtype_id), 'dtype_name': dtype_name,
                             })
@@ -99,6 +99,8 @@ if __name__ == '__main__':
         cloud_provider_id, instance_id, _ = instance
         if cloud_provider_id == 1: # AWS
             cmd = ['aws', 'ec2', 'start-instances', '--instance-ids', instance_id]
+        elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
+            cmd = ['true']
         else:
             raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
         output = run_command(cmd)
@@ -118,6 +120,8 @@ if __name__ == '__main__':
                     raise RuntimeError(f'Failed to check status for {instance_id} on cloud provider {cloud_provider_id}.')
                 if output.stdout.count('ok') >= 2:
                     started = True
+            elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
+                started = True
             else:
                 raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
 

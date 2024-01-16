@@ -34,7 +34,7 @@ def test_symmetric_quant_matmul(x_shape, w_shape):
     x = hidet.randn(x_shape, dtype='float16', device='cuda')
     w = hidet.randn(w_shape, dtype='float16', device='cuda')
     wq, scale = quant.symmetric_quantize(w, dims=0, quant_type='int8')
-    yq = quant.symmetric_quant_matmul(x, wq, scale).sum(0)
+    yq = quant.symmetric_quant_matmul_f16_i8(x, wq, scale)
     y = ops.matmul(x, w)
     assert np.allclose(y.cpu().numpy(), yq.cpu().numpy(), atol=2e-1, rtol=2e-1)
 
