@@ -35,7 +35,13 @@ class CudaAutoScheduler(AutoScheduler):
         grid_dim: Expr = (prod(node.shape) + block_dim - 1) // block_dim
 
         if self.task is not None:
-            name = f'{self.task.name}_compute_{node.name}'
+            from hidet.graph.ops.fusion.fused_operator import FusedTask
+
+            if isinstance(self.task, FusedTask):
+                fused_name = self.task.attrs['fused_ops'].replace(' ', '_')
+                name = f'fused_{fused_name}_{node.name}'
+            else:
+                name = f'{self.task.name}_{node.name}'
         else:
             name = f'compute_{node.name}'
 
