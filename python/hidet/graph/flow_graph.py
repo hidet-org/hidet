@@ -15,7 +15,6 @@ from typing import List, Union, Dict, Set, Optional, Tuple, Sequence
 import logging
 import os
 import pickle
-from collections import defaultdict
 
 import hidet.graph.operator
 import hidet.cuda
@@ -106,14 +105,31 @@ def forward_context() -> GraphForwardContext:
 
 
 class FlowGraph:
-    """The computation graph representation."""
+    """
+    The computation graph representation.
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
+    Attributes
+    ----------
+    outputs: List[Tensor]
+        The output tensors of the computation graph.
+
+    inputs: Optional[List[Tensor]]
+        The input tensors of the computation graph.
+
+    """
+
+    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]]):
         self.outputs: List[Tensor] = list(outputs)
-        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
-        self._nodes: Optional[List[Operator]] = nodes
+        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs else None
+        self._share_map: Optional[Dict[int, int]] = None
+        self._nodes: Optional[List[Operator]] = None
         self._usage_count: Optional[Dict[Tensor, int]] = None
-        self.update_nodes()
+
+        if self.inputs is None:
+            # analyze the graph to get the inputs, when the inputs are not given, there should be only one input
+            # when there are multiple inputs, it is mandatory to specify the "inputs" argument explicitly to avoid
+            # ambiguity in the order of inputs
+            self.update_nodes()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -133,9 +149,9 @@ class FlowGraph:
         return outputs[0] if len(outputs) == 1 else outputs
 
     def __str__(self):
-        from .graph_utils import flow_graph_as_text
+        from .impl.graph_impl import graph_as_text
 
-        return flow_graph_as_text(self)
+        return graph_as_text(self)
 
     @property
     def nodes(self) -> List[Operator]:
@@ -150,6 +166,20 @@ class FlowGraph:
         if self._usage_count is None:
             self.update_nodes()
         return self._usage_count.copy()
+
+    @property
+    def share_map(self) -> Dict[int, int]:
+        """
+        If an output tensor of the graph shares the memory with an input tensor of the graph, we should record the
+        information in this attribute. For example, `share_map = {0: 0, 1: 2}` means that the output tensor 0 shares
+        the memory with input tensor 0, and output tensor 1 shares the memory with input tensor 2 of the graph.
+        The output tensor does not allow sharing memory with intermediate tensors in the graph.
+        """
+        if self._share_map is None:
+            from hidet.graph.impl.graph_impl import graph_analyze_share_map
+
+            self._share_map = graph_analyze_share_map(self)
+        return self._share_map.copy()
 
     def invalid_cache(self):
         self._nodes = None
@@ -324,9 +354,12 @@ class FlowGraph:
         return ret
 
     def update_nodes(self):
-        free_vars, self._nodes, self._usage_count = self._analyze(self.outputs)
+        from hidet.graph.impl.graph_impl import graph_analyze
+
+        free_vars, self._nodes, self._usage_count = graph_analyze(self.outputs, stop_tensors=self.inputs)
+
         if self.inputs:
-            non_bound_free_vars: Set[Tensor] = set(free_vars) - set(self.inputs)
+            non_bound_free_vars: Set[Tensor] = set(free_vars)
             if len(non_bound_free_vars) > 0:
                 msg = ['There is free variable(s) not given in inputs:']
                 for v in non_bound_free_vars:
@@ -422,92 +455,6 @@ class FlowGraph:
 
         # return the median
         return do_bench(lambda: self.forward(dummy_inputs), warmup=warmup, rep=repeat)[1]
-
-    @staticmethod
-    def _analyze(outputs: List[Tensor]) -> Tuple[List[Tensor], List[Operator], Dict[Tensor, int]]:
-        """
-        Analyze the implicit flow graph by backwards traversing the graph from given outputs.
-
-        Parameters
-        ----------
-        outputs: List[Tensor]
-            The outputs of the flow graph to traversing from.
-
-        Returns
-        -------
-        free_vars, nodes, usage_count: Tuple[List[Tensor], List[Operator], Dict[Tensor, int]]
-            The free variables, nodes and usage count of the flow graph.
-
-            The free variables are the free symbolic tensors that are not produced by any operators and do not contain
-            the non-None storage attribute.
-
-            The nodes are the operators that are used to produce the outputs, in topological order.
-
-            The usage count contains the number of times each tensor is used.
-        """
-        free_vars = []
-        nodes: List[Operator] = []
-        # find out all nodes
-        all_nodes: Set[Operator] = set()
-
-        def find_all_nodes(u: Operator):
-            all_nodes.add(u)
-            for x in u.inputs:
-                if x.op is None:
-                    continue
-                v: Operator = x.op
-                if v not in all_nodes:
-                    find_all_nodes(v)
-
-        for ot in outputs:
-            if ot.trace:
-                find_all_nodes(ot.op)
-
-        # topological sort
-        out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}
-        for u in all_nodes:
-            for it in u.inputs:
-                if it.op is None or it.op not in all_nodes:
-                    continue
-                out_degree[it.op] += 1
-        for u in outputs:
-            if u.op:
-                out_degree[u.op] += 1
-
-        stack: List[Operator] = []
-        for u in outputs:
-            if u.op:
-                out_degree[u.op] -= 1
-                if out_degree[u.op] == 0:
-                    stack.append(u.op)
-        while len(stack) > 0:
-            op = stack.pop()
-            nodes.append(op)
-            for it in op.inputs:
-                if it.op is None:
-                    if it.storage is None and all(it is not v for v in free_vars):
-                        # input
-                        free_vars.append(it)
-                elif it.op not in all_nodes:
-                    pass
-                else:
-                    if it is not it.op.outputs[it.trace[1]]:
-                        raise ValueError('The trace is broken')
-                    out_degree[it.op] -= 1
-                    if out_degree[it.op] == 0:
-                        stack.append(it.op)
-        nodes = list(reversed(nodes))
-        assert len(nodes) == len(all_nodes), 'all_nodes {} topo_order {}'.format(len(all_nodes), len(nodes))
-
-        # tensor usage count
-        usage_count: Dict[Tensor, int] = defaultdict(int)
-        for op in all_nodes:
-            for inp in op.inputs:
-                usage_count[inp] += 1
-        for graph_output in outputs:
-            usage_count[graph_output] += 1
-
-        return free_vars, nodes, usage_count
 
     def vcuda_(self) -> None:
         """

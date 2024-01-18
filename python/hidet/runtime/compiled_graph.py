@@ -47,6 +47,7 @@ class GraphMetaData:
     hidet_version: str
     num_kernels: int
     graph_hash: str
+    share_map: Dict[int, int]
 
 
 @dataclass
@@ -255,25 +256,41 @@ class CompiledGraph:
         return tuple(symbol_dims)
 
     def _create_outputs(self, inputs):
-        from hidet.graph.tensor import empty
+        from hidet.graph.tensor import empty, Tensor
 
         outputs = []
-        output_to_input = {}
+        exec_idx_to_output_idx: Dict[int, int] = {}
         for output_index, (exec_idx, sig) in enumerate(zip(self.graph_execution.outputs_index, self.meta.outputs)):
             if exec_idx in self.graph_execution.inputs_index:
+                # the graph directly returns an input tensor
                 outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
             elif exec_idx in self.graph_execution.weights_index:
+                # the graph directly returns a weight tensor
                 outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
-            elif exec_idx in output_to_input:
-                outputs.append(outputs[output_to_input[exec_idx]])
+            elif exec_idx in exec_idx_to_output_idx:
+                # the graph returns the same tensor multiple times
+                outputs.append(outputs[exec_idx_to_output_idx[exec_idx]])
             else:
+                # get the shape of output tensor
                 if self.is_dynamic:
                     shape_buffer = Array(i32, len(sig.shape))
                     self._get_output_shape(output_index, shape_buffer)
-                    outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
+                    shape = list(shape_buffer)
                 else:
-                    outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
-                output_to_input[exec_idx] = len(outputs) - 1
+                    shape = sig.shape
+
+                if output_index not in self.meta.share_map:
+                    # create the output tensor
+                    outputs.append(empty(shape=shape, dtype=sig.dtype, device=sig.device))
+                else:
+                    # this output tensor shares the storage with one input tensor, reuse the storage
+                    input_tensor: Tensor = inputs[self.meta.share_map[output_index]]
+                    outputs.append(
+                        Tensor(shape=shape, dtype=sig.dtype, device=sig.device, storage=input_tensor.storage)
+                    )
+
+                # record the exec_idx of this output tensor, in case the graph returns the same tensor multiple times
+                exec_idx_to_output_idx[exec_idx] = output_index
 
         return outputs
 
@@ -304,6 +321,7 @@ class CompiledGraph:
         return outputs
 
     def _run_slow_path(self, inputs, symbol_dims: Tuple[int, ...]):
+        """Interpret the graph execution"""
         from hidet.graph.tensor import Tensor
 
         index2tensor: Dict[int, Tensor] = {}
