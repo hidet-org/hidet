@@ -771,7 +771,6 @@ class FusePrologueEpiloguePass(Pass):
         try:
             rewriter = PrologueEpilogueFuseRewriter(self.fused_task, prologues, epilogues, tensor_map, marks)
             ir_module = rewriter.rewrite(ir_module)
-            print('success')
             return ir_module
         except CanNotFuseError:
             pass
