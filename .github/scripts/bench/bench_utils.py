@@ -35,9 +35,10 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     return latency
 
 def enable_compile_server(enable=True):
-    hidet.option.compile_server.addr(os.environ.get('CI_CS_HOSTNAME'))
-    hidet.option.compile_server.port(int(os.environ.get('CI_CS_PORT')))
-    hidet.option.compile_server.username(os.environ.get('CI_CS_USERNAME'))
-    hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
-    hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
-    hidet.option.compile_server.enable(flag=enable)
+    if os.environ.get('CI_CS_HOSTNAME'):
+        hidet.option.compile_server.addr(os.environ.get('CI_CS_HOSTNAME'))
+        hidet.option.compile_server.port(int(os.environ.get('CI_CS_PORT')))
+        hidet.option.compile_server.username(os.environ.get('CI_CS_USERNAME'))
+        hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
+        hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
+        hidet.option.compile_server.enable(flag=enable)
