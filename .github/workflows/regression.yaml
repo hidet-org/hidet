@@ -8,16 +8,19 @@ on:
         required: true
         type: boolean
         default: true
-  issue_comment:
-    types: [created]
+      source_repo:
+        description: 'Source Repository Name. E.g, hidet-org/hidet'
+        required: true
+        type: string
+        default: 'this'
+      source_ref:
+        description: 'Source repository ref (Branch name or PR number).'
+        required: true
+        type: string
+        default: 'this'
 
 jobs:
   start_instances:
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      github.event_name == 'issue_comment' && github.event.issue.pull_request != '' &&
-      contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.comment.author_association) &&
-      contains(github.event.comment.body, '$hidet-ci launch')
     runs-on: ubuntu-latest
     outputs:
       started_instances: ${{ steps.run_py_script.outputs.started_instances }}
@@ -61,13 +64,20 @@ jobs:
     container:
       image: nvcr.io/nvidia/pytorch:23.10-py3
       options: --gpus all
+    outputs:
+      commit_time: ${{ steps.get_commit_info.outputs.commit_time }}
+      commit_author: ${{ steps.get_commit_info.outputs.commit_author }}
+      commit_sha: ${{ steps.get_commit_info.outputs.commit_sha }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          repository: |
+            ${{ inputs.source_repo == 'this' && github.repository ||
+            inputs.source_repo }}
           ref: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('refs/pull/{0}/head', github.event.issue.number) }}
+            ${{ inputs.source_repo == 'this' && github.ref_name || 
+            format('refs/pull/{0}/head', inputs.source_ref) }}
           path: hidet
       
       - name: Checkout models
@@ -114,10 +124,8 @@ jobs:
           python hidet/.github/scripts/run_tests.py
         env:
           HW_CONFIG: ${{ matrix.hw_configs }}
-          REPO_NAME: ${{ github.repository }}
-          REPO_BRANCH: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('pull/{0}', github.event.issue.number) }}
+          REPO_NAME: ${{ inputs.source_repo == 'this' && github.repository || inputs.source_repo }}
+          REPO_BRANCH: ${{ inputs.source_repo == 'this' && github.ref_name || format('pull/{0}', inputs.source_ref) }}
           CI_CS_HOSTNAME: ${{ secrets.CI_CS_HOSTNAME }}
           CI_CS_PORT: ${{ secrets.CI_CS_PORT }}
           CI_CS_USERNAME: ${{ secrets.CI_CS_USERNAME }}
@@ -130,6 +138,17 @@ jobs:
           name: run_configs_${{ matrix.hw_configs }}
           path: run_configs.json
           retention-days: 1
+      
+      - name: Retrieve commit properties
+        id: get_commit_info
+        run: |
+          cd hidet
+          COMMIT_TIME=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S')
+          COMMIT_AUTHOR=$(git log -1 --format=%an)
+          COMMIT_SHA=$(git log -1 --format=%H)
+          echo "commit_time=$COMMIT_TIME" >> $GITHUB_OUTPUT
+          echo "commit_author=$COMMIT_AUTHOR" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
   
   upload_results:
     runs-on: ubuntu-latest
@@ -143,26 +162,15 @@ jobs:
 
       - name: Download run configs
         uses: actions/download-artifact@v3
-      
-      - name: Setup ENV
-        run: |
-          COMMIT_TIME=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S')
-          COMMIT_AUTHOR=$(git log -1 --format=%an)
-          COMMIT_SHA=$(git log -1 --format=%H)
-          echo "COMMIT_TIME=$COMMIT_TIME" >> $GITHUB_ENV
-          echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >> $GITHUB_ENV
-          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
 
       - name: Run main Python script
         run: python ./.github/scripts/upload_results.py
         env:
-          REPO_NAME: ${{ github.repository }}
-          REPO_BRANCH: |
-            ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
-            format('pull/{0}', github.event.issue.number) }}
-          COMMIT_SHA: ${{ env.COMMIT_SHA }}
-          COMMIT_TIME: ${{ env.COMMIT_TIME }}
-          COMMIT_AUTHOR: ${{ env.COMMIT_AUTHOR }}
+          REPO_NAME: ${{ inputs.source_repo == 'this' && github.repository || inputs.source_repo }}
+          REPO_BRANCH: ${{ inputs.source_repo == 'this' && github.ref_name || format('pull/{0}', inputs.source_ref) }}
+          COMMIT_SHA: ${{ needs.run_tests.outputs.commit_sha }}
+          COMMIT_TIME: ${{ needs.run_tests.outputs.commit_time }}
+          COMMIT_AUTHOR: ${{ needs.run_tests.outputs.commit_author }}
           HW_CONFIGS: ${{ needs.start_instances.outputs.hw_configs }}
           CI_DB_HOSTNAME: ${{ secrets.CI_DB_HOSTNAME }}
           CI_DB_PORT: ${{ secrets.CI_DB_PORT }}
@@ -170,10 +178,7 @@ jobs:
           CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
 
   stop_instances:
-    if: |
-      github.event_name == 'workflow_dispatch' && inputs.shutdown_instances || 
-      github.event_name == 'issue_comment' && github.event.issue.pull_request != '' &&
-      !contains(github.event.comment.body, '--keep')
+    if: inputs.shutdown_instances
     runs-on: ubuntu-latest
     needs: [start_instances, run_tests]
     steps:
