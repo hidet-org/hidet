@@ -9,13 +9,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple, Union
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.stmt import AssignStmt, Stmt
 from hidet.utils import gcd, prod
 from hidet.ir.mapping import TaskMapping, row_repeat, spatial_map
 from hidet.ir.layout import DataLayout, row_major, local_layout
+from hidet.ir.expr import Expr, is_true
+from hidet.ir.dtypes import f16, f32
+from hidet.ir.type import DataType
+from hidet.cuda.cublas import cublasComputeType
 
 
 class NotSupportedError(Exception):
@@ -143,3 +147,117 @@ def get_transfer_task_map(
     task_map = row_repeat(*repeat_shape, attrs='u+u+') * spatial_map(grid_shape, ranks=ranks)
     data_layout = row_major(*repeat_shape) * local_layout(*grid_shape)
     return task_map, data_layout
+
+
+def resolve_cublas_compute_type(
+    in_dtype: DataType, out_dtype: DataType, compute_type: Optional[Union[int, cublasComputeType]]
+) -> cublasComputeType:
+    if compute_type is not None:
+        return cublasComputeType(compute_type)
+    if in_dtype == out_dtype == f16:
+        # use tensor core whenever possible
+        return cublasComputeType.CUBLAS_COMPUTE_16F
+    elif in_dtype == out_dtype == f32:
+        # use tensor core whenever possible
+        return cublasComputeType.CUBLAS_COMPUTE_32F
+    else:
+        raise NotImplementedError(
+            'not implemented resolve rules for compute_type with in_dtype={}, out_dtype={}'.format(in_dtype, out_dtype)
+        )
+
+
+def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_shape: List[Expr]):
+    a_rank: int = len(a_shape)
+    b_rank: int = len(b_shape)
+
+    assert a_rank >= 1 and b_rank >= 1 and (a_rank >= 2 or b_rank >= 2)
+    if a_rank == 1:
+        bs = prod(b_shape[:-2])
+        m = 1
+        n = b_shape[-1]
+        k = a_shape[0]
+        stride_a = 0
+        stride_b = b_shape[-2] * b_shape[-1]
+        stride_c = c_shape[-2] * c_shape[-1]
+    elif b_rank == 1:
+        bs = prod(a_shape[:-2])
+        m = a_shape[-2]
+        n = 1
+        k = b_shape[0]
+        stride_a = a_shape[-2] * a_shape[-1]
+        stride_b = 0
+        stride_c = c_shape[-1]
+    else:
+        if is_true(prod(a_shape[:-2]) == 1):
+            bs = prod(b_shape[:-2])
+            m = a_shape[-2]
+            n = b_shape[-1]
+            k = a_shape[-1]
+            stride_a = 0
+            stride_b = b_shape[-2] * b_shape[-1]
+            stride_c = c_shape[-2] * c_shape[-1]
+        elif is_true(prod(b_shape[:-2]) == 1):
+            bs = prod(a_shape[:-2])
+            m = a_shape[-2]
+            n = b_shape[-1]
+            k = a_shape[-1]
+            stride_a = a_shape[-2] * a_shape[-1]
+            stride_b = 0
+            stride_c = c_shape[-2] * c_shape[-1]
+        elif all(is_true(a == b) for a, b in zip(a_shape[:-2], b_shape[:-2])):
+            bs = prod(a_shape[:-2])
+            m = a_shape[-2]
+            n = b_shape[-1]
+            k = a_shape[-1]
+            stride_a = a_shape[-2] * a_shape[-1]
+            stride_b = b_shape[-2] * b_shape[-1]
+            stride_c = c_shape[-2] * c_shape[-1]
+        else:
+            # todo: add cublasGemmBatchedEx to support this case
+            # https://docs.nvidia.com/cuda/cublas/index.html#cublasgemmbatchedex
+            raise NotImplementedError('Can not convert matmul {} @ {} to strided_gemm'.format(a_shape, b_shape))
+    return bs, m, n, k, stride_a, stride_b, stride_c
+
+
+def get_cublas_matmul_schedule(a_shape, b_shape, c_shape, a_dtype, b_dtype, c_dtype):
+    import hidet
+    from hidet.lang.cuda import cublas
+    from hidet.lang import attrs
+    from hidet.ir.library import tune
+
+    try:
+        bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(a_shape, b_shape, c_shape)
+        compute_type: cublasComputeType = resolve_cublas_compute_type(a_dtype, b_dtype, None)
+    except NotImplementedError:
+        # Unable to resolve cublas params, skip using cublas
+        tune.check(False)
+
+    with hidet.script_module() as script_module:
+
+        def generate(a: Expr, b: Expr, c: Expr) -> Expr:
+            return cublas.strided_gemm(
+                bs,
+                m,
+                n,
+                k,
+                a_dtype,
+                b_dtype,
+                c_dtype,
+                a,
+                b,
+                c,
+                stride_a,
+                stride_b,
+                stride_c,
+                False,
+                False,
+                compute_type,
+            )
+
+        @hidet.script
+        def launch(a: a_dtype[a_shape], b: b_dtype[b_shape], c: c_dtype[c_shape]):
+            attrs.func_kind = 'public'
+
+            generate(a, b, c)
+
+    return script_module.ir_module()
