@@ -70,7 +70,10 @@ def test_int_4bit():
     inp = torch.empty((4, 2), dtype=torch.int8, device="cuda")
     inp = hidet.from_torch(inp)
     func(data, inp)
-    print(data.cpu().numpy())
+    import numpy as np
+
+    groundtruth = np.resize(np.arange(-8, 8), (4, 4)).astype(np.float32)
+    np.testing.assert_equal(data.cpu().numpy(), groundtruth)
 
 
 def test_int_2bit():
@@ -113,7 +116,10 @@ def test_int_2bit():
     data = torch.empty((2, 2), dtype=torch.float32, device="cuda")
     data = hidet.from_torch(data)
     func(data)
-    print(data.cpu().numpy())
+    import numpy as np
+
+    groundtruth = np.resize(np.arange(-2, 2), (2, 2)).astype(np.float32)
+    np.testing.assert_equal(data.cpu().numpy(), groundtruth)
 
 
 if __name__ == "__main__":

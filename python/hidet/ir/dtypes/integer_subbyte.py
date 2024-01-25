@@ -23,12 +23,27 @@ class IntegerSubbyteType(IntegerType):
         self._sign_mask: int = 1 << (self._nbits - 1) if self.signedness() else 0
 
     @property
+    def storage(self):
+        return self._storage
+
+    @property
+    def nbytes(self):
+        raise TypeError(f"Cannot access nbytes property for the type({self}")
+
+    @property
+    def nbits(self):
+        return self._nbits
+
+    @property
     def bits_mask(self):
         return self._bits_mask
 
     @property
     def sign_mask(self):
         return self._sign_mask
+
+    def is_integer_subbyte(self):
+        return True
 
     def iinfo(self) -> IntInfo:
         return IntInfo(self._nbits, self._max_value, self._min_value, self)

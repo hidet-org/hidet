@@ -33,6 +33,7 @@ from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.transforms import Pass
+from hidet.utils.py import is_power_of_two
 
 
 def is_pointer_type(base_ty: BaseType):
@@ -113,10 +114,10 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         storage_bits = storage_ty.nbits
         dtype_bits = dtype.nbits
         divisor = storage_bits // dtype_bits
-        if divisor & (divisor - 1) != 0:
+        if not is_power_of_two(divisor):
             raise TypeError(f"data type not supported yet(got:{dtype})")
         idx = simplify(offset // divisor)
-        offset_ = simplify(offset & (divisor - 1))
+        offset_ = simplify(offset % divisor)
         mask = storage_ty.constant(dtype.bits_mask)
         return (base[idx] >> (offset_ * dtype_bits)) & mask
 
@@ -125,10 +126,10 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         storage_bits = storage_ty.nbits
         dtype_bits = dtype.nbits
         divisor = storage_bits // dtype_bits
-        if divisor & (divisor - 1) != 0:
+        if not is_power_of_two(divisor):
             raise TypeError(f"data type not supported yet(got:{dtype})")
         idx = simplify(offset // divisor)
-        offset_ = simplify(offset & (divisor - 1))
+        offset_ = simplify(offset % divisor)
         value_ty = infer_type(value)
         assert value_ty == storage_ty
         mask = storage_ty.constant(dtype.bits_mask)

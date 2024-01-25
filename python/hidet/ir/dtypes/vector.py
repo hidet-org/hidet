@@ -30,6 +30,9 @@ class VectorType(DataType):
         if lane_type.is_vector():
             raise ValueError('Cannot create a vector type of vectors')
 
+    def is_integer_subbyte(self) -> bool:
+        return False
+
     def is_float(self) -> bool:
         return False
 
