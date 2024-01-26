@@ -84,7 +84,7 @@ with open('attention-graph.json', 'w') as f:
 #
 # You can download the generated json file
 # :download:`attention-graph.json <../../../../gallery/how-to-guides/attention-graph.json>`
-# and open it with the `customized Netron viewer </netron>`_.
+# and open it with the `customized Netron viewer </docs/netron>`_.
 #
 
 # %%
