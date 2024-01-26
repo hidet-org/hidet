@@ -29,6 +29,9 @@ class IntegerType(DataType):
         self._min_value: int = min_value
         self._max_value: int = max_value
 
+    def is_integer_subbyte(self) -> bool:
+        return False
+
     def is_float(self) -> bool:
         return False
 
@@ -53,6 +56,9 @@ class IntegerType(DataType):
         if not self._min_value <= value <= self._max_value:
             raise ValueError('Value {} is out of range for {}.'.format(value, self.name))
         return constant(value, self)
+
+    def signedness(self):
+        return self._min_value < 0
 
     @property
     def one(self):

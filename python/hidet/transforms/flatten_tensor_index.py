@@ -9,11 +9,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType, ArrayType
+from typing import Dict
+
+from hidet.ir.type import (
+    TensorType,
+    tensor_type,
+    tensor_pointer_type,
+    PointerType,
+    TensorPointerType,
+    ArrayType,
+    FuncType,
+    func_type,
+)
 from hidet.ir.expr import Var, TensorElement, TensorSlice, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_major
 from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import simplify, TypeInfer
 from hidet.transforms import Pass
@@ -28,6 +40,15 @@ class FlattenTensorAccessRewriter(IRRewriter):
     def __init__(self):
         super().__init__()
         self.type_infer = TypeInfer()
+        self.func2func_type: Dict[str, FuncType] = {}
+
+    def visit_Var(self, v: Var):
+        if isinstance(v.type, FuncType):
+            if v.name in self.func2func_type:
+                func_ty = self.func2func_type[v.name]
+                if func_ty is not v.type:
+                    return Var(v.hint, func_ty, v.name)
+        return super().visit_Var(v)
 
     def visit_Function(self, func: Function):
         for var in func.params:
@@ -39,7 +60,13 @@ class FlattenTensorAccessRewriter(IRRewriter):
                 self.memo[var] = Var(var.hint, tensor_pointer_type(var.type.tensor_type.dtype, [size]))
         body = self(func.body)
         params = [self(p) for p in func.params]
-        return Function(func.name, params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
+        if body is func.body and all(p is p1 for p, p1 in zip(params, func.params)):
+            return func
+        else:
+            new_func = Function(func.name, params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
+            param_types = [p.type for p in params]
+            self.func2func_type[func.name] = func_type(param_types, func.ret_type)
+            return new_func
 
     def get_layout(self, e) -> DataLayout:
         e_type = self.type_infer(e)
@@ -103,9 +130,16 @@ class FlattenTensorAccessRewriter(IRRewriter):
 
 
 class FlattenTensorIndexPass(Pass):
-    def process_func(self, func: Function) -> Function:
+    def process_module(self, ir_module: IRModule) -> IRModule:
         flatten_index = FlattenTensorAccessRewriter()
-        return flatten_index(func)
+
+        new_funcs = {}
+        for name, func in ir_module.functions.items():
+            new_funcs[name] = flatten_index(func)
+        if all(new_funcs[name] is ir_module.functions[name] for name in new_funcs):
+            return ir_module
+        else:
+            return ir_module.copy().reset_funcs(new_funcs, ir_module.global_vars)
 
 
 def flatten_tensor_index_pass():

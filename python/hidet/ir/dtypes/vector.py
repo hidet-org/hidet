@@ -13,19 +13,25 @@ from typing import Any, Sequence
 from hidet.ir.type import DataType
 from .floats import float32, float16
 from .integer import int8, uint8
+from .integer_subbyte import int4b, uint4b
 
 
 class VectorType(DataType):
     def __init__(self, lane_type: DataType, num_lanes: int):
         name = '{}x{}'.format(lane_type.name, num_lanes)
         short_name = '{}x{}'.format(lane_type.short_name, num_lanes)
-        nbytes = lane_type.nbytes * num_lanes
+        nbytes = (
+            lane_type.nbytes * num_lanes if not lane_type.is_integer_subbyte() else lane_type.nbits * num_lanes // 8
+        )
         super().__init__(name, short_name, nbytes)
         self._num_lanes: int = num_lanes
         self._lane_type: DataType = lane_type
 
         if lane_type.is_vector():
             raise ValueError('Cannot create a vector type of vectors')
+
+    def is_integer_subbyte(self) -> bool:
+        return False
 
     def is_float(self) -> bool:
         return False
@@ -89,6 +95,18 @@ f32x8 = float32x8
 
 float16x2 = VectorType(float16, 2)
 f16x2 = float16x2
+
+int4bx2 = VectorType(int4b, 2)
+i4x2 = int4bx2
+
+uint4bx2 = VectorType(uint4b, 2)
+u4x2 = uint4bx2
+
+int4bx8 = VectorType(int4b, 8)
+i4x8 = int4bx8
+
+uint4bx8 = VectorType(uint4b, 8)
+u4x8 = uint4bx8
 
 
 def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
