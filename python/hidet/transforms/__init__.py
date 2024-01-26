@@ -37,6 +37,7 @@ from .propagate_launch_bound import propagate_launch_bound_pass
 from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
 from .annotate_header_and_libs import annotate_header_and_libs_pass
+from .lower_integer_subbyte import lower_integer_subbyte_pass
 
 
 def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
@@ -63,6 +64,7 @@ def lower(ir_module: IRModule) -> IRModule:
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
         flatten_tensor_index_pass(),
+        lower_integer_subbyte_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),
         resolve_primitive_func_pass(),
