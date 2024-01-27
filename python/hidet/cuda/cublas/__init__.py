@@ -10,4 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .ffi import cublasComputeType, cudaDataType
-from .kernels import gemm, strided_gemm
+from .kernels import gemm, strided_gemm, batched_gemm

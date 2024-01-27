@@ -11,5 +11,5 @@
 # limitations under the License.
 from hidet.cuda.cublas.utils import as_type_code
 from hidet.cuda.cublas.kernels import cublasComputeType, cudaDataType
-from .kernels import gemm, strided_gemm
+from .kernels import gemm, strided_gemm, batched_gemm
 from . import regs as _regs  # register functions

@@ -18,6 +18,9 @@ typedef int cudaError_t;
 typedef cudaError_t (*cudaGetDeviceCount_t)(int* count);
 typedef cudaError_t (*cudaGetDevice_t)(int* device);
 typedef cudaError_t (*cudaSetDevice_t)(int device);
+typedef cudaError_t (*cudaMalloc_t)(void **devPtr, size_t size);
+typedef cudaError_t (*cudaFree_t)(void *devPtr);
+typedef cudaError_t (*cudaMemcpy_t)(void* dst, const void* src, size_t count, cudaMemcpyKind kind);
 typedef const char* (*cudaGetErrorString_t)(cudaError_t error);
 
 static std::string library_path;
@@ -25,6 +28,9 @@ static void* libcudart = nullptr;
 static cudaGetDeviceCount_t cudaGetDeviceCount = nullptr;
 static cudaGetDevice_t cudaGetDevice = nullptr;
 static cudaSetDevice_t cudaSetDevice = nullptr;
+static cudaMalloc_t cudaMalloc = nullptr;
+static cudaFree_t cudaFree = nullptr;
+static cudaMemcpy_t cudaMemcpy = nullptr;
 static cudaGetErrorString_t cudaGetErrorString = nullptr;
 
 // load cuda runtime APIs
@@ -45,6 +51,9 @@ static inline void lazy_load_cuda_runtime() {
         cudaGetDeviceCount = get_symbol<cudaGetDeviceCount_t>(libcudart, "cudaGetDeviceCount");
         cudaGetDevice = get_symbol<cudaGetDevice_t>(libcudart, "cudaGetDevice");
         cudaSetDevice = get_symbol<cudaSetDevice_t>(libcudart, "cudaSetDevice");
+        cudaMalloc = get_symbol<cudaMalloc_t>(libcudart, "cudaMalloc");
+        cudaFree = get_symbol<cudaFree_t>(libcudart, "cudaFree");
+        cudaMemcpy = get_symbol<cudaMemcpy_t>(libcudart, "cudaMemcpy");
         cudaGetErrorString = get_symbol<cudaGetErrorString_t>(libcudart, "cudaGetErrorString");
     }
 }
@@ -78,4 +87,19 @@ DLL int hidet_cuda_get_device() {
 DLL void hidet_cuda_set_device(int device) {
     lazy_load_cuda_runtime();
     CHECK_CUDA(cudaSetDevice(device));
+}
+
+DLL void hidet_cuda_malloc(void **devPtr, size_t size) {
+    lazy_load_cuda_runtime();
+    CHECK_CUDA(cudaMalloc(devPtr, size));
+}
+
+DLL void hidet_cuda_free(void *devPtr) {
+    lazy_load_cuda_runtime();
+    CHECK_CUDA(cudaFree(devPtr));
+}
+
+DLL void hidet_cuda_memcpy(void* dst, const void* src, size_t count, cudaMemcpyKind kind) {
+    lazy_load_cuda_runtime();
+    CHECK_CUDA(cudaMemcpy(dst, src, count, kind));
 }
