@@ -348,6 +348,7 @@ DLL void hidet_cublas_batched_gemm(
     static void **ptr_a_device, **ptr_b_device, **ptr_c_device;
     static int cur_device_ptr_size; // Size of device memory currently allocated for each of the three a,b,c arrays.
 
+    cudaStream_t cur_stream = get_cuda_stream();
     // Allocate device memory
     // first use synchronous versions of malloc and memcpy, later switch to async versions
     if (cur_device_ptr_size != 0 && b > cur_device_ptr_size) {
@@ -356,16 +357,17 @@ DLL void hidet_cublas_batched_gemm(
         hidet_cuda_free((void *)ptr_c_device);
     }
     if (ptr_a_device == NULL || b > cur_device_ptr_size) {
-        hidet_cuda_malloc((void **) &ptr_a_device, b * sizeof(void*));
-        hidet_cuda_malloc((void **) &ptr_b_device, b * sizeof(void*));
-        hidet_cuda_malloc((void **) &ptr_c_device, b * sizeof(void*));
+        ptr_a_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+        ptr_b_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+        ptr_c_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+
         cur_device_ptr_size = b;
     }
 
     // Copy input arrays (A and B) from host to device
-    hidet_cuda_memcpy((void *)ptr_a_device, (void *)ptr_a, b * sizeof(void*), cudaMemcpyHostToDevice);    
-    hidet_cuda_memcpy((void *)ptr_b_device, (void *)ptr_b, b * sizeof(void*), cudaMemcpyHostToDevice);
-    hidet_cuda_memcpy((void *)ptr_c_device, (void *)ptr_c, b * sizeof(void*), cudaMemcpyHostToDevice);
+    hidet_cuda_memcpy_async((void *)ptr_a_device, (void *)ptr_a, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);    
+    hidet_cuda_memcpy_async((void *)ptr_b_device, (void *)ptr_b, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);
+    hidet_cuda_memcpy_async((void *)ptr_c_device, (void *)ptr_c, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);
 
     CHECK_CUBLAS(cublasGemmBatchedEx(
         CublasContext::current_handle(),
