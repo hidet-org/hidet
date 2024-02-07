@@ -104,6 +104,7 @@ typedef enum {
 typedef const char* (*cublasGetStatusName_t)(cublasStatus_t status);
 typedef const char* (*cublasGetStatusString_t)(cublasStatus_t status);
 typedef cublasStatus_t (*cublasCreate_t)(cublasHandle_t *handle);
+typedef cublasStatus_t (*cublasSetStream_t)(cublasHandle_t handle, cudaStream_t streamId);
 typedef cublasStatus_t (*cublasGemmEx_t)(
     cublasHandle_t handle,
     cublasOperation_t transa, cublasOperation_t transb,
@@ -146,6 +147,7 @@ typedef cublasStatus_t (*cublasGemmBatchedEx_t)(
 
 // cublas api functions
 static cublasCreate_t cublasCreate;
+static cublasSetStream_t cublasSetStream;
 static cublasGetStatusName_t cublasGetStatusName;
 static cublasGetStatusString_t cublasGetStatusString;
 static cublasGemmEx_t cublasGemmEx;
@@ -213,6 +215,7 @@ static void lazy_load_cublas() {
 
         // load api functions
         cublasCreate = get_symbol<cublasCreate_t>(libcublas, "cublasCreate_v2");
+        cublasSetStream = get_symbol<cublasSetStream_t>(libcublas, "cublasSetStream_v2");
         cublasGetStatusName = get_symbol<cublasGetStatusName_t>(libcublas, "cublasGetStatusName");
         cublasGetStatusString = get_symbol<cublasGetStatusString_t>(libcublas, "cublasGetStatusString");
         cublasGemmEx = get_symbol<cublasGemmEx_t>(libcublas, "cublasGemmEx");
@@ -263,6 +266,10 @@ DLL void hidet_cublas_gemm(
 ) {
     lazy_load_cublas();
 
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+
     const void *p_alpha = nullptr;
     const void *p_beta = nullptr;
 
@@ -298,6 +305,10 @@ DLL void hidet_cublas_strided_gemm(
     bool trans_a, bool trans_b, int compute_type
 ) {
     lazy_load_cublas();
+
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
 
     const void *p_alpha = nullptr;
     const void *p_beta = nullptr;
@@ -340,6 +351,10 @@ DLL void hidet_cublas_batched_gemm(
 ) {
     lazy_load_cublas();
 
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+
     const void *p_alpha = nullptr;
     const void *p_beta = nullptr;
 
@@ -348,7 +363,6 @@ DLL void hidet_cublas_batched_gemm(
     static void **ptr_a_device, **ptr_b_device, **ptr_c_device;
     static int cur_device_ptr_size; // Size of device memory currently allocated for each of the three a,b,c arrays.
 
-    cudaStream_t cur_stream = get_cuda_stream();
     // Allocate device memory
     // first use synchronous versions of malloc and memcpy, later switch to async versions
     if (cur_device_ptr_size != 0 && b > cur_device_ptr_size) {
