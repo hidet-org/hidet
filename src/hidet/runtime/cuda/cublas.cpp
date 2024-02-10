@@ -365,12 +365,12 @@ DLL void hidet_cublas_batched_gemm(
 
     // Allocate device memory
     // first use synchronous versions of malloc and memcpy, later switch to async versions
-    if (cur_device_ptr_size != 0 && b > cur_device_ptr_size) {
-        hidet_cuda_free((void *)ptr_a_device);
-        hidet_cuda_free((void *)ptr_b_device);
-        hidet_cuda_free((void *)ptr_c_device);
-    }
-    if (ptr_a_device == NULL || b > cur_device_ptr_size) {
+    if (b > cur_device_ptr_size) {
+        if (cur_device_ptr_size > 0) {
+            hidet_cuda_free_async((void *)ptr_a_device, cur_stream);
+            hidet_cuda_free_async((void *)ptr_b_device, cur_stream);
+            hidet_cuda_free_async((void *)ptr_c_device, cur_stream);
+        }
         ptr_a_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
         ptr_b_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
         ptr_c_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);

@@ -28,6 +28,7 @@ DLL void hidet_cuda_set_device(int device);
 DLL void* hidet_cuda_malloc(size_t size);
 DLL void* hidet_cuda_malloc_async(size_t size, cudaStream_t stream);
 DLL void hidet_cuda_free(void *devPtr);
+DLL void hidet_cuda_free_async(void *devPtr, cudaStream_t stream);
 DLL void hidet_cuda_memcpy(void* dst, const void* src, size_t count, cudaMemcpyKind kind);
 DLL void hidet_cuda_memcpy_async(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream);
 

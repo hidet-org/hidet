@@ -21,6 +21,7 @@ typedef cudaError_t (*cudaSetDevice_t)(int device);
 typedef cudaError_t (*cudaMalloc_t)(void **devPtr, size_t size);
 typedef cudaError_t (*cudaMallocAsync_t)(void **devPtr, size_t size, cudaStream_t stream);
 typedef cudaError_t (*cudaFree_t)(void *devPtr);
+typedef cudaError_t (*cudaFreeAsync_t)(void *devPtr, cudaStream_t stream);
 typedef cudaError_t (*cudaMemcpy_t)(void* dst, const void* src, size_t count, cudaMemcpyKind kind);
 typedef cudaError_t (*cudaMemcpyAsync_t)(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream);
 typedef const char* (*cudaGetErrorString_t)(cudaError_t error);
@@ -33,6 +34,7 @@ static cudaSetDevice_t cudaSetDevice = nullptr;
 static cudaMalloc_t cudaMalloc = nullptr;
 static cudaMallocAsync_t cudaMallocAsync = nullptr;
 static cudaFree_t cudaFree = nullptr;
+static cudaFreeAsync_t cudaFreeAsync = nullptr;
 static cudaMemcpy_t cudaMemcpy = nullptr;
 static cudaMemcpyAsync_t cudaMemcpyAsync = nullptr;
 static cudaGetErrorString_t cudaGetErrorString = nullptr;
@@ -58,6 +60,7 @@ static inline void lazy_load_cuda_runtime() {
         cudaMalloc = get_symbol<cudaMalloc_t>(libcudart, "cudaMalloc");
         cudaMallocAsync = get_symbol<cudaMallocAsync_t>(libcudart, "cudaMallocAsync");
         cudaFree = get_symbol<cudaFree_t>(libcudart, "cudaFree");
+        cudaFreeAsync = get_symbol<cudaFreeAsync_t>(libcudart, "cudaFreeAsync");
         cudaMemcpy = get_symbol<cudaMemcpy_t>(libcudart, "cudaMemcpy");
         cudaMemcpyAsync = get_symbol<cudaMemcpyAsync_t>(libcudart, "cudaMemcpyAsync");
         cudaGetErrorString = get_symbol<cudaGetErrorString_t>(libcudart, "cudaGetErrorString");
@@ -97,14 +100,14 @@ DLL void hidet_cuda_set_device(int device) {
 
 DLL void* hidet_cuda_malloc(size_t size) {
     lazy_load_cuda_runtime();
-    void* devPtr = malloc(sizeof(void*));
+    void *devPtr;
     CHECK_CUDA(cudaMalloc(&devPtr, size));
     return devPtr;
 }
 
 DLL void* hidet_cuda_malloc_async(size_t size, cudaStream_t stream) {
     lazy_load_cuda_runtime();
-    void* devPtr = malloc(sizeof(void*));
+    void *devPtr;
     CHECK_CUDA(cudaMallocAsync(&devPtr, size, stream));
     return devPtr;
 }
@@ -112,6 +115,11 @@ DLL void* hidet_cuda_malloc_async(size_t size, cudaStream_t stream) {
 DLL void hidet_cuda_free(void *devPtr) {
     lazy_load_cuda_runtime();
     CHECK_CUDA(cudaFree(devPtr));
+}
+
+DLL void hidet_cuda_free_async(void *devPtr, cudaStream_t stream) {
+    lazy_load_cuda_runtime();
+    CHECK_CUDA(cudaFreeAsync(devPtr, stream));
 }
 
 DLL void hidet_cuda_memcpy(void* dst, const void* src, size_t count, cudaMemcpyKind kind) {
