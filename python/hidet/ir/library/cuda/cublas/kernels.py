@@ -76,3 +76,25 @@ def strided_gemm(
             compute_type,
         ],
     )
+
+
+def batched_gemm(
+    bs: Union[Expr, int],
+    m: Union[Expr, int],
+    n: Union[Expr, int],
+    k: Union[Expr, int],
+    type_a: Union[Expr, DataType, int],
+    type_b: Union[Expr, DataType, int],
+    type_c: Union[Expr, DataType, int],
+    a: Expr,
+    b: Expr,
+    c: Expr,
+    trans_a: Union[Expr, bool],
+    trans_b: Union[Expr, bool],
+    compute_type: Union[Expr, int],
+):
+    type_a, type_b, type_c = [as_type_code(t) if isinstance(t, DataType) else t for t in [type_a, type_b, type_c]]
+    return call_primitive_func(
+        func_name='cublas.batched_gemm',
+        args=[bs, m, n, k, type_a, type_b, type_c, a, b, c, trans_a, trans_b, compute_type],
+    )

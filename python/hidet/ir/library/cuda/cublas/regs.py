@@ -63,3 +63,25 @@ def register_cublas_kernels():
         ),
         codegen_name='hidet_cublas_strided_gemm',
     )
+    register_primitive_function(
+        name='cublas.batched_gemm',
+        func_or_type=FuncType(
+            param_types=[
+                int32,  # bs
+                int32,  # m
+                int32,  # n
+                int32,  # k
+                int32,  # type_a (cudaDataType)
+                int32,  # type_b (cudaDataType)
+                int32,  # type_c (cudaDataType)
+                void_p,  # a
+                void_p,  # b
+                void_p,  # c
+                boolean,  # trans_a
+                boolean,  # trans_b
+                int32,  # compute_type (cublasComputeType)
+            ],
+            ret_type=void,
+        ),
+        codegen_name='hidet_cublas_batched_gemm',
+    )
