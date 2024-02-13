@@ -16,7 +16,6 @@ import json
 import shutil
 from hashlib import sha256
 from typing import List, Optional, Tuple
-
 import hidet.cuda
 from hidet import option
 from hidet.ir.stmt import AssertStmt
@@ -111,9 +110,8 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
 
         # generate the candidate summary
         _generate_candidate_summary(candidates, task_dir)
-
         # build each candidate to an object file (.o)
-        build_ir_module_batch(
+        objects_path_list = build_ir_module_batch(
             ir_modules=candidates,
             output_dirs=[os.path.join(task_dir, 'candidates', str(i)) for i in range(len(candidates))],
             output_kind='.o',
@@ -143,9 +141,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module = script_module.ir_module()
         ir_module.add_function(get_input_shape.name, get_input_shape)
         ir_module.add_function(get_output_shape.name, get_output_shape)
-        ir_module.object_files.extend(
-            [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
-        )
+        ir_module.object_files.extend([os.path.join(object_path, 'lib.o') for object_path in objects_path_list])
         task_ir_module = ir_module
 
     # add assertions to the launch function
@@ -162,7 +158,6 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
 
     # build task ir module
     build_ir_module(ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', target=target)
-
     # clear the candidate object files that are no longer needed
     if not hidet.option.get_option('debug_cache_tuning'):
         shutil.rmtree(os.path.join(task_dir, 'candidates'), ignore_errors=True)
@@ -277,7 +272,6 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
             # write version
             with open(version_path, 'w') as f:
                 f.write(hidet.__version__)
-
             # implement task to IRModule, each task may produce multiple IRModules (candidates)
             # they have the same functionality but different performance
             candidates = task.implement(target=target, working_dir=task_dir)

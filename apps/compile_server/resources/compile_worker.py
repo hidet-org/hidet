@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Sequence, Union
 import os
 import traceback
 import argparse
@@ -51,7 +51,7 @@ def compile_job(job_id: str):
 
             # load the workload
             workload: Dict[str, Any] = pickle.loads(job['workload'])
-            ir_module: hidet.ir.IRModule = workload['ir_module']
+            ir_module: Union[hidet.ir.IRModule, Sequence[hidet.ir.IRModule]] = workload['ir_module']
             target: str = workload['target']
             output_kind: str = workload['output_kind']
 

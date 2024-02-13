@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, List, Tuple, Dict, Union
+from typing import Sequence, Optional, List, Tuple, Dict, Union
 import os
 import numpy as np
 from hidet.ir.dialects.pattern import PlaceholderExpr
@@ -263,7 +263,6 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             doc += '}  // namespace ' + module.namespace + NewLine()
 
         doc = self.require_headers() + doc
-
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
@@ -831,7 +830,7 @@ class CPUCodegen(Codegen):
         return doc
 
 
-def codegen(ir_module: IRModule, src_out_path: str, target: Union[str, Target]) -> str:
+def codegen(ir_module: Union[IRModule, Sequence[IRModule]], src_out_path: str, target: Union[str, Target]) -> str:
     if isinstance(target, str):
         target = Target.from_string(target)
 
@@ -842,8 +841,14 @@ def codegen(ir_module: IRModule, src_out_path: str, target: Union[str, Target]) 
     else:
         raise ValueError(f'Unknown target: {target}')
 
-    doc = gen(ir_module)
-    code = str(doc)
+    code = ''
+    if isinstance(ir_module, Sequence):
+        for m in ir_module:
+            doc = gen(m)
+            code += str(doc) + '\n'
+    else:
+        doc = gen(ir_module)
+        code = str(doc)
     if src_out_path is not None:
         dir_path = os.path.dirname(src_out_path)
         if not os.path.exists(dir_path):
