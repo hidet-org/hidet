@@ -105,7 +105,7 @@ jobs:
           -e HW_CONFIG -e REPO_NAME -e REPO_BRANCH -e CI_CS_HOSTNAME -e CI_CS_PORT
           -e CI_CS_USERNAME -e CI_CS_PASSWORD -e HF_TOKEN
           -v ./mount:/workspace/mount
-          hidet-ci python hidet/.github/scripts/run_tests.py'
+          hidet-ci python hidet/.github/scripts/run_tests.py --configs /workspace/mount/run_configs.json'
         env:
           HW_CONFIG: ${{ matrix.hw_configs }}
           REPO_NAME: ${{ inputs.source_repo == 'this' && github.repository || inputs.source_repo }}
