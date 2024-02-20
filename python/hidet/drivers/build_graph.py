@@ -145,6 +145,11 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
         lines.append(str(node.task))
     lines.append(str(graph))
     lines.append(str(space))
+
+    # graph nodes are not traversed in deterministic order
+    # sort to ensure same graph --> same hash
+    lines.sort()
+
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
