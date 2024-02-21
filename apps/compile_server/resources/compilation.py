@@ -67,6 +67,7 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
                 repo.remotes.origin.pull(version + '/head')
             else:
                 # Not a PR, just a regular branch
+                repo.remotes.origin.fetch(version)
                 repo.git.checkout(version)
                 repo.remotes.origin.pull(version)
             with open(repo_timestamp, 'w') as f:
