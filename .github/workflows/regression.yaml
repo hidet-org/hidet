@@ -61,9 +61,6 @@ jobs:
       matrix:
         hw_configs: ${{ fromJSON(needs.start_instances.outputs.hw_configs) }}
     runs-on: ${{ matrix.hw_configs }}
-    container:
-      image: nvcr.io/nvidia/pytorch:23.10-py3
-      options: --gpus all
     outputs:
       commit_time: ${{ steps.get_commit_info.outputs.commit_time }}
       commit_author: ${{ steps.get_commit_info.outputs.commit_author }}
@@ -79,7 +76,7 @@ jobs:
             ${{ inputs.source_repo == 'this' && github.ref_name || 
             format('refs/pull/{0}/head', inputs.source_ref) }}
           path: hidet
-      
+
       - name: Checkout models
         uses: actions/checkout@v4
         with:
@@ -88,40 +85,27 @@ jobs:
           path: models
           ref: ci
 
-      - name: Install dependencies
-        run: |
-          pip install -r hidet/requirements.txt
-          pip install -r hidet/requirements-dev.txt
-          pip install -r hidet/.github/requirements-ci.txt
-      
-      - name: Build hidet
-        run: |
-          bash hidet/scripts/wheel/build_wheel.sh
-          WHEEL=$(find hidet/scripts/wheel/built_wheel -maxdepth 1 -name '*.whl')
-          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
-          echo "Built wheel: ${{ env.WHEEL_NAME }}"
-
-      - name: Install hidet
-        run: |
-          pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
-      
-      - name: Install models
-        run: |
-          pip install -e models
-      
       - name: Download run configs
         uses: actions/download-artifact@v3
         with:
           name: run_configs
-
-      - name: Clear cache
-        run: |
-          hidet cache clear --all
+          path: ./mount
+        
+      # Build the image
+      - name: Build docker image from base image
+        run: docker build -t hidet-ci -f hidet/.github/Dockerfile .
       
-      - name: Run tests
+      # Run the tests in the container. Container should write output to host file
+      - name: Run Docker with slurm
         timeout-minutes: 2880
-        run: |
-          python hidet/.github/scripts/run_tests.py
+        run: >
+          srun --gpus 1 -c 8 bash -c 'docker run --privileged
+          --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=-1
+          -e CUDA_VISIBLE_DEVICES=$SLURM_STEP_GPUS
+          -e HW_CONFIG -e REPO_NAME -e REPO_BRANCH -e CI_CS_HOSTNAME -e CI_CS_PORT
+          -e CI_CS_USERNAME -e CI_CS_PASSWORD -e HF_TOKEN
+          -v ./mount:/workspace/mount
+          hidet-ci python hidet/.github/scripts/run_tests.py --configs /workspace/mount/run_configs.json'
         env:
           HW_CONFIG: ${{ matrix.hw_configs }}
           REPO_NAME: ${{ inputs.source_repo == 'this' && github.repository || inputs.source_repo }}
@@ -136,7 +120,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: run_configs_${{ matrix.hw_configs }}
-          path: run_configs.json
+          path: ./mount/run_configs.json
           retention-days: 1
       
       - name: Retrieve commit properties
