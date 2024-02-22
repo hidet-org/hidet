@@ -99,7 +99,7 @@ jobs:
       - name: Run Docker with slurm
         timeout-minutes: 2880
         run: >
-          srun --gpus 1 -c 8 bash -c 'docker run
+          srun --gpus 1 -c 8 bash -c 'docker run --privileged
           --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=-1
           -e CUDA_VISIBLE_DEVICES=$SLURM_STEP_GPUS
           -e HW_CONFIG -e REPO_NAME -e REPO_BRANCH -e CI_CS_HOSTNAME -e CI_CS_PORT
