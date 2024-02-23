@@ -137,9 +137,10 @@ class MatmulResolveRule(ResolveRule):
         if a.dtype.nbytes > 4 or b.dtype.nbytes > 4:
             return None
 
-        run_func = self.run_batch_matmul
         if op.device.is_cpu():
             run_func = self.run_batch_matmul_cpu
+        else:
+            run_func = self.run_batch_matmul
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
