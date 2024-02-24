@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Set, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union
 from collections import defaultdict
 import hidet.option
 from hidet.graph.tensor import Tensor
@@ -58,8 +58,6 @@ def graph_analyze(
     for ot in outputs:
         if ot.trace and ot not in stop_tensors:
             find_all_nodes(ot.op)
-    print("all_nodes")
-    print(all_nodes)
 
     # topological sort
     out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}

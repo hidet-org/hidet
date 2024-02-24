@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Set, Dict
+from typing import List, Dict
 import os
 import json
 import shutil
@@ -34,7 +34,7 @@ def get_graph_weights(graph):
     Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
     graph, are considered as weights.
     """
-    weights: List[Tensor] = list()
+    weights: List[Tensor] = []
     for node in graph.nodes:
         for x in node.inputs:
             if x.storage is not None:
@@ -146,12 +146,8 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     lines.append(str(graph))
     lines.append(str(space))
 
-    # graph nodes are not traversed in deterministic order
-    # sort to ensure same graph --> same hash
-    lines.sort()
-
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
-    
+
     return GraphMetaData(
         inputs=inputs,
         outputs=outputs,
