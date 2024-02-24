@@ -39,10 +39,12 @@ def graph_analyze(
     stop_tensors: List[Tensor] = stop_tensors or []
 
     # find out all nodes
-    all_nodes: Set[Operator] = set()
+    # use dict for ordered set behaviour
+    # ordering needed for deterministic node ordering
+    all_nodes: Dict[Operator, bool] = {}
 
     def find_all_nodes(u: Operator):
-        all_nodes.add(u)
+        all_nodes[u] = True
         for x in u.inputs:
             if x.op is None or x in stop_tensors:
                 continue
@@ -56,6 +58,8 @@ def graph_analyze(
     for ot in outputs:
         if ot.trace and ot not in stop_tensors:
             find_all_nodes(ot.op)
+    print("all_nodes")
+    print(all_nodes)
 
     # topological sort
     out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}

@@ -34,15 +34,15 @@ def get_graph_weights(graph):
     Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
     graph, are considered as weights.
     """
-    weights: Set[Tensor] = set()
+    weights: List[Tensor] = list()
     for node in graph.nodes:
         for x in node.inputs:
             if x.storage is not None:
-                weights.add(x)
+                weights.append(x)
     for y in graph.outputs:
         if y.storage is not None:
-            weights.add(y)
-    return list(weights)
+            weights.append(y)
+    return weights
 
 
 def get_graph_intermediates(graph):
@@ -151,7 +151,7 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     lines.sort()
 
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
-
+    
     return GraphMetaData(
         inputs=inputs,
         outputs=outputs,
