@@ -41,7 +41,7 @@ from .quant import symmetric_quantize, symmetric_dequantize
 from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .cumulative import cumsum
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
-from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather
+from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather, index_select
 from .transform import permute_dims
 from .fusion import fused_operator
 from .transfer import transfer

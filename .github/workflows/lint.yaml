@@ -7,7 +7,7 @@ on:
 
 jobs:
   format-and-lint:
-    if: github.repository == 'hidet-org/hidet'
+    if: github.repository == 'hidet-org/hidet' || github.repository == 'CentML/hidet'
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true

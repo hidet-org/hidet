@@ -174,6 +174,11 @@ def iadd(x: Tensor, y: Tensor):
     return x + y
 
 
+@register_function(operator.imul)
+def imul(x: Tensor, y: Tensor):
+    return x * y
+
+
 @register_function(torch.sin)
 @register_function(torch.ops.aten.sin.default)
 def sin(x: Tensor):
@@ -320,7 +325,7 @@ def mul(x: Tensor, y: Tensor):
 
 
 @register_function(torch.cat)
-def cat(tensors: List[Tensor], dim: int):
+def cat(tensors: List[Tensor], dim: int = 0):
     dtype = functools.reduce(promote_type, [t.dtype for t in tensors])
     tensors = [ops.cast(t, dtype) for t in tensors]
     return ops.concat(tensors, dim)
@@ -688,6 +693,11 @@ def pow(base: Tensor, exponent: Union[Number, Tensor]):
     return ops.pow(base, exponent)
 
 
+@register_function(torch.scalar_tensor)
+def scalar_tensor(value):
+    return ops.full([1], value)
+
+
 @register_function(torch.full)
 def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, requires_grad=False):
     if out is not None:
@@ -727,7 +737,9 @@ def empty(
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
     if len(size) == 1 and isinstance(size[0], (tuple, list)):
         size = size[0]
-    return ops.full(size, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
+    return ops.full(
+        size, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero if hidet_dtype is not None else 0
+    )
 
 
 @register_function(torch.bmm)
@@ -1017,6 +1029,7 @@ def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
     return a >= b
 
 
+@register_method(torch.Tensor.eq)
 @register_function(operator.eq)
 def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     if isinstance(a, Tensor) or isinstance(b, Tensor):
@@ -1160,6 +1173,7 @@ def torch_conj(x: Tensor) -> Tensor:
 
 
 @register_function(torch._C._log_api_usage_once)
+@register_function(torch._assert_async)
 @register_function(torch.cuda.synchronize)
 def torch_noop(*args, **kwargs):
     return
