@@ -87,6 +87,11 @@ def test_transpose(shape, axes):
     check_transform(shape, lambda x: np.transpose(x, axes), lambda x: ops.transpose(x, axes))
 
 
+@pytest.mark.parametrize("shape", [[33, 44], [1, 100], [100, 1], [10, 20], [20, 10], [100, 200], [2000, 3000]])
+def test_transpose_2d(shape):
+    check_transform(shape, lambda x: np.transpose(x), lambda x: ops.transpose(x))
+
+
 @pytest.mark.parametrize(
     "shapes, dtype, axis",
     [
