@@ -207,6 +207,23 @@ def build_ir_module_batch(
         else:
             return modules
 
+    # check if regrouped IRModules have unique function names
+    def check_function_singular(module_list: Union[Sequence[IRModule], Sequence[Sequence[IRModule]]]) -> bool:
+        if len(module_list) == 0 or isinstance(module_list[0], IRModule):
+            return True
+        name_set = set()
+        for modules in module_list:
+            for module in modules:
+                namespace_str = module.namespace
+                function_name_list = list(module.extern_functions.keys()) + list(module.functions.keys())
+                for func_name in function_name_list:
+                    func_str = namespace_str + '::' + func_name
+                    if func_str in name_set:
+                        return False
+                    else:
+                        name_set.add(func_str)
+        return True
+
     # calculate the number of workers
     cpu_count = os.cpu_count()
     if hidet.option.compile_server.enabled():
@@ -229,6 +246,9 @@ def build_ir_module_batch(
 
         per_worker_jobs = 1 if len(ir_modules) < num_workers else len(ir_modules) // num_workers
         ir_modules_list = regroup_modules(ir_modules, per_worker_jobs)
+        assert check_function_singular(
+            ir_modules_list
+        ), 'duplicate function names detected after regrouping candidates for batch compilation'
         jobs = [
             (ir_modules, output_dir)
             for ir_modules, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])
