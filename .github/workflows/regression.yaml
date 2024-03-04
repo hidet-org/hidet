@@ -162,7 +162,7 @@ jobs:
           CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
 
   stop_instances:
-    if: inputs.shutdown_instances
+    if: ${{ always() && inputs.shutdown_instances }}
     runs-on: ubuntu-latest
     needs: [start_instances, run_tests]
     steps:
