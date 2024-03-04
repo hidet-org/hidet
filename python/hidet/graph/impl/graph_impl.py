@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Set, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union
 from collections import defaultdict
 import hidet.option
 from hidet.graph.tensor import Tensor
@@ -39,10 +39,12 @@ def graph_analyze(
     stop_tensors: List[Tensor] = stop_tensors or []
 
     # find out all nodes
-    all_nodes: Set[Operator] = set()
+    # use dict for ordered set behaviour
+    # ordering needed for deterministic node ordering
+    all_nodes: Dict[Operator, bool] = {}
 
     def find_all_nodes(u: Operator):
-        all_nodes.add(u)
+        all_nodes[u] = True
         for x in u.inputs:
             if x.op is None or x in stop_tensors:
                 continue

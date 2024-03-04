@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Set, Dict
+from typing import List, Dict
 import os
 import json
 import shutil
@@ -34,15 +34,15 @@ def get_graph_weights(graph):
     Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
     graph, are considered as weights.
     """
-    weights: Set[Tensor] = set()
+    weights: List[Tensor] = []
     for node in graph.nodes:
         for x in node.inputs:
             if x.storage is not None:
-                weights.add(x)
+                weights.append(x)
     for y in graph.outputs:
         if y.storage is not None:
-            weights.add(y)
-    return list(weights)
+            weights.append(y)
+    return weights
 
 
 def get_graph_intermediates(graph):
@@ -145,6 +145,7 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
         lines.append(str(node.task))
     lines.append(str(graph))
     lines.append(str(space))
+
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
