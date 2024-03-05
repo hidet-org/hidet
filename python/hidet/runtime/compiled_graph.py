@@ -136,6 +136,23 @@ class CompiledGraph:
             # the weights are already loaded, initialize the graph directly
             self._init_compiled_graph()
 
+    def __getstate__(self):
+        # Create a temporary file and save the CompiledGraph zip in it
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            self.save(temp_file.name)
+            with open(temp_file.name, 'rb') as f:
+                state = f.read()
+        # os.unlink(temp_file.name)  # Delete the temporary file
+        return state
+
+    def __setstate__(self, state):
+        # Load the CompiledGraph
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            with open(temp_file.name, 'wb') as f:
+                f.write(state)
+            self.load(temp_file.name)
+        # os.unlink(temp_file.name)  # Delete the temporary file
+
     def __str__(self):
         """
         Get the basic information of this compiled graph.
@@ -499,6 +516,21 @@ class CompiledGraph:
             Whether to save the dispatch table to disk. See `save_compiled_graph` for details.
         """
         save_compiled_graph(self, path, save_dispatch_table)
+
+    def load(self, path: str):
+        """
+        Set the state of self to the state of the CompiledGraph saved in the given file.
+
+        See Also
+        --------
+        CompiledGraph.save or save_compiled_graph
+        
+        Parameters
+        ----------
+        path: str
+            The path to save the compiled graph. By convention, the path should end with '.hidet'
+        """
+        self.__dict__.update(load_compiled_graph(path).__dict__)
 
 
 def save_compiled_graph(model: CompiledGraph, file: str, save_dispatch_table: bool = False, save_weights: bool = True):
