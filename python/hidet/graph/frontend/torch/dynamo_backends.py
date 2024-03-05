@@ -108,38 +108,20 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
     hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
     return hidet_inputs
 
-
-class CompiledForwardFunction(torch.nn.Module):
-    def get_runner(self, cgraph):
-        use_cuda_graph = dynamo_config['use_cuda_graph']
-        if use_cuda_graph:
-            try:
-                runner = cgraph.cuda_graph()
-            except CudaGraphCreationError:
-                runner = cgraph
-        else:
-            runner = cgraph
-
-        return runner
-
+class CompiledForwardFunction(torch.nn.Module): 
     def __init__(self, cgraph: CompiledGraph, inputs, output_format):
         self.cgraph = cgraph
         self.inputs = inputs
         self.output_format = output_format
 
-    def __name__(self):
-        return self.__class__.__name__
 
     def __call__(self, *args):
-        use_cuda_graph = dynamo_config['use_cuda_graph']
-        if use_cuda_graph:
+        if dynamo_config['use_cuda_graph']:
             try:
                 runner = self.cgraph.cuda_graph()
             except CudaGraphCreationError:
                 runner = self.cgraph
-        else:
-            runner = self.cgraph
-
+        
         tensor_args = []
         for param, arg in zip(self.inputs, args):
             if isinstance(param, Tensor):
@@ -190,6 +172,4 @@ def hidet_backend(graph_module, example_inputs):
 
     cgraph = get_compiled_graph(flow_graph)
 
-    wrapper = CompiledForwardFunction(cgraph, inputs, output_format)
-
-    return wrapper
+    return CompiledForwardFunction(cgraph, example_inputs, output_format)
