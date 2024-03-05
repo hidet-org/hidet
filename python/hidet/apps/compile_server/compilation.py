@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Sequence, Union
 import zipfile
 import shutil
 import tempfile
@@ -21,7 +22,9 @@ from hidet.ir.module import IRModule
 from .core import api_url, access_token
 
 
-def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):
+def remote_build(
+    ir_module: Union[IRModule, Sequence[IRModule]], output_dir: str, *, target: str, output_kind: str = '.so'
+):
     # upload the IRModule
     if 'cuda' in target:
         if 'arch' not in target:
