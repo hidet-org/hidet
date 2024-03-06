@@ -62,3 +62,25 @@ class LayerNorm(Module):
         if self.bias is not None:
             x = x + self.bias
         return x
+
+
+class GroupNorm(Module):
+    def __init__(self, num_groups, num_channels, eps=1e-5, affine=True):
+        super().__init__()
+        self.eps = eps
+        self.affine = affine
+        self.num_groups = num_groups
+        self.num_channels = num_channels
+        if affine:
+            self.weight: Tensor = empty(shape=[num_channels])
+            self.bias: Tensor = empty(shape=[num_channels])
+        else:
+            self.weight = None
+            self.bias = None
+
+    def forward(self, x: Tensor):
+        x = ops.group_norm(x, self.num_groups, self.eps)
+        if self.affine:
+            x = x * self.weight + self.bias
+
+        return x
