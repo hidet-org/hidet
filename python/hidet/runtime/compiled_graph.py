@@ -66,7 +66,7 @@ class GraphExecution:
     outputs_index: List[int]
     tensor_device: List[str]
 
-
+import sys
 class CompiledGraph:
     """
     A compiled graph that can be directly called in Python.
@@ -138,20 +138,18 @@ class CompiledGraph:
 
     def __getstate__(self):
         # Create a temporary file and save the CompiledGraph zip in it
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            self.save(temp_file.name)
+        with tempfile.NamedTemporaryFile() as temp_file:
+            self.save(temp_file.name, save_dispatch_table=True)
             with open(temp_file.name, 'rb') as f:
                 state = f.read()
-        # os.unlink(temp_file.name)  # Delete the temporary file
         return state
 
     def __setstate__(self, state):
         # Load the CompiledGraph
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile() as temp_file:
             with open(temp_file.name, 'wb') as f:
                 f.write(state)
             self.load(temp_file.name)
-        # os.unlink(temp_file.name)  # Delete the temporary file
 
     def __str__(self):
         """
