@@ -12,11 +12,13 @@
 from hidet.ir.type import DataType
 from .integer import int8, int16, int32, int64, uint8, uint16, uint32, uint64
 from .integer import i8, i16, i32, i64, u8, u16, u32, u64
+from .integer_subbyte import int4b, int3b, int2b, int1b, uint4b, uint3b, uint2b, uint1b
+from .integer_subbyte import i4, i3, i2, i1, u4, u3, u2, u1
 from .floats import float16, float32, float64, bfloat16, tfloat32
 from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
-from .vector import float16x2, float32x4, float32x8, int8x4, uint8x4, vectorize
-from .vector import f16x2, f32x4, f32x8
+from .vector import float16x2, float32x4, float32x8, int8x4, uint8x4, int4bx8, uint4bx8, vectorize
+from .vector import f16x2, f32x4, f32x8, i4x8, u4x8
 from .complex import complex64, complex128
 from .promotion import promote_type
 from .utils import dtype_to_numpy, finfo, iinfo
@@ -43,6 +45,16 @@ name2dtype = {
     'float16x2': float16x2,
     'int8x4': int8x4,
     'uint8x4': uint8x4,
+    'int4b': int4b,
+    'int3b': int3b,
+    'int2b': int2b,
+    'int1b': int1b,
+    'uint4b': uint4b,
+    'uint3b': uint3b,
+    'uint2b': uint2b,
+    'uint1b': uint1b,
+    'int4bx8': int4bx8,
+    'uint4bx8': uint4bx8,
 }
 
 sname2dtype = {
@@ -66,6 +78,16 @@ sname2dtype = {
     'f32x8': f32x8,
     'f16x2': f16x2,
     'i8x4': int8x4,
+    'i4': int4b,
+    'i3': int3b,
+    'i2': int2b,
+    'i1': int1b,
+    'u4': uint4b,
+    'u3': uint3b,
+    'u2': uint2b,
+    'u1': uint1b,
+    'i4x8': int4bx8,
+    'u4x8': uint4bx8,
 }
 
 

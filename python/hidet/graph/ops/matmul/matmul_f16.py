@@ -92,10 +92,29 @@ class MatmulF16Task(Task):
         warp_n=[16, 32, 48, 64],
         warp_k=[8, 16, 32, 64],
         mma=['m16n8k16'],
+        use_cublas=[True, False],
     )
-    @tune.space(1, block_m=[128], block_n=[128], block_k=[16], warp_m=[64], warp_n=[64], warp_k=[16], mma=['m16n8k16'])
+    @tune.space(
+        1,
+        block_m=[128],
+        block_n=[128],
+        block_k=[16],
+        warp_m=[64],
+        warp_n=[64],
+        warp_k=[16],
+        mma=['m16n8k16'],
+        use_cublas=[True, False],
+    )
     def schedule(
-        self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16'
+        self,
+        block_m=64,
+        block_n=128,
+        block_k=16,
+        warp_m=32,
+        warp_n=64,
+        warp_k=16,
+        mma: str = 'm16n8k16',
+        use_cublas=False,
     ) -> IRModule:
         # pylint: disable=unused-variable
         import hidet
@@ -116,6 +135,24 @@ class MatmulF16Task(Task):
         a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
         k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
+
+        if use_cublas:
+            from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
+
+            dtype = self.inputs[0].type.dtype
+            # Hack to reduce redundant schedules. When use_cublas == False, other tuning params are irrelevant
+            # and we only need one copy of the schedule.
+            schedule_filter = (
+                block_m == 128
+                and block_n == 128
+                and block_k == 16
+                and warp_m == 64
+                and warp_n == 64
+                and warp_k == 16
+                and mma == 'm16n8k16'
+            )
+            tune.check(schedule_filter)
+            return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype)
 
         # schedule parameters
         mma_configs = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}

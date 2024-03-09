@@ -48,7 +48,7 @@ y = model_opt(x)
 See the following tutorials to learn other usages:
 - [Quick Start](http://docs.hidet.org/stable/gallery/getting-started/quick-start.html)
 - [Optimize PyTorch models](http://docs.hidet.org/stable/gallery/tutorials/optimize-pytorch-model.html)
-- [Optimize ONNX models](http://docs.hidet.org/stable/gallery/tutorials/run-onnx-model.html)
+- [Optimize ONNX models](http://docs.hidet.org/stable/gallery/tutorials/optimize-onnx-model.html)
 
 ## Publication
 Hidet originates from the following research work:

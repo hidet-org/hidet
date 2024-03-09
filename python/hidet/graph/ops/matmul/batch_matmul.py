@@ -76,6 +76,7 @@ class BatchMatmulTask(Task):
             spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
         ],
         warp_inner=[(4, 4)],
+        use_cublas=[True, False],
     )
     @tune.space(
         1,
@@ -84,12 +85,41 @@ class BatchMatmulTask(Task):
         warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
         warp_mid=[spatial(4, 8)],
         warp_inner=[(4, 4), (4, 8), (8, 4)],
+        use_cublas=[True, False],
     )
     def schedule_simt(
-        self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
+        self,
+        block_warps_k=8,
+        block_warps=(4, 2),
+        warp_outer=(2, 2),
+        warp_mid=spatial(4, 8),
+        warp_inner=(4, 4),
+        use_cublas=False,
     ) -> IRModule:
         task = self
         dtype = task.inputs[0].type.dtype
+
+        if use_cublas:
+            from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
+
+            a_shape = task.inputs[0].type.shape
+            b_shape = task.inputs[1].type.shape
+            c_shape = task.outputs[0].type.shape
+            # Hack to reduce redundant schedules. When use_cublas == False, other tuning params are irrelevant
+            # and we only need one copy of the schedule.
+            from hidet.ir.mapping import SpatialTaskMapping
+
+            schedule_filter = (
+                block_warps_k == 8
+                and block_warps == (1, 1)
+                and warp_outer == (1, 1)
+                and isinstance(warp_mid, SpatialTaskMapping)
+                and warp_mid.task_shape == (4, 8)
+                and warp_inner == (4, 4)
+            )
+            tune.check(schedule_filter)
+            return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype)
+
         warp_k = 1
 
         # Task Layouts
@@ -369,6 +399,7 @@ class BatchMatmulTask(Task):
         warp_n=[16, 32, 64],
         warp_k=[8, 16, 32],
         mma_config=MmaConfig.all(),
+        use_cublas=[True, False],
     )
     @tune.space(
         1,
@@ -379,9 +410,18 @@ class BatchMatmulTask(Task):
         warp_n=[32, 64],
         warp_k=[8, 16, 32],
         mma_config=MmaConfig.all(),
+        use_cublas=[True, False],
     )
     def schedule_mma(
-        self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config: MmaConfig = None
+        self,
+        block_m=64,
+        block_n=64,
+        block_k=16,
+        warp_m=32,
+        warp_n=32,
+        warp_k=16,
+        mma_config: MmaConfig = None,
+        use_cublas=False,
     ) -> IRModule:
         def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
             dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
@@ -398,9 +438,35 @@ class BatchMatmulTask(Task):
 
         task = self
 
-        input_a, input_b, input_c = task.inputs[0], task.inputs[1], task.outputs[0]
-        input_a_dtype, input_b_dtype, input_c_dtype = [t.type.dtype for t in [input_a, input_b, input_c]]
-        mma_type = resolve_mma_type(input_a_dtype, input_b_dtype, input_c_dtype)
+        input_a, input_b, output_c = task.inputs[0], task.inputs[1], task.outputs[0]
+        input_a_dtype, input_b_dtype, output_c_dtype = [t.type.dtype for t in [input_a, input_b, output_c]]
+        input_a_shape, input_b_shape, output_c_shape = [t.type.shape for t in [input_a, input_b, output_c]]
+
+        if use_cublas:
+            from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
+
+            # Hack to reduce redundant schedules. When use_cublas == False, other tuning params are irrelevant
+            # and we only need one copy of the schedule.
+            schedule_filter = (
+                block_m == 64
+                and block_n == 64
+                and block_k == 8
+                and warp_m == 32
+                and warp_n == 32
+                and warp_k == 8
+                and mma_config
+                and mma_config.m == 16
+                and mma_config.n == 8
+                and mma_config.k == 8
+                and mma_config.input_dtype == 'f16'
+                and mma_config.output_dtype == 'f16'
+            )
+            tune.check(schedule_filter)
+            return get_cublas_matmul_schedule(
+                input_a_shape, input_b_shape, output_c_shape, input_a_dtype, input_b_dtype, output_c_dtype
+            )
+
+        mma_type = resolve_mma_type(input_a_dtype, input_b_dtype, output_c_dtype)
 
         # Resolve parameters when space level is 0
         if mma_config is None:
@@ -549,7 +615,7 @@ class BatchMatmulTask(Task):
             @hidet.script
             def copy_c_r2g(
                 regs_c: TensorType(dtype=c_dtype, layout=regs_c_layout),
-                c: input_c_dtype[bs, m_size, n_size],
+                c: output_c_dtype[bs, m_size, n_size],
                 offset_m: i32,
                 offset_n: i32,
                 smem: void_p,
@@ -610,7 +676,7 @@ class BatchMatmulTask(Task):
             def batch_matmul_kernel(
                 a: input_a_dtype[bs, m_size, k_size],
                 b: input_b_dtype[bs, k_size, n_size],
-                c: input_c_dtype[bs, m_size, n_size],
+                c: output_c_dtype[bs, m_size, n_size],
             ):
                 attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
                 attrs.cuda.block_dim = block_size

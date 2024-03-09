@@ -35,6 +35,9 @@ class FloatType(DataType):
         self._eps: float = eps
         self._smallest_normal: float = smallest_normal
 
+    def is_integer_subbyte(self) -> bool:
+        return False
+
     def is_float(self) -> bool:
         return True
 

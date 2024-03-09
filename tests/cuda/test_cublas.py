@@ -51,6 +51,28 @@ def test_cublas_strided_gemm(bs, m, n, k, dtype, compute_type, tol):
     hidet.utils.assert_close(actual=c, expected=a @ b, rtol=tol, atol=tol)
 
 
+@pytest.mark.parametrize('bs, m, n, k', [[3, 4, 4, 4], [4, 128, 128, 128], [5, 123, 234, 345]])
+@pytest.mark.parametrize(
+    'dtype, compute_type, tol',
+    [
+        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_16F, 1e-2),
+        (hidet.float32, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-5),
+        (hidet.float64, cublasComputeType.CUBLAS_COMPUTE_64F, 1e-8),
+    ],
+)
+def test_cublas_batched_gemm(bs, m, n, k, dtype, compute_type, tol):
+    a, b, c = [], [], []
+    for i in range(bs):
+        a.append(hidet.randn((m, k), device='cuda', dtype=dtype) / math.sqrt(k))
+        b.append(hidet.randn((k, n), device='cuda', dtype=dtype) / math.sqrt(k))
+        c.append(hidet.empty((m, n), device='cuda', dtype=dtype))
+
+    hidet.cuda.cublas.batched_gemm(bs, m, n, k, a[0].dtype, b[0].dtype, c[0].dtype, a, b, c, False, False, compute_type)
+
+    for i in range(bs):
+        hidet.utils.assert_close(actual=c[i], expected=a[i] @ b[i], rtol=tol, atol=tol)
+
+
 def test_cublas_library_gemm():
     from hidet.lang import attrs
     from hidet.lang.cuda import cublas

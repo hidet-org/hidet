@@ -9,7 +9,7 @@ on:
 
 jobs:
   tests:
-    if: github.repository == 'hidet-org/hidet'
+    if: github.repository == 'CentML/hidet' || github.repository == 'hidet-org/hidet'
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true

@@ -67,6 +67,7 @@ class BaseType(Node):
 class DataType(BaseType):
     """
     The data type that defines how to interpret the data in memory.
+
     """
 
     def __init__(self, name: str, short_name: str, nbytes: int):
@@ -131,6 +132,36 @@ class DataType(BaseType):
     def nbytes(self) -> int:
         return self._nbytes
 
+    @property
+    def nbits(self) -> int:
+        """
+        Get the bit length of the data type
+
+        Note:
+        1. The bit length of the data type itself other than the bit length of its storage.
+        2. For regular data types, the nbits can be computed from its nbytes property.
+        3. For subbyte data types, the nbits is defined when constructing the data type,
+        and this method will also be overridden for subbyte data types.
+        4. In addition, we cannot access the nbytes for a subbyte data type, otherwise
+        a type error will be raised.
+        """
+        return self._nbytes * 8
+
+    @property
+    def storage(self) -> DataType:
+        """
+        Get the actual storage type of the data type
+
+        Note:
+        1. The storage of a regular data type is the data type itself, while the storage
+        of a subbyte type is the type of its actual storage. e.g., the storage of int4b is uint8
+        2. The property will be overridden in the subclass of subbyte types.
+        """
+        return self
+
+    def is_integer_subbyte(self) -> bool:
+        raise NotImplementedError()
+
     def is_float(self) -> bool:
         raise NotImplementedError()
 
@@ -187,7 +218,10 @@ class TensorType(BaseType):
         return TensorPointerType.from_tensor_type(self)
 
     def storage_bytes(self) -> Expr:
-        return self.layout.size * self.dtype.nbytes
+        if self.dtype.is_integer_subbyte():
+            return self.layout.size * self.dtype.nbits // 8
+        else:
+            return self.layout.size * self.dtype.nbytes
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]

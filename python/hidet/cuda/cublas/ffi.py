@@ -14,6 +14,7 @@ import sys
 import glob
 from enum import IntEnum
 from ctypes import c_int32, c_int64, c_void_p, c_bool, c_char_p
+from hidet.ffi.utils import c_pointer_compatible
 from hidet.ffi.ffi import get_func
 from hidet.utils.py import initialize
 
@@ -110,6 +111,26 @@ strided_gemm = get_func(
         c_int64,  # stride a
         c_int64,  # stride b
         c_int64,  # stride c
+        c_bool,  # trans a
+        c_bool,  # trans b
+        c_int32,  # compute type
+    ],
+    restype=None,
+)
+
+batched_gemm = get_func(
+    func_name='hidet_cublas_batched_gemm',
+    arg_types=[
+        c_int32,  # batch size
+        c_int32,  # m
+        c_int32,  # n
+        c_int32,  # k
+        c_int32,  # type a
+        c_int32,  # type b
+        c_int32,  # type c
+        c_pointer_compatible,  # a array
+        c_pointer_compatible,  # b array
+        c_pointer_compatible,  # c array
         c_bool,  # trans a
         c_bool,  # trans b
         c_int32,  # compute type

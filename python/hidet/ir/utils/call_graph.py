@@ -12,6 +12,7 @@
 from typing import Union, List
 from collections import defaultdict
 from hidet.ir.expr import Call
+from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.tools import collect
@@ -50,7 +51,7 @@ class CallGraph:
 
         for func in ir_module.functions.values():
             caller = func
-            for call in collect(func.body, Call):
+            for call in collect(func.body, [Call, LaunchKernelStmt]):
                 if is_primitive_function(call.func_var.name):
                     entry = lookup_primitive_function(call.func_var.name)
                     if entry.function is not None:

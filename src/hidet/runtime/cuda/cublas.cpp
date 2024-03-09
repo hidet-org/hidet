@@ -104,6 +104,7 @@ typedef enum {
 typedef const char* (*cublasGetStatusName_t)(cublasStatus_t status);
 typedef const char* (*cublasGetStatusString_t)(cublasStatus_t status);
 typedef cublasStatus_t (*cublasCreate_t)(cublasHandle_t *handle);
+typedef cublasStatus_t (*cublasSetStream_t)(cublasHandle_t handle, cudaStream_t streamId);
 typedef cublasStatus_t (*cublasGemmEx_t)(
     cublasHandle_t handle,
     cublasOperation_t transa, cublasOperation_t transb,
@@ -129,14 +130,29 @@ typedef cublasStatus_t (*cublasGemmStridedBatchedEx_t)(
     cublasComputeType_t computeType,
     cublasGemmAlgo_t algo
 );
+typedef cublasStatus_t (*cublasGemmBatchedEx_t)(
+    cublasHandle_t handle,
+    cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const void *alpha,
+    const void *const Aarray[], cudaDataType_t Atype, int lda,
+    const void *const Barray[], cudaDataType_t Btype, int ldb,
+    const void *beta,
+    void *const Carray[], cudaDataType_t Ctype, int ldc,
+    int batchCount,
+    cublasComputeType_t computeType,
+    cublasGemmAlgo_t algo
+);
 
 
 // cublas api functions
 static cublasCreate_t cublasCreate;
+static cublasSetStream_t cublasSetStream;
 static cublasGetStatusName_t cublasGetStatusName;
 static cublasGetStatusString_t cublasGetStatusString;
 static cublasGemmEx_t cublasGemmEx;
 static cublasGemmStridedBatchedEx_t cublasGemmStridedBatchedEx;
+static cublasGemmBatchedEx_t cublasGemmBatchedEx;
 
 static std::string library_path;
 static void* libcublas = nullptr;
@@ -199,12 +215,14 @@ static void lazy_load_cublas() {
 
         // load api functions
         cublasCreate = get_symbol<cublasCreate_t>(libcublas, "cublasCreate_v2");
+        cublasSetStream = get_symbol<cublasSetStream_t>(libcublas, "cublasSetStream_v2");
         cublasGetStatusName = get_symbol<cublasGetStatusName_t>(libcublas, "cublasGetStatusName");
         cublasGetStatusString = get_symbol<cublasGetStatusString_t>(libcublas, "cublasGetStatusString");
         cublasGemmEx = get_symbol<cublasGemmEx_t>(libcublas, "cublasGemmEx");
         cublasGemmStridedBatchedEx = get_symbol<cublasGemmStridedBatchedEx_t>(
             libcublas, "cublasGemmStridedBatchedEx"
         );
+        cublasGemmBatchedEx = get_symbol<cublasGemmBatchedEx_t>(libcublas, "cublasGemmBatchedEx");
     }
 }
 
@@ -248,6 +266,10 @@ DLL void hidet_cublas_gemm(
 ) {
     lazy_load_cublas();
 
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+
     const void *p_alpha = nullptr;
     const void *p_beta = nullptr;
 
@@ -284,6 +306,10 @@ DLL void hidet_cublas_strided_gemm(
 ) {
     lazy_load_cublas();
 
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+
     const void *p_alpha = nullptr;
     const void *p_beta = nullptr;
 
@@ -317,6 +343,72 @@ DLL void hidet_cublas_strided_gemm(
         cublasComputeType_t(compute_type),
         cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT
     ));
+}
+
+DLL void hidet_cublas_batched_gemm(
+    int b, int m, int n, int k, int ta, int tb, int tc, void **ptr_a, void **ptr_b, void **ptr_c,
+    bool trans_a, bool trans_b, int compute_type
+) {
+    lazy_load_cublas();
+
+    // Set the stream to the current stream
+    cudaStream_t cur_stream = get_cuda_stream();
+    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+
+    const void *p_alpha = nullptr;
+    const void *p_beta = nullptr;
+
+    set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
+
+    static void **ptr_a_device, **ptr_b_device, **ptr_c_device;
+    static int cur_device_ptr_size; // Size of device memory currently allocated for each of the three a,b,c arrays.
+
+    // Allocate device memory
+    // first use synchronous versions of malloc and memcpy, later switch to async versions
+    if (b > cur_device_ptr_size) {
+        if (cur_device_ptr_size > 0) {
+            hidet_cuda_free_async((void *)ptr_a_device, cur_stream);
+            hidet_cuda_free_async((void *)ptr_b_device, cur_stream);
+            hidet_cuda_free_async((void *)ptr_c_device, cur_stream);
+        }
+        ptr_a_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+        ptr_b_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+        ptr_c_device = (void **) hidet_cuda_malloc_async(b * sizeof(void*), cur_stream);
+
+        cur_device_ptr_size = b;
+    }
+
+    // Copy input arrays (A and B) from host to device
+    hidet_cuda_memcpy_async((void *)ptr_a_device, (void *)ptr_a, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);    
+    hidet_cuda_memcpy_async((void *)ptr_b_device, (void *)ptr_b, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);
+    hidet_cuda_memcpy_async((void *)ptr_c_device, (void *)ptr_c, b * sizeof(void*), cudaMemcpyHostToDevice, cur_stream);
+
+    CHECK_CUBLAS(cublasGemmBatchedEx(
+        CublasContext::current_handle(),
+        trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+        trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+        n,
+        m,
+        k,
+        p_alpha,
+        // b^t
+        ptr_b_device,
+        cudaDataType(tb),
+        n,  // ldb
+        // a^t
+        ptr_a_device,
+        cudaDataType(ta),
+        k,  // lda
+        p_beta,
+        // c^t
+        ptr_c_device,
+        cudaDataType(tc),
+        n,   // ldc
+        b,  // batchCount
+        cublasComputeType_t(compute_type),
+        cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT
+    ));
+
 }
 
 
