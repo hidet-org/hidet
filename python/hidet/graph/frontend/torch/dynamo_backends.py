@@ -110,10 +110,10 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
 
 class CompiledForwardFunction(torch.nn.Module): 
     def __init__(self, cgraph: CompiledGraph, inputs, output_format):
+        super().__init__()
         self.cgraph = cgraph
         self.inputs = inputs
         self.output_format = output_format
-
 
     def __call__(self, *args):
         if dynamo_config['use_cuda_graph']:
