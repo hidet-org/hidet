@@ -97,7 +97,6 @@ def get_compiled_graph(flow_graph: FlowGraph):
     logger.info('finish building computation graph')
     return cgraph
 
-
 def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
     torch_inputs: List[torch.Tensor] = []
     for x in inputs:
@@ -115,7 +114,7 @@ class CompiledForwardFunction(torch.nn.Module):
         self.inputs = inputs
         self.output_format = output_format
 
-    def __call__(self, *args):
+    def forward(self, *args):
         if dynamo_config['use_cuda_graph']:
             try:
                 runner = self.cgraph.cuda_graph()
@@ -136,8 +135,8 @@ class CompiledForwardFunction(torch.nn.Module):
             else:
                 # ignore constant
                 pass
-
-        hidet_inputs = preprocess_inputs(self.inputs)
+        
+        hidet_inputs = preprocess_inputs(tensor_args)
         hidet_outputs: List[hidet.Tensor] = runner.run_async(hidet_inputs)
         outputs: Sequence[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
         return deserialize_output(self.output_format, outputs)
