@@ -66,7 +66,8 @@ class GraphExecution:
     outputs_index: List[int]
     tensor_device: List[str]
 
-import sys
+
+
 class CompiledGraph:
     """
     A compiled graph that can be directly called in Python.
@@ -522,7 +523,7 @@ class CompiledGraph:
         See Also
         --------
         CompiledGraph.save or save_compiled_graph
-        
+
         Parameters
         ----------
         path: str

@@ -97,6 +97,7 @@ def get_compiled_graph(flow_graph: FlowGraph):
     logger.info('finish building computation graph')
     return cgraph
 
+
 def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
     torch_inputs: List[torch.Tensor] = []
     for x in inputs:
@@ -107,7 +108,8 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
     hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
     return hidet_inputs
 
-class CompiledForwardFunction(torch.nn.Module): 
+
+class CompiledForwardFunction(torch.nn.Module):
     def __init__(self, cgraph: CompiledGraph, inputs, output_format):
         super().__init__()
         self.cgraph = cgraph
@@ -120,7 +122,7 @@ class CompiledForwardFunction(torch.nn.Module):
                 runner = self.cgraph.cuda_graph()
             except CudaGraphCreationError:
                 runner = self.cgraph
-        
+
         tensor_args = []
         for param, arg in zip(self.inputs, args):
             if isinstance(param, Tensor):
@@ -135,8 +137,8 @@ class CompiledForwardFunction(torch.nn.Module):
             else:
                 # ignore constant
                 pass
-        
-        hidet_inputs = preprocess_inputs(tensor_args)
+
+        hidet_inputs = preprocess_inputs(*tensor_args)
         hidet_outputs: List[hidet.Tensor] = runner.run_async(hidet_inputs)
         outputs: Sequence[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
         return deserialize_output(self.output_format, outputs)
@@ -171,4 +173,11 @@ def hidet_backend(graph_module, example_inputs):
 
     cgraph = get_compiled_graph(flow_graph)
 
-    return CompiledForwardFunction(cgraph, example_inputs, output_format)
+    cff = CompiledForwardFunction(cgraph, inputs, output_format)
+
+    # The torch.fx.GraphModule compiled forward function expects arguments to be passed as a tuple
+    # But the compiled forward function expects arguments to be passed like forward(a, b, c, ...)
+    def args_to_tuple_wrapper(*args):
+        return cff(args)
+
+    return args_to_tuple_wrapper
