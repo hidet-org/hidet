@@ -216,3 +216,6 @@ build-release
 
 # experiments folder
 /experiments
+
+# vscode
+.vscode

@@ -23,6 +23,7 @@ class BatchNorm2d(Module):
         self.affine = affine
         self.running_mean = empty(shape=[num_features])
         self.running_var = empty(shape=[num_features])
+        self.num_batches_tracked = empty(shape=[])
         if affine:
             self.weight: Tensor = empty(shape=[num_features])
             self.bias = empty(shape=[num_features])

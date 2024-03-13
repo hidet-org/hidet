@@ -107,6 +107,11 @@ def resize2d_nchw_compute(
     extrapolation_value: Optional[float],
     recompute_scale_factor: Optional[bool],
 ):  # pylint: disable=unused-argument
+    """
+    Resize data to size or by scale, whichever is provided, according to method (one of `nearest`, `linear`, `cubic`).
+
+    `nearest` and `linear` methods preserve dtype, cubic does not.
+    """
     _ = roi  # not supported yet
     image_size = data.shape[2:]
 

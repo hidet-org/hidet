@@ -30,12 +30,19 @@ class Sequential(Module):
 
     def forward(self, x):  # pylint: disable=arguments-differ
         for module in self._submodules.values():
-            x = module(x)
+            if module is not None:
+                x = module(x)
         return x
+
+    def __iter__(self):
+        return iter(self._submodules.values())
+
+    def __len__(self):
+        return len(self._submodules.keys())
 
 
 class ModuleList(Module):
-    def __init__(self, modules: Iterable[Module] = None):
+    def __init__(self, modules: Iterable[Module]):
         super().__init__()
         for idx, module in enumerate(modules):
             self._submodules[str(idx)] = module
