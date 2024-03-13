@@ -65,6 +65,7 @@ def test_llama2(device, opt):
     print(current_memory_pool("vcuda"))
 
 
+@pytest.mark.skip(reason='The transformers updated their modeling, skip until we update.')
 def test_model_architecture():
     import torch
     import hidet
