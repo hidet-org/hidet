@@ -464,7 +464,7 @@ class PrologueEpilogueFuseRewriter(IRRewriter):
             func_name = e.func_var.name
             if func_name in self.func_records:
                 args = self.process_call(func_name, list(e.args))
-                return Call(e.func_var, args)
+                return Call(e.func_var, tuple(args))
         return super().visit_Call(e)
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):

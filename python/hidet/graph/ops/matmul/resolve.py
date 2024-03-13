@@ -249,8 +249,9 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        print("Here resolve is called.......")
         if op.device.is_cpu():
-            return None
+            return self.resolve_generic(op)
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)

@@ -21,6 +21,7 @@ from hidet.graph.ops.utils import input_like
 from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.lang import attrs
+from hidet.ir.expr import if_then_else
 
 
 class MatmulF32Taskx86(Task):
@@ -320,7 +321,10 @@ class MatmulF32Taskx86(Task):
             packed_b_total_size = packed_b_total_width * packed_b_height
             packed_b_individual_size = packed_b_width * packed_b_height
 
-            packed_a_individual_height = min(MC, (m_size + MR - 1) // MR * MR)
+            # packed_a_individual_height = min(MC, (m_size + MR - 1) // MR * MR) # FIXME: what? Error on this line?
+            temp_packed_a_ind = (m_size + MR - 1) // MR * MR
+            packed_a_individual_height = if_then_else(temp_packed_a_ind > MR, MR, temp_packed_a_ind)
+
             packed_a_total_height = packed_a_individual_height * packed_a_buffers_needed
 
             packed_a_width = min(KC, (k_size + 8 - 1) // 8 * 8)

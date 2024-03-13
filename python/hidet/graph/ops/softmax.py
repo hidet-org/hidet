@@ -157,11 +157,6 @@ class SoftmaxTask(Task):
 
         return ir_module
 
-    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        if self.inputs[0].type.dtype != float32:
-            return NotImplemented  # use auto-scheduler
-        return tune.extract_ir_modules(self.schedule_softmax_cpu)
-
 
 class CPUSoftmaxTask(SoftmaxTask):
     def allow_epilogue(self) -> bool:
@@ -169,6 +164,11 @@ class CPUSoftmaxTask(SoftmaxTask):
 
     def allow_prologue(self) -> bool:
         return False
+
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        if self.inputs[-1].type.dtype != float32:
+            return NotImplemented  # use auto-scheduler
+        return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
     @tune.space(2, nthreads=['', 4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=['', 8, 16])
