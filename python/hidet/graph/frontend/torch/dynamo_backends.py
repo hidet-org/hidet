@@ -22,11 +22,11 @@ from hidet.runtime import CompiledGraph
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.cuda.graph import CudaGraphCreationError
+from hidet.ffi import runtime_api
 from .dynamo_config import dynamo_config
 from .interpreter import Interpreter
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .utils import symbol_like_torch
-from hidet.ffi import runtime_api
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,8 @@ class CompiledForwardFunction(torch.nn.Module):
         self.inputs = inputs
         self.output_format = output_format
 
-    def forward(self, *args):
+    # Due to the structure of the torch.fx.Graph that wraps this function, arguments are passed as a tuple
+    def forward(self, args):
         if dynamo_config['use_cuda_graph']:
             try:
                 runner = self.cgraph.cuda_graph()
@@ -138,7 +139,7 @@ class CompiledForwardFunction(torch.nn.Module):
                 # ignore constant
                 pass
 
-        hidet_inputs = preprocess_inputs(*tensor_args)
+        hidet_inputs = preprocess_inputs(tensor_args)
         hidet_outputs: List[hidet.Tensor] = runner.run_async(hidet_inputs)
         outputs: Sequence[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
         return deserialize_output(self.output_format, outputs)
@@ -176,7 +177,7 @@ def hidet_backend(graph_module, example_inputs):
     cff = CompiledForwardFunction(cgraph, inputs, output_format)
 
     # The torch.fx.GraphModule compiled forward function expects arguments to be passed as a tuple
-    # But the compiled forward function expects arguments to be passed like forward(a, b, c, ...)
+    # But CompiledForwardFunction.forward expects arguments to be passed like forward(a, b, c, ...)
     def args_to_tuple_wrapper(*args):
         return cff(args)
 

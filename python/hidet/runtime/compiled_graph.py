@@ -67,7 +67,6 @@ class GraphExecution:
     tensor_device: List[str]
 
 
-
 class CompiledGraph:
     """
     A compiled graph that can be directly called in Python.
