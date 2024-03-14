@@ -585,7 +585,7 @@ DLL void hidet_cudnn_conv2d(
     
     void *dev_ptrs[3] = {ptr_x, ptr_w, ptr_y}; // device pointers
     int64_t uids[3] = {'x', 'w', 'y'};
-    void *workspace = hidet_cuda_malloc_async(workspaceSize, cur_stream);
+    void *workspace = request_cuda_workspace(workspaceSize, false);
 
     cudnnBackendDescriptor_t varpack;
     CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, &varpack));
