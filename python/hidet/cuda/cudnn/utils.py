@@ -14,6 +14,7 @@ from hidet.ir.dtypes import DataType
 from .ffi import cudnnDataType
 
 _cudnn_type_dict = {
+    dtypes.float16: cudnnDataType.CUDNN_DATA_HALF,
     dtypes.float32: cudnnDataType.CUDNN_DATA_FLOAT,
     dtypes.float64: cudnnDataType.CUDNN_DATA_DOUBLE,
     dtypes.int32: cudnnDataType.CUDNN_DATA_INT32,

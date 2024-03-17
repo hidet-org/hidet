@@ -327,6 +327,7 @@ static void* libcudnn = nullptr;
 static cudnnBackendAttributeType_t get_attribute_type_from_compute_type(cudnnDataType_t computeType) {
     switch (computeType) {
         case CUDNN_DATA_FLOAT:
+        case CUDNN_DATA_HALF:
             return CUDNN_TYPE_FLOAT;
         case CUDNN_DATA_DOUBLE:
             return CUDNN_TYPE_DOUBLE;
@@ -342,8 +343,9 @@ static cudnnBackendAttributeType_t get_attribute_type_from_compute_type(cudnnDat
 static void set_alpha_beta(void** p_alpha, void** p_beta, cudnnDataType_t c) {
     // There's no such thing as a cudnnComputeType_t type. As per the official example, the computeType is defined
     // in terms of cudnnDataType_t
-    // cudnnBackendAttributeType_t only has support for FLOAT, DOUBLE, and INT64.
-    if(c == CUDNN_DATA_FLOAT) {
+    if(c == CUDNN_DATA_FLOAT || c == CUDNN_DATA_HALF) {
+        // cudnnBackendAttributeType_t only has support for FLOAT, DOUBLE, and INT64. There is no HALF attribute type.
+        // See get_attribute_type_from_compute_type above.
         static float alpha = 1.0f;
         static float beta = 0.0f;
         *p_alpha = &alpha;

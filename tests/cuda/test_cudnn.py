@@ -21,13 +21,16 @@ from hidet.cuda.cudnn import cudnnDataType
     [
         [1, 3, 32, 32, 12, 30, 30, 3, 3, [0, 0], [1, 1], [1, 1]],  # kernel 3,
         [2, 3, 32, 32, 12, 11, 6, 7, 7, [1, 2], [2, 3], [2, 3]],  # kernel 7, batch size 2
-        [1, 3, 32, 32, 12, 16, 11, 1, 1, [0, 0], [2, 3], [1, 1]],  # kernel 1,
-        [2, 3, 224, 224, 16, 109, 109, 7, 7, [0, 0], [2, 2], [1, 1]],
+        [1, 3, 224, 224, 64, 112, 112, 7, 7, [3, 3], [2, 2], [1, 1]], # resnet layer 1
+        [1, 64, 56, 56, 128, 56, 56, 1, 1, [0, 0], [1, 1], [1, 1]], # resnet layer 2 - kernel size 1
     ],
 )
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
-    [(hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5), (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8)],
+    [(hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 1e-2),
+     (hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5), 
+     (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8),
+     ]
 )
 def test_cudnn_conv2d(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, stride, dilations, tol):
     tx = tw = ty = dtype
