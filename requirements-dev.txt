@@ -14,7 +14,7 @@ pylint==2.13.9
 # for models to test
 torch
 torchvision
-transformers
+transformers==4.37
 sentencepiece
 sacremoses
 
