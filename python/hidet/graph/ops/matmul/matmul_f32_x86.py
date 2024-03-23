@@ -858,5 +858,5 @@ class Matmulx86Op(Operator):
         super().__init__(inputs=[a, b], attributes={}, task=task)
 
 
-def matmul_x86(a: Tensor, b: Tensor) -> Tensor:
+def batch_matmul_x86(a: Tensor, b: Tensor) -> Tensor:
     return Matmulx86Op(a, b).outputs[0]
