@@ -73,8 +73,9 @@ class GroupNorm(Module):
         self.num_groups = num_groups
         self.num_channels = num_channels
         if affine:
-            self.weight: Tensor = empty(shape=[num_channels])
-            self.bias: Tensor = empty(shape=[num_channels])
+            # add extra dims for broadcast
+            self.weight: Tensor = empty(shape=[num_channels, 1, 1])
+            self.bias: Tensor = empty(shape=[num_channels, 1, 1])
         else:
             self.weight = None
             self.bias = None

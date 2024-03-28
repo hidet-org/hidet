@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.graph import ops
+from hidet.graph.nn.linear import Linear
 from hidet.graph.nn.module import Module
 
 
@@ -21,6 +22,17 @@ class Relu(Module):
 class Gelu(Module):
     def forward(self, x):
         return ops.gelu(x)
+
+
+class Geglu(Module):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
+        super().__init__()
+        self.proj = Linear(dim_in, dim_out * 2, bias=bias)
+
+    def forward(self, x):
+        x = self.proj(x)
+        hidden_states, gate = ops.split(x, 2, axis=2)
+        return hidden_states * ops.gelu(gate)
 
 
 class Tanh(Module):
