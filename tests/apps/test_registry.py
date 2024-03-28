@@ -4,6 +4,7 @@ from hidet.apps.image_classification.modeling.resnet.modeling import ResNetForIm
 from transformers import PretrainedConfig
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('model_name', ["microsoft/resnet-50"])
 def test_load_module(model_name: str):
     config: PretrainedConfig = hf.load_pretrained_config(model_name)
