@@ -21,6 +21,8 @@ class Backend:
         hidet.torch.dynamo_config.use_cuda_graph(True)
         hidet.option.search_space(2)
         hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
+
+        # hidet.option.parallel_tune(max_parallel_jobs=1)
         # hidet.option.debug_cache_tuning(True)
         # hidet.option.save_lower_ir(True)
         # hidet.option.debug_show_verbose_flow_graph(True)

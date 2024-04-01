@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Any
+from functools import cached_property
 from dataclasses import dataclass
 import warnings
 from hidet.ir.type import DataType
@@ -60,19 +61,19 @@ class IntegerType(DataType):
     def signedness(self):
         return self._min_value < 0
 
-    @property
+    @cached_property
     def one(self):
         return self.constant(1)
 
-    @property
+    @cached_property
     def zero(self):
         return self.constant(0)
 
-    @property
+    @cached_property
     def min_value(self):
         return self.constant(self._min_value)
 
-    @property
+    @cached_property
     def max_value(self):
         return self.constant(self._max_value)
 
