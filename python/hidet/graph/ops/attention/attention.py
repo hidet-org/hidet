@@ -859,6 +859,9 @@ class AttnOp(Operator):
 
 
 def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is_causal: bool = False) -> Tensor:
+    # Note: does not apply scaling factor (1/sqrt(E)) in softmax,
+    # requires k transposed relative to q
+    # (ie. returns softmax(Q @ K) @ V )
     if mask is not None and is_causal is True:
         raise ValueError("mask and is_causal cannot be set at the same time")
 

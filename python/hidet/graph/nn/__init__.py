@@ -13,8 +13,10 @@ from . import module
 from . import container
 
 from .module import Module
+from .identity import Identity
 from .container import Sequential, ModuleList
-from .activations import Relu, Gelu, Tanh
+from .attention import CrossAttention
+from .activations import Relu, Gelu, Geglu, Tanh
 from .convolutions import Conv2d
 from .linear import Linear, LinearTransposed
 from .norms import BatchNorm2d, LayerNorm
