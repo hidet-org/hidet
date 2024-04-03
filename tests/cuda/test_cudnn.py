@@ -73,5 +73,115 @@ def test_cudnn_conv2d(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, s
     hidet.utils.assert_close(actual=tensor_y, expected=golden, rtol=tol, atol=tol)
 
 
+@pytest.mark.parametrize(
+    "n, c, h, w, k, p, q, r, s, padding, stride, dilations",
+    [
+        [1, 3, 32, 32, 12, 30, 30, 3, 3, [0, 0], [1, 1], [1, 1]],  # kernel 3,
+        [2, 3, 32, 32, 12, 11, 6, 7, 7, [1, 2], [2, 3], [2, 3]],  # kernel 7, batch size 2
+        [1, 3, 224, 224, 64, 112, 112, 7, 7, [3, 3], [2, 2], [1, 1]], # resnet layer 1
+        [1, 64, 56, 56, 128, 56, 56, 1, 1, [0, 0], [1, 1], [1, 1]], # resnet layer 2 - kernel size 1
+    ],
+)
+@pytest.mark.parametrize(
+    'dtype, compute_type, tol',
+    [(hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 1e-2),
+     (hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5), 
+     (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8),
+     ]
+)
+def test_cudnn_conv2d_gemm(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, stride, dilations, tol):
+    tx = tw = ty = dtype
+    pad_dim1, pad_dim2 = padding
+    str_dim1, str_dim2 = stride
+    dil_dim1, dil_dim2 = dilations
+
+    tensor_x = hidet.randn((n, c, h, w), device='cuda', dtype=tx)
+    tensor_w = hidet.randn((k, c, r, s), device='cuda', dtype=tw)
+    tensor_y = hidet.empty((n, k, p, q), device='cuda', dtype=ty)
+
+    golden = ops.conv2d(
+        tensor_x, tensor_w, stride=(str_dim1, str_dim2), dilations=(dil_dim1, dil_dim2), padding=(pad_dim1, pad_dim2)
+    )
+    hidet.cuda.cudnn.conv2d_gemm(
+        n,
+        c,
+        h,
+        w,
+        k,
+        r,
+        s,
+        tensor_x,
+        tensor_w,
+        tensor_y,
+        tx,
+        tw,
+        ty,
+        compute_type,
+        pad_dim1,
+        pad_dim2,
+        str_dim1,
+        str_dim2,
+        dil_dim1,
+        dil_dim2,
+    )
+
+    hidet.utils.assert_close(actual=tensor_y, expected=golden, rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize(
+    "n, c, h, w, k, p, q, r, s, padding, stride, dilations",
+    [
+        [1, 3, 32, 32, 12, 30, 30, 3, 3, [0, 0], [1, 1], [1, 1]],  # kernel 3,
+        [2, 3, 32, 32, 12, 11, 6, 7, 7, [1, 2], [2, 3], [2, 3]],  # kernel 7, batch size 2
+        [1, 3, 224, 224, 64, 112, 112, 7, 7, [3, 3], [2, 2], [1, 1]], # resnet layer 1
+        [1, 64, 56, 56, 128, 56, 56, 1, 1, [0, 0], [1, 1], [1, 1]], # resnet layer 2 - kernel size 1
+    ],
+)
+@pytest.mark.parametrize(
+    'dtype, compute_type, tol',
+    [(hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 1e-2),
+     (hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5), 
+     (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8),
+     ]
+)
+def test_cudnn_conv2d_autoselect_algo(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, stride, dilations, tol):
+    tx = tw = ty = dtype
+    pad_dim1, pad_dim2 = padding
+    str_dim1, str_dim2 = stride
+    dil_dim1, dil_dim2 = dilations
+
+    tensor_x = hidet.randn((n, c, h, w), device='cuda', dtype=tx)
+    tensor_w = hidet.randn((k, c, r, s), device='cuda', dtype=tw)
+    tensor_y = hidet.empty((n, k, p, q), device='cuda', dtype=ty)
+
+    golden = ops.conv2d(
+        tensor_x, tensor_w, stride=(str_dim1, str_dim2), dilations=(dil_dim1, dil_dim2), padding=(pad_dim1, pad_dim2)
+    )
+    hidet.cuda.cudnn.conv2d_autoselect_algo(
+        n,
+        c,
+        h,
+        w,
+        k,
+        r,
+        s,
+        tensor_x,
+        tensor_w,
+        tensor_y,
+        tx,
+        tw,
+        ty,
+        compute_type,
+        pad_dim1,
+        pad_dim2,
+        str_dim1,
+        str_dim2,
+        dil_dim1,
+        dil_dim2,
+    )
+
+    hidet.utils.assert_close(actual=tensor_y, expected=golden, rtol=tol, atol=tol)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

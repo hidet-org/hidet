@@ -68,6 +68,60 @@ conv2d = get_func(
     restype=None,
 )
 
+conv2d_gemm = get_func(
+    func_name='hidet_cudnn_conv2d_gemm',
+    arg_types=[
+        c_int32,  # n
+        c_int32,  # c
+        c_int32,  # h
+        c_int32,  # w
+        c_int32,  # k
+        c_int32,  # r
+        c_int32,  # s
+        c_void_p,  # ptr_x
+        c_void_p,  # ptr_w
+        c_void_p,  # ptr_y
+        c_int32,  # tx
+        c_int32,  # tw
+        c_int32,  # ty
+        c_int32,  # compute_type
+        c_int32,  # pad_dim1
+        c_int32,  # pad_dim2
+        c_int32,  # str_dim1
+        c_int32,  # str_dim2
+        c_int32,  # dil_dim1
+        c_int32,  # dil_dim2
+    ],
+    restype=None,
+)
+
+conv2d_autoselect_algo = get_func(
+    func_name='hidet_cudnn_conv2d_autoselect_algo',
+    arg_types=[
+        c_int32,  # n
+        c_int32,  # c
+        c_int32,  # h
+        c_int32,  # w
+        c_int32,  # k
+        c_int32,  # r
+        c_int32,  # s
+        c_void_p,  # ptr_x
+        c_void_p,  # ptr_w
+        c_void_p,  # ptr_y
+        c_int32,  # tx
+        c_int32,  # tw
+        c_int32,  # ty
+        c_int32,  # compute_type
+        c_int32,  # pad_dim1
+        c_int32,  # pad_dim2
+        c_int32,  # str_dim1
+        c_int32,  # str_dim2
+        c_int32,  # dil_dim1
+        c_int32,  # dil_dim2
+    ],
+    restype=None,
+)
+
 
 @initialize()
 def set_cudnn_library_path():

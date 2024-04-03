@@ -115,3 +115,191 @@ def conv2d(
         dil_dim1,
         dil_dim2,
     )
+
+
+def conv2d_gemm(
+    n: int,
+    c: int,
+    h: int,
+    w: int,
+    k: int,
+    r: int,
+    s: int,
+    ptr_x,
+    ptr_w,
+    ptr_y,
+    tx: Union[int, DataType],
+    tw: Union[int, DataType],
+    ty: Union[int, DataType],
+    compute_type: Union[int, cudnnDataType],
+    pad_dim1: int,
+    pad_dim2: int,
+    str_dim1: int,
+    str_dim2: int,
+    dil_dim1: int,
+    dil_dim2: int,
+):
+    """
+    Calculates the 2D convolution of tensor x with filter w, stores the result in tensor y.
+
+    Parameters
+    ----------
+    n: int
+        Batch number.
+    c: int
+        Number of channels in the input tensor x.
+    h: int
+        Height of the input tensor x.
+    w: int
+        Width of the input tensor x.
+    k: int
+        Number of channels in the output tensor y.
+    r: int
+        Height of the filter w.
+    s: int
+        Width of the filter w.
+    ptr_x: hidet.Tensor or int
+        Input tensor x, can be either a Tensor or an integer (the address of the tensor).
+    ptr_w: hidet.Tensor or int
+        Weight tensor w, can be either a Tensor or an integer (the address of the tensor).
+    ptr_y: hidet.Tensor or int
+        Output tensor y, can be either a Tensor or an integer (the address of the tensor).
+    tx: Union[int, DataType]
+        Type of elements in tensor x.
+    tw: Union[int, DataType]
+        Type of elements in tensor w.
+    ty: Union[int, DataType]
+        Type of elements in tensor y.
+    compute_type: Union[int, cudnnDataType]
+        The compute type of the operation.
+        For cuDNN, there's no such thing as a cudnnComputeType_t type.
+        As per the official example, the computeType is defined in terms of cudnnDataType_t
+    pad_dim1: int
+        The value to use for padding along the height dimension
+    pad_dim2: int
+        The value to use for padding along the width dimension
+    str_dim1: int
+        The stride to use for the height dimension
+    str_dim2: int
+        The stride to use for the width dimension
+    dil_dim1: int
+        The dilation to use for the height dimension
+    dil_dim2: int
+        The dilation to use for the width dimension
+    """
+    ffi.conv2d_gemm(
+        n,
+        c,
+        h,
+        w,
+        k,
+        r,
+        s,
+        as_pointer(ptr_x),
+        as_pointer(ptr_w),
+        as_pointer(ptr_y),
+        as_cudnn_type(tx),
+        as_cudnn_type(tw),
+        as_cudnn_type(ty),
+        compute_type,
+        pad_dim1,
+        pad_dim2,
+        str_dim1,
+        str_dim2,
+        dil_dim1,
+        dil_dim2,
+    )
+    
+    
+def conv2d_autoselect_algo(
+    n: int,
+    c: int,
+    h: int,
+    w: int,
+    k: int,
+    r: int,
+    s: int,
+    ptr_x,
+    ptr_w,
+    ptr_y,
+    tx: Union[int, DataType],
+    tw: Union[int, DataType],
+    ty: Union[int, DataType],
+    compute_type: Union[int, cudnnDataType],
+    pad_dim1: int,
+    pad_dim2: int,
+    str_dim1: int,
+    str_dim2: int,
+    dil_dim1: int,
+    dil_dim2: int,
+):
+    """
+    Calculates the 2D convolution of tensor x with filter w, stores the result in tensor y.
+
+    Parameters
+    ----------
+    n: int
+        Batch number.
+    c: int
+        Number of channels in the input tensor x.
+    h: int
+        Height of the input tensor x.
+    w: int
+        Width of the input tensor x.
+    k: int
+        Number of channels in the output tensor y.
+    r: int
+        Height of the filter w.
+    s: int
+        Width of the filter w.
+    ptr_x: hidet.Tensor or int
+        Input tensor x, can be either a Tensor or an integer (the address of the tensor).
+    ptr_w: hidet.Tensor or int
+        Weight tensor w, can be either a Tensor or an integer (the address of the tensor).
+    ptr_y: hidet.Tensor or int
+        Output tensor y, can be either a Tensor or an integer (the address of the tensor).
+    tx: Union[int, DataType]
+        Type of elements in tensor x.
+    tw: Union[int, DataType]
+        Type of elements in tensor w.
+    ty: Union[int, DataType]
+        Type of elements in tensor y.
+    compute_type: Union[int, cudnnDataType]
+        The compute type of the operation.
+        For cuDNN, there's no such thing as a cudnnComputeType_t type.
+        As per the official example, the computeType is defined in terms of cudnnDataType_t
+    pad_dim1: int
+        The value to use for padding along the height dimension
+    pad_dim2: int
+        The value to use for padding along the width dimension
+    str_dim1: int
+        The stride to use for the height dimension
+    str_dim2: int
+        The stride to use for the width dimension
+    dil_dim1: int
+        The dilation to use for the height dimension
+    dil_dim2: int
+        The dilation to use for the width dimension
+    """
+    ffi.conv2d_autoselect_algo(
+        n,
+        c,
+        h,
+        w,
+        k,
+        r,
+        s,
+        as_pointer(ptr_x),
+        as_pointer(ptr_w),
+        as_pointer(ptr_y),
+        as_cudnn_type(tx),
+        as_cudnn_type(tw),
+        as_cudnn_type(ty),
+        compute_type,
+        pad_dim1,
+        pad_dim2,
+        str_dim1,
+        str_dim2,
+        dil_dim1,
+        dil_dim2,
+    )

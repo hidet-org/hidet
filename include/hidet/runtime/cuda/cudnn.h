@@ -19,6 +19,15 @@ typedef struct cudnnContext *cudnnHandle_t;
 
 typedef void *cudnnBackendDescriptor_t;
 
+/* Legacy API */
+struct cudnnTensorStruct;
+struct cudnnFilterStruct;
+struct cudnnConvolutionStruct;
+
+typedef struct cudnnTensorStruct *cudnnTensorDescriptor_t;
+typedef struct cudnnFilterStruct *cudnnFilterDescriptor_t;
+typedef struct cudnnConvolutionStruct *cudnnConvolutionDescriptor_t;
+
 struct CudnnContext {
     cudnnHandle_t handles[HIDET_CUDNN_MAX_GPUS];
     static CudnnContext* global();

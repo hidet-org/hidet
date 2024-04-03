@@ -10,4 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .ffi import cudnnDataType
-from .kernels import conv2d
+from .kernels import conv2d, conv2d_gemm, conv2d_autoselect_algo

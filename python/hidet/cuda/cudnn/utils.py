@@ -21,6 +21,14 @@ _cudnn_type_dict = {
     dtypes.int64: cudnnDataType.CUDNN_DATA_INT64,
 }
 
+_cudnn_type_dict_str = {
+    "float16": cudnnDataType.CUDNN_DATA_HALF,
+    "float32": cudnnDataType.CUDNN_DATA_FLOAT,
+    "float64": cudnnDataType.CUDNN_DATA_DOUBLE,
+    "int32": cudnnDataType.CUDNN_DATA_INT32,
+    "int64": cudnnDataType.CUDNN_DATA_INT64,
+}
+
 
 def as_pointer(obj) -> int:
     from hidet.graph.tensor import Tensor
@@ -36,7 +44,9 @@ def as_pointer(obj) -> int:
 def as_cudnn_type(obj) -> int:
     if isinstance(obj, DataType):
         return _cudnn_type_dict[obj]
+    elif isinstance(obj, str):
+        return _cudnn_type_dict_str[obj]
     elif isinstance(obj, int):
         return obj
     else:
-        raise TypeError(f'Expected DataType or int, but got {type(obj)}')
+        raise TypeError(f'Expected DataType, int, or str, but got {type(obj)}')
