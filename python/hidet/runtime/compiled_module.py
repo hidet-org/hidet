@@ -9,15 +9,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, Sequence
 import os
 import pickle
 import time
 import warnings
-import ctypes
-from hidet.ir.type import FuncType, PointerType, DataType, BaseType, VoidType, TensorPointerType
+
+from hidet.ffi.convert import ctypes_type, to_ctypes_arg, from_ctypes_return
+from hidet.ir.type import FuncType, BaseType
 from hidet.ffi.shared_lib import SharedLibrary
-from hidet.ffi.utils import c_pointer_compatible
 
 
 class CompiledModuleLoadError(Exception):
@@ -45,10 +45,12 @@ class CompiledFunction:
 
     def __init__(self, name, func_type: FuncType, ctypes_func):
         self.name: str = name
-        self.func_type: FuncType = func_type
+        self.param_types: Sequence[BaseType] = func_type.param_types
+        self.ret_type: BaseType = func_type.ret_type
         self.ctypes_func: Callable = ctypes_func
 
-        self._update_func_signature()
+        ctypes_func.argtypes = [ctypes_type(t) for t in self.param_types]
+        ctypes_func.restype = ctypes_type(self.ret_type)
 
     def __call__(self, *args):
         """
@@ -66,7 +68,12 @@ class CompiledFunction:
         """
         from hidet.ffi.ffi import BackendException, get_last_error
 
-        ret = self.ctypes_func(*args)
+        cargs = []
+        for typ, arg in zip(self.param_types, args):
+            cargs.append(to_ctypes_arg(hidet_type=typ, obj=arg))
+
+        val = self.ctypes_func(*cargs)
+        ret = from_ctypes_return(hidet_type=self.ret_type, val=val)
 
         status = get_last_error()
         if status is not None:
@@ -74,40 +81,6 @@ class CompiledFunction:
             raise BackendException(msg)
 
         return ret
-
-    def _parse_type(self, hidet_type: BaseType):
-        if isinstance(hidet_type, DataType):
-            from hidet.ir import dtypes
-
-            mapping = {
-                dtypes.int8: ctypes.c_int8,
-                dtypes.int16: ctypes.c_int16,
-                dtypes.int32: ctypes.c_int32,
-                dtypes.int64: ctypes.c_int64,
-                dtypes.uint8: ctypes.c_uint8,
-                dtypes.uint16: ctypes.c_uint16,
-                dtypes.uint32: ctypes.c_uint32,
-                dtypes.uint64: ctypes.c_uint64,
-                # dtypes.float16: sadly, there is no float16 in ctypes for now, we might need to create a custom type
-                dtypes.float32: ctypes.c_float,
-                dtypes.float64: ctypes.c_double,
-                dtypes.boolean: ctypes.c_bool,
-                # dtypes.complex64:
-                # dtypes.complex128:
-            }
-            if hidet_type not in mapping:
-                raise NotImplementedError('Unsupported type {}'.format(hidet_type))
-            return mapping[hidet_type]
-        elif isinstance(hidet_type, VoidType):
-            return None
-        elif isinstance(hidet_type, (PointerType, TensorPointerType)):
-            return c_pointer_compatible
-        else:
-            raise NotImplementedError('Unsupported type {}'.format(hidet_type))
-
-    def _update_func_signature(self):
-        self.ctypes_func.argtypes = [self._parse_type(hidet_type) for hidet_type in self.func_type.param_types]
-        self.ctypes_func.restype = self._parse_type(self.func_type.ret_type)
 
     def profile(self, *args, warmup=1, number=2, repeat=10):
         """
@@ -138,14 +111,14 @@ class CompiledFunction:
         from hidet.cuda import current_stream
 
         for _ in range(warmup):
-            self.ctypes_func(*args)
+            self(*args)
 
         results = []
         for _ in range(repeat):
             current_stream().synchronize()
             start = time.time()
             for _ in range(number):
-                self.ctypes_func(*args)
+                self(*args)
             current_stream().synchronize()
             end = time.time()
             results.append((end - start) / number * 1000)

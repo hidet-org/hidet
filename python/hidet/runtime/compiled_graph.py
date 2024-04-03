@@ -21,7 +21,8 @@ from tabulate import tabulate
 import numpy
 
 import hidet
-from hidet.ffi.utils import Array, ctypes_func_pointer
+from hidet.ffi.utils import ctypes_func_pointer
+from hidet.ffi.array import Array
 from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device

@@ -19,7 +19,7 @@ import tabulate
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
 from hidet.ir.dtypes import i32
 from hidet.ffi import runtime_api
-from hidet.ffi.utils import Array
+from hidet.ffi.array import Array
 
 
 @dataclass

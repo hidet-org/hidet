@@ -12,7 +12,7 @@
 from typing import Union, List
 from hidet.ir.dtypes import DataType
 from hidet.ir.type import void_p
-from hidet.ffi.utils import Array
+from hidet.ffi.array import Array
 from .utils import as_pointer, as_type_code
 from .ffi import cublasComputeType, cudaDataType
 from . import ffi
@@ -209,11 +209,11 @@ def batched_gemm(
         Type of elements in matrix B.
     type_c: Union[int, DataType]
         Type of elements in matrix C.
-    a: hidet.ffi.utils.Array or List[Tensor]
+    a: hidet.ffi.array.Array or List[Tensor]
         Matrix A, can be either a list of Tensors or an Array object constructed from a list of Tensors.
-    b: hidet.ffi.utils.Array or List[Tensor]
+    b: hidet.ffi.array.Array or List[Tensor]
         Matrix B, can be either a list of Tensors or an Array object constructed from a list of Tensors.
-    c: hidet.ffi.utils.Array or List[Tensor]
+    c: hidet.ffi.array.Array or List[Tensor]
         Matrix C, can be either a list of Tensors or an Array object constructed from a list of Tensors.
     trans_a: bool
         Whether matrix A is transposed.
@@ -244,9 +244,9 @@ def batched_gemm(
         as_type_code(type_a),
         as_type_code(type_b),
         as_type_code(type_c),
-        a,
-        b,
-        c,
+        a.data_ptr(),
+        b.data_ptr(),
+        c.data_ptr(),
         trans_a,
         trans_b,
         compute_type,

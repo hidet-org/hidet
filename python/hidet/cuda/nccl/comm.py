@@ -13,7 +13,7 @@ from enum import IntEnum
 from typing import List, Optional
 import struct
 
-from hidet.ffi.utils import Array
+from hidet.ffi.array import Array
 from hidet.ir.type import void_p, DataType
 from hidet.cuda import Stream, current_stream
 from .ffi import nccl_available, NcclUniqueId
