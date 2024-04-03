@@ -3,7 +3,8 @@ import os
 import argparse
 import numpy as np
 import hidet
-from bench_utils import enable_compile_server, setup_hidet_flags, bench_torch_model
+from bench_utils import bench_torch_model, Backend
+
 
 def bench_matmul_f16(params: str, *args, **kwargs) -> float:
     a_shape, b_shape = params.split(',')
@@ -16,6 +17,7 @@ def bench_matmul_f16(params: str, *args, **kwargs) -> float:
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
+
 
 def bench_batch_matmul(params: str, *args, **kwargs) -> float:
     # Default to benchmarking f32 for now, though this op can run other dtypes
@@ -30,6 +32,7 @@ def bench_batch_matmul(params: str, *args, **kwargs) -> float:
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
 
+
 def bench_conv2d(params: str, *args, **kwargs) -> float:
     x_shape, w_shape = params.split(',')
     x_shape = [int(s) for s in x_shape.split('x')]
@@ -42,6 +45,7 @@ def bench_conv2d(params: str, *args, **kwargs) -> float:
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
 
+
 def bench_conv2d_gemm_f16(params: str, *args, **kwargs) -> float:
     x_shape, w_shape = params.split(',')
     x_shape = [int(s) for s in x_shape.split('x')]
@@ -53,6 +57,7 @@ def bench_conv2d_gemm_f16(params: str, *args, **kwargs) -> float:
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
+
 
 def bench_attn(params: str, *args, **kwargs) -> float:
     bs, seqlen, nhead, hdim = [int(s) for s in params.split('x')]
@@ -67,6 +72,7 @@ def bench_attn(params: str, *args, **kwargs) -> float:
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
+
 
 def bench_attn_mask_add(params: str, *args, **kwargs) -> float:
     bs, seqlen, nhead, hdim = [int(s) for s in params.split('x')]
@@ -84,6 +90,7 @@ def bench_attn_mask_add(params: str, *args, **kwargs) -> float:
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
 
+
 def bench_reduce(params: str, *args, **kwargs) -> float:
     x_shape, axis = params.split(',', maxsplit=1)
     start = axis.find('axis=[') + len('axis=[')
@@ -97,6 +104,7 @@ def bench_reduce(params: str, *args, **kwargs) -> float:
     g = g.cuda_graph()
     return bench_torch_model(lambda: g.run_async(), [])
 
+
 bench_func_map = {
     'matmul_f16': bench_matmul_f16,
     'batch_matmul': bench_batch_matmul,
@@ -109,23 +117,14 @@ bench_func_map = {
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='Benchmark Operators')
+    parser.add_argument('operator', type=str, help='Specify operator. E.g., matmul_f16')
     parser.add_argument(
-        'operator',
-        type=str,
-        help='Specify operator. E.g., matmul_f16'
+        '--params', type=str, help='Specify Input Parameters. Different operators have different formats.'
     )
-    parser.add_argument(
-        '--params',
-        type=str,
-        help='Specify Input Parameters. Different operators have different formats.'
-    )
-    parser.add_argument(
-        '--dtype',
-        type=str,
-        default='float16',
-        help='Specify precision. E.g., float32'
-    )
+    parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
+    parser.add_argument('--backend', type=str, default='hidet', help='Only hidet supported in this script')
     args = parser.parse_args()
+    assert args.backend == 'hidet'
 
     operator, dtype = args.operator, args.dtype
     params = args.params
@@ -134,8 +133,8 @@ if __name__ == '__main__':
     else:
         raise ValueError(f'Benchmark function for operator {operator} not implemented')
 
-    setup_hidet_flags(dtype, dynamo=False)
-    enable_compile_server(True)
+    Backend(backend='hidet', dtype=dtype).init_hidet()
+
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision(dtype)
         ctx.set_use_attention(True)

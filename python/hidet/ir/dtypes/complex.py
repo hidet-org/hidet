@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Any
+from functools import cached_property
 from hidet.ir.type import DataType
 from hidet.ir.dtypes.floats import float32, float64
 
@@ -47,11 +48,11 @@ class ComplexType(DataType):
         else:
             raise RuntimeError("Invalid constant value for complex type: {}".format(value))
 
-    @property
+    @cached_property
     def one(self):
         return self.constant(1.0 + 0.0j)
 
-    @property
+    @cached_property
     def zero(self):
         return self.constant(0.0 + 0.0j)
 

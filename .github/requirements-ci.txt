@@ -1,4 +1,4 @@
 mysql-connector-python
-transformers
+transformers==4.37
 accelerate
 sentencepiece

@@ -30,7 +30,7 @@ Number = Union[int, float, bool]
 
 
 @register_function(torch.nn.functional.conv1d)
-def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor] = None, stride=1, padding=0, dilation=1, groups=1):
     x = ops.conv_pad(x, padding)
     y = ops.conv1d(x, weight, stride=stride, dilations=dilation, groups=groups)
     if bias is not None:
@@ -40,7 +40,14 @@ def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 
 @register_function(torch.nn.functional.conv_transpose1d)
 def conv1d_transpose(
-    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+    x: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor] = None,
+    stride=1,
+    padding=0,
+    output_padding=0,
+    groups=1,
+    dilation=1,
 ):
     if dilation != 1 and not same_list(dilation, [1]):
         raise NotImplementedError("dilation != 1")
@@ -51,7 +58,7 @@ def conv1d_transpose(
 
 
 @register_function(torch.nn.functional.conv2d)
-def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor] = None, stride=1, padding=0, dilation=1, groups=1):
     y = ops.conv2d(x, weight, stride, dilation, groups, padding=padding)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
@@ -60,7 +67,7 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 
 @register_function(torch.nn.functional.conv_transpose2d)
 def conv2d_transpose(
-    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride=1, padding=0, output_padding=0, groups=1, dilation=1
 ):
     if dilation != 1 and not same_list(dilation, [1, 1]):
         raise NotImplementedError("dilation != 1")
@@ -71,7 +78,7 @@ def conv2d_transpose(
 
 
 @register_function(torch.nn.functional.conv3d)
-def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor] = None, stride=1, padding=0, dilation=1, groups=1):
     x = ops.conv_pad(x, padding)
     y = ops.conv3d(x, weight, stride, dilation, groups)
     if bias is not None:
@@ -81,7 +88,14 @@ def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 
 @register_function(torch.nn.functional.conv_transpose3d)
 def conv3d_transpose(
-    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+    x: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor] = None,
+    stride=1,
+    padding=0,
+    output_padding=0,
+    groups=1,
+    dilation=1,
 ):
     if dilation != 1 and not same_list(dilation, [1, 1, 1]):
         raise NotImplementedError("dilation != 1")
@@ -158,6 +172,11 @@ def add(x: Tensor, y: Tensor):
 @register_function(operator.iadd)
 def iadd(x: Tensor, y: Tensor):
     return x + y
+
+
+@register_function(operator.imul)
+def imul(x: Tensor, y: Tensor):
+    return x * y
 
 
 @register_function(torch.sin)
@@ -306,7 +325,7 @@ def mul(x: Tensor, y: Tensor):
 
 
 @register_function(torch.cat)
-def cat(tensors: List[Tensor], dim: int):
+def cat(tensors: List[Tensor], dim: int = 0):
     dtype = functools.reduce(promote_type, [t.dtype for t in tensors])
     tensors = [ops.cast(t, dtype) for t in tensors]
     return ops.concat(tensors, dim)
@@ -674,6 +693,11 @@ def pow(base: Tensor, exponent: Union[Number, Tensor]):
     return ops.pow(base, exponent)
 
 
+@register_function(torch.scalar_tensor)
+def scalar_tensor(value):
+    return ops.full([1], value)
+
+
 @register_function(torch.full)
 def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, requires_grad=False):
     if out is not None:
@@ -713,7 +737,9 @@ def empty(
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
     if len(size) == 1 and isinstance(size[0], (tuple, list)):
         size = size[0]
-    return ops.full(size, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
+    return ops.full(
+        size, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero if hidet_dtype is not None else 0
+    )
 
 
 @register_function(torch.bmm)
@@ -1003,6 +1029,7 @@ def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor
     return a >= b
 
 
+@register_method(torch.Tensor.eq)
 @register_function(operator.eq)
 def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     if isinstance(a, Tensor) or isinstance(b, Tensor):
@@ -1146,6 +1173,7 @@ def torch_conj(x: Tensor) -> Tensor:
 
 
 @register_function(torch._C._log_api_usage_once)
+@register_function(torch._assert_async)
 @register_function(torch.cuda.synchronize)
 def torch_noop(*args, **kwargs):
     return
