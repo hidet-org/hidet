@@ -14,5 +14,7 @@ from .runtime_api import runtime_api
 from .shared_lib import SharedLibrary
 
 from . import callbacks
+from . import convert
 from . import crt
+from . import array
 from . import utils

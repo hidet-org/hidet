@@ -13,7 +13,7 @@ from typing import Union
 from ctypes import c_void_p, c_char_p, c_uint64, c_int32
 from hidet.cuda import Stream
 from .ffi import get_func
-from .utils import Array
+from .array import Array
 
 
 class RuntimeAPI:

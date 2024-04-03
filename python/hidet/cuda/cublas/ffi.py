@@ -13,8 +13,7 @@ import os
 import sys
 import glob
 from enum import IntEnum
-from ctypes import c_int32, c_int64, c_void_p, c_bool, c_char_p
-from hidet.ffi.utils import c_pointer_compatible
+from ctypes import c_int32, c_int64, c_bool, c_char_p, c_void_p
 from hidet.ffi.ffi import get_func
 from hidet.utils.py import initialize
 
@@ -128,9 +127,9 @@ batched_gemm = get_func(
         c_int32,  # type a
         c_int32,  # type b
         c_int32,  # type c
-        c_pointer_compatible,  # a array
-        c_pointer_compatible,  # b array
-        c_pointer_compatible,  # c array
+        c_void_p,  # a array
+        c_void_p,  # b array
+        c_void_p,  # c array
         c_bool,  # trans a
         c_bool,  # trans b
         c_int32,  # compute type
