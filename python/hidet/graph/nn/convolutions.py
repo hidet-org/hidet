@@ -16,7 +16,7 @@ from hidet.graph.tensor import empty
 
 
 class Conv2d(Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding=0, stride=1, groups=1):
+    def __init__(self, in_channels, out_channels, kernel_size, padding=0, stride=1, groups=1, bias=False):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -25,6 +25,8 @@ class Conv2d(Module):
         self.stride = normalize(stride)
         self.groups = groups
         self.weight = empty(shape=[out_channels, in_channels, *self.kernel], dtype='float32')
+        # use shape (oc, 1, 1) for broadcast
+        self.bias = empty(shape=[out_channels, 1, 1], dtype="float32") if bias else None
 
     def extra_str(self) -> str:
         return 'in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}'.format(
@@ -33,4 +35,7 @@ class Conv2d(Module):
 
     def forward(self, x):
         x = ops.pad(x, ops.utils.normalize_padding(self.padding))
-        return ops.conv2d(x, self.weight, stride=self.stride, groups=self.groups)
+        x = ops.conv2d(x, self.weight, stride=self.stride, groups=self.groups)
+        if self.bias is not None:
+            x = ops.add(x, self.bias)
+        return x

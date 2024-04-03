@@ -12,7 +12,14 @@
 from typing import List, Union, Sequence
 from hidet import ir
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
+from hidet.graph.ops.utils import (
+    compute,
+    input_like,
+    normalize_stride,
+    normalize_dilations,
+    normalize_conv_padding,
+    reduce,
+)
 from hidet.utils.py import cdiv
 
 
@@ -147,6 +154,7 @@ class Conv2dOp(Operator):
     ):
         stride = normalize_stride(stride)
         dilations = normalize_dilations(dilations)
+        padding = normalize_conv_padding(padding, 2)
         super().__init__(
             inputs=[x, w],
             attributes={'padding': padding, 'stride': stride, 'groups': groups, 'dilations': dilations},

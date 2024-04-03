@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Any
+from functools import cached_property
 import warnings
 from hidet.ir.type import DataType
 
@@ -42,19 +43,19 @@ class Boolean(DataType):
         value = bool(value)
         return constant(value, self)
 
-    @property
+    @cached_property
     def one(self):
         return self.constant(True)
 
-    @property
+    @cached_property
     def zero(self):
         return self.constant(False)
 
-    @property
+    @cached_property
     def true(self):
         return self.constant(True)
 
-    @property
+    @cached_property
     def false(self):
         return self.constant(False)
 

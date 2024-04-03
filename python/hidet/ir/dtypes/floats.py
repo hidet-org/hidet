@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Any
+from functools import cached_property
 from dataclasses import dataclass
 import warnings
 import numpy as np
@@ -77,11 +78,11 @@ class FloatType(DataType):
 
         return constant(value, self)
 
-    @property
+    @cached_property
     def one(self):
         return self.constant(1.0)
 
-    @property
+    @cached_property
     def zero(self):
         return self.constant(0.0)
 

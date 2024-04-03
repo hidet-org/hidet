@@ -238,6 +238,20 @@ class GatherTask(Task):
         super().__init__(name='gather', inputs=[data, indices], outputs=[output])
 
 
+class IdxSelTask(Task):
+    def __init__(self, data: TensorInput, index: TensorInput, dim=0):
+        output_shape = data.shape[:dim] + [index.shape[0]] + data.shape[dim + 1 :]
+
+        def fmap(*output_indices):
+            index_value = index[output_indices[dim]]
+            index_value = if_then_else(index_value < 0, index_value + data.shape[dim], index_value)
+            data_indices = output_indices[:dim] + (index_value,) + output_indices[dim + 1 :]
+            return data[data_indices]
+
+        output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
+        super().__init__(name='idxsel', inputs=[data, index], outputs=[output])
+
+
 class StridedSliceTask(Task):
     def __init__(
         self,
@@ -426,6 +440,15 @@ class GatherOp(Operator):
         )
 
 
+class IdxSelOp(Operator):
+    def __init__(self, data: Tensor, index: Tensor, dim: int):
+        super().__init__(
+            inputs=[data, index],
+            attributes={'dim': dim},
+            task=IdxSelTask(input_like(data, 'data'), input_like(index, 'index'), dim=dim),
+        )
+
+
 class StridedSliceOp(Operator):
     def __init__(
         self,
@@ -581,6 +604,10 @@ def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     return GatherOp(data, indices, axis).outputs[0]
+
+
+def index_select(data: Tensor, index: Tensor, dim: int) -> Tensor:
+    return IdxSelOp(data, index, dim).outputs[0]
 
 
 def strided_slice(

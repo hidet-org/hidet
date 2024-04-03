@@ -10,35 +10,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Optional, Sequence, Iterator, Dict, Any
+from typing import Optional, Sequence, Iterator, Dict, Any, Generic, TypeVar
 from collections import OrderedDict
 from hidet.graph.tensor import symbol_like
 from hidet.graph.flow_graph import FlowGraph, trace_from
 from hidet.graph.tensor import Tensor
 
+# forward method return type
+R = TypeVar('R')
 
-class Module:
+
+class Module(Generic[R]):
     def __init__(self):
         self.name = None
         self._parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
         self._submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
 
     def __setattr__(self, key, value):
-        parameters = self.__dict__.get('parameters')
-        submodules = self.__dict__.get('submodules')
-        if isinstance(value, Tensor):
-            value.name = key
-            self._parameters[key] = value
-        elif isinstance(value, Module):
-            value.name = '{}.{}'.format(self.name, key) if self.name else key
-            self._submodules[key] = value
-        elif parameters and submodules and value is None and (key in parameters or key in submodules):
-            if key in self._parameters:
-                self._parameters[key] = value
-            if key in self._submodules:
-                self._submodules[key] = value
-        else:
+        if key in ['name', '_submodules', '_parameters']:
             super().__setattr__(key, value)
+            return
+
+        parameters = self.__dict__.get('_parameters')
+        submodules = self.__dict__.get('_submodules')
+
+        if key in parameters:
+            del self._parameters[key]
+        elif key in submodules:
+            del self._submodules[key]
+        elif key in self.__dict__:
+            del self.__dict__[key]
+
+        if isinstance(value, Tensor):
+            parameters[key] = value
+        elif isinstance(value, Module):
+            submodules[key] = value
+        else:
+            self.__dict__[key] = value
+
         cnt = sum(1 for collection in [parameters, submodules, self.__dict__] if collection and key in collection)
         assert cnt <= 1, 'duplicated definition of {}'.format(key)
 
@@ -70,7 +79,7 @@ class Module:
             lines = [' ' * indent + line for line in lines]
             return '{}(\n{}\n)'.format(name, '\n'.join(lines))
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> R:
         return self.forward(*args, **kwargs)
 
     def state_dict(self) -> Dict[str, Any]:
@@ -86,7 +95,7 @@ class Module:
     def extra_str(self) -> str:
         return ''
 
-    def forward(self, *args, **kwargs):
+    def forward(self, *args, **kwargs) -> R:
         raise NotImplementedError()
 
     def parameters(self, recursive: bool = True) -> Iterator[Tensor]:

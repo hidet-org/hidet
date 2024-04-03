@@ -285,6 +285,12 @@ def register_hidet_options():
         default_value=True,
         description='Whether to enable imperative execution when op arguments allows',
     )
+    register_option(
+        name='auth_tokens.for_huggingface',
+        type_hint='str',
+        default_value='',
+        description='The auth token to use for accessing private huggingface models.',
+    )
 
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
     if not os.path.exists(config_file_path):

@@ -47,12 +47,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
       
-      - name: Upload run configs
-        uses: actions/upload-artifact@v3
-        with:
-          name: run_configs
-          path: run_configs.json
-          retention-days: 1
+      #- name: Upload run configs
+      #  uses: actions/upload-artifact@v3
+      #  with:
+      #    name: run_configs
+      #    path: run_configs.json
+      #    retention-days: 1
 
   run_tests:
     needs: start_instances
@@ -85,12 +85,16 @@ jobs:
           path: models
           ref: ci
 
-      - name: Download run configs
-        uses: actions/download-artifact@v3
-        with:
-          name: run_configs
-          path: ./mount
-        
+      #- name: Download run configs
+      #  uses: actions/download-artifact@v3
+      #  with:
+      #    name: run_configs
+      #    path: ./mount
+
+      # Put run_configs.json in shared folder. Intup and output of tests is saved in it. 
+      - name: Copy run_config.json
+        run: cp hidet/tests/benchmarks/run_configs.json ./mount
+
       # Build the image
       - name: Build docker image from base image
         run: docker build -t hidet-ci -f hidet/.github/Dockerfile .
@@ -105,7 +109,7 @@ jobs:
           -e HW_CONFIG -e REPO_NAME -e REPO_BRANCH -e CI_CS_HOSTNAME -e CI_CS_PORT
           -e CI_CS_USERNAME -e CI_CS_PASSWORD -e HF_TOKEN
           -v ./mount:/workspace/mount
-          hidet-ci python hidet/.github/scripts/run_tests.py --configs /workspace/mount/run_configs.json'
+          hidet-ci python hidet/tests/benchmarks/run_tests.py --configs /workspace/mount/run_configs.json'
         env:
           HW_CONFIG: ${{ matrix.hw_configs }}
           REPO_NAME: ${{ inputs.source_repo == 'this' && github.repository || inputs.source_repo }}
@@ -162,7 +166,7 @@ jobs:
           CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
 
   stop_instances:
-    if: inputs.shutdown_instances
+    if: ${{ always() && inputs.shutdown_instances }}
     runs-on: ubuntu-latest
     needs: [start_instances, run_tests]
     steps:

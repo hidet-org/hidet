@@ -136,6 +136,21 @@ class CompiledGraph:
             # the weights are already loaded, initialize the graph directly
             self._init_compiled_graph()
 
+    def __getstate__(self):
+        # Create a temporary file and save the CompiledGraph zip in it
+        with tempfile.NamedTemporaryFile() as temp_file:
+            self.save(temp_file.name, save_dispatch_table=True)
+            with open(temp_file.name, 'rb') as f:
+                state = f.read()
+        return state
+
+    def __setstate__(self, state):
+        # Load the CompiledGraph
+        with tempfile.NamedTemporaryFile() as temp_file:
+            with open(temp_file.name, 'wb') as f:
+                f.write(state)
+            self.__dict__.update(load_compiled_graph(temp_file.name).__dict__)
+
     def __str__(self):
         """
         Get the basic information of this compiled graph.
