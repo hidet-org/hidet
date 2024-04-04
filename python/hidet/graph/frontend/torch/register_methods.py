@@ -63,6 +63,16 @@ def tensor_type_as(self: Tensor, other: Tensor) -> Tensor:
     return ops.cast(self, other.dtype)
 
 
+@register_method(torch.Tensor.index_select)
+def index_select(self: Tensor, dim: int, index: Tensor):
+    return ops.index_select(self, index, dim)
+
+
+@register_method(torch.Tensor.fill_)
+def fill_(self: Tensor, value):
+    return ops.full(self.shape, value, dtype=self.dtype, device=self.device)
+
+
 @register_method(torch.Tensor.to)
 def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
     """

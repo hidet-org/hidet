@@ -22,6 +22,7 @@ from hidet.runtime import CompiledGraph
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.cuda.graph import CudaGraphCreationError
+from hidet.ffi import runtime_api
 from .dynamo_config import dynamo_config
 from .interpreter import Interpreter
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
@@ -108,46 +109,45 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
     return hidet_inputs
 
 
-def get_wrapper(cgraph: CompiledGraph, inputs, output_format):
-    use_cuda_graph = dynamo_config['use_cuda_graph']
-    if use_cuda_graph:
-        try:
-            runner = cgraph.cuda_graph()
-        except CudaGraphCreationError:
-            runner = cgraph
-    else:
-        runner = cgraph
+class HidetCompiledModel:
+    def __init__(self, cgraph: CompiledGraph, inputs, output_format):
+        super().__init__()
+        self.inputs = inputs
+        self.output_format = output_format
+        self.cgraph_configured = False
+        self.cgraph = cgraph
 
-    def run(*inputs: torch.Tensor):
-        hidet_inputs = preprocess_inputs(inputs)
-        hidet_outputs: List[hidet.Tensor] = runner.run_async(hidet_inputs)
-        torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
-        return torch_outputs
+    def configure_cgraph(self):
+        if dynamo_config['use_cuda_graph']:
+            try:
+                self.cgraph = self.cgraph.cuda_graph()
+            except CudaGraphCreationError:
+                pass  # Leave cgraph as is
 
-    def wrapper(*args: Tensor):
+    def __call__(self, *args):
+        if not self.cgraph_configured:
+            self.configure_cgraph()
+            self.cgraph_configured = True
+
         tensor_args = []
-        for param, arg in zip(inputs, args):
+        for param, arg in zip(self.inputs, args):
             if isinstance(param, Tensor):
                 tensor_args.append(arg)
             elif isinstance(param, SymbolVar):
                 dtype = param.type
                 assert isinstance(dtype, DataType)
                 if dtype.name == 'int32':
-                    from hidet.ffi import runtime_api
-
                     runtime_api.set_symbol_value(param.name, int(arg))
                 else:
                     raise ValueError(f'hidet_backend: unsupported symbolic dtype {dtype}. We only support int32 now.')
             else:
                 # ignore constant
                 pass
-        outputs: Sequence[torch.Tensor] = run(*tensor_args)
-        ret = deserialize_output(output_format, outputs)
-        return ret
 
-    logger.info('finish generating the executor')
-
-    return wrapper
+        hidet_inputs = preprocess_inputs(tensor_args)
+        hidet_outputs: List[hidet.Tensor] = self.cgraph.run_async(hidet_inputs)
+        outputs: Sequence[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
+        return deserialize_output(self.output_format, outputs)
 
 
 def hidet_backend(graph_module, example_inputs):
@@ -178,4 +178,4 @@ def hidet_backend(graph_module, example_inputs):
 
     cgraph = get_compiled_graph(flow_graph)
 
-    return get_wrapper(cgraph, inputs, output_format)
+    return HidetCompiledModel(cgraph, inputs, output_format)

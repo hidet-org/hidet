@@ -92,6 +92,15 @@ def normalize_padding(padding: Union[Int, Sequence[Int]], dim=2) -> List[Int]:
     )
 
 
+def normalize_conv_padding(padding: Union[Int, Sequence[Int]], dim) -> List[Int]:
+    if isinstance(padding, int):
+        return [padding for _ in range(dim)]
+    elif isinstance(padding, (list, tuple)):
+        assert len(padding) == dim
+        return padding
+    raise ValueError('Incorrect conv padding: {}; dim is {}'.format(padding, dim))
+
+
 def normalize_dim(dim: Optional[Union[Int, Sequence[Int]]], rank: int) -> Union[Int, List[Int]]:
     """
     normalize a dim from [-rank, rank] or None to [0, rank].

@@ -1,0 +1,192 @@
+[
+    {
+        "type": "model",
+        "id": 1,
+        "name": "bert-base-uncased",
+        "runfile": "bench_transformer.py",
+        "param_id": 1,
+        "param_name": "seqlen=256",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 4,
+        "name": "resnet50",
+        "runfile": "bench_vision.py",
+        "param_id": 13,
+        "param_name": "128x3x224x224",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 5,
+        "name": "efficientnet_b0",
+        "runfile": "bench_vision.py",
+        "param_id": 13,
+        "param_name": "128x3x224x224",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 6,
+        "name": "densenet121",
+        "runfile": "bench_vision.py",
+        "param_id": 13,
+        "param_name": "128x3x224x224",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 12,
+        "name": "mobilenet_v2",
+        "runfile": "bench_vision.py",
+        "param_id": 13,
+        "param_name": "128x3x224x224",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 14,
+        "name": "vit_b_16",
+        "runfile": "bench_vision.py",
+        "param_id": 13,
+        "param_name": "128x3x224x224",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 1,
+        "name": "batch_matmul",
+        "runfile": "bench_op.py",
+        "param_id": 5,
+        "param_name": "1x4096x4096,1x4096x4096",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 1,
+        "name": "batch_matmul",
+        "runfile": "bench_op.py",
+        "param_id": 6,
+        "param_name": "1x1024x128,1x128x512",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 2,
+        "name": "matmul_f16",
+        "runfile": "bench_op.py",
+        "param_id": 5,
+        "param_name": "1x4096x4096,1x4096x4096",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 2,
+        "name": "matmul_f16",
+        "runfile": "bench_op.py",
+        "param_id": 6,
+        "param_name": "1x1024x128,1x128x512",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 3,
+        "name": "conv2d",
+        "runfile": "bench_op.py",
+        "param_id": 7,
+        "param_name": "1x3x224x224,64x3x3x3",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 3,
+        "name": "conv2d",
+        "runfile": "bench_op.py",
+        "param_id": 8,
+        "param_name": "1x3x1280x768,32x3x3x3",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 4,
+        "name": "conv2d_gemm_f16",
+        "runfile": "bench_op.py",
+        "param_id": 7,
+        "param_name": "1x3x224x224,64x3x3x3",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 4,
+        "name": "conv2d_gemm_f16",
+        "runfile": "bench_op.py",
+        "param_id": 8,
+        "param_name": "1x3x1280x768,32x3x3x3",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 5,
+        "name": "attn",
+        "runfile": "bench_op.py",
+        "param_id": 9,
+        "param_name": "1x4096x16x64",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 5,
+        "name": "attn",
+        "runfile": "bench_op.py",
+        "param_id": 10,
+        "param_name": "1x1024x16x128",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 6,
+        "name": "attn_mask_add",
+        "runfile": "bench_op.py",
+        "param_id": 9,
+        "param_name": "1x4096x16x64",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 6,
+        "name": "attn_mask_add",
+        "runfile": "bench_op.py",
+        "param_id": 10,
+        "param_name": "1x1024x16x128",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 11,
+        "param_name": "1x224x224x3,axis=[1,2]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    }
+]

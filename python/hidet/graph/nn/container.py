@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Iterable
+from typing import Iterable, List, Union
 from collections import OrderedDict
 from .module import Module
 
@@ -30,18 +30,35 @@ class Sequential(Module):
 
     def forward(self, x):  # pylint: disable=arguments-differ
         for module in self._submodules.values():
-            x = module(x)
+            if module is not None:
+                x = module(x)
         return x
+
+    def __iter__(self):
+        return iter(self._submodules.values())
+
+    def __len__(self):
+        return len(self._submodules.keys())
 
 
 class ModuleList(Module):
-    def __init__(self, modules: Iterable[Module] = None):
+    def __init__(self, modules: Iterable[Module]):
         super().__init__()
         for idx, module in enumerate(modules):
             self._submodules[str(idx)] = module
 
     def __iter__(self):
         return iter(self._submodules.values())
+
+    def __getitem__(self, index: int) -> Union[Module, List[Module]]:
+        if isinstance(index, slice):
+            module_list = [self._submodules[str(idx)] for idx in range(len(self._submodules))]
+            return module_list[index]
+        else:
+            return self._submodules[str(index)]
+
+    def __len__(self):
+        return len(self._submodules)
 
     def forward(self, *args):
         raise ValueError('Should not forward ModuleList.')

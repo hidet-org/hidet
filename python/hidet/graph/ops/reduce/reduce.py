@@ -398,7 +398,14 @@ class ArgReduceTask(Task):
 
 
 class ReduceBaseOp(Operator):
-    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keep_dim: bool, reduce_type: str):
+    def __init__(
+        self,
+        x: Tensor,
+        dims: Optional[Sequence[int]],
+        keep_dim: bool,
+        reduce_type: str,
+        accumulate_dtype: str = 'float32',
+    ):
         rank = len(x.shape)
         if dims is None:
             dims = list(range(rank))
@@ -406,7 +413,7 @@ class ReduceBaseOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'dims': dims, 'keepdims': keep_dim},
-            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
+            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type, accumulate_dtype=accumulate_dtype),
         )
 
 
@@ -444,12 +451,12 @@ class ReduceMinOp(ReduceBaseOp):
 
 class ReduceOrOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
-        super().__init__(x, dims, keepdims, ReduceType.Or.value)
+        super().__init__(x, dims, keepdims, ReduceType.Or.value, 'bool')
 
 
 class ReduceAndOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
-        super().__init__(x, dims, keepdims, ReduceType.And.value)
+        super().__init__(x, dims, keepdims, ReduceType.And.value, 'bool')
 
 
 class ReduceProdOp(ReduceBaseOp):
