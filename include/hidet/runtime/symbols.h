@@ -11,16 +11,13 @@
 // limitations under the License.
 #pragma once
 
-#include <string>
-#include <map>
 #include <cstdint>
+#include <map>
+#include <string>
 #include <hidet/runtime/common.h>
-
-
 
 DLL void reset_symbol_table();
 
-DLL int32_t get_symbol_value(const char* symbol_name);
+DLL int32_t get_symbol_value(const char *symbol_name);
 
-DLL void set_symbol_value(const char* symbol_name, int32_t value);
-
+DLL void set_symbol_value(const char *symbol_name, int32_t value);

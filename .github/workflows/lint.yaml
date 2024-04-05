@@ -27,6 +27,8 @@ jobs:
           pip install torch torchvision torchaudio
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
+          sudo apt-get update
+          sudo apt-get install clang-format
       - name: Format with black
         run: |
           # stop the build if format is not correct
@@ -36,3 +38,8 @@ jobs:
         run: |
           echo "Running with" $(pip freeze | grep "pylint")
           python -m pylint --rcfile ./scripts/lint/pylintrc -j $(nproc) ./python/hidet
+      - name: Format with clang-format
+        run: |
+          echo "Running with" $(clang-format --version)
+          find ./src ./include -iname '*.h' -o -iname '*.cpp' \
+          | xargs clang-format -style=file:scripts/lint/.clang-format --dry-run -Werror

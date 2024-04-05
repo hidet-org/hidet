@@ -26,26 +26,22 @@ struct ErrorState {
 struct HidetException: std::exception {
     std::string msg;
 
-    HidetException(std::string msg): msg(msg){}
+    HidetException(std::string msg) : msg(msg) {}
 
-    const char * what() const noexcept override {
+    const char *what() const noexcept override {
         static std::string what_msg;
         what_msg = this->msg;
         return what_msg.c_str();
     }
 };
 
-
 class FATALMessage {
     std::ostringstream stream_;
-public:
-    FATALMessage(const char* file, int line) {
-        this->stream_ << file << ":" << line << ": ";
-    }
 
-    std::ostringstream &stream() {
-        return this->stream_;
-    }
+   public:
+    FATALMessage(const char *file, int line) { this->stream_ << file << ":" << line << ": "; }
+
+    std::ostringstream &stream() { return this->stream_; }
 
     [[noreturn]] ~FATALMessage() {
         std::cerr << this->stream_.str() << std::endl;
@@ -55,21 +51,15 @@ public:
 
 DLL void hidet_set_last_error(const char *msg);
 
-DLL const char * hidet_get_last_error();
+DLL const char *hidet_get_last_error();
 
 class ERRORMessage {
     std::ostringstream stream_;
-public:
-    ERRORMessage(const char* file, int line) {
-        this->stream_ << file << ":" << line << ": ";
-    }
 
-    std::ostringstream &stream() {
-        return this->stream_;
-    }
+   public:
+    ERRORMessage(const char *file, int line) { this->stream_ << file << ":" << line << ": "; }
 
-    ~ERRORMessage() noexcept(false) {
-        throw HidetException(this->stream_.str().c_str());
-    }
+    std::ostringstream &stream() { return this->stream_; }
+
+    ~ERRORMessage() noexcept(false) { throw HidetException(this->stream_.str().c_str()); }
 };
-

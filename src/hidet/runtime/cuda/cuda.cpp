@@ -15,19 +15,20 @@
 
 // CUDA runtime APIs
 typedef int cudaError_t;
-typedef cudaError_t (*cudaGetDeviceCount_t)(int* count);
-typedef cudaError_t (*cudaGetDevice_t)(int* device);
+typedef cudaError_t (*cudaGetDeviceCount_t)(int *count);
+typedef cudaError_t (*cudaGetDevice_t)(int *device);
 typedef cudaError_t (*cudaSetDevice_t)(int device);
 typedef cudaError_t (*cudaMalloc_t)(void **devPtr, size_t size);
 typedef cudaError_t (*cudaMallocAsync_t)(void **devPtr, size_t size, cudaStream_t stream);
 typedef cudaError_t (*cudaFree_t)(void *devPtr);
 typedef cudaError_t (*cudaFreeAsync_t)(void *devPtr, cudaStream_t stream);
-typedef cudaError_t (*cudaMemcpy_t)(void* dst, const void* src, size_t count, cudaMemcpyKind kind);
-typedef cudaError_t (*cudaMemcpyAsync_t)(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream);
-typedef const char* (*cudaGetErrorString_t)(cudaError_t error);
+typedef cudaError_t (*cudaMemcpy_t)(void *dst, const void *src, size_t count, cudaMemcpyKind kind);
+typedef cudaError_t (*cudaMemcpyAsync_t)(void *dst, const void *src, size_t count, cudaMemcpyKind kind,
+                                         cudaStream_t stream);
+typedef const char *(*cudaGetErrorString_t)(cudaError_t error);
 
 static std::string library_path;
-static void* libcudart = nullptr;
+static void *libcudart = nullptr;
 static cudaGetDeviceCount_t cudaGetDeviceCount = nullptr;
 static cudaGetDevice_t cudaGetDevice = nullptr;
 static cudaSetDevice_t cudaSetDevice = nullptr;
@@ -41,16 +42,16 @@ static cudaGetErrorString_t cudaGetErrorString = nullptr;
 
 // load cuda runtime APIs
 static inline void lazy_load_cuda_runtime() {
-    if(libcudart == nullptr) {
-        const char* libpath;
-        if(library_path.empty()) {
+    if (libcudart == nullptr) {
+        const char *libpath;
+        if (library_path.empty()) {
             libpath = "libcudart.so";
         } else {
             libpath = library_path.c_str();
         }
         libcudart = dlopen(libpath, RTLD_LAZY);
 
-        if(libcudart == nullptr) {
+        if (libcudart == nullptr) {
             LOG(FATAL) << "Failed to load libcudart.so: " << dlerror();
         }
 
@@ -67,15 +68,16 @@ static inline void lazy_load_cuda_runtime() {
     }
 }
 
-#define CHECK_CUDA(status) do{                                      \
-    cudaError_t err = (status);                                     \
-    if (err != 0) {                                                 \
-        LOG(FATAL) << "CUDA error: " << cudaGetErrorString(err);    \
-    }                                                               \
-} while(0)
+#define CHECK_CUDA(status)                                           \
+    do {                                                             \
+        cudaError_t err = (status);                                  \
+        if (err != 0) {                                              \
+            LOG(FATAL) << "CUDA error: " << cudaGetErrorString(err); \
+        }                                                            \
+    } while (0)
 
 // Hidet exported APIs
-DLL void hidet_cuda_set_library_path(const char* path) {
+DLL void hidet_cuda_set_library_path(const char *path) {
     library_path = path;
 }
 
@@ -98,14 +100,14 @@ DLL void hidet_cuda_set_device(int device) {
     CHECK_CUDA(cudaSetDevice(device));
 }
 
-DLL void* hidet_cuda_malloc(size_t size) {
+DLL void *hidet_cuda_malloc(size_t size) {
     lazy_load_cuda_runtime();
     void *devPtr;
     CHECK_CUDA(cudaMalloc(&devPtr, size));
     return devPtr;
 }
 
-DLL void* hidet_cuda_malloc_async(size_t size, cudaStream_t stream) {
+DLL void *hidet_cuda_malloc_async(size_t size, cudaStream_t stream) {
     lazy_load_cuda_runtime();
     void *devPtr;
     CHECK_CUDA(cudaMallocAsync(&devPtr, size, stream));
@@ -122,12 +124,12 @@ DLL void hidet_cuda_free_async(void *devPtr, cudaStream_t stream) {
     CHECK_CUDA(cudaFreeAsync(devPtr, stream));
 }
 
-DLL void hidet_cuda_memcpy(void* dst, const void* src, size_t count, cudaMemcpyKind kind) {
+DLL void hidet_cuda_memcpy(void *dst, const void *src, size_t count, cudaMemcpyKind kind) {
     lazy_load_cuda_runtime();
     CHECK_CUDA(cudaMemcpy(dst, src, count, kind));
 }
 
-DLL void hidet_cuda_memcpy_async(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream) {
+DLL void hidet_cuda_memcpy_async(void *dst, const void *src, size_t count, cudaMemcpyKind kind, cudaStream_t stream) {
     lazy_load_cuda_runtime();
     CHECK_CUDA(cudaMemcpyAsync(dst, src, count, kind, stream));
 }

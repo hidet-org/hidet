@@ -10,8 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 #include <hidet/runtime/callbacks.h>
 #include <hidet/runtime/logging.h>
 
@@ -20,7 +20,7 @@ struct CallbackRegistryPool {
     std::unordered_map<std::string, int> name2id;
     std::unordered_map<int, std::string> id2name;
     /* array contains the function pointer of callback function */
-    std::vector<void*> id2ptr;
+    std::vector<void *> id2ptr;
 
     CallbackRegistryPool() {
         name2id["allocate_cuda_storage"] = 0;
@@ -29,37 +29,37 @@ struct CallbackRegistryPool {
         name2id["free_cpu_storage"] = 3;
         name2id["cuda_memset"] = 4;
 
-        for (auto& kv : name2id) {
+        for (auto &kv : name2id) {
             id2name[kv.second] = kv.first;
         }
     }
 
-    static CallbackRegistryPool* global() {
+    static CallbackRegistryPool *global() {
         static CallbackRegistryPool instance;
         return &instance;
     }
 };
 
 template<int id, typename FuncType>
-static FuncType* get_callback_ptr() {
+static FuncType *get_callback_ptr() {
     auto pool = CallbackRegistryPool::global();
     assert(id < pool->id2name.size());
-    if(id >= pool->id2ptr.size() || pool->id2ptr[id] == nullptr) {
+    if (id >= pool->id2ptr.size() || pool->id2ptr[id] == nullptr) {
         LOG(ERROR) << "Callback function " << pool->id2name[id] << " has not been registered.";
     }
-    void* ptr = pool->id2ptr[id];
-    typedef FuncType* FuncPointerType;
+    void *ptr = pool->id2ptr[id];
+    typedef FuncType *FuncPointerType;
     return FuncPointerType(ptr);
 }
 
-DLL void register_callback(const char* name, void *func_ptr) {
+DLL void register_callback(const char *name, void *func_ptr) {
     try {
         auto pool = CallbackRegistryPool::global();
         if (pool->name2id.count(name) == 0) {
             LOG(ERROR) << "Function " << std::string(name) << " is not a callback function.";
         }
         int id = pool->name2id[name];
-        if(id >= pool->id2ptr.size()) {
+        if (id >= pool->id2ptr.size()) {
             pool->id2ptr.resize(id + 1);
         }
         pool->id2ptr[id] = func_ptr;

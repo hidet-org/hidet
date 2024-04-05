@@ -19,12 +19,12 @@ CudaContext *CudaContext::global() {
 }
 
 static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
-    if(nbytes > workspace.allocated_nbytes) {
-        if(workspace.base) {
+    if (nbytes > workspace.allocated_nbytes) {
+        if (workspace.base) {
             free_cuda_storage(reinterpret_cast<uint64_t>(workspace.base));
         }
-        workspace.base = reinterpret_cast<void*>(allocate_cuda_storage(nbytes));
-        if(workspace.base == nullptr) {
+        workspace.base = reinterpret_cast<void *>(allocate_cuda_storage(nbytes));
+        if (workspace.base == nullptr) {
             LOG(ERROR) << "allocate workspace failed.";
         }
 
@@ -32,18 +32,18 @@ static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
     }
 }
 
-DLL void set_cuda_stream(void* stream) {
+DLL void set_cuda_stream(void *stream) {
     CudaContext::global()->stream = stream;
 }
 
-DLL void* get_cuda_stream() {
+DLL void *get_cuda_stream() {
     return CudaContext::global()->stream;
 }
 
-DLL void* request_cuda_workspace(size_t nbytes, bool require_clean) {
+DLL void *request_cuda_workspace(size_t nbytes, bool require_clean) {
     try {
         auto ctx = CudaContext::global();
-        if(require_clean) {
+        if (require_clean) {
             reserve_cuda_workspace(ctx->clean_workspace, nbytes);
             return ctx->clean_workspace.base;
         } else {
@@ -56,12 +56,12 @@ DLL void* request_cuda_workspace(size_t nbytes, bool require_clean) {
     }
 }
 
-DLL void set_nccl_comms(int num_comms, void** comms) {
+DLL void set_nccl_comms(int num_comms, void **comms) {
     CudaContext::global()->num_comms = num_comms;
     CudaContext::global()->nccl_comms = comms;
 }
 
-DLL void* get_nccl_comm(int idx) {
+DLL void *get_nccl_comm(int idx) {
     const int num_comms = CudaContext::global()->num_comms;
     if (idx >= num_comms) {
         LOG(ERROR) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
