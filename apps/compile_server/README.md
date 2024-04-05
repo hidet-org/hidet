@@ -30,5 +30,5 @@ hidet.option.compile_server.password('password')
 hidet.option.compile_server.repo('https://github.com/hidet-org/hidet', 'main')  
 
 # enable the compile server
-hidet.option.compile_server.enable()        
+hidet.option.compile_server.enable()
 ```
