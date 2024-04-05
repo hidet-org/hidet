@@ -11,11 +11,11 @@
 // limitations under the License.
 #pragma once
 
-#include <hidet/runtime/common.h>
 #include <hidet/runtime/callbacks.h>
+#include <hidet/runtime/common.h>
 
 struct Workspace {
-    void* base;
+    void *base;
     size_t allocated_nbytes;
     Workspace() {
         base = nullptr;

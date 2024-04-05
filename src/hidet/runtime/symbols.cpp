@@ -12,14 +12,13 @@
 #include <hidet/runtime/logging.h>
 #include <hidet/runtime/symbols.h>
 
-
 static std::map<std::string, int32_t> symbol_mapping;
 
 DLL void reset_symbol_table() {
     symbol_mapping.clear();
 }
 
-DLL int32_t get_symbol_value(const char* symbol_name) {
+DLL int32_t get_symbol_value(const char *symbol_name) {
     try {
         auto it = symbol_mapping.find(symbol_name);
         if (it == symbol_mapping.end()) {
@@ -32,6 +31,6 @@ DLL int32_t get_symbol_value(const char* symbol_name) {
     }
 }
 
-DLL void set_symbol_value(const char* symbol_name, int32_t value) {
+DLL void set_symbol_value(const char *symbol_name, int32_t value) {
     symbol_mapping[symbol_name] = value;
 }

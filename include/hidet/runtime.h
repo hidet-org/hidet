@@ -11,8 +11,8 @@
 // limitations under the License.
 #pragma once
 
-#include <hidet/runtime/common.h>
 #include <hidet/runtime/callbacks.h>
-#include <hidet/runtime/cuda/context.h>
+#include <hidet/runtime/common.h>
 #include <hidet/runtime/cpu/context.h>
+#include <hidet/runtime/cuda/context.h>
 #include <hidet/runtime/logging.h>

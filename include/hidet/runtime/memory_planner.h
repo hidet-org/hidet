@@ -10,10 +10,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-#include <list>
-#include <vector>
-#include <unordered_map>
 #include <cstdint>
+#include <list>
+#include <unordered_map>
+#include <vector>
 #include <hidet/runtime/common.h>
 
 struct Region {
@@ -29,7 +29,7 @@ struct MemoryPlanner {
 static std::vector<MemoryPlanner> memory_planners;
 
 static void memory_planner_init(int idx) {
-    if(memory_planners.size() <= idx) {
+    if (memory_planners.size() <= idx) {
         memory_planners.resize(idx + 1);
     }
     memory_planners[idx].size_map.clear();
@@ -40,11 +40,11 @@ static void memory_planner_init(int idx) {
 static int64_t memory_planner_allocate(int idx, int64_t size) {
     MemoryPlanner &memory_planner = memory_planners[idx];
 
-    if(size == 0) {
+    if (size == 0) {
         return -1;
     }
 
-    size = (size + 127) / 128 * 128;    // ceil to 128 bytes
+    size = (size + 127) / 128 * 128;  // ceil to 128 bytes
     for (auto it = memory_planner.regions.begin(); it != memory_planner.regions.end(); ++it) {
         if (it->size >= size) {
             auto region = *it;
@@ -69,19 +69,18 @@ static int64_t memory_planner_allocate(int idx, int64_t size) {
 static void memory_planner_free(int idx, int64_t ptr) {
     MemoryPlanner &memory_planner = memory_planners[idx];
 
-    if(ptr == -1) {
+    if (ptr == -1) {
         return;
     }
 
     int64_t start = ptr;
     int64_t size = memory_planner.size_map[ptr];
     auto it = memory_planner.regions.begin();
-    while(it != memory_planner.regions.end() && it->start <= start)
-        it++;
-    if(it == memory_planner.regions.begin()) {
-        if(start + size == it->start) {
+    while (it != memory_planner.regions.end() && it->start <= start) it++;
+    if (it == memory_planner.regions.begin()) {
+        if (start + size == it->start) {
             it->start = start;
-            if(it->size != -1) {
+            if (it->size != -1) {
                 it->size += size;
             }
         } else {
@@ -90,13 +89,13 @@ static void memory_planner_free(int idx, int64_t ptr) {
     } else {
         auto pit = it;
         pit--;
-        if(start + size == it->start && start == pit->start + pit->size) {
+        if (start + size == it->start && start == pit->start + pit->size) {
             it->start = pit->start;
-            if(it->size != -1) {
+            if (it->size != -1) {
                 it->size += pit->size + size;
             }
             memory_planner.regions.erase(pit);
-        } else if (start + size == it->start){
+        } else if (start + size == it->start) {
             it->start = start;
             if (it->size != -1) {
                 it->size += size;

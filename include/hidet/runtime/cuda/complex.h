@@ -13,7 +13,7 @@
 #include <cuComplex.h>
 #define HIDET_HOST_DEVICE __host__ __device__ __forceinline__
 
-template <typename T>
+template<typename T>
 struct Complex {
     T real, imag;
     Complex() = default;
@@ -22,14 +22,12 @@ struct Complex {
 };
 
 template<typename T>
-HIDET_HOST_DEVICE
-Complex<T> operator-(Complex<T> a) {
+HIDET_HOST_DEVICE Complex<T> operator-(Complex<T> a) {
     return {-a.real, -a.imag};
 }
 
 template<typename T>
-HIDET_HOST_DEVICE
-Complex<T> operator+(Complex<T> a, Complex<T> b) {
+HIDET_HOST_DEVICE Complex<T> operator+(Complex<T> a, Complex<T> b) {
     return {a.real + b.real, a.imag + b.imag};
 }
 
@@ -40,8 +38,7 @@ HIDET_HOST_DEVICE Complex<T> operator-(Complex<T> a, Complex<T> b) {
 
 template<typename T>
 HIDET_HOST_DEVICE Complex<T> operator*(Complex<T> a, Complex<T> b) {
-    return {a.real * b.real - a.imag * b.imag,
-            a.real * b.imag + a.imag * b.real};
+    return {a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real};
 }
 
 template<typename T>
