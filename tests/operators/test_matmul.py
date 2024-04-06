@@ -26,7 +26,7 @@ def test_matmul_x86(a_shape, b_shape):
         a_shape,
         b_shape,
         lambda x, y: np.matmul(x, y),
-        lambda x, y: ops.matmul_x86(x, y) - ops.matmul_x86(x, y) + ops.matmul_x86(x, y),
+        lambda x, y: ops.batch_matmul_x86(x, y) - ops.batch_matmul_x86(x, y) + ops.batch_matmul_x86(x, y),
         dtype="float32",
         atol=1e-4,
         rtol=1e-4,
