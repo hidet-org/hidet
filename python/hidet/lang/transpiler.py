@@ -36,7 +36,7 @@ from ast import ListComp, DictComp, SetComp, GeneratorExp, comprehension
 from ast import Load, Store, Del
 
 # arithmetic and bitwise operators
-from ast import UAdd, USub, Add, Sub, Mult, Div, FloorDiv, Mod, Pow, BitOr, BitXor, BitAnd, Invert
+from ast import UAdd, USub, Add, Sub, Mult, Div, FloorDiv, Mod, Pow, BitOr, BitXor, BitAnd, Invert, LShift, RShift
 
 # bool and compare operators
 from ast import Not, And, Or, Eq, NotEq, Lt, LtE, Gt, GtE
@@ -620,6 +620,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
             assert isinstance(expr.op, Add)
             return list(lhs) + list(rhs)
         elif isinstance(lhs, (ir.Expr, float, int)) and isinstance(rhs, (ir.Expr, float, int)):
+            # pylint: disable=import-outside-toplevel
+            from hidet.ir import primitives
+
             op_dict = {
                 Add: operator.add,
                 Sub: operator.sub,
@@ -630,13 +633,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 BitXor: operator.xor,
                 BitOr: operator.or_,
                 BitAnd: operator.and_,
+                Pow: primitives.pow,
+                LShift: ir.expr.left_shift,
+                RShift: ir.expr.right_shift,
             }
-            # pylint: disable=import-outside-toplevel
-            from hidet.ir import primitives
 
-            if isinstance(expr.op, Pow):
-                return primitives.pow(lhs, rhs)
-            elif type(expr.op) in op_dict:
+            if type(expr.op) in op_dict:
                 return op_dict[type(expr.op)](lhs, rhs)
             else:
                 type_name = type(expr.op).__name__
@@ -918,9 +920,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
         if isinstance(func, types.FunctionType):
             # call python function
-            if len(kwargs) > 0 and not isinstance(list(kwargs)[0], str):
-                print('Hi')
-
             return func(*args, **kwargs)
         elif isinstance(func, types.MethodType):
             # call python class method
@@ -950,6 +949,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, expr, 'Call undefined function.')
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
+            assert isinstance(func_var.type, ir.FuncType)
+            if len(func_var.type.param_types) != len(args):
+                raise HidetProgramError(
+                    self, expr, 'The number of parameters of callee and given arguments does not match.'
+                )
             if func.kind == 'cuda_kernel':
                 return ir.stmt.launch_kernel(
                     func_var=func_var,

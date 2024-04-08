@@ -50,6 +50,11 @@ class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
             if entry.generic:
                 args = [self(arg) for arg in e.args]
                 arg_types = [infer_type(arg) for arg in args]
+                if any(not isinstance(arg_type, DataType) for arg_type in arg_types):
+                    raise ValueError(
+                        'Cannot resolve generic primitive function "{}" for arguments:'.format(e.func_var.name)
+                        + ' args: {}  types: {}'.format(args, arg_types)
+                    )
                 resolved_dtype: DataType = resolve_dtype(arg_types)
                 generic, func_name = entry.name.split('_')  # such as 'generic_exp'
                 assert generic == 'generic'

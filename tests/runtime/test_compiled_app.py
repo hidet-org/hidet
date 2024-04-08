@@ -17,7 +17,9 @@ def test_compiled_app():
     cgraph_1 = hidet.trace_from(y1, inputs=[x1]).build()
     cgraph_2 = hidet.trace_from(y2, inputs=[x2]).build()
 
-    app = create_compiled_app(graphs={'graph_1': cgraph_1, 'graph_2': cgraph_2}, name='demo_app')
+    app = create_compiled_app(
+        graphs={'graph_1': cgraph_1, 'graph_2': cgraph_2}, modules={}, tensors={}, attributes={}, name='demo_app'
+    )
 
     save_compiled_app(app, 'app.hidet')
 

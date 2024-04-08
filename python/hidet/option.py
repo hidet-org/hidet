@@ -105,7 +105,7 @@ def _load_config(config_file_path: str):
         config_doc = tomlkit.parse(f.read())
     for k, v in collapse_nested_dict(config_doc).items():
         if k not in OptionRegistry.registered_options:
-            raise KeyError(f'Option {k} found in config file {config_file_path} is not registered.')
+            continue  # ignore the config that can not be recognized
         OptionRegistry.registered_options[k].default_value = v
 
 
@@ -289,7 +289,7 @@ def register_hidet_options():
         name='auth_tokens.for_huggingface',
         type_hint='str',
         default_value='',
-        description='The auth token to use for accessing private huggingface models.',
+        description='The auth-tokens to use for accessing private huggingface models. ',
     )
 
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
@@ -1041,6 +1041,20 @@ class compile_server:
         """
         OptionContext.current().set_option('compile_server.repo_url', repo_url)
         OptionContext.current().set_option('compile_server.repo_version', version)
+
+
+class auth_tokens:
+    @staticmethod
+    def for_huggingface(token: str):
+        """
+        Set the token for accessing to huggingface.
+
+        Parameters
+        ----------
+        token: str
+            The token for huggingface.
+        """
+        OptionContext.current().set_option('auth_tokens.for_huggingface', token)
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

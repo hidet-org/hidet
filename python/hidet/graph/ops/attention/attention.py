@@ -16,6 +16,7 @@ from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
+from hidet.ir.expr import is_false
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.library import tune
 from hidet.ir.layout import row_major, local_layout
@@ -176,7 +177,7 @@ class AttnTask(Task):
         qk_head = broadcast_shape(q_head, k_head)
         bs_qk = prod(qk_head)
         bs = prod(o_head)
-        assert bs == bs_qk
+        assert not is_false(bs == bs_qk), 'bs: {}, bs_qk: {}'.format(bs, bs_qk)
 
         n_size = q_shape[-2]
         d_size = q_shape[-1]
