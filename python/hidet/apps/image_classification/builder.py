@@ -37,7 +37,9 @@ def create_image_classifier(
     compiled_graph = graph.build(space=kernel_search_space)
 
     return ImageClassificationApp(
-        compiled_app=create_compiled_app(graphs={"image_classifier": compiled_graph}, name=name)
+        compiled_app=create_compiled_app(
+            graphs={"image_classifier": compiled_graph}, modules={}, tensors={}, attributes={}, name=name
+        )
     )
 
 

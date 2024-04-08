@@ -9,8 +9,8 @@ from .utils import Tensor, Task, Operator, IRModule, Expr, input_like
 
 
 class OpaqueTask(Task):
-    def __init__(self, name: str, inputs, outputs, op):
-        super().__init__(name=name, inputs=inputs, outputs=outputs, attributes={'is_opaque': True})
+    def __init__(self, name: str, inputs, outputs, op, share_map: Optional[Dict[int, int]] = None):
+        super().__init__(name=name, inputs=inputs, outputs=outputs, attributes={'is_opaque': True}, share_map=share_map)
         self.op: OpaqueOperator = op
 
     def allow_prologue(self) -> bool:
@@ -27,7 +27,13 @@ class OpaqueTask(Task):
 
 
 class OpaqueOperator(Operator):
-    def __init__(self, name: str, inputs: Dict[str, Tensor], attributes: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        name: str,
+        inputs: Dict[str, Tensor],
+        attributes: Optional[Dict[str, Any]] = None,
+        share_map: Optional[Dict[int, int]] = None,
+    ):
         symbol_outputs: Dict[str, Tensor] = self.symbolic_forward(**inputs)
         super().__init__(
             inputs=list(inputs.values()),
@@ -37,6 +43,7 @@ class OpaqueOperator(Operator):
                 inputs=[input_like(tensor, name) for name, tensor in inputs.items()],
                 outputs=[input_like(tensor, name) for name, tensor in symbol_outputs.items()],
                 op=self,
+                share_map=share_map,
             ),
         )
 

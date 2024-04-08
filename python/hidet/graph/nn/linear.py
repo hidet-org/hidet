@@ -25,17 +25,19 @@ class Linear(Module):
         else:
             self.bias = None
 
-        self._transposed = False
+        self._transposed_weight = None
 
     def extra_str(self) -> str:
         return 'in_features={}, out_features={}'.format(self.in_features, self.out_features)
 
-    def forward(self, x: Tensor) -> Tensor:
-        if not self._transposed:
-            self._transposed = True
-            self.weight = ops.transpose(self.weight, [1, 0])
+    def transposed_weight(self) -> Tensor:
+        if self._transposed_weight is None:
+            self._transposed_weight = ops.transpose(self.weight, [1, 0])  # [in_features, out_features]
+            self.weight = None
+        return self._transposed_weight
 
-        x = ops.matmul(x, self.weight)
+    def forward(self, x: Tensor) -> Tensor:
+        x = ops.matmul(x, self.transposed_weight())
         if self.bias is not None:
             x = ops.add(x, self.bias)
         return x

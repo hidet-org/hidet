@@ -11,7 +11,7 @@
 // limitations under the License.
 #pragma once
 #include <hidet/runtime/common.h>
-//#include <cublas_v2.h>
+// #include <cublas_v2.h>
 
 #define HIDET_CUBLAS_MAX_GPUS 32
 

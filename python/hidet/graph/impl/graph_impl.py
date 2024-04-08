@@ -230,11 +230,12 @@ def graph_as_text(graph: FlowGraph) -> str:
                 assert x.storage is not None
                 const_doc += NewLine() + printer.namer.get_name(x, hint='c') + ' = Constant(' + get_tensor_sig(x) + ')'
         outputs = op.outputs
-        if len(outputs) > 1:
-            raise NotImplementedError()
-        output: Tensor = outputs[0]
         line_doc = Doc()
-        line_doc += printer.namer(output) + ': ' + get_tensor_sig(output) + ' = '
+        for idx, output in enumerate(outputs):
+            line_doc += printer.namer(output) + ': ' + get_tensor_sig(output)
+            if idx < len(outputs) - 1:
+                line_doc += ', '
+        line_doc += ' = '
         items = []
         for x in op.inputs:
             items.append(printer.namer(x))

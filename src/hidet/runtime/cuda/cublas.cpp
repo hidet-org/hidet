@@ -14,8 +14,8 @@
 #include <hidet/runtime/cuda/cublas.h>
 #include <hidet/runtime/cuda/cuda.h>
 #include <hidet/runtime/logging.h>
-//#include <cublas_v2.h>
-//#include <cublas_v2.h>
+// #include <cublas_v2.h>
+// #include <cublas_v2.h>
 #include "./utils.h"
 
 // types defined in <cublas_v2.h>,
