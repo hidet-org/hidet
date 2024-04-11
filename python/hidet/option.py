@@ -289,7 +289,7 @@ def register_hidet_options():
         name='auth_tokens.for_huggingface',
         type_hint='str',
         default_value='',
-        description='The auth-tokens to use for accessing private huggingface models. ',
+        description='The auth token to use for accessing private huggingface models.',
     )
 
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')

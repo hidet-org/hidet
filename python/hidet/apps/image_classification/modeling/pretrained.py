@@ -15,7 +15,7 @@ class PretrainedModelForImageClassification(PretrainedModel[ImageClassifierOutpu
         cls, config: PretrainedConfig, revision: Optional[str] = None, dtype: Optional[str] = None, device: str = "cuda"
     ):
         # dynamically load model subclass
-        pretrained_model_class = cls.load_module(config)
+        pretrained_model_class = cls.load_module(config.architectures[0])
 
         # load the pretrained huggingface model into cpu
         with torch.device("cuda"):  # reduce the time to load the model

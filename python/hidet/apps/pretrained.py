@@ -1,4 +1,5 @@
 from typing import Generic, List, Set
+import logging
 
 import torch
 from transformers import PretrainedConfig
@@ -7,6 +8,12 @@ from hidet.apps.registry import Registry
 from hidet.graph import Tensor, nn
 from hidet.graph.nn.module import R
 from hidet.graph.tensor import from_torch
+from hidet.utils import prod
+
+
+logger = logging.Logger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 
 class PretrainedModel(nn.Module[R], Registry, Generic[R]):
@@ -33,8 +40,14 @@ class PretrainedModel(nn.Module[R], Registry, Generic[R]):
                 )
 
             src = from_torch(tensor).to(member.dtype, member.device)
+
             if src.shape != member.shape:
-                raise ValueError(f"Parameter {name} shape mismatch, hidet: {member.shape}, torch: {src.shape}")
+                if prod(src.shape) == prod(member.shape):
+                    logging.warning("Attempting to reshape parameter %s from %s to %s.", name, src.shape, member.shape)
+                    src = src.reshape(member.shape)
+                else:
+                    raise ValueError(f"Parameter {name} shape mismatch, hidet: {member.shape}, torch: {src.shape}")
+
             found_tensors.append(member)
             member.copy_(src)
 

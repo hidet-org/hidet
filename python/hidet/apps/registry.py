@@ -2,8 +2,6 @@ import importlib
 from dataclasses import astuple, dataclass
 from typing import Dict
 
-from transformers import PretrainedConfig
-
 
 @dataclass
 class RegistryEntry:
@@ -46,13 +44,7 @@ class Registry:
     module_registry: Dict[str, RegistryEntry] = {}
 
     @classmethod
-    def load_module(cls, config: PretrainedConfig):
-        architectures = getattr(config, "architectures")
-        if not architectures:
-            raise ValueError(f"Config {config.name_or_path} has no architecture.")
-
-        # assume only 1 architecture available for now
-        architecture = architectures[0]
+    def load_module(cls, architecture: str):
         if architecture not in cls.module_registry:
             raise KeyError(
                 f"No model class with architecture {architecture} found."
