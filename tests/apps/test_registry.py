@@ -8,7 +8,7 @@ from transformers import PretrainedConfig
 @pytest.mark.parametrize('model_name', ["microsoft/resnet-50"])
 def test_load_module(model_name: str):
     config: PretrainedConfig = hf.load_pretrained_config(model_name)
-    assert Registry.load_module(config) is ResNetForImageClassification
+    assert Registry.load_module(config.architectures[0]) is ResNetForImageClassification
 
 
 if __name__ == '__main__':

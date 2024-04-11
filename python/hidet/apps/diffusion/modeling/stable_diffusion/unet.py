@@ -1,6 +1,6 @@
 from typing import Tuple
 from hidet import nn
-from hidet.apps.diffusion.modeling.pretrained import PretrainedModelForText2Image
+from hidet.apps.diffusion.modeling.pretrained import PretrainedModelForDiffusion
 from hidet.apps.diffusion.modeling.stable_diffusion.timestep import TimestepEmbedding, Timesteps
 from hidet.apps.diffusion.modeling.stable_diffusion.unet_blocks import (
     CrossAttnDownBlock2D,
@@ -9,7 +9,6 @@ from hidet.apps.diffusion.modeling.stable_diffusion.unet_blocks import (
     MidBlock2DCrossAttn,
     UpBlock2D,
 )
-from hidet.apps.modeling_outputs import UNet2DConditionOutput
 from hidet.apps.pretrained import PretrainedModel
 from hidet.apps.registry import RegistryEntry
 from hidet.graph.tensor import Tensor
@@ -23,7 +22,7 @@ PretrainedModel.register(
 )
 
 
-class UNet2DConditionModel(PretrainedModelForText2Image):
+class UNet2DConditionModel(PretrainedModelForDiffusion):
     def __init__(self, **kwargs):
         super().__init__(kwargs)
         self.conv_in = nn.Conv2d(
@@ -192,6 +191,18 @@ class UNet2DConditionModel(PretrainedModelForText2Image):
             bias=True,
         )
 
+    @property
+    def embed_max_length(self):
+        return self.config["embed_max_length"]
+
+    @property
+    def embed_hidden_dim(self):
+        return self.config["embed_hidden_dim"]
+
+    @property
+    def vae_scale_factor(self):
+        return self.config["vae_scale_factor"]
+
     def get_down_block(self, down_block_type: str, **kwargs):
         if down_block_type == "CrossAttnDownBlock2D":
             return CrossAttnDownBlock2D(**{**self.config, **kwargs})  # type: ignore
@@ -276,9 +287,7 @@ class UNet2DConditionModel(PretrainedModelForText2Image):
 
         return sample
 
-    def forward(
-        self, sample: Tensor, timesteps: Tensor, encoder_hidden_states: Tensor, **kwargs
-    ) -> UNet2DConditionOutput:
+    def forward(self, sample: Tensor, timesteps: Tensor, encoder_hidden_states: Tensor, **kwargs) -> Tensor:
         timesteps = broadcast(timesteps, shape=(sample.shape[0],))
 
         sample, emb, down_block_residual_samples = self.forward_down(sample, timesteps, encoder_hidden_states)
@@ -287,4 +296,4 @@ class UNet2DConditionModel(PretrainedModelForText2Image):
 
         sample = self.forward_up(sample, emb, encoder_hidden_states, down_block_residual_samples)
 
-        return UNet2DConditionOutput(last_hidden_state=sample, hidden_states=[sample])
+        return sample

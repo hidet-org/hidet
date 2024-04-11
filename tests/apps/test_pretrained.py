@@ -2,7 +2,6 @@ import pytest
 import torch
 from hidet.apps import PretrainedModel, hf
 from hidet.apps.image_classification.modeling.resnet.modeling import ResNetForImageClassification
-from hidet.graph.tensor import empty
 from hidet.option import get_option
 from transformers import AutoModelForImageClassification, PretrainedConfig, ResNetConfig
 
