@@ -30,10 +30,13 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
         self.operator_idx: int = 0
         self.reset()
 
+        self.tensor_names: Dict[Tensor, str] = {}
+
     def reset(self):
         self.debugging = False
         self.summary_file = None
         self.operator_idx = 0
+        self.tensor_names = {}
 
     def before_graph(self, graph: FlowGraph, inputs: List[Tensor]) -> None:
         from hidet.utils import netron
@@ -56,6 +59,8 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
             top_sep = '-' * len(head)
             bot_sep = self._template.format(*['-' * extent for extent in [5, 30, 3, 25, 8, 8, 8, 10, 10, 10, 10]])
             f.write(''.join([top_sep, '\n', head, '\n', bot_sep, '\n']))
+
+        self.tensor_names = {inp: f"@in:{idx}" for idx, inp in enumerate(inputs)}
 
     @staticmethod
     def tensor_stats(array: np.ndarray) -> Dict[str, str]:
@@ -116,6 +121,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
         lines = []
         found_abnormal = False
         for idx, tensor in enumerate(outputs):
+            self.tensor_names[tensor] = f"@{self.operator_idx}"
             array: np.ndarray = tensor.cpu().numpy()
             stats = self.tensor_stats(array)
             op_idx = op_name = ''
@@ -137,17 +143,21 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
 
             if self.dump_outputs:
                 array_path = os.path.join(
-                    self.output_dir, '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_y{idx}' if idx > 0 else '')
+                    self.output_dir, '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_y{idx}' if idx > 0 else '_y')
                 )
                 with open(array_path, 'w') as f:
                     with np.printoptions(precision=8, edgeitems=30, linewidth=512):
                         f.write(str(array))
             if self.dump_op:
                 op_path = os.path.join(
-                    self.output_dir, '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_def{idx}' if idx > 0 else '')
+                    self.output_dir,
+                    '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_def{idx}' if idx > 0 else '_def'),
                 )
                 with open(op_path, 'w') as f:
                     f.write('Operator:\n{}\n'.format(op))
+                    f.write('Inputs:\n')
+                    for i, op_input in enumerate(inputs):
+                        print(f"\t{i} <- {self.tensor_names.get(op_input, '?')}", file=f)
                     f.write('Task:\n{}\n'.format(op.task))
 
         with open(self.summary_file, 'a') as f:

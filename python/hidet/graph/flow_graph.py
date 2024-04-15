@@ -89,10 +89,36 @@ class GraphForwardContext:
     def append_instrument(self, instrument: GraphForwardInstrument):
         self.instruments.append(instrument)
 
-    def debug(self, output_dir='./outs/debug', print_summary: bool = False, dump_outputs: bool = False):
+    def debug(
+        self,
+        output_dir: Union[str, bytes, os.PathLike] = './outs/debug',
+        *,
+        print_summary: bool = False,
+        dump_outputs: bool = False,
+        dump_op: bool = False,
+    ):
+        """
+        Dump parts of the computation graph for debugging. By default, outputs a summary
+        of the operators and a Netron graph for viewing.
+
+        Parameters
+        ----------
+        output_dir: str, bytes, or PathLike
+            The directory to store the outputs (default: ./outs/debug)
+        print_summary: bool
+            Whether to print the summary to stdout (default: false)
+        dump_outputs: bool
+            Whether to dump outputs of operators (default: false)
+        dump_op: bool
+            Whether to dump the operator definition (default: false)
+        """
         from .graph_utils.instruments import GraphForwardDebugInstrument
 
-        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary, dump_outputs))
+        self.instruments.append(
+            GraphForwardDebugInstrument(
+                output_dir=output_dir, print_summary=print_summary, dump_outputs=dump_outputs, dump_op=dump_op
+            )
+        )
 
     def benchmark(self, output_dir='./outs/benchmark', print_summary: bool = False, warmup=3, number=10, repeat=3):
         from .graph_utils.instruments import GraphForwardBenchmarkInstrument
