@@ -16,6 +16,8 @@ import json
 import shutil
 from hashlib import sha256
 from typing import List, Optional, Tuple
+from tqdm import tqdm
+
 import hidet.cuda
 from hidet import option
 from hidet.ir.stmt import AssertStmt
@@ -307,7 +309,7 @@ def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
 
     if option.get_option('parallel_build') and len(jobs) > 1:
         lazy_initialize_cuda()
-        status_list = list(parallel_imap(build_job, jobs))
+        status_list = list(tqdm(parallel_imap(build_job, jobs), desc='Parallel build', total=len(jobs), ncols=80))
     else:
         status_list = list(map(build_job, jobs))
     if not all(status for status, msg in status_list) and option.get_option('parallel_build'):

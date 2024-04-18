@@ -12,6 +12,7 @@
 from typing import Any, Sequence, Callable, Optional, Iterable
 import multiprocessing
 import os
+import psutil
 
 
 class JobQueue:
@@ -37,16 +38,30 @@ def _wrapped_func(job_index):
     return func(job)
 
 
-def parallel_imap(func: Callable, jobs: Sequence[Any], num_workers: Optional[int] = None) -> Iterable[Any]:
+def get_parallel_num_workers(max_num_workers: Optional[int] = None, mem_for_worker: Optional[int] = None):
+    num_workers = (
+        os.cpu_count() if (max_num_workers is None or max_num_workers == -1) else min(max_num_workers, os.cpu_count())
+    )
+    if mem_for_worker is not None:
+        mem_for_worker *= 1024**3
+        limit_by_memory = psutil.virtual_memory().available // mem_for_worker
+        limit_by_memory = max(limit_by_memory, 1)
+        num_workers = min(num_workers, limit_by_memory)
+    return num_workers
+
+
+def parallel_imap(
+    func: Callable, jobs: Sequence[Any], max_num_workers: Optional[int] = None, mem_for_worker: Optional[int] = None
+) -> Iterable[Any]:
     global _job_queue
+    assert len(jobs) > 1
 
     if _job_queue is not None:
         raise RuntimeError('Cannot call parallel_map recursively.')
 
     _job_queue = JobQueue(func, jobs)
 
-    if num_workers is None:
-        num_workers = os.cpu_count()
+    num_workers = get_parallel_num_workers(max_num_workers, mem_for_worker)
 
     ctx = multiprocessing.get_context('fork')
     with ctx.Pool(num_workers) as pool:

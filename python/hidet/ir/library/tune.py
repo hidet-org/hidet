@@ -12,10 +12,12 @@
 import itertools
 import warnings
 from typing import Union, Sequence, TypeVar, Any, Dict, List
+from tqdm import tqdm
 
 import hidet.option
 from hidet.ir.module import IRModule
 from hidet.utils import prod
+from hidet.utils.multiprocess import parallel_imap
 
 Choice = TypeVar('Choice')
 
@@ -112,6 +114,17 @@ def space(level: int, /, **subspaces: Sequence[Choice]):
 
 
 def extract_ir_modules(template_func) -> List[IRModule]:
+    def _extract_ir_modules(kwargs):
+        with MetricCollectContext() as metric_ctx:
+            try:
+                ir_module = template_func(**kwargs)
+            except ScheduleError:
+                # the schedule is invalid, skip it
+                return None
+        kwargs.update(metric_ctx.metrics)
+        setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
+        return ir_module
+
     MAX_VALID_SPACE_SIZE = 2000
     # get ir modules to tune
     if hasattr(template_func, 'tuning_space'):
@@ -124,23 +137,23 @@ def extract_ir_modules(template_func) -> List[IRModule]:
             'Please use @tune.space to decorate the template function to define the search space.'
         )
 
-    ir_modules = []
-    for kwargs in kwargs_list:
-        try:
-            with MetricCollectContext() as metric_ctx:
-                ir_module = template_func(**kwargs)
-            ir_modules.append(ir_module)
-            if len(ir_modules) > MAX_VALID_SPACE_SIZE:
-                raise ValueError(
-                    f'The tune space has {len(ir_modules)} valid schedules, '
-                    f'which is larger than the predefined limit {MAX_VALID_SPACE_SIZE}. '
-                    f'Please consider to reduce the search space.'
-                )
-            kwargs.update(metric_ctx.metrics)
-            setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
-        except ScheduleError:
-            # the schedule is invalid, skip it
-            continue
+    # Generate IR for all set of params
+    if len(kwargs_list) == 1:
+        ir_modules = [_extract_ir_modules(kwargs_list[0])]
+    else:
+        ir_modules = list(
+            tqdm(parallel_imap(_extract_ir_modules, kwargs_list), desc='Gen IR', total=len(kwargs_list), ncols=80)
+        )
+    ir_modules = [i for i in ir_modules if i is not None]
+
+    # Too many schedules
+    if len(ir_modules) > MAX_VALID_SPACE_SIZE:
+        warnings.warn(
+            f'The tune space has {len(ir_modules)} valid schedules, '
+            f'which is larger than the predefined limit {MAX_VALID_SPACE_SIZE}. '
+            f'Please consider to reduce the search space.'
+        )
+
     return ir_modules
 
 
