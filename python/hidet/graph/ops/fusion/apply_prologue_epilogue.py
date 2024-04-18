@@ -31,7 +31,7 @@ from hidet.transforms import Pass
 from hidet.graph import FlowGraph, Operator, Tensor
 from hidet.utils import strict_zip, prod
 from hidet.utils.structure import DirectedGraph
-from .fused_operator import FusedTask
+from .fused_operator import FusedTask, Target
 
 
 class Prologue:
@@ -806,3 +806,23 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, target: 
         ir_module = lower_with(ir_module, transforms)
 
     return ir_module
+
+
+def apply_prologue_epilogue_batch(
+    anchor_modules: List[IRModule], fused_task: FusedTask, target: Target, working_dir: str
+) -> List[IRModule]:
+    from hidet.utils.multiprocess import parallel_imap
+    from tqdm import tqdm
+
+    def _apply_prologue_epilogue_batch(args):
+        return apply_prologue_epilogue(*args)
+
+    jobs = [(m, fused_task, target, working_dir) for m in anchor_modules]
+    if len(jobs) == 1:
+        fused_modules: List[IRModule] = [apply_prologue_epilogue(*jobs[0])]
+    else:
+        fused_modules: List[IRModule] = list(
+            tqdm(parallel_imap(_apply_prologue_epilogue_batch, jobs), desc='Appling fusing', total=len(jobs), ncols=80)
+        )
+
+    return fused_modules

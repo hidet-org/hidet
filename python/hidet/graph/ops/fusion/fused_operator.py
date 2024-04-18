@@ -101,7 +101,7 @@ class FusedTask(Task):
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         from hidet.ir.schedulers import CpuAutoScheduler, CudaAutoScheduler
-        from .apply_prologue_epilogue import apply_prologue_epilogue
+        from .apply_prologue_epilogue import apply_prologue_epilogue_batch
 
         if isinstance(target, str):
             target = Target.from_string(target)
@@ -124,7 +124,8 @@ class FusedTask(Task):
         if isinstance(anchor_modules, IRModule):
             anchor_modules = [anchor_modules]
 
-        fused_modules: List[IRModule] = [apply_prologue_epilogue(m, self, target, working_dir) for m in anchor_modules]
+        fused_modules: List[IRModule] = apply_prologue_epilogue_batch(anchor_modules, self, target, working_dir)
+
         for fused_module, anchor_module in zip(fused_modules, anchor_modules):
             if hasattr(anchor_module, '_tuning_kwargs'):
                 setattr(fused_module, '_tuning_kwargs', getattr(anchor_module, '_tuning_kwargs'))

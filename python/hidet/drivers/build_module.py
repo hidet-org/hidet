@@ -13,8 +13,6 @@ from typing import Sequence, Dict, Union
 import logging
 import os
 import pickle
-
-import psutil
 from tqdm import tqdm
 
 import hidet.cuda
@@ -25,7 +23,7 @@ from hidet.ir.module import IRModule
 from hidet.ir.type import FuncType
 from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
-from hidet.utils.multiprocess import parallel_imap
+from hidet.utils.multiprocess import parallel_imap, get_parallel_num_workers
 from hidet.utils.stack_limit import set_stack_limit
 
 logger = logging.Logger(__name__)
@@ -225,25 +223,14 @@ def build_ir_module_batch(
         return True
 
     # calculate the number of workers
-    cpu_count = os.cpu_count()
+    max_num_worker, mem_for_worker = option.get_parallel_tune()
     if hidet.option.compile_server.enabled():
         num_workers = min(len(ir_modules), 128)
     else:
-        max_jobs, mem_for_worker = option.get_parallel_tune()
-        max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
-        mem_for_worker *= 1024**3
-        num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
+        num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
 
     if num_workers > 1 and len(ir_modules) > 1:
-        # Set the affinity of current process. Some package such as numpy will change affinity of current process,
-        # which might limit the parallelism of compilation.
-        from contextlib import suppress
-
-        with suppress(OSError):
-            os.sched_setaffinity(0, range(cpu_count))
-
         lazy_initialize_cuda()
-
         per_worker_jobs = 1 if len(ir_modules) < num_workers else len(ir_modules) // num_workers
         ir_modules_list = regroup_modules(ir_modules, per_worker_jobs)
         assert check_function_singular(
@@ -254,7 +241,9 @@ def build_ir_module_batch(
             for ir_modules, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])
         ]
 
-        for _ in tqdm(parallel_imap(build_job, jobs, num_workers), desc='Compiling', total=len(jobs), ncols=80):
+        for _ in tqdm(
+            parallel_imap(build_job, jobs, num_workers, mem_for_worker), desc='Compiling', total=len(jobs), ncols=80
+        ):
             pass
         return output_dirs[: len(ir_modules_list)]
     else:
