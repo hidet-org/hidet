@@ -10,7 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence, List
+
+import hidet.option
 from hidet.ir.expr import Expr, Int, is_constant, if_then_else
+from hidet.utils import repeat_until_converge
 
 
 def can_broadcast(src_shape: Sequence[Int], dst_shape: Sequence[Int]) -> bool:
@@ -47,18 +50,52 @@ def broadcast_shape(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> List[Int]
         y_shape = [int32(1)] + y_shape
     result_shape = []
     for p, q in zip(x_shape, y_shape):
+        # Case 1: one of the dimensions is the constant 1
         if is_constant(p) and p == 1:
             result_shape.append(q)
         elif is_constant(q) and q == 1:
             result_shape.append(p)
+        # Case 2: both dimensions are constant
         elif is_constant(p, q):
             if p != q:
                 raise ValueError(
-                    'can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1])
+                    'Cannot broadcast operands with shape {} and {}'.format(orig_shapes[0], orig_shapes[1])
                 )
             result_shape.append(p)
+        # Case 3: exactly one of the dimensions is constant, assume the symbolic dimension is 1
+        elif is_constant(p):
+            result_shape.append(p)
+        elif is_constant(q):
+            result_shape.append(q)
+        # Case 4: both dimensions are symbolic, this is only allowed if the dimensions are the same expression or at
+        # least one of them resolves to 1.
         else:
-            result_shape.append(p if is_constant(p) else q)
+            if not hidet.option.get_option('debug_strict_broadcast_check'):
+                # Assume p == q
+                result_shape.append(p)
+                continue
+
+            from hidet.transforms.rule_based_simplifier import RuleBasedSimplifier
+
+            simp = RuleBasedSimplifier()
+            p = repeat_until_converge(simp, p)
+            q = repeat_until_converge(simp, q)
+
+            if is_constant(p) and p == 1:
+                result_shape.append(q)
+            elif is_constant(q) and q == 1:
+                result_shape.append(p)
+            else:
+                diff = repeat_until_converge(simp, p - q)
+                if not is_constant(diff) or diff != 0:
+                    raise ValueError(
+                        "Broadcasting between operands with symbolic shapes {} and {} is ambiguous,"
+                        " consider explicitly broadcasting before the operator to resolve this ambiguity".format(
+                            *orig_shapes
+                        )
+                    )
+                result_shape.append(p)
+
     return result_shape
 
 

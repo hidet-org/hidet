@@ -208,6 +208,17 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='debug_strict_broadcast_check',
+        type_hint='bool',
+        default_value=False,
+        description=(
+            'Whether to enforce equality of shapes in symbolic broadcasts.'
+            ' If set to True, the symbolic equivalence checker is used to prove correctness of broadcasts,'
+            ' so broadcasting shapes [n] to [m] will raise ValueError. If set to False, broadcasting between'
+            ' shapes [n] and [m] will proceed assuming n == m.'
+        ),
+    )
+    register_option(
         name='runtime_check',
         type_hint='bool',
         default_value=True,
@@ -791,6 +802,22 @@ def debug_show_var_id(enable: bool = True):
     if not OptionContext.current().get_option('debug_enable_var_id'):
         warnings.warn("Please use `hidet.option.debug_enable_var_id()` to enable the id first")
     OptionContext.current().set_option('debug_show_var_id', enable)
+
+
+def debug_strict_broadcast_check(enable: bool = False):
+    """
+    Whether to enforce equality of shapes in symbolic broadcasts.
+
+    If set to True, the symbolic equivalence checker is used to prove correctness of broadcasts,
+    so broadcasting shapes [n] to [m] will raise ValueError. If set to False, broadcasting between
+    shapes [n] and [m] will proceed assuming n == m.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to enforce equality of shapes in symbolic broadcasts.
+    """
+    OptionContext.current().set_option('debug_strict_broadcast_check', enable)
 
 
 def runtime_check(enable: bool = True):
