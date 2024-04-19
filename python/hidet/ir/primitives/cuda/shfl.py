@@ -26,6 +26,7 @@ def register_primitive_functions():
         ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=type_infer)),
         ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=type_infer)),
         ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=type_infer)),
+        ('cuda_shfl_xor_sync', '__shfl_xor_sync', FuncType(type_infer_func=type_infer)),
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
@@ -44,7 +45,7 @@ def shfl_down_sync(mask, var, delta, width=32):
 
 
 def shfl_xor_sync(mask, var, lane_mask, width=32):
-    return call_primitive_func('cuda_shfl_down_sync', [mask, var, lane_mask, width])
+    return call_primitive_func('cuda_shfl_xor_sync', [mask, var, lane_mask, width])
 
 
 def active_mask():
