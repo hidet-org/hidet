@@ -13,8 +13,11 @@ from typing import Optional, List
 import pytest
 import numpy as np
 import torch
+
+import hidet
 import hidet as hi
 from hidet import ops
+from hidet.ir.utils import broadcast_shape
 from hidet.utils import prod
 
 
@@ -145,6 +148,46 @@ def test_strided_slice(shape, starts, ends, axes, strides):
 )
 def test_broadcast(shape, broadcast_shape):
     check_transform(shape, lambda x: x + np.zeros(broadcast_shape), lambda x: ops.broadcast(x, broadcast_shape))
+
+
+def test_symbolic_broadcast():
+    """
+    Test broadcasting semantics with symbolic shapes.
+    """
+
+    n = hidet.symbol_var("n")
+    m = hidet.symbol_var("m")
+
+    # When strict broadcasting check is disabled, pairs of symbolic dimensions are assumed to be equal and no error
+    # is raised
+    with hidet.option.context():
+        hidet.option.debug_strict_broadcast_check(False)
+        broadcast_shape([n, m], [m, n])
+        broadcast_shape([n], [m, m])
+
+    with hidet.option.context():
+        hidet.option.debug_strict_broadcast_check(True)
+
+        # Broadcasting between these shapes with the strict broadcasting check enabled will raise an error
+        with pytest.raises(ValueError):
+            broadcast_shape([n, m], [m, n])
+        with pytest.raises(ValueError):
+            broadcast_shape([n], [m, m])
+
+        # If one dimension is 1, the broadcast result takes on the other dimension, even if it is symbolic
+        assert broadcast_shape([n, 1], [1, 2]) == [n, 2]
+        assert broadcast_shape([1], [n, n]) == [n, n]
+
+        # Pairs of symbolic dimensions don't necessarily have to be the same if one of them can be resolved to 1.
+        assert broadcast_shape([m // m], [n]) == [n]
+        assert broadcast_shape([n - n + 1], [3]) == [3]
+
+        # In the case where exactly one dimension is symbolic, the symbolic dimension is assumed to be 1.
+        assert broadcast_shape([2, 3], [n, n]) == [2, 3]
+
+        # This should never work without further conditions on n and m
+        with pytest.raises(ValueError):
+            broadcast_shape([n], [m])
 
 
 if __name__ == '__main__':

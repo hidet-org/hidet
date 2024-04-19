@@ -35,6 +35,30 @@ class NotMatchedError(Exception):
         self.target = target
 
 
+def _certainly_equal(lhs: Expr, rhs: Expr) -> bool:
+    """
+    Perform a conservative check of equality by traversing the expression trees in parallel.
+    """
+    if lhs.__class__ != rhs.__class__:
+        return False
+
+    if lhs is rhs:
+        return True
+    if isinstance(lhs, Constant):
+        return lhs == rhs
+    if isinstance(lhs, BinaryExpr):
+        rhs: BinaryExpr
+        if _certainly_equal(lhs.a, rhs.a) and _certainly_equal(lhs.b, rhs.b):
+            return True
+        # Check (b, a) == (a, b) if commutative
+        commutative_ops = (Add, Multiply, BitwiseXor, LogicalAnd, LogicalOr)
+        if not isinstance(lhs, commutative_ops):
+            return False
+        return _certainly_equal(lhs.a, rhs.b) and _certainly_equal(lhs.b, rhs.a)
+
+    return False
+
+
 class MatchContext:
     def __init__(self, matcher: PatternMatcher, pattern: Expr, target: Expr):
         self.matcher: PatternMatcher = matcher
@@ -45,9 +69,10 @@ class MatchContext:
     def __enter__(self):
         if self.pattern in self.matched:
             if self.matched[self.pattern] is not self.target:
-                # we think the constant with the same value as the same object
+                # We have already matched a term in the pattern to another value earlier (call it lhs).
+                # If we cannot be certain that they are the same value, return no match.
                 lhs, rhs = self.matched[self.pattern], self.target
-                if isinstance(lhs, Constant) and isinstance(rhs, Constant) and lhs == rhs:
+                if _certainly_equal(lhs, rhs):
                     return
                 raise NotMatchedError(self.pattern, self.target, 'Can not match a pattern to two different targets')
             else:
