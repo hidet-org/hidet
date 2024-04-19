@@ -45,6 +45,7 @@ class CPUFloat16MathFunctionSet(MathFunctionSet):
             'log10': 'log10',
             'log1p': 'log1p',
             'trunc': 'trunc',
+            'isfinite': 'isfinite',
             'isinf': 'isinf',
             'isnan': 'isnan',
         }
