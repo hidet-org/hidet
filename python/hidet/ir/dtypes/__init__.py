@@ -20,6 +20,7 @@ from .boolean import boolean
 from .vector import float16x2, float32x4, float32x8, int8x4, uint8x4, int4bx8, uint4bx8, vectorize
 from .vector import f16x2, f32x4, f32x8, i4x8, u4x8
 from .complex import complex64, complex128
+from .integer import IntegerType
 from .promotion import promote_type
 from .utils import dtype_to_numpy, finfo, iinfo
 

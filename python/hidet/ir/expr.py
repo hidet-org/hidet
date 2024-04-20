@@ -17,6 +17,7 @@ import string
 import operator
 import numpy as np
 import hidet.option
+from hidet.ir.dtypes import boolean, int32, int64, uint64, IntegerType, promote_type
 from .node import Node
 from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
@@ -217,8 +218,6 @@ class Expr(Node):
         if not isinstance(b, Expr):
             b = convert(b)
         if isinstance(a, Constant) and isinstance(b, Constant):
-            from hidet.ir.dtypes import promote_type
-
             if a.type.is_data_type() and b.type.is_data_type():
                 value = operator_dict[cls](a.value, b.value)
                 if cls in [Equal, NotEqual, LessThan, LessEqual, LogicalAnd, LogicalOr]:
@@ -248,7 +247,6 @@ class Expr(Node):
             else:
                 raise ValueError('unknown binary operator {}'.format(cls))
         elif isinstance(b, Constant) and b.type.is_data_type():
-            from hidet.ir.dtypes import promote_type
             from hidet.ir.tools import infer_type
 
             if b == 0:
@@ -259,7 +257,6 @@ class Expr(Node):
             elif b == 1 and cls in [Multiply, Div]:
                 return a
         elif isinstance(a, Constant):
-            from hidet.ir.dtypes import promote_type
             from hidet.ir.tools import infer_type
 
             if a == 0:
@@ -496,6 +493,36 @@ class Constant(Expr):
 
     def array(self) -> np.ndarray:
         return self.value
+
+    # This speciallisation of Expr._binary is done for speedup purposes only
+    # and fully equvivalent to Expr._binary by functionality
+    @staticmethod
+    def _binary(cls, a: Expr, b: Expr):  # pylint: disable=bad-staticmethod-argument
+        def _binary_internal(cls, a: int, b: int, a_type, res_type):
+            value = operator_dict[cls](a, b)
+            if cls in [Equal, NotEqual, LessThan, LessEqual]:
+                return boolean.true if value else boolean.false
+            elif cls in [LeftShift, RightShift]:
+                return constant_int(value, a_type)
+            else:
+                return constant_int(value, res_type)
+
+        if (
+            isinstance(a, Constant)
+            and isinstance(b, Constant)
+            and isinstance(a.type, IntegerType)
+            and isinstance(b.type, IntegerType)
+        ):
+            res_type = a.type if a.type is b.type else promote_type(a.type, b.type)
+            return _binary_internal(cls, a.value, b.value, a.type, res_type)
+        if isinstance(b, int) and isinstance(a.type, IntegerType):
+            res_type = int64 if (a.type is int64 or a.type is uint64) else int32
+            return _binary_internal(cls, a.value, b, a.type, res_type)
+        if isinstance(a, int) and isinstance(b.type, IntegerType):
+            res_type = int64 if (b.type is int64 or b.type is uint64) else int32
+            return _binary_internal(cls, a, b.value, int32, res_type)
+        # 2.5% cases fall here
+        return super(Constant, Constant)._binary(cls, a, b)
 
 
 class IfThenElse(Expr):
@@ -927,8 +954,6 @@ def is_constant(e: Union[Expr, PyScalar], *other: Union[Expr, PyScalar]) -> bool
 
 
 def constant(value, const_type: Union[str, BaseType]) -> Constant:
-    from hidet.ir.dtypes import boolean
-
     if const_type and isinstance(const_type, str):
         const_type = data_type(const_type)
 
@@ -959,6 +984,16 @@ def constant(value, const_type: Union[str, BaseType]) -> Constant:
     if const_type.is_data_type() and (
         (isinstance(value, int) and -128 <= value <= 128) or (isinstance(value, float) and value in [-1.0, 0.0, 1.0])
     ):
+        # pylint: disable=protected-access
+        if (value, const_type.name) not in Constant._constant_pool:
+            Constant._constant_pool[(value, const_type.name)] = Constant(value, const_type)
+        return Constant._constant_pool[(value, const_type.name)]
+    else:
+        return Constant(value, const_type)
+
+
+def constant_int(value: int, const_type: IntegerType) -> Constant:
+    if -128 <= value <= 128:
         # pylint: disable=protected-access
         if (value, const_type.name) not in Constant._constant_pool:
             Constant._constant_pool[(value, const_type.name)] = Constant(value, const_type)
