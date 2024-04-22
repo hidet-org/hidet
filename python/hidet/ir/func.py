@@ -37,6 +37,8 @@ class Function(Node):
                 - 'public': this is a packed function that wraps kernel function(s)
         'cuda.grid_dim': Union[int, List[int]]
             the grid dimension in cuda launch configuration
+        'cuda.cluster_dim': Union[int, List[int]]
+            the cluster dimension in cuda launch configuration
         'cuda.block_dim': Union[int, List[int]]
             the block dimension in cuda launch configuration
         'cuda.dynamic_smem_bytes': int

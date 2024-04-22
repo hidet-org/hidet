@@ -324,8 +324,9 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         func_var = self.visit(stmt.func_var)
         args = [self.visit(e) for e in stmt.args]
-        grid_dim = (self.visit(stmt.grid_dim[0]), self.visit(stmt.grid_dim[1]), self.visit(stmt.grid_dim[2]))
-        block_dim = (self.visit(stmt.block_dim[0]), self.visit(stmt.block_dim[1]), self.visit(stmt.block_dim[2]))
+        grid_dim = tuple(self.visit(stmt.grid_dim[i]) for i in range(3))
+        cluster_dim = tuple(self.visit(stmt.cluster_dim[i]) for i in range(3))
+        block_dim = tuple(self.visit(stmt.block_dim[i]) for i in range(3))
         shared_mem_bytes = self.visit(stmt.shared_mem_bytes)
         if same_list(
             [func_var, *args, *grid_dim, *block_dim, shared_mem_bytes],
@@ -333,7 +334,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         ):
             return stmt
         else:
-            return LaunchKernelStmt(func_var, args, grid_dim, block_dim, shared_mem_bytes)
+            return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, shared_mem_bytes)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         exprs = [self.visit(e) for e in stmt.exprs]

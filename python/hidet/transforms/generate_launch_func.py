@@ -59,6 +59,7 @@ def add_launch_func(ir_module: IRModule, kernel_func: Function):
                 func_var,
                 params,
                 grid_dim=rewrite(_normalize_dim3(kernel_func.get_attr('cuda.grid_dim')), param_remap),
+                cluster_dim=rewrite(_normalize_dim3(kernel_func.get_attr('cuda.cluster_dim', default=1)), param_remap),
                 block_dim=rewrite(_normalize_dim3(kernel_func.get_attr('cuda.block_dim')), param_remap),
                 shared_mem=shared_memory_bytes,
             )

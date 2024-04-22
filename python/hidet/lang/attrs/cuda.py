@@ -19,6 +19,9 @@ Dim3 = Union[Int, Tuple[Int, Int], Tuple[Int, Int, Int]]
 # The grid dimension of a cuda kernel, specifying the number of thread blocks
 grid_dim: Dim3 = 1
 
+# The optional cluster dimension of a cuda kernel, specifying the number of thread blocks per cluster
+cluster_dim: Dim3 = 1
+
 # The block dimension of a cuda kernel, specifying the number of threads per block
 block_dim: Dim3 = 1
 

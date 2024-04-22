@@ -16,6 +16,7 @@ from hidet.ir.expr import Expr
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.layout import DataLayout
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
+from hidet.ir.primitives.cuda.cluster import this_cluster
 from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
 from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or, syncwarp
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, ldmatrix

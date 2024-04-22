@@ -27,6 +27,7 @@ class FunctionBuilder(StmtBuilder):
         label: str = "",
         ret_type=VoidType(),
         grid_dim=None,
+        cluster_dim=None,
         block_dim=None,
         dynamic_smem_bytes=None,
         min_blocks=None,
@@ -44,6 +45,8 @@ class FunctionBuilder(StmtBuilder):
 
         if grid_dim is not None:
             self.attrs['cuda.grid_dim'] = grid_dim
+        if cluster_dim is not None:
+            self.attrs['cuda.cluster_dim'] = cluster_dim
         if block_dim is not None:
             self.attrs['cuda.block_dim'] = block_dim
         if dynamic_smem_bytes:

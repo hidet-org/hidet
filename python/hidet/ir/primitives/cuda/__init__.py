@@ -12,6 +12,7 @@
 from . import math
 from . import mma
 
+from .cluster import this_cluster
 from .smem import set_kernel_max_dynamic_smem_bytes
 from .sync import syncthreads, syncwarp
 from .ldst import lds128, sts128
