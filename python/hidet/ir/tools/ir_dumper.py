@@ -1098,7 +1098,7 @@ class ParseTreeVisitor:
         shared_smem = self(node[3])
 
         args = [self(v) for v in node[4:]]
-        return LaunchKernelStmt(fn_var, args, grid_dim, block_dim, shared_smem)
+        return LaunchKernelStmt(fn_var, args, grid_dim, (1,), block_dim, shared_smem)
 
     def visit_let_expr(self, node):
         return Let(self(node[0]), self(node[1]), self(node[2]))

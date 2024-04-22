@@ -405,7 +405,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             namespace = {hidet.lang.attrs: '', hidet.lang.attrs.cuda: 'cuda.'}
             if lhs_base in namespace:
                 attr_name = namespace[lhs_base] + lhs.attr
-                if attr_name in ['cuda.block_dim', 'cuda.grid_dim', 'cuda.dynamic_smem_bytes']:
+                if attr_name in ['cuda.block_dim', 'cuda.cluster_dim', 'cuda.grid_dim', 'cuda.dynamic_smem_bytes']:
                     if isinstance(rhs, (tuple, list)):
                         rhs = [simplify(v) for v in rhs]
                     else:
@@ -959,6 +959,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     func_var=func_var,
                     args=args,
                     grid_dim=func.attrs['cuda.grid_dim'],
+                    cluster_dim=func.attrs.get('cuda.cluster_dim', 1),
                     block_dim=func.attrs['cuda.block_dim'],
                     shared_mem=func.attrs.get('cuda.dynamic_smem_bytes', 0),
                 )

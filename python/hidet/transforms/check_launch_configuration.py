@@ -18,6 +18,7 @@ from hidet.ir.primitives.cuda import check_cuda_error
 from hidet.ir.stmt import LaunchKernelStmt, AssertStmt
 from hidet.ir.func import Function
 from hidet.transforms.base import Pass, FunctionPass
+from hidet.utils.py import prod
 
 
 class CheckLaunchConfigurationRewriter(IRRewriter):
@@ -49,6 +50,13 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
                     stmt.block_dim[2],
                 )
                 sb += AssertStmt(False, "Invalid launch configuration")
+            conditions = [grid_dim % cluster_dim != 0 for grid_dim, cluster_dim in zip(stmt.grid_dim, stmt.cluster_dim)]
+            with sb.if_then(logical_or(*conditions)):
+                sb += AssertStmt(False, "Cluster dims must elementwise evenly divide grid dims")
+
+            conditions = prod(stmt.cluster_dim) > 8
+            with sb.if_then(conditions):
+                sb += AssertStmt(False, "At most 8 thread blocks in a cluster")
             with sb.if_then(stmt.shared_mem_bytes > 49152):
                 # if the shared memory is larger than 48KB, we should call cudaFuncSetAttribute
                 sb += BlackBoxStmt(

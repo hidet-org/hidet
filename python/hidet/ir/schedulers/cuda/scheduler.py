@@ -65,4 +65,10 @@ class CudaAutoScheduler(AutoScheduler):
                     fb += BufferStoreStmt(out_param, task_index, value)
         func = fb.get()
         func_var = self.add_function(func)
-        return launch_kernel(func_var, args=call_args, grid_dim=grid_dim, block_dim=block_dim)
+        return launch_kernel(
+            func_var,
+            args=call_args,
+            grid_dim=grid_dim,
+            cluster_dim=func.get_attr('cluster_dim', default=1),
+            block_dim=block_dim,
+        )

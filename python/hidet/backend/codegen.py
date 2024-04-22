@@ -31,6 +31,7 @@ from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.functors import ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor
 from hidet.ir.tools import TypeInfer
+from hidet.transforms.generate_launch_func import _normalize_dim3
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
@@ -50,6 +51,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.require_fp16 = False
         self.require_bf16 = False
         self.require_tf32 = False
+        self.require_cooperative_groups = False
 
     def __call__(self, node) -> Doc:
         return self.visit(node)
@@ -691,6 +693,8 @@ class CUDACodegen(Codegen):
             doc += Text('#include <cuda_fp16.h>') + NewLine()
         if self.require_bf16:
             doc += Text('#include <cuda_bf16.h>') + NewLine()
+        if self.require_cooperative_groups:
+            doc += Text('#include <cooperative_groups.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
@@ -732,6 +736,12 @@ class CUDACodegen(Codegen):
             raise ValueError(f'Unknown function kind: {func.kind}')
 
         doc += self(func.ret_type)
+
+        if 'cuda.cluster_dim' in func.attrs:
+            cluster_dims = _normalize_dim3(func.attrs['cuda.cluster_dim'])
+            doc += f" __cluster_dims__({cluster_dims[0]}, {cluster_dims[1]}, {cluster_dims[2]})"
+
+            self.require_cooperative_groups = True
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':

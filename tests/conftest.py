@@ -11,17 +11,18 @@
 # limitations under the License.
 import os
 import pytest
-import shutil
 import hidet
 
 
 def pytest_addoption(parser):
     parser.addoption("--clear-cache", action="store_true", help="Clear operator cache before running tests")
     parser.addoption("--runslow", action="store_true", help="Run slow tests")
+    parser.addoption("--hopper", action='store_true', help="Run test that requires sm_90+")
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "hopper: mark test as requiring sm_90+ to run")
 
 
 def pytest_sessionstart(session):
@@ -43,13 +44,19 @@ def pytest_sessionstart(session):
 
 
 def pytest_collection_modifyitems(config, items):
+    keywords = {
+        "slow": pytest.mark.skip(reason="need --runslow option to run"),
+        "hopper": pytest.mark.skip(reason="need --hopper option to run"),
+    }
     if config.getoption("--runslow"):
-        # --runslow given in cli: do not skip slow tests
-        return
-    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+        del keywords["slow"]
+    if config.getoption("--hopper"):
+        del keywords["hopper"]
+
     for item in items:
-        if "slow" in item.keywords:
-            item.add_marker(skip_slow)
+        for keyword in keywords.keys():
+            if keyword in item.keywords:
+                item.add_marker(keywords[keyword])
 
 
 @pytest.fixture(autouse=True)

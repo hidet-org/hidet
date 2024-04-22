@@ -472,7 +472,9 @@ class PrologueEpilogueFuseRewriter(IRRewriter):
             func_name = stmt.func_var.name
             if func_name in self.func_records:
                 args = self.process_call(func_name, list(stmt.args))
-                return LaunchKernelStmt(stmt.func_var, args, stmt.grid_dim, stmt.block_dim, stmt.shared_mem_bytes)
+                return LaunchKernelStmt(
+                    stmt.func_var, args, stmt.grid_dim, stmt.cluster_dim, stmt.block_dim, stmt.shared_mem_bytes
+                )
         return super().visit_LaunchKernelStmt(stmt)
 
     def visit_TensorElement(self, e: TensorElement):
