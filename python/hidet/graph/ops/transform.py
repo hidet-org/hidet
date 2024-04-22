@@ -334,6 +334,30 @@ class TileTask(Task):
         super().__init__(name='tile', inputs=[data], outputs=[out])
 
 
+class TriuTask(Task):
+    def __init__(self, x: TensorNode, diagonal: Int):
+        dtype = x.type.dtype
+
+        def fmap(*indices):
+            *ks, i, j = indices
+            return if_then_else(j >= i + diagonal, x[(*ks, i, j)], dtype.zero)
+
+        out = compute(name='out', shape=x.shape, fcompute=fmap)
+        super().__init__(name='triu', inputs=[x], attributes={'diagonal': diagonal}, outputs=[out])
+
+
+class TrilTask(Task):
+    def __init__(self, x: TensorNode, diagonal: Int):
+        dtype = x.type.dtype
+
+        def fmap(*indices):
+            *ks, i, j = indices
+            return if_then_else(j <= i + diagonal, x[(*ks, i, j)], dtype.zero)
+
+        out = compute(name='out', shape=x.shape, fcompute=fmap)
+        super().__init__(name='tril', inputs=[x], attributes={'diagonal': diagonal}, outputs=[out])
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
@@ -500,6 +524,16 @@ class TileOp(Operator):
         )
 
 
+class TriuOp(Operator):
+    def __init__(self, x: Tensor, diagonal: Int = 0):
+        super().__init__(inputs=[x], attributes={'diagonal': diagonal}, task=TriuTask(input_like(x, 'x'), diagonal))
+
+
+class TrilOp(Operator):
+    def __init__(self, x: Tensor, diagonal: Int = 0):
+        super().__init__(inputs=[x], attributes={'diagonal': diagonal}, task=TrilTask(input_like(x, 'x'), diagonal))
+
+
 def reshape(x: Tensor, shape) -> Tensor:
     if same_shape(x.shape, shape):
         return x
@@ -657,6 +691,20 @@ def tile(data: Tensor, repeats: Sequence[int]) -> Tensor:
         The tiled tensor, with shape [a * b for a, b in zip(data.shape, repeats)].
     """
     return TileOp(data, repeats).outputs[0]
+
+
+def triu(x: Tensor, diagonal: int = 0) -> Tensor:
+    rank = len(x.shape)
+    if rank < 2:
+        raise ValueError('triu operator expects a tensor with rank >= 2, but got {}'.format(x.shape))
+    return TriuOp(x, diagonal).outputs[0]
+
+
+def tril(x: Tensor, diagonal: int = 0) -> Tensor:
+    rank = len(x.shape)
+    if rank < 2:
+        raise ValueError('triu operator expects a tensor with rank >= 2, but got {}'.format(x.shape))
+    return TrilOp(x, diagonal).outputs[0]
 
 
 def split(data: Tensor, parts_or_sections: Union[Sequence[int], int], axis: int = 0) -> List[Tensor]:

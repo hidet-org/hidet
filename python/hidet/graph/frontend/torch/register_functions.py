@@ -1319,3 +1319,17 @@ def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
 @register_function(torch.einsum)
 def torch_einsum(equation, *operands):
     return ops.einsum(equation, operands)
+
+
+@register_function(torch.triu)
+def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.triu(..., out=...)")
+    return ops.triu(x, diagonal)
+
+
+@register_function(torch.tril)
+def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.tril(..., out=...)")
+    return ops.tril(x, diagonal)
