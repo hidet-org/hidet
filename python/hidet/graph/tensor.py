@@ -221,6 +221,11 @@ class Tensor:
 
         return divide(self, utils.convert_to_tensor(other, self))
 
+    def __rtruediv__(self, other) -> Tensor:
+        from .ops import divide, utils
+
+        return divide(utils.convert_to_tensor(other, self), self)
+
     def __mod__(self, other) -> Tensor:
         from .ops import mod, utils
 

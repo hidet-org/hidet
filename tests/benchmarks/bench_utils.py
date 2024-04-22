@@ -2,8 +2,11 @@
 class Backend:
     def __init__(self, backend, dtype) -> None:
         assert (
-            backend == 'hidet' or backend == 'max-autotune' or backend == 'max-autotune-no-cudagraphs'
-        ), 'backend is hidet or max-autotune or max-autotune-no-cudagraphs supported only'
+            backend == 'hidet'
+            or backend == 'max-autotune'
+            or backend == 'max-autotune-no-cudagraphs'
+            or backend == 'eager'
+        ), 'backend is hidet or max-autotune or max-autotune-no-cudagraphs or eager supported only'
         self.backend = backend
         self.dtype = dtype
         if self.backend == 'hidet':
@@ -41,6 +44,8 @@ class Backend:
 
         if self.backend == 'hidet':
             model = torch.compile(model, backend=self.backend)
+        elif self.backend == 'eager':
+            pass
         else:
             model = torch.compile(model, mode=self.backend)
         return model
