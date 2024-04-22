@@ -16,7 +16,7 @@ from hidet.runtime.compiled_graph import CompiledGraph
 
 def _load_pretrained_config(model: str, revision: Optional[str]) -> PretrainedConfig:
     try:
-        huggingface_token = hidet.option.get_option('tokens.for_huggingface')
+        huggingface_token = hidet.option.get_option('auth_tokens.for_huggingface')
         return AutoConfig.from_pretrained(model, revision=revision, token=huggingface_token)
     except ValueError as e:
         raise e

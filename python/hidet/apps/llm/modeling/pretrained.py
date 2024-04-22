@@ -105,7 +105,7 @@ class PretrainedModelForCausalLM(nn.Module):
 
         # load the pretrained huggingface model into cpu
         with torch.device("cuda"):  # reduce the time to load the model
-            huggingface_token = hidet.option.get_option('tokens.for_huggingface')
+            huggingface_token = hidet.option.get_option('auth_tokens.for_huggingface')
             torch_model = AutoModelForCausalLM.from_pretrained(
                 name, torch_dtype=torch.float16, revision=revision, token=huggingface_token
             )
