@@ -72,7 +72,9 @@ def _build_prefill_graph(
 
     # create the flow graph
     inputs: List[Tensor] = [input_ids, position_ids, cache_slots, seq_lengths, *key_caches, *value_caches]
-    outputs: List[Tensor] = [hidden_states, *key_caches, *value_caches]
+    updated_key_caches: List[Tensor] = [attn_state.key_cache for attn_state in attn_states]
+    updated_value_caches: List[Tensor] = [attn_state.value_cache for attn_state in attn_states]
+    outputs: List[Tensor] = [hidden_states, *updated_key_caches, *updated_value_caches]
     graph: FlowGraph = hidet.trace_from(outputs, inputs=inputs)
 
     # # optimize the flow graph
@@ -135,7 +137,9 @@ def _build_decode_graph(
         *key_caches,
         *value_caches,
     ]
-    outputs: List[Tensor] = [hidden_states, *key_caches, *value_caches]
+    updated_key_caches: List[Tensor] = [attn_state.key_cache for attn_state in attn_states]
+    updated_value_caches: List[Tensor] = [attn_state.value_cache for attn_state in attn_states]
+    outputs: List[Tensor] = [hidden_states, *updated_key_caches, *updated_value_caches]
     graph: FlowGraph = hidet.trace_from(outputs, inputs=inputs)
 
     # # optimize the flow graph
