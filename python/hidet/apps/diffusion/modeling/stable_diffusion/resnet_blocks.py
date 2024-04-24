@@ -1,26 +1,35 @@
+from typing import Callable, Optional
 from hidet.graph import nn
 from hidet.graph.tensor import Tensor
 from hidet.graph.ops import split
 
 
 class ResnetBlock2D(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        input_channels: int,
+        output_channels: Optional[int],
+        resnet_groups: int,
+        temb_channels: int,
+        resnet_time_scale_shift: str,
+        resnet_act_fn: Callable,
+        resnet_eps: float = 1e-05,
+        dropout: float = 0.0,
+        **kwargs,
+    ):
         super().__init__()
 
-        input_channels = kwargs["input_channels"]
-        output_channels = kwargs["output_channels"] or input_channels
-        groups_out = kwargs["resnet_groups"]
+        output_channels = output_channels or input_channels
+        groups_out = resnet_groups
 
-        self.norm1 = nn.GroupNorm(
-            num_groups=kwargs["resnet_groups"], num_channels=kwargs["input_channels"], eps=kwargs["resnet_eps"]
-        )
+        self.norm1 = nn.GroupNorm(num_groups=resnet_groups, num_channels=input_channels, eps=resnet_eps)
 
         self.conv1 = nn.Conv2d(
             in_channels=input_channels, out_channels=output_channels, kernel_size=3, padding=1, bias=True
         )
 
-        temb_channels = kwargs["temb_channels"]
-        self.time_embedding_norm = kwargs["resnet_time_scale_shift"]
+        self.time_embedding_norm = resnet_time_scale_shift
 
         self.time_emb_proj = None
         if temb_channels is not None:
@@ -31,16 +40,16 @@ class ResnetBlock2D(nn.Module):
             else:
                 raise ValueError(f"Unknown time_embedding_norm: {self.time_embedding_norm}")
 
-        self.norm2 = nn.GroupNorm(num_groups=groups_out, num_channels=output_channels, eps=kwargs["resnet_eps"])
+        self.norm2 = nn.GroupNorm(num_groups=groups_out, num_channels=output_channels, eps=resnet_eps)
 
-        if kwargs["dropout"] != 0.0:
+        if dropout != 0.0:
             raise NotImplementedError("No dropout should be used for inference")
 
         self.conv2 = nn.Conv2d(
             in_channels=output_channels, out_channels=output_channels, kernel_size=3, padding=1, bias=True
         )
 
-        self.nonlinearity = kwargs["resnet_act_fn"]
+        self.nonlinearity = resnet_act_fn
 
         self.use_in_shortcut = input_channels != output_channels
         self.conv_shortcut = None

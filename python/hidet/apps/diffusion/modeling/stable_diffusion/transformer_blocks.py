@@ -34,20 +34,20 @@ class FeedForward(nn.Module[Tensor]):
 
 
 class BasicTransformerBlock(nn.Module[Tensor]):
-    def __init__(self, dim: int, **kwargs):
+    def __init__(self, dim: int, num_attention_heads: int, attention_head_dim: int, cross_attention_dim: int):
         super().__init__()
 
         self.norm1 = nn.LayerNorm(dim)
         self.attn1 = nn.CrossAttention(
-            dim, heads=kwargs["num_attention_heads"], dim_head=kwargs["attention_head_dim"], upcast=True, out_bias=True
+            dim, heads=num_attention_heads, dim_head=attention_head_dim, upcast=True, out_bias=True
         )
 
         self.norm2 = nn.LayerNorm(dim)
         self.attn2 = nn.CrossAttention(
             dim,
-            cross_attention_dim=kwargs["cross_attention_dim"],
-            heads=kwargs["num_attention_heads"],
-            dim_head=kwargs["attention_head_dim"],
+            cross_attention_dim=cross_attention_dim,
+            heads=num_attention_heads,
+            dim_head=attention_head_dim,
             upcast=True,
             out_bias=True,
         )
@@ -81,30 +81,42 @@ class BasicTransformerBlock(nn.Module[Tensor]):
 
 
 class Transformer2DModel(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: Optional[int],
+        attention_head_dim: int,
+        num_attention_heads: int,
+        cross_attention_dim: int,
+        resnet_groups: int,
+        use_linear_projection: bool,
+    ):
         super().__init__()
 
-        inner_dim = kwargs["num_attention_heads"] * kwargs["attention_head_dim"]
-        self.use_linear_projection = kwargs["use_linear_projection"]
+        inner_dim = num_attention_heads * attention_head_dim
+        self.use_linear_projection = use_linear_projection
 
-        self.norm = nn.GroupNorm(kwargs["resnet_groups"], kwargs["input_channels"], eps=1e-6, affine=True)
-        if kwargs["use_linear_projection"]:
-            self.proj_in = nn.Linear(kwargs["input_channels"], inner_dim)
+        self.norm = nn.GroupNorm(resnet_groups, input_channels, eps=1e-6, affine=True)
+        if use_linear_projection:
+            self.proj_in = nn.Linear(input_channels, inner_dim)
         else:
-            self.proj_in = nn.Conv2d(kwargs["input_channels"], inner_dim, kernel_size=1)
+            self.proj_in = nn.Conv2d(input_channels, inner_dim, kernel_size=1)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, **kwargs) for _ in range(kwargs["num_layers"])]
+            [
+                BasicTransformerBlock(inner_dim, num_attention_heads, attention_head_dim, cross_attention_dim)
+                for _ in range(num_layers)
+            ]
         )
 
-        self.output_channels = (
-            kwargs["input_channels"] if kwargs.get("output_channels", None) is None else kwargs["output_channels"]
-        )
+        self.output_channels = input_channels if output_channels is None else output_channels
 
-        if kwargs["use_linear_projection"]:
-            self.proj_out = nn.Linear(inner_dim, kwargs["input_channels"])
+        if use_linear_projection:
+            self.proj_out = nn.Linear(inner_dim, input_channels)
         else:
-            self.proj_out = nn.Conv2d(inner_dim, kwargs["input_channels"], kernel_size=1)
+            self.proj_out = nn.Conv2d(inner_dim, input_channels, kernel_size=1)
 
     def forward(self, hidden_states: Tensor, encoder_hidden_states: Tensor, temperature_scaling: float = 1.0) -> Tensor:
         bs, _, h, w = hidden_states.shape

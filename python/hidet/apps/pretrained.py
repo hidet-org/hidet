@@ -1,4 +1,4 @@
-from typing import Generic, List, Set
+from typing import Generic, List, Set, Union
 import logging
 
 import torch
@@ -17,7 +17,7 @@ logger.addHandler(logging.StreamHandler())
 
 
 class PretrainedModel(nn.Module[R], Registry, Generic[R]):
-    def __init__(self, config: PretrainedConfig):
+    def __init__(self, config: Union[PretrainedConfig, dict]):
         super().__init__()
         self.config = config
 

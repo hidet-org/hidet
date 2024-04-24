@@ -5,11 +5,11 @@ from hidet.graph.ops import resize2d
 
 
 class Upsample2D(nn.Module):
-    def __init__(self, channels: int, **kwargs):
+    def __init__(self, channels: int, output_channels: Optional[int]):
         super().__init__()
 
         self.channels = channels
-        self.out_channels = kwargs.get("output_channels", None) or channels
+        self.out_channels = output_channels or channels
 
         self.conv = nn.Conv2d(self.channels, self.out_channels, kernel_size=3, padding=1, bias=True)
 

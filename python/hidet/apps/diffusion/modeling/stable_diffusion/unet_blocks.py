@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Callable, Optional, Tuple, Union
 from hidet import nn
 from hidet.apps.diffusion.modeling.stable_diffusion.downsample import Downsample2D
 from hidet.apps.diffusion.modeling.stable_diffusion.resnet_blocks import ResnetBlock2D
@@ -9,41 +9,70 @@ from hidet.graph.ops import concat
 
 
 class CrossAttnDownBlock2D(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: int,
+        temb_channels: int,
+        add_downsample: bool,
+        num_attention_heads: int,
+        cross_attention_dim: int,
+        transformer_layers_per_block: Union[int, Tuple[int, ...]],
+        resnet_act_fn: Callable,
+        resnet_eps: float,
+        resnet_groups: int,
+        resnet_time_scale_shift: str,
+        downsample_padding: int,
+        use_linear_projection: bool,
+        dropout: float,
+        **kwargs,
+    ):
         super().__init__()
         self.has_cross_attention = True
         self.resnets = []
         self.attentions = []
 
-        transformer_layers_per_block = kwargs["transformer_layers_per_block"]
-        num_layers = kwargs["num_layers"]
-
         if isinstance(transformer_layers_per_block, int):
-            transformer_layers_per_block = [transformer_layers_per_block] * num_layers
+            transformer_layers_per_block = (transformer_layers_per_block,) * num_layers
 
         for i in range(num_layers):
-            input_channels = kwargs["input_channels"] if i == 0 else kwargs["output_channels"]
-            self.resnets.append(ResnetBlock2D(**{**kwargs, "input_channels": input_channels}))
+            resnet_input_channels = input_channels if i == 0 else output_channels
+            self.resnets.append(
+                ResnetBlock2D(
+                    input_channels=resnet_input_channels,
+                    output_channels=output_channels,
+                    resnet_groups=resnet_groups,
+                    temb_channels=temb_channels,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    resnet_act_fn=resnet_act_fn,
+                    resnet_eps=resnet_eps,
+                    dropout=dropout,
+                )
+            )
             self.attentions.append(
                 Transformer2DModel(
-                    **{
-                        **kwargs,
-                        "attention_head_dim": kwargs["output_channels"] // kwargs["num_attention_heads"],
-                        "input_channels": kwargs["output_channels"],
-                        "num_layers": transformer_layers_per_block[i],
-                    }
+                    num_layers=transformer_layers_per_block[i],
+                    input_channels=output_channels,
+                    output_channels=output_channels,
+                    attention_head_dim=output_channels // num_attention_heads,
+                    num_attention_heads=num_attention_heads,
+                    cross_attention_dim=cross_attention_dim,
+                    resnet_groups=resnet_groups,
+                    use_linear_projection=use_linear_projection,
                 )
             )
 
         self.resnets = nn.ModuleList(self.resnets)
         self.attentions = nn.ModuleList(self.attentions)
 
-        if kwargs["add_downsample"]:
-            self.downsamplers = nn.ModuleList([Downsample2D(kwargs["output_channels"], **kwargs)])
+        if add_downsample:
+            self.downsamplers = nn.ModuleList([Downsample2D(output_channels, output_channels, downsample_padding)])
         else:
             self.downsamplers = None
 
-    def forward(self, hidden_states: Tensor, temb: Tensor, encoder_hidden_states: Tensor) -> Tensor:
+    def forward(self, hidden_states: Tensor, temb: Tensor, encoder_hidden_states: Tensor) -> Tuple:
         output_states = ()
         blocks = list(zip(self.resnets, self.attentions))
 
@@ -63,22 +92,48 @@ class CrossAttnDownBlock2D(nn.Module[Tensor]):
 
 
 class DownBlock2D(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: int,
+        temb_channels: int,
+        add_downsample: bool,
+        resnet_act_fn: Callable,
+        resnet_eps: float,
+        resnet_groups: int,
+        resnet_time_scale_shift: str,
+        downsample_padding: int,
+        dropout: float,
+        **kwargs,
+    ):
         super().__init__()
         self.has_cross_attention = False
         self.resnets = []
 
-        for i in range(kwargs["num_layers"]):
-            input_channels = kwargs["input_channels"] if i == 0 else kwargs["output_channels"]
-            self.resnets.append(ResnetBlock2D(**{**kwargs, "input_channels": input_channels}))
+        for i in range(num_layers):
+            resnet_input_channels = input_channels if i == 0 else output_channels
+            self.resnets.append(
+                ResnetBlock2D(
+                    input_channels=resnet_input_channels,
+                    output_channels=output_channels,
+                    resnet_groups=resnet_groups,
+                    temb_channels=temb_channels,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    resnet_act_fn=resnet_act_fn,
+                    resnet_eps=resnet_eps,
+                    dropout=dropout,
+                )
+            )
 
         self.resnets = nn.ModuleList(self.resnets)
-        if kwargs["add_downsample"]:
-            self.downsamplers = nn.ModuleList([Downsample2D(kwargs["output_channels"], **kwargs)])
+        if add_downsample:
+            self.downsamplers = nn.ModuleList([Downsample2D(output_channels, output_channels, downsample_padding)])
         else:
             self.downsamplers = None
 
-    def forward(self, hidden_states: Tensor, temb: Tensor) -> Tensor:
+    def forward(self, hidden_states: Tensor, temb: Tensor) -> Tuple:
         output_states = ()
 
         for resnet in self.resnets:
@@ -95,31 +150,71 @@ class DownBlock2D(nn.Module[Tensor]):
 
 
 class MidBlock2DCrossAttn(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: Optional[int],
+        temb_channels: int,
+        transformer_layers_per_block: Union[int, Tuple[int, ...]],
+        num_attention_heads: int,
+        cross_attention_dim: int,
+        resnet_act_fn: Callable,
+        resnet_eps: float,
+        resnet_groups: int,
+        resnet_time_scale_shift: str,
+        use_linear_projection: bool,
+        dropout: float,
+        **kwargs,
+    ):
         super().__init__()
 
         self.has_cross_attention = True
 
-        transformer_layers_per_block = kwargs["transformer_layers_per_block"]
-        if isinstance(kwargs["transformer_layers_per_block"], int):
-            transformer_layers_per_block = [transformer_layers_per_block] * kwargs["num_layers"]
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = (transformer_layers_per_block,) * num_layers
 
-        self.resnets = [ResnetBlock2D(**{**kwargs, "input_channels": kwargs["input_channels"]})]
+        self.resnets = [
+            ResnetBlock2D(
+                input_channels=input_channels,
+                output_channels=output_channels,
+                resnet_groups=resnet_groups,
+                temb_channels=temb_channels,
+                resnet_time_scale_shift=resnet_time_scale_shift,
+                resnet_act_fn=resnet_act_fn,
+                resnet_eps=resnet_eps,
+                dropout=dropout,
+            )
+        ]
         self.attentions = []
 
-        for i in range(kwargs["num_layers"]):
+        for i in range(num_layers):
             self.attentions.append(
                 Transformer2DModel(
-                    **{
-                        **kwargs,
-                        "attention_head_dim": kwargs["input_channels"] // kwargs["num_attention_heads"],
-                        "input_channels": kwargs["input_channels"],
-                        "num_layers": transformer_layers_per_block[i],
-                    }
+                    num_layers=transformer_layers_per_block[i],
+                    input_channels=input_channels,
+                    output_channels=output_channels,
+                    attention_head_dim=input_channels // num_attention_heads,
+                    num_attention_heads=num_attention_heads,
+                    cross_attention_dim=cross_attention_dim,
+                    resnet_groups=resnet_groups,
+                    use_linear_projection=use_linear_projection,
                 )
             )
 
-            self.resnets.append(ResnetBlock2D(**{**kwargs, "input_channels": kwargs["input_channels"]}))
+            self.resnets.append(
+                ResnetBlock2D(
+                    input_channels=input_channels,
+                    output_channels=output_channels,
+                    resnet_groups=resnet_groups,
+                    temb_channels=temb_channels,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    resnet_act_fn=resnet_act_fn,
+                    resnet_eps=resnet_eps,
+                    dropout=dropout,
+                )
+            )
 
         self.resnets = nn.ModuleList(self.resnets)
         self.attentions = nn.ModuleList(self.attentions)
@@ -135,40 +230,70 @@ class MidBlock2DCrossAttn(nn.Module[Tensor]):
 
 
 class CrossAttnUpBlock2D(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: int,
+        temb_channels: int,
+        transformer_layers_per_block: Union[int, Tuple[int, ...]],
+        prev_output_channel: int,
+        add_upsample: bool,
+        resnet_act_fn: Callable,
+        resnet_groups: int,
+        resnet_eps: float,
+        resnet_time_scale_shift: str,
+        num_attention_heads: int,
+        cross_attention_dim: int,
+        use_linear_projection: bool,
+        dropout: float,
+        **kwargs,
+    ):
         super().__init__()
         self.has_cross_attention = True
-        num_layers = kwargs["num_layers"]
 
-        transformer_layers_per_block = kwargs["transformer_layers_per_block"]
         if isinstance(transformer_layers_per_block, int):
-            transformer_layers_per_block = [transformer_layers_per_block] * num_layers
+            transformer_layers_per_block = (transformer_layers_per_block,) * num_layers
 
         self.resnets = []
         self.attentions = []
         for i in range(num_layers):
-            res_skip_channels = kwargs["input_channels"] if (i == num_layers - 1) else kwargs["output_channels"]
-            resnet_in_channels = kwargs["prev_output_channel"] if i == 0 else kwargs["output_channels"]
-            input_channels = resnet_in_channels + res_skip_channels
+            res_skip_channels = input_channels if (i == num_layers - 1) else output_channels
+            resnet_in_channels = prev_output_channel if i == 0 else output_channels
+            resnet_input_channels = resnet_in_channels + res_skip_channels
 
-            self.resnets.append(ResnetBlock2D(**{**kwargs, "input_channels": input_channels}))
+            self.resnets.append(
+                ResnetBlock2D(
+                    input_channels=resnet_input_channels,
+                    output_channels=output_channels,
+                    resnet_groups=resnet_groups,
+                    temb_channels=temb_channels,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    resnet_act_fn=resnet_act_fn,
+                    resnet_eps=resnet_eps,
+                    dropout=dropout,
+                )
+            )
 
             self.attentions.append(
                 Transformer2DModel(
-                    **{
-                        **kwargs,
-                        "attention_head_dim": kwargs["output_channels"] // kwargs["num_attention_heads"],
-                        "input_channels": kwargs["output_channels"],
-                        "num_layers": transformer_layers_per_block[i],
-                    }
+                    num_layers=transformer_layers_per_block[i],
+                    input_channels=output_channels,
+                    output_channels=output_channels,
+                    attention_head_dim=output_channels // num_attention_heads,
+                    num_attention_heads=num_attention_heads,
+                    cross_attention_dim=cross_attention_dim,
+                    resnet_groups=resnet_groups,
+                    use_linear_projection=use_linear_projection,
                 )
             )
 
         self.resnets = nn.ModuleList(self.resnets)
         self.attentions = nn.ModuleList(self.attentions)
 
-        if kwargs["add_upsample"]:
-            self.upsamplers = nn.ModuleList([Upsample2D(kwargs["output_channels"], **kwargs)])
+        if add_upsample:
+            self.upsamplers = nn.ModuleList([Upsample2D(output_channels, output_channels)])
         else:
             self.upsamplers = None
 
@@ -202,23 +327,47 @@ class CrossAttnUpBlock2D(nn.Module[Tensor]):
 
 
 class UpBlock2D(nn.Module[Tensor]):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        *,
+        num_layers: int,
+        input_channels: int,
+        output_channels: int,
+        temb_channels: int,
+        prev_output_channel: int,
+        add_upsample: bool,
+        resnet_act_fn: Callable,
+        resnet_eps: float,
+        resnet_groups: int,
+        resnet_time_scale_shift: str,
+        dropout: float,
+        **kwargs,
+    ):
         super().__init__()
         self.has_cross_attention = False
         self.resnets = []
 
-        for i in range(kwargs["num_layers"]):
-            res_skip_channels = (
-                kwargs["input_channels"] if (i == kwargs["num_layers"] - 1) else kwargs["output_channels"]
-            )
-            resnet_input_channels = kwargs["prev_output_channel"] if i == 0 else kwargs["output_channels"]
-            input_channels = res_skip_channels + resnet_input_channels
+        for i in range(num_layers):
+            res_skip_channels = input_channels if (i == num_layers - 1) else output_channels
+            resnet_input_channels = prev_output_channel if i == 0 else output_channels
+            resnet_input_channels = res_skip_channels + resnet_input_channels
 
-            self.resnets.append(ResnetBlock2D(**{**kwargs, "input_channels": input_channels}))
+            self.resnets.append(
+                ResnetBlock2D(
+                    input_channels=resnet_input_channels,
+                    output_channels=output_channels,
+                    resnet_groups=resnet_groups,
+                    temb_channels=temb_channels,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    resnet_act_fn=resnet_act_fn,
+                    resnet_eps=resnet_eps,
+                    dropout=dropout,
+                )
+            )
 
         self.resnets = nn.ModuleList(self.resnets)
-        if kwargs["add_upsample"]:
-            self.upsamplers = nn.ModuleList([Upsample2D(kwargs["output_channels"], **kwargs)])
+        if add_upsample:
+            self.upsamplers = nn.ModuleList([Upsample2D(output_channels, output_channels)])
         else:
             self.upsamplers = None
 
