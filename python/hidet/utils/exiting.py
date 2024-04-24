@@ -36,6 +36,7 @@ def is_exiting():
 
 
 def _at_exit():
+    global _is_exiting
     _is_exiting = True
 
 
