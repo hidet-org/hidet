@@ -24,9 +24,20 @@ class PretrainedModelForDiffusion(PretrainedModel):
 
         torch_unet = hf_pipeline.unet
         pretrained_unet_class = cls.load_module(pipeline_config["unet"][1])
+        hf_config = dict(torch_unet.config)
+
+        if not all(
+            x is None
+            for x in (
+                hf_config["encoder_hid_dim_type"],
+                hf_config["class_embed_type"],
+                hf_config["addition_embed_type"],
+            )
+        ):
+            raise NotImplementedError("Additional projection and embedding features not included yet.")
 
         hidet_unet = pretrained_unet_class(
-            **dict(torch_unet.config),
+            **hf_config,
             vae_scale_factor=hf_pipeline.vae_scale_factor,
             embed_max_length=hf_pipeline.text_encoder.config.max_position_embeddings,
             embed_hidden_dim=hf_pipeline.text_encoder.config.hidden_size

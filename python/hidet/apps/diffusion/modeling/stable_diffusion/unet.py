@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Callable, List, Optional, Tuple, Union
 from hidet import nn
 from hidet.apps.diffusion.modeling.pretrained import PretrainedModelForDiffusion
 from hidet.apps.diffusion.modeling.stable_diffusion.timestep import TimestepEmbedding, Timesteps
@@ -23,75 +23,107 @@ PretrainedModel.register(
 
 
 class UNet2DConditionModel(PretrainedModelForDiffusion):
-    def __init__(self, **kwargs):
-        super().__init__(kwargs)
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        center_input_sample: bool,
+        block_out_channels: List[int],
+        conv_in_kernel: int,
+        conv_out_kernel: int,
+        down_block_types: List[str],
+        mid_block_type: str,
+        up_block_types: List[str],
+        embed_max_length: int,
+        embed_hidden_dim: int,
+        vae_scale_factor: int,
+        attention_head_dim: Union[int, Tuple[int, ...]],
+        num_attention_heads: Optional[Union[int, Tuple[int, ...]]] = None,
+        cross_attention_dim: Union[int, Tuple[int, ...]] = 1024,
+        only_cross_attention: Union[bool, Tuple[bool, ...]] = False,
+        mid_block_only_cross_attention: Optional[bool] = None,
+        layers_per_block: Union[int, Tuple[int, ...]] = 2,
+        transformer_layers_per_block: Union[int, Tuple[int, ...]] = 1,
+        time_embedding_type: str = "positional",
+        flip_sin_to_cos: bool = True,
+        freq_shift: int = 0,
+        act_fn: Union[str, Callable] = "silu",
+        norm_eps: float = 1e-05,
+        norm_num_groups: int = 32,
+        resnet_time_scale_shift: str = "default",
+        downsample_padding: int = 1,
+        use_linear_projection: bool = True,
+        class_embeddings_concat: bool = False,
+        dropout: float = 0.0,
+        **kwargs,  # capture unnecessary kwargs
+    ):
+        super().__init__(
+            {
+                "in_channels": in_channels,
+                "embed_max_length": embed_max_length,
+                "embed_hidden_dim": embed_hidden_dim,
+                "vae_scale_factor": vae_scale_factor,
+                "center_input_sample": center_input_sample,
+            }
+        )
         self.conv_in = nn.Conv2d(
-            in_channels=kwargs["in_channels"],
-            out_channels=kwargs["block_out_channels"][0],
-            kernel_size=kwargs["conv_in_kernel"],
-            padding=(kwargs["conv_in_kernel"] - 1) // 2,
+            in_channels=in_channels,
+            out_channels=block_out_channels[0],
+            kernel_size=conv_in_kernel,
+            padding=(conv_in_kernel - 1) // 2,
             bias=True,
         )
 
-        assert kwargs["time_embedding_type"] == "positional"
-        timestep_input_dim = kwargs["block_out_channels"][0]
-        time_embed_dim = kwargs["block_out_channels"][0] * 4
+        assert time_embedding_type == "positional"
+        timestep_input_dim = block_out_channels[0]
+        time_embed_dim = block_out_channels[0] * 4
 
-        self.time_proj = Timesteps(kwargs["block_out_channels"][0], kwargs["flip_sin_to_cos"], kwargs["freq_shift"])
+        self.time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
 
-        kwargs["act_fn"] = getattr(hidet.graph.ops, kwargs["act_fn"])
-        self.time_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim, act_fn=kwargs["act_fn"])
+        if isinstance(act_fn, str):
+            act_fn = getattr(hidet.graph.ops, act_fn)
 
-        if not all(
-            x is None
-            for x in (kwargs["encoder_hid_dim_type"], kwargs["class_embed_type"], kwargs["addition_embed_type"])
-        ):
-            raise NotImplementedError("Additional projection and embedding features not included yet.")
+        self.time_embedding = TimestepEmbedding(
+            in_channels=timestep_input_dim, time_embed_dim=time_embed_dim, act_fn=act_fn
+        )
 
         self.down_blocks = []
         self.up_blocks = []
 
-        down_block_types = kwargs["down_block_types"]
-        only_cross_attention = kwargs["only_cross_attention"]
-        mid_block_only_cross_attention = kwargs["mid_block_only_cross_attention"]
-
-        if isinstance(kwargs["only_cross_attention"], bool):
-            if kwargs["mid_block_only_cross_attention"] is None:
+        if isinstance(only_cross_attention, bool):
+            if mid_block_only_cross_attention is None:
                 mid_block_only_cross_attention = only_cross_attention
-            only_cross_attention = [only_cross_attention] * len(down_block_types)  # 4
+            only_cross_attention = (only_cross_attention,) * len(down_block_types)
 
-        if mid_block_only_cross_attention is None:
-            mid_block_only_cross_attention = False
+        mid_block_only_cross_attention = (
+            mid_block_only_cross_attention if mid_block_only_cross_attention is not None else False
+        )
 
-        attention_head_dim = kwargs["attention_head_dim"]
-        if isinstance(kwargs["attention_head_dim"], int):
+        if isinstance(attention_head_dim, int):
             attention_head_dim = (attention_head_dim,) * len(down_block_types)
 
-        num_attention_heads = kwargs["num_attention_heads"] or attention_head_dim
-        if isinstance(kwargs["num_attention_heads"], int):
+        num_attention_heads = num_attention_heads or attention_head_dim
+        if isinstance(num_attention_heads, int):
             num_attention_heads = (num_attention_heads,) * len(down_block_types)
 
-        cross_attention_dim = kwargs["cross_attention_dim"]
-        if isinstance(kwargs["cross_attention_dim"], int):
+        if isinstance(cross_attention_dim, int):
             cross_attention_dim = (cross_attention_dim,) * len(down_block_types)
 
-        layers_per_block = kwargs["layers_per_block"]
-        if isinstance(kwargs["layers_per_block"], int):
-            layers_per_block = [layers_per_block] * len(down_block_types)
+        if isinstance(layers_per_block, int):
+            layers_per_block = (layers_per_block,) * len(down_block_types)
 
-        transformer_layers_per_block = kwargs["transformer_layers_per_block"]
-        if isinstance(kwargs["transformer_layers_per_block"], int):
-            transformer_layers_per_block = [transformer_layers_per_block] * len(down_block_types)
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = (transformer_layers_per_block,) * len(down_block_types)
 
         blocks_time_embed_dim = time_embed_dim
-        if kwargs["class_embeddings_concat"]:
+        if class_embeddings_concat:
             blocks_time_embed_dim *= 2
 
-        output_channels = kwargs["block_out_channels"][0]
-        for i, down_block_type in enumerate(kwargs["down_block_types"]):
+        output_channels = block_out_channels[0]
+        for i, down_block_type in enumerate(down_block_types):
             input_channels = output_channels
-            output_channels = kwargs["block_out_channels"][i]
-            is_final = i == (len(kwargs["block_out_channels"]) - 1)
+            output_channels = block_out_channels[i]
+            is_final = i == (len(block_out_channels) - 1)
 
             self.down_blocks.append(
                 self.get_down_block(
@@ -101,46 +133,48 @@ class UNet2DConditionModel(PretrainedModelForDiffusion):
                     output_channels=output_channels,
                     temb_channels=blocks_time_embed_dim,
                     add_downsample=not is_final,
-                    transformer_layers_per_block=transformer_layers_per_block[i],
-                    resnet_eps=kwargs["norm_eps"],
-                    resnet_act_fn=kwargs["act_fn"],
-                    resnet_groups=kwargs["norm_num_groups"],
-                    cross_attention_dim=cross_attention_dim[i],
                     num_attention_heads=num_attention_heads[i],
-                    only_cross_attention=only_cross_attention[i],
-                    attention_head_dim=attention_head_dim[i] or output_channels,
+                    cross_attention_dim=cross_attention_dim[i],
+                    transformer_layers_per_block=transformer_layers_per_block[i],
+                    resnet_act_fn=act_fn,
+                    resnet_eps=norm_eps,
+                    resnet_groups=norm_num_groups,
+                    resnet_time_scale_shift=resnet_time_scale_shift,
+                    downsample_padding=downsample_padding,
+                    use_linear_projection=use_linear_projection,
+                    dropout=dropout,
                 )
             )
 
         self.down_blocks = nn.ModuleList(self.down_blocks)
 
+        assert mid_block_type == "UNetMidBlock2DCrossAttn"
         self.mid_block = MidBlock2DCrossAttn(
-            **{
-                **self.config,
-                "input_channels": kwargs["block_out_channels"][-1],
-                "output_channels": None,
-                "temb_channels": blocks_time_embed_dim,
-                "num_layers": 1,
-                "transformer_layers_per_block": transformer_layers_per_block[-1],
-                "resnet_eps": kwargs["norm_eps"],
-                "resnet_act_fn": kwargs["act_fn"],
-                "resnet_groups": kwargs["norm_num_groups"],
-                "cross_attention_dim": cross_attention_dim[-1],
-                "num_attention_heads": num_attention_heads[-1],
-            }
+            num_layers=1,
+            input_channels=block_out_channels[-1],
+            output_channels=None,
+            temb_channels=blocks_time_embed_dim,
+            transformer_layers_per_block=transformer_layers_per_block[-1],
+            num_attention_heads=num_attention_heads[-1],
+            cross_attention_dim=cross_attention_dim[-1],
+            resnet_act_fn=act_fn,
+            resnet_eps=norm_eps,
+            resnet_groups=norm_num_groups,
+            resnet_time_scale_shift=resnet_time_scale_shift,
+            use_linear_projection=use_linear_projection,
+            dropout=dropout,
         )
 
         self.num_upsamplers = 0
 
-        r_block_out_channels = list(reversed(kwargs["block_out_channels"]))
+        r_block_out_channels = list(reversed(block_out_channels))
         r_num_attention_heads = list(reversed(num_attention_heads))
-        r_layers_per_block = list(reversed(layers_per_block))
         r_cross_attention_dim = list(reversed(cross_attention_dim))
+        r_layers_per_block = list(reversed(layers_per_block))
         r_transformer_layers_per_block = list(reversed(transformer_layers_per_block))
-        r_only_cross_attention = list(reversed(only_cross_attention))
 
         output_channels = r_block_out_channels[0]
-        for i, up_block_type in enumerate(kwargs["up_block_types"]):
+        for i, up_block_type in enumerate(up_block_types):
             is_final_block = i == len(r_block_out_channels) - 1
 
             prev_output_channels = output_channels
@@ -156,20 +190,20 @@ class UNet2DConditionModel(PretrainedModelForDiffusion):
             up_block = self.get_up_block(
                 up_block_type,
                 num_layers=r_layers_per_block[i] + 1,
-                transformer_layers_per_block=r_transformer_layers_per_block[i],
                 input_channels=input_channels,
                 output_channels=output_channels,
-                prev_output_channel=prev_output_channels,
                 temb_channels=blocks_time_embed_dim,
+                transformer_layers_per_block=r_transformer_layers_per_block[i],
+                prev_output_channel=prev_output_channels,
                 add_upsample=add_upsample,
-                resnet_eps=kwargs["norm_eps"],
-                resnet_act_fn=kwargs["act_fn"],
-                resnet_groups=kwargs["norm_num_groups"],
-                resolution_idx=i,
-                cross_attention_dim=r_cross_attention_dim[i],
+                resnet_act_fn=act_fn,
+                resnet_eps=norm_eps,
+                resnet_groups=norm_num_groups,
                 num_attention_heads=r_num_attention_heads[i],
-                only_cross_attention=r_only_cross_attention[i],
-                attention_head_dim=(attention_head_dim[i] if attention_head_dim[i] is not None else output_channels),
+                cross_attention_dim=r_cross_attention_dim[i],
+                resnet_time_scale_shift=resnet_time_scale_shift,
+                use_linear_projection=use_linear_projection,
+                dropout=dropout,
             )
 
             self.up_blocks.append(up_block)
@@ -177,18 +211,12 @@ class UNet2DConditionModel(PretrainedModelForDiffusion):
 
         self.up_blocks = nn.ModuleList(self.up_blocks)
 
-        self.conv_norm_out = nn.GroupNorm(
-            num_channels=kwargs["block_out_channels"][0], num_groups=kwargs["norm_num_groups"], eps=kwargs["norm_eps"]
-        )
-        self.conv_act = kwargs["act_fn"]
+        self.conv_norm_out = nn.GroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps)
+        self.conv_act = act_fn
 
-        conv_out_padding = (kwargs["conv_out_kernel"] - 1) // 2
+        conv_out_padding = (conv_out_kernel - 1) // 2
         self.conv_out = nn.Conv2d(
-            kwargs["block_out_channels"][0],
-            kwargs["out_channels"],
-            kernel_size=kwargs["conv_out_kernel"],
-            padding=conv_out_padding,
-            bias=True,
+            block_out_channels[0], out_channels, kernel_size=conv_out_kernel, padding=conv_out_padding, bias=True
         )
 
     @property
@@ -205,17 +233,17 @@ class UNet2DConditionModel(PretrainedModelForDiffusion):
 
     def get_down_block(self, down_block_type: str, **kwargs):
         if down_block_type == "CrossAttnDownBlock2D":
-            return CrossAttnDownBlock2D(**{**self.config, **kwargs})  # type: ignore
+            return CrossAttnDownBlock2D(**kwargs)  # type: ignore
         elif down_block_type == "DownBlock2D":
-            return DownBlock2D(**{**self.config, **kwargs})  # type: ignore
+            return DownBlock2D(**kwargs)  # type: ignore
         else:
             raise ValueError(f"{down_block_type} not found.")
 
     def get_up_block(self, up_block_type: str, **kwargs):
         if up_block_type == "CrossAttnUpBlock2D":
-            return CrossAttnUpBlock2D(**{**self.config, **kwargs})
+            return CrossAttnUpBlock2D(**kwargs)
         elif up_block_type == "UpBlock2D":
-            return UpBlock2D(**{**self.config, **kwargs})
+            return UpBlock2D(**kwargs)
         else:
             raise ValueError(f"{up_block_type} not found.")
 
