@@ -18,6 +18,7 @@ from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput, normalize_slice
+from .transpose2d import TransposeOp2D
 
 
 def is_true(x: Union[Expr, bool]) -> bool:
@@ -595,6 +596,8 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
 
 def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
     rank = len(x.shape)
+    if rank == 2:
+        return TransposeOp2D(x).outputs[0]
     if axes is None:
         axes = list(reversed(range(rank)))
     axes = [normalize_dim(dim, rank) for dim in axes]

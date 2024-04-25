@@ -46,6 +46,18 @@ def bench_conv2d(params: str, *args, **kwargs) -> float:
     return bench_torch_model(lambda: g.run_async(), [])
 
 
+def bench_transpose2d(params: str, *args, **kwargs) -> float:
+    dtype = args[0] if args else "float32"
+    x_shape = params
+    x_shape = [int(s) for s in x_shape.split('x')]
+    x = hidet.symbol(x_shape, dtype=dtype, device='cuda')
+    o = hidet.ops.transpose(x)
+    g = hidet.trace_from(o, inputs=[x])
+    g = hidet.graph.optimize(g)
+    g = g.cuda_graph()
+    return bench_torch_model(lambda: g.run_async(), [])
+
+
 def bench_conv2d_gemm_f16(params: str, *args, **kwargs) -> float:
     x_shape, w_shape = params.split(',')
     x_shape = [int(s) for s in x_shape.split('x')]
@@ -109,6 +121,7 @@ bench_func_map = {
     'matmul_f16': bench_matmul_f16,
     'batch_matmul': bench_batch_matmul,
     'conv2d': bench_conv2d,
+    'transpose2d': bench_transpose2d,
     'conv2d_gemm_f16': bench_conv2d_gemm_f16,
     'attn': bench_attn,
     'attn_mask_add': bench_attn_mask_add,
