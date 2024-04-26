@@ -3,7 +3,8 @@ import os
 import argparse
 import numpy as np
 import hidet
-from bench_utils import bench_torch_model, Backend
+
+from hidet.testing.torch_utils import bench_torch_model, Backend
 
 
 def bench_matmul_f16(params: str, *args, **kwargs) -> float:

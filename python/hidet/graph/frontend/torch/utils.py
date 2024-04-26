@@ -117,14 +117,20 @@ def symbol_like_torch(tensor) -> Tensor:
     from torch._subclasses.fake_tensor import FakeTensor
 
     if isinstance(tensor, FakeTensor):
-        # this should be fine for now; torch wraps around the sympy library
         symbolic_shape = []
         for s in tensor.shape:
-            try:
-                i = int(s)
-            except Exception:  # pylint: disable=broad-except
-                i = str(s)
-            symbolic_shape.append(i)
+            if isinstance(s, int):
+                symbolic_shape.append(s)
+            else:
+                assert isinstance(s, torch.SymInt)
+                expr = s.node.expr
+                if expr.is_Integer:
+                    i = int(s)
+                    symbolic_shape.append(i)
+                else:
+                    assert expr.is_Symbol
+                    name = s.node.expr.name
+                    symbolic_shape.append(name)
         return hidet.symbol(shape=symbolic_shape, dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type)
     elif isinstance(tensor, torch.Tensor):
         return hidet.symbol(

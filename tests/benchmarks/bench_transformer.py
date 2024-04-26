@@ -2,7 +2,7 @@ import os
 import argparse
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModelForCausalLM, logging
-from bench_utils import bench_torch_model, Backend
+from hidet.testing.torch_utils import bench_torch_model, Backend
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.set_verbosity_error()

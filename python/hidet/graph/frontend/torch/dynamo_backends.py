@@ -15,7 +15,6 @@ import logging
 import torch
 import hidet.option
 from hidet import Tensor
-from hidet.ir import dtypes
 from hidet.ir.type import DataType
 from hidet.ir.expr import SymbolVar
 from hidet.runtime import CompiledGraph
@@ -30,26 +29,31 @@ from .utils import symbol_like_torch
 
 logger = logging.getLogger(__name__)
 
-
-def get_flow_graph(interpreter, example_inputs):
-    # prepare dummy and symbolic inputs for correctness and flow graph construction
-    inputs: List[Union[Tensor, SymbolVar, int, bool, float]] = []  # for flow graph construction
-    for example_input in example_inputs:
+# NOTES ABOUT DYNAMIC SHAPE.
+# From pytorch we got two argument:
+#   - fxgraph
+#   - example_inputs
+# In case when we are requested to create dynamic shape, `example_inputs` contain info
+# about used symbols only (all symbols are presented in `example_input` as element of list).
+# But in `example_inputs` there is no information about what dimentions of input tensors
+# should be symbolic and correspondence between symbol and dimention.
+# These info is presented in fxgraph. Every input corresponds fxgraph node.
+# in `fx_node.meta['example_value']` stored `FakeTensor` that contain all symbols in its shape.
+# We use this data to determinate shapes of the inputs.
+def get_flow_graph(interpreter: Interpreter, example_inputs):
+    inputs: List[Union[Tensor, SymbolVar]] = []  # for flow graph construction
+    for fxgraph_node, example_input in zip(interpreter.graph.nodes, example_inputs):
         if isinstance(example_input, torch.Tensor):
-            symbolic_input = symbol_like_torch(example_input)
+            fake_input = fxgraph_node.meta['example_value']
+            symbolic_input = symbol_like_torch(fake_input)
             inputs.append(symbolic_input)
-        elif isinstance(example_input, (int, bool, float)):
+        elif isinstance(example_input, int):
             inputs.append(example_input)
         elif isinstance(example_input, torch.SymInt):
-            from torch.fx.experimental.symbolic_shapes import SymNode
-
-            node: SymNode = example_input.node
-            try:
-                inputs.append(node.pytype(example_input))
-            except RuntimeError:
-                # is a symbolic scalar input
-                pytype2dtype = {int: dtypes.int32, float: dtypes.float32, bool: dtypes.boolean}
-                inputs.append(hidet.symbol_var(name=str(example_input), dtype=pytype2dtype[node.pytype]))
+            assert fxgraph_node.op == 'placeholder' and fxgraph_node.type is torch.SymInt
+            name = fxgraph_node.name
+            var = hidet.symbol_var(name)
+            inputs.append(var)
         else:
             raise ValueError(f"hidet_backend: unexpected example input {example_input}, type {type(example_input)}")
 
