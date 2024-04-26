@@ -1,7 +1,7 @@
 import sys
 import argparse
 import torch
-from bench_utils import bench_torch_model, Backend
+from hidet.testing.torch_utils import bench_torch_model, Backend
 
 
 # MATMUL BENCHMARKS #
@@ -139,10 +139,12 @@ def create_model_transpose(params: str, dtype):
 # Main benchmark function for ops.
 # Calls bench_torch_model
 def bench_op(operator, params, dtype, backend):
-    dtype = getattr(torch, dtype)
     comp_backend = Backend(backend, dtype)
+    dtype = getattr(torch, dtype)
+
     model_creator = getattr(sys.modules[__name__], "create_model_" + operator)
     model, model_inputs = model_creator(params, dtype)
+    model = model.eval().to(dtype).cuda()
     with torch.no_grad(), torch.autocast("cuda"):
         opt_model = comp_backend.compile(model)
         latency = bench_torch_model(opt_model, model_inputs)

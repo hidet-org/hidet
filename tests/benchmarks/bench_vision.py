@@ -1,7 +1,7 @@
 import argparse
 import torch
 import torchvision
-from bench_utils import bench_torch_model, Backend
+from hidet.testing.torch_utils import bench_torch_model, Backend
 
 
 def bench_torchvision(model_name, shape, dtype, backend):
