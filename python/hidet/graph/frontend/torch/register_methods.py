@@ -312,3 +312,13 @@ def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, 
 @register_method(torch.Tensor.zero_)
 def tensor_zero_(self: Tensor):
     return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)
+
+
+@register_method(torch.Tensor.sin)
+def sin(x: Tensor):
+    return ops.sin(x)
+
+
+@register_method(torch.Tensor.cos)
+def cos(x: Tensor):
+    return ops.cos(x)
