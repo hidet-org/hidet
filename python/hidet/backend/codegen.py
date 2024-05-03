@@ -15,7 +15,7 @@ import numpy as np
 from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir import dtypes
 from hidet.ir.node import Node
-from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
+from hidet.ir.type import DataType, OpaqueType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
 from hidet.ir.type import VoidType, StringType, ArrayType
 from hidet.ir.expr import Var, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
@@ -52,6 +52,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.require_bf16 = False
         self.require_tf32 = False
         self.require_cooperative_groups = False
+        self.require_tensor_maps = False
 
     def __call__(self, node) -> Doc:
         return self.visit(node)
@@ -148,6 +149,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         elif isinstance(v_type, ArrayType):
             base_type_doc = self(v_type.base_type)
             return base_type_doc + ' ' + name_doc + '[' + self(v_type.size) + ']'
+        elif isinstance(v_type, OpaqueType):
+            dtype_doc = self(v_type)
+            return dtype_doc + ' ' + name_doc
         else:
             raise ValueError()
 
@@ -188,6 +192,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             else:
                 base_type_doc = self(v_type.base_type)
                 return base_type_doc + ' ' + name_doc + '[' + self(v_type.size) + ']'
+        elif isinstance(v_type, OpaqueType):
+            dtype_doc = self(v_type)
+            return dtype_doc + ' ' + name_doc
         else:
             assert False
 
@@ -665,6 +672,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         param_type_docs = [self(p) for p in t.param_types]
         return ret_type_doc + Text(' (*)( ') + doc_join(param_type_docs, ', ') + Text(')')
 
+    def visit_OpaqueType(self, t: OpaqueType):
+        return doc_join(t.modifiers, ' ') + Text((" " if len(t.modifiers) > 0 else "") + f'{t.cpp_name}')
+
     # the following expressions should not remain to codegen
     def visit_TensorSlice(self, e: TensorSlice):
         raise ValueError()
@@ -695,6 +705,7 @@ class CUDACodegen(Codegen):
             doc += Text('#include <cuda_bf16.h>') + NewLine()
         if self.require_cooperative_groups:
             doc += Text('#include <cooperative_groups.h>') + NewLine()
+        doc += Text('#include <cudaTypedefs.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()

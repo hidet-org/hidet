@@ -52,7 +52,6 @@ def pytest_collection_modifyitems(config, items):
         del keywords["slow"]
     if config.getoption("--hopper"):
         del keywords["hopper"]
-
     for item in items:
         for keyword in keywords.keys():
             if keyword in item.keywords:

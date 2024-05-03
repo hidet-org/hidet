@@ -15,7 +15,16 @@ import hidet.utils.structure
 from hidet.ir.node import Node
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
-from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
+from hidet.ir.type import (
+    DataType,
+    OpaqueType,
+    TensorType,
+    VoidType,
+    PointerType,
+    ReferenceType,
+    TensorPointerType,
+    FuncType,
+)
 from hidet.ir.type import ArrayType, StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
@@ -427,6 +436,9 @@ class IRPrinter(IRFunctor):
             return Text('FuncType[type_infer_func]')
         else:
             return Text('FuncType(params={}, ret={})'.format(self(t.param_types), self(t.ret_type)))
+
+    def visit_OpaqueType(self, t: OpaqueType):
+        return Text(f'OpaqueType({t.cpp_name})')
 
     def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         if e.required_type:

@@ -19,6 +19,7 @@ from hidet.ir.module import IRModule
 from hidet.ir.func import Function
 from hidet.ir.type import (
     DataType,
+    OpaqueType,
     data_type,
     TensorType,
     tensor_type,
@@ -547,6 +548,9 @@ class IRDumper(IRFunctor):
 
     def visit_FuncType(self, t: FuncType):
         return Text('(') + self(t.param_types) + ') -> ' + self(t.ret_type)
+
+    def visit_OpaqueType(self, t: OpaqueType):
+        return Text(f'OpaqueType({t.cpp_name})')
 
     # def visit_ArrayType(self, t: ArrayType):
     #     return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'

@@ -10,7 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=bad-staticmethod-argument
-from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType, StringType
+from hidet.ir.type import (
+    DataType,
+    OpaqueType,
+    TensorType,
+    PointerType,
+    TensorPointerType,
+    ReferenceType,
+    VoidType,
+    StringType,
+)
 from hidet.ir.type import ArrayType, FuncType
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
@@ -36,6 +45,8 @@ class TypeFunctor(BaseFunctor):
             return self.visit_VoidType(node)
         elif isinstance(node, FuncType):
             return self.visit_FuncType(node)
+        elif isinstance(node, OpaqueType):
+            return self.visit_OpaqueType(node)
         else:
             return NotImplemented
 
@@ -64,6 +75,9 @@ class TypeFunctor(BaseFunctor):
         raise NotImplementedError()
 
     def visit_FuncType(self, t: FuncType):
+        raise NotImplementedError()
+
+    def visit_OpaqueType(self, t: OpaqueType):
         raise NotImplementedError()
 
 
@@ -98,6 +112,9 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
         self.visit(t.ret_type)
         for param_type in t.param_types:
             self.visit(param_type)
+
+    def visit_OpaqueType(self, t: OpaqueType):
+        pass
 
 
 class TypeRewriter(TypeFunctor, BaseRewriter):
@@ -157,3 +174,6 @@ class TypeRewriter(TypeFunctor, BaseRewriter):
                 return t
             else:
                 return FuncType(param_types, ret_type)
+
+    def visit_OpaqueType(self, t: OpaqueType):
+        return t

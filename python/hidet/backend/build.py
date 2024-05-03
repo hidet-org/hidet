@@ -147,7 +147,7 @@ class NVCC(SourceCompiler):
             *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
-            *['-l{}'.format(library) for library in linking_libs],
+            *['-l{}'.format(library) for library in [*linking_libs, 'cuda']],
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
