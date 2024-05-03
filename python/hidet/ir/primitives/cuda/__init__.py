@@ -22,3 +22,17 @@ from .wmma import wmma_load_a, wmma_load_b, wmma_mma, wmma_store
 from .cvt import cvt
 from .memcpy import memcpy_async
 from .errchk import check_cuda_error
+from .cp_async import cp_async, cp_async_commit_group, cp_async_wait_group, cp_async_wait_all
+from .barrier import (
+    mbarrier_arrive,
+    mbarrier_arrive_and_expect_tx,
+    mbarrier_expect_transaction,
+    mbarrier_complete_transaction,
+    mbarrier_init,
+    mbarrier_invalidate,
+    mbarrier_test_wait,
+    mbarrier_try_wait,
+    mbarrier_wait,
+    cp_async_barrier_arrive,
+)
+from .tensor_map import create_tensor_map

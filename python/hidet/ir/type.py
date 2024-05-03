@@ -325,6 +325,12 @@ class FuncType(BaseType):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
+class OpaqueType(BaseType):
+    def __init__(self, cpp_name: str, *modifiers: str):
+        self.cpp_name: str = cpp_name
+        self.modifiers: Sequence[str] = modifiers
+
+
 def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout=None):
     """
     Construct a tensor type.

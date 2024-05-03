@@ -23,7 +23,7 @@ def register_cuda_cluster_functions():
         codegen_name="cooperative_groups::this_cluster().sync",
     )
 
-    for dtype in ['int8', 'uint8', 'uint32', 'int32', 'float16', 'float32', 'bool']:
+    for dtype in ['int8', 'uint8', 'uint32', 'uint64', 'int32', 'float16', 'float32', 'bool']:
         dtype = data_type(dtype)
 
         register_primitive_function(

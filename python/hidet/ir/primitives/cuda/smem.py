@@ -32,7 +32,9 @@ def register_functions():
         def cuda_dynamic_shared_memory(byte_offset: int) -> ~dtype:
             attrs.func_kind = 'cuda_internal'
             attrs.func_name = func_name
-            dynamic_smem = PointerType(base_type='uint8', specifiers=['extern', '__shared__'], use_bracket=True)
+            dynamic_smem = PointerType(
+                base_type='uint8', specifiers=['extern', '__align__(128)', '__shared__'], use_bracket=True
+            )
             return cast(~dynamic_smem[byte_offset], ~dtype)
 
         assert isinstance(cuda_dynamic_shared_memory, Function)
