@@ -43,7 +43,9 @@ The LLM app supports two operations:
 Acknowledgement:
     - We adopt the page attention mechanism proposed in vLLM: https://github.com/vllm-project/vllm
 """
-from typing import List, Optional
+# pylint: disable=useless-super-delegation
+import asyncio
+from typing import List, Optional, Iterable, Union, Dict
 import dataclasses
 from hidet.runtime.compiled_app import CompiledApp
 from hidet.ir.type import data_type
@@ -57,6 +59,183 @@ from hidet.utils.dataclass import from_dict
 from .utils import tensor_pad, tensor
 
 
+class SyncGenerationMixin:
+    """
+    An LLM Mixin for synchronous single-threaded generation.
+    """
+
+    def generate(
+        self,
+        prompts: Union[str, Iterable[str]],
+        *,
+        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None
+    ) -> Union[SequenceOutput, List[SequenceOutput]]:
+        """
+        Generate text with the LLM app synchronously.
+
+        Parameters
+        ----------
+        prompts: str or Iterable[str]
+            The prompt text(s).
+
+        sampling_params: SamplingParams, Iterable[SamplingParams], or None
+            The sampling parameters for the prompt(s). Specifying one instance of SamplingParams will apply to all
+            prompts. An iterable of SamplingParams will apply to each prompt individually. If None, the default
+            sampling parameters will be used.
+
+        Returns
+        -------
+        finished_outputs: SequenceOutput or List[SequenceOutput]
+            The output sequence(s). If a single prompt is given, a single SequenceOutput will be returned. If an
+            iterable of prompts is given, a list of SequenceOutput will be returned.
+        """
+        input_is_scalar = isinstance(prompts, str)
+        prompts = [prompts] if isinstance(prompts, str) else prompts
+
+        if sampling_params is None:
+            greedy_sampling = SamplingParams(temperature=0.0)
+            sampling_params = [greedy_sampling for _ in prompts]
+        elif isinstance(sampling_params, SamplingParams):
+            sampling_params = [sampling_params for _ in prompts]
+        else:
+            sampling_params = list(sampling_params)
+
+        # Number of prompts and sampling parameters should match. If they don't, that means the user specified
+        # a sequence of too many / too few sampling parameters.
+        if len(prompts) != len(sampling_params):
+            raise ValueError(
+                "Mismatch: received {} prompt(s) and {} sampling parameters. The number of prompts and "
+                "sampling parameters should match.".format(len(prompts), len(sampling_params))
+            )
+
+        # Keep stepping until all sequences provided as input are finished.
+        counter = 0
+        for prompt, params in zip(prompts, sampling_params):
+            self._add_sequence(sequence_id=counter, prompt=prompt, sampling_params=params)
+            counter += 1
+        finished_outputs = {}
+        while len(finished_outputs) < len(prompts):
+            for output in self._step():
+                if output.is_finished():
+                    finished_outputs[output.sequence_id] = output
+
+        # Returned value preserves the input "shape"
+        if input_is_scalar:
+            return next(iter(finished_outputs.values()))
+        else:
+            return [finished_outputs[i] for i in range(len(prompts))]
+
+
+class SequenceOutputStream:
+    """
+    An asynchronously iterable stream of sequence outputs, corresponding to the successive outputs of a single input
+    sequence passed through the LLM app.
+
+    Parameters
+    ----------
+    sequence_id: int
+        The ID of the sequence associated with this stream.
+    """
+
+    def __init__(self, sequence_id: int):
+        self.sequence_id = sequence_id
+        self._queue = asyncio.Queue()
+
+    def put(self, item: SequenceOutput):
+        """
+        Used by the producer to push an item into the queue.
+        """
+        self._queue.put_nowait(item)
+
+    def finish(self):
+        self._queue.put_nowait(None)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        """
+        Used by the consumer, yields to the event loop while waiting for the next item
+        """
+        output = await self._queue.get()
+        if output is None:
+            raise StopAsyncIteration
+        return output
+
+
+class AsyncGenerationMixin:
+    """
+    An LLM mixin for asynchronous single-threaded generation.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._dispatch_loop_task: Optional[asyncio.Task] = None
+        self._has_pending_streams: Optional[asyncio.Event] = None
+        self._pending_streams: Dict[int, SequenceOutputStream] = {}
+        self._counter = 0
+
+    def __del__(self):
+        if self._dispatch_loop_task:
+            self._dispatch_loop_task.cancel()
+
+    def _init_loop_task(self):
+        if self._dispatch_loop_task is None:
+            self._has_pending_streams = asyncio.Event()
+            self._dispatch_loop_task = asyncio.create_task(self._dispatch_loop())
+
+    async def _dispatch_loop(self):
+        while True:
+            if not self._has_pending_streams.is_set():
+                await self._has_pending_streams.wait()
+
+            for output in self._step():
+                sequence_id = output.sequence_id
+                stream = self._pending_streams[sequence_id]
+                stream.put(output)
+                if output.is_finished():
+                    stream.finish()
+                    del self._pending_streams[sequence_id]
+
+            if len(self._pending_streams) == 0:
+                self._has_pending_streams.clear()
+
+            # Yield control to the event loop
+            await asyncio.sleep(0)
+
+    def async_generate(self, prompt: str, *, sampling_params: Optional[SamplingParams] = None) -> SequenceOutputStream:
+        """
+        Generate text with the LLM app asynchronously.
+
+        Parameters
+        ----------
+        prompt: str
+            The prompt text.
+
+        sampling_params: SamplingParams or None
+            The sampling parameters for the prompt. If None, the default sampling parameters will be used.
+
+        Returns
+        -------
+        stream: SequenceOutputStream (i.e., AsyncIterator[SequenceOutput])
+            The stream to get the output sequence.
+        """
+        self._init_loop_task()
+
+        if sampling_params is None:
+            sampling_params = SamplingParams(temperature=0.0)
+
+        sequence_id = self._counter
+        self._counter += 1
+
+        self._add_sequence(sequence_id=sequence_id, prompt=prompt, sampling_params=sampling_params)
+        stream = SequenceOutputStream(sequence_id)
+        self._pending_streams[sequence_id] = stream
+        self._has_pending_streams.set()
+
+        return stream
+
+
 @dataclasses.dataclass
 class Attributes:
     cache_dtype: str
@@ -64,10 +243,10 @@ class Attributes:
     num_heads: int
     head_size: int
     block_size: int
-    tokenizer: str  # currently, we use the tokenizer from huggingface
+    tokenizer: str
 
 
-class LLM:
+class LLM(SyncGenerationMixin, AsyncGenerationMixin):
     def __init__(self, compiled_app: CompiledApp, memory_capacity: Optional[int] = None):
         super().__init__()
         self.compiled_app: CompiledApp = compiled_app
@@ -190,7 +369,7 @@ class LLM:
 
         return sequence_outputs
 
-    def add_sequence(self, sequence_id: int, prompt: str, sampling_params: SamplingParams):
+    def _add_sequence(self, sequence_id: int, prompt: str, sampling_params: SamplingParams):
         seq = Sequence(sequence_id, prompt, sampling_params)
 
         # tokenize the prompt
@@ -198,7 +377,7 @@ class LLM:
 
         self.scheduler.add_sequence(seq)
 
-    def step(self) -> List[SequenceOutput]:
+    def _step(self) -> List[SequenceOutput]:
         # schedule for the next step, got the sequences to run
         sequences: List[Sequence] = self.scheduler.schedule()
 
@@ -219,3 +398,14 @@ class LLM:
         sequence_outputs: List[SequenceOutput] = self._post_process(sampler_outputs)
 
         return sequence_outputs
+
+    def generate(
+        self,
+        prompts: Union[str, Iterable[str]],
+        *,
+        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None
+    ) -> Union[SequenceOutput, List[SequenceOutput]]:
+        return super().generate(prompts, sampling_params=sampling_params)
+
+    def async_generate(self, prompt: str, *, sampling_params: Optional[SamplingParams] = None) -> SequenceOutputStream:
+        return super().async_generate(prompt, sampling_params=sampling_params)

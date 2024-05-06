@@ -518,6 +518,51 @@ def assert_close(actual, expected, rtol=1e-5, atol=1e-5):
     numpy.testing.assert_allclose(actual, expected, rtol, atol)
 
 
+def inspect_live_hidet_objects() -> str:
+    """
+    Inspect the live hidet objects and return a report in human-readable text.
+    """
+    import gc
+    from hidet import FlowGraph, Tensor, Operator
+    from hidet.runtime import CompiledApp, CompiledGraph, CompiledTask, CompiledModule, CompiledFunction
+    from hidet.ir import IRModule, Function, Stmt, Expr
+
+    classes = [
+        FlowGraph,
+        Tensor,
+        Operator,
+        CompiledApp,
+        CompiledGraph,
+        CompiledTask,
+        CompiledModule,
+        CompiledFunction,
+        IRModule,
+        Function,
+        Stmt,
+        Expr,
+    ]
+
+    headers = ['Class', 'Live Instances']
+    lines = []
+    objects = gc.get_objects()
+    lines: List[List[str]]
+    for cls in classes:
+        class_name = cls.__name__
+        num_instances = sum(1 for obj in objects if isinstance(obj, cls))
+        lines.append([class_name, num_instances])
+    report = tabulate(lines, headers=headers, tablefmt='simple', stralign='right', numalign='left')
+    return report
+
+
+def release_unused_resources():
+    """
+    Release the resources with circular references but not used anymore (i.e., unreachable).
+    """
+    import gc
+
+    gc.collect()
+
+
 if __name__ == '__main__':
     # color_table()
     print(color_text('sample', idx=1))
