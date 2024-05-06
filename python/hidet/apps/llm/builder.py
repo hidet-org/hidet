@@ -12,6 +12,7 @@ from hidet.apps.llm.modeling import registry, PretrainedModelForCausalLM
 from hidet.apps.llm.nn.attention import PagedAttnState
 from hidet.runtime.compiled_app import create_compiled_app
 from hidet.runtime.compiled_graph import CompiledGraph
+from hidet.utils.py import release_unused_resources
 
 
 def _load_pretrained_config(model: str, revision: Optional[str]) -> PretrainedConfig:
@@ -79,8 +80,6 @@ def _build_prefill_graph(
 
     # # optimize the flow graph
     # graph: FlowGraph = hidet.graph.optimize(graph)
-    with open('./prefill_graph.json', 'w') as f:
-        hidet.utils.netron.dump(graph, f)
 
     # build the flow graph into a CompiledGraph
     compiled_graph = graph.build(space=kernel_search_space)
@@ -220,7 +219,7 @@ def create_llm(
     )
 
     print('finish building graphs')
-    return LLM(
+    llm = LLM(
         compiled_app=create_compiled_app(
             graphs={'prefill': prefill_graph, 'decode': decode_graph},
             modules={},
@@ -237,6 +236,8 @@ def create_llm(
         ),
         memory_capacity=default_memory_capacity,
     )
+    release_unused_resources()
+    return llm
 
 
 def save_llm(app: LLM, path: str):

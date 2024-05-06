@@ -1,8 +1,9 @@
 from typing import List, Tuple, Dict, Optional, Union
 from collections import defaultdict
 import hidet.option
+from hidet.ir.expr import Expr
 from hidet.graph.tensor import Tensor
-from hidet.graph.operator import Operator
+from hidet.graph.operator import Operator, SymbolVar
 from hidet.graph.flow_graph import FlowGraph
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 
@@ -141,6 +142,54 @@ def graph_analyze_share_map(graph: FlowGraph) -> Dict[int, int]:
     return share_map
 
 
+def _get_tensor_sig(printer, size_var_equivalence, x: Tensor) -> Doc:
+    shape_items = []
+    for i in range(len(x.shape)):
+        if x.trace is None:
+            shape_items.append(printer(x.shape[i]))
+        else:
+            op: Operator
+            op, idx = x.trace
+            task_out_dim = op.task.outputs[idx].shape[i]
+            if isinstance(task_out_dim, SymbolVar) and task_out_dim in size_var_equivalence:
+                shape_items.append(printer(size_var_equivalence[task_out_dim]))
+            else:
+                shape_items.append(printer(x.shape[i]))
+
+    return Text(x.dtype.name) + '[' + doc_join(shape_items, ', ') + '][' + Text(x.device.kind) + ']'
+
+
+def _get_attr_repr(printer, value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
+    if isinstance(value, (float, int, bool)):
+        return Text(str(value))
+    elif isinstance(value, str):
+        return Text('"{}"'.format(value))
+    elif isinstance(value, list):
+        return '[' + doc_join([_get_attr_repr(printer, v) for v in value], ', ') + ']'
+    elif isinstance(value, tuple):
+        return '(' + doc_join([_get_attr_repr(printer, v) for v in value], ', ') + ')'
+    elif isinstance(value, FlowGraph):
+        return Text('FlowGraph({})'.format(', '.join(u.name for u in value.nodes)))
+    elif isinstance(value, Expr):
+        return printer(value)
+    else:
+        return Text(str(value))
+
+
+def _get_comment(p, size_var_equivalence, op: Operator) -> Doc:
+    items = []
+    for out, task_output in zip(op.outputs, op.task.outputs):
+        for dim, task_dim in zip(out.shape, task_output.shape):
+            if isinstance(dim, SymbolVar) and task_dim not in size_var_equivalence:
+                items.append('{}={}'.format(p(dim), p(task_dim)))
+    if op.share_map:
+        items.append('share_map={}'.format(op.share_map))
+    if len(items) > 0:
+        return Text('# ') + doc_join(items, ', ')
+    else:
+        return Doc()
+
+
 def graph_as_text(graph: FlowGraph) -> str:
     """
     Get a human-readable text representation of the flow graph.
@@ -156,61 +205,14 @@ def graph_as_text(graph: FlowGraph) -> str:
         The human-readable text representation of the flow graph.
     """
     from hidet.ir.tools.printer import IRPrinter
-    from hidet.ir.expr import Expr
-    from hidet.graph.operator import SymbolVar
 
     printer = IRPrinter()
     size_var_equivalence: Dict[SymbolVar, SymbolVar] = {}
 
-    def get_tensor_sig(x: Tensor) -> Doc:
-        shape_items = []
-        for i in range(len(x.shape)):
-            if x.trace is None:
-                shape_items.append(printer(x.shape[i]))
-            else:
-                op: Operator
-                op, idx = x.trace
-                task_out_dim = op.task.outputs[idx].shape[i]
-                if isinstance(task_out_dim, SymbolVar) and task_out_dim in size_var_equivalence:
-                    shape_items.append(printer(size_var_equivalence[task_out_dim]))
-                else:
-                    shape_items.append(printer(x.shape[i]))
-
-        return Text(x.dtype.name) + '[' + doc_join(shape_items, ', ') + '][' + Text(x.device.kind) + ']'
-
-    def get_attr_repr(value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
-        if isinstance(value, (float, int, bool)):
-            return Text(str(value))
-        elif isinstance(value, str):
-            return Text('"{}"'.format(value))
-        elif isinstance(value, list):
-            return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
-        elif isinstance(value, tuple):
-            return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
-        elif isinstance(value, FlowGraph):
-            return Text('FlowGraph({})'.format(', '.join(u.name for u in value.nodes)))
-        elif isinstance(value, Expr):
-            return printer(value)
-        else:
-            return Text(str(value))
-
-    def get_comment(op: Operator) -> Doc:
-        items = []
-        for out, task_output in zip(op.outputs, op.task.outputs):
-            for dim, task_dim in zip(out.shape, task_output.shape):
-                if isinstance(dim, SymbolVar) and task_dim not in size_var_equivalence:
-                    items.append('{}={}'.format(printer(dim), printer(task_dim)))
-        if op.share_map:
-            items.append('share_map={}'.format(op.share_map))
-        if len(items) > 0:
-            return Text('# ') + doc_join(items, ', ')
-        else:
-            return Doc()
-
     param_docs = []
     for x in graph.inputs:
         name = printer.namer(x)
-        param_docs.append(Text(name) + ': ' + get_tensor_sig(x))
+        param_docs.append(Text(name) + ': ' + _get_tensor_sig(printer, size_var_equivalence, x))
 
     # head
     head_doc = 'Graph(' + doc_join(param_docs, ', ') + ')'
@@ -228,11 +230,17 @@ def graph_as_text(graph: FlowGraph) -> str:
         for x in op.inputs:
             if x not in printer.namer.obj_name:
                 assert x.storage is not None
-                const_doc += NewLine() + printer.namer.get_name(x, hint='c') + ' = Constant(' + get_tensor_sig(x) + ')'
+                const_doc += (
+                    NewLine()
+                    + printer.namer.get_name(x, hint='c')
+                    + ' = Constant('
+                    + _get_tensor_sig(printer, size_var_equivalence, x)
+                    + ')'
+                )
         outputs = op.outputs
         line_doc = Doc()
         for idx, output in enumerate(outputs):
-            line_doc += printer.namer(output) + ': ' + get_tensor_sig(output)
+            line_doc += printer.namer(output) + ': ' + _get_tensor_sig(printer, size_var_equivalence, output)
             if idx < len(outputs) - 1:
                 line_doc += ', '
         line_doc += ' = '
@@ -240,12 +248,12 @@ def graph_as_text(graph: FlowGraph) -> str:
         for x in op.inputs:
             items.append(printer.namer(x))
         for name, value in op.attrs.items():
-            items.append(name + '=' + get_attr_repr(value))
+            items.append(name + '=' + _get_attr_repr(printer, value))
         for op_out, task_out in zip(op.outputs, op.task.outputs):
             for a, b in zip(op_out.shape, task_out.shape):
                 if isinstance(b, SymbolVar):
                     size_var_equivalence[a] = size_var_equivalence[b] if b in size_var_equivalence else b
-        line_doc += op.name + '(' + doc_join(items, ', ') + ')  ' + get_comment(op)
+        line_doc += op.name + '(' + doc_join(items, ', ') + ')  ' + _get_comment(printer, size_var_equivalence, op)
         body_doc += NewLine() + line_doc
         if hidet.option.get_option('debug_show_verbose_flow_graph'):
             body_doc += (NewLine() + printer(op.task)).indent()
