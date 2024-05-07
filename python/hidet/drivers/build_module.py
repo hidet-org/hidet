@@ -13,6 +13,7 @@ from typing import Sequence, Dict, Union
 import logging
 import os
 import pickle
+import random
 from tqdm import tqdm
 
 import hidet.cuda
@@ -199,9 +200,16 @@ def build_ir_module_batch(
         ir_module, output_dir = args
         build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
 
-    def regroup_modules(modules, size):
-        if size > 1:
-            return [modules[i : i + size] for i in range(0, len(modules), size)]
+    def regroup_modules(modules, per_worker_jobs, num_workers):
+        if per_worker_jobs > 1:
+            initial_list_len = per_worker_jobs * num_workers
+            # first assign equal amount of the jobs to every worker
+            initial_list = [modules[i : i + per_worker_jobs] for i in range(0, initial_list_len, per_worker_jobs)]
+            # take the remaining jobs and assign them each to a worker, adding at most one job to each worker
+            reminder_len = len(modules) - initial_list_len
+            for i, j in zip(range(initial_list_len, len(modules)), range(reminder_len)):
+                initial_list[j].append(modules[i])
+            return initial_list
         else:
             return modules
 
@@ -228,11 +236,12 @@ def build_ir_module_batch(
         num_workers = min(len(ir_modules), 128)
     else:
         num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
-
+    # shuffle the candidates to avoid grouping long-compilation time candidates together
+    random.shuffle(ir_modules)
     if num_workers > 1 and len(ir_modules) > 1:
         lazy_initialize_cuda()
         per_worker_jobs = 1 if len(ir_modules) < num_workers else len(ir_modules) // num_workers
-        ir_modules_list = regroup_modules(ir_modules, per_worker_jobs)
+        ir_modules_list = regroup_modules(ir_modules, per_worker_jobs, num_workers)
         assert check_function_singular(
             ir_modules_list
         ), 'duplicate function names detected after regrouping candidates for batch compilation'
