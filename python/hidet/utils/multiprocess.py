@@ -62,6 +62,7 @@ def parallel_imap(
     _job_queue = JobQueue(func, jobs)
 
     num_workers = get_parallel_num_workers(max_num_workers, mem_for_worker)
+    num_workers = min(num_workers, len(jobs))
 
     ctx = multiprocessing.get_context('fork')
     # Chunksize is taken from cpython/Lib/multiprocessing/pool.py::_map_async
