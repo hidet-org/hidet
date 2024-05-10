@@ -201,7 +201,7 @@ def build_ir_module_batch(
         build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
 
     def regroup_modules(modules, per_worker_jobs, num_workers):
-        if per_worker_jobs > 1:
+        if len(modules) >= num_workers:
             initial_list_len = per_worker_jobs * num_workers
             # first assign equal amount of the jobs to every worker
             initial_list = [modules[i : i + per_worker_jobs] for i in range(0, initial_list_len, per_worker_jobs)]
