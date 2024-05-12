@@ -1334,3 +1334,8 @@ def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.tril(..., out=...)")
     return ops.tril(x, diagonal)
+
+
+@register_function(torch.meshgrid)
+def torch_meshgrid(*tensors, indexing=None):
+    return ops.meshgrid(tensors, indexing)
