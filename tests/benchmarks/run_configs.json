@@ -188,15 +188,5 @@
         "param_name": "1x224x224x3,axis=[1,2]",
         "dtype_id": 1,
         "dtype_name": "float16"
-    },
-    {
-        "type": "model",
-        "id": 15,
-        "name": "yolov7",
-        "runfile": "bench_vision.py",
-        "param_id": 13,
-        "param_name": "128x3x224x224",
-        "dtype_id": 1,
-        "dtype_name": "float16"
-    },
+    }
 ]
