@@ -740,3 +740,39 @@ def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
     new_shape = list(x.shape)
     new_shape.insert(axis, 1)
     return reshape(x, new_shape)
+
+
+def meshgrid(*tensors: Tensor, indexing: str = "ij") -> List[Tensor]:
+    if indexing not in ("xy", "ij"):
+        raise ValueError(f"meshgrid: indexing must be 'xy' or 'ij', but got {indexing}")
+    tensors = list(tensors)
+    output_rank = len(tensors)
+    if output_rank < 2:
+        raise ValueError(f"meshgrid requires at least two tensors, but {output_rank} given.")
+
+    if any(tensors[0].dtype != t.dtype for t in tensors):
+        raise ValueError("meshgrid requires all inputs to be of the same type.")
+    if any(not isinstance(t, Tensor) for t in tensors):
+        raise ValueError("meshgrid: expect a sequence of tensors")
+
+    # In torch.meshgrid, only 0D and 1D tensors are allowed.
+    illegal_shapes = [t.shape for t in tensors if len(t.shape) > 1]
+    if len(illegal_shapes) > 1:
+        raise ValueError(
+            f"meshgrid: only 0D and 1D tensors are allowed, but got a tensor with shape {illegal_shapes[0]}"
+        )
+
+    tensors_size = [t.size for t in tensors]
+
+    outputs = []
+    for dim in range(output_rank):
+        target_shape = [1] * output_rank
+        target_shape[dim] = -1
+        grid = reshape(tensors[dim], target_shape)
+        tile_shape = tensors_size[:]
+        tile_shape[dim] = 1
+        grid = tile(grid, tile_shape)
+        if indexing == 'xy':
+            grid = transpose(grid, (1, 0))
+        outputs.append(grid)
+    return outputs

@@ -42,7 +42,7 @@ from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, an
 from .cumulative import cumsum
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
 from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather, index_select, triu, tril
-from .transform import permute_dims
+from .transform import permute_dims, meshgrid
 from .fusion import fused_operator
 from .transfer import transfer
 from .special import barrier

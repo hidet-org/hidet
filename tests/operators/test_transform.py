@@ -195,5 +195,37 @@ def test_symbolic_broadcast():
             broadcast_shape([n], [m])
 
 
+@pytest.mark.parametrize(
+    "shapes, indexing",
+    [
+        [[2, 3], "ij"],
+        [[2, 3], "xy"],
+        [[2, 3, 4], "ij"],
+        [[2, 3, 4], "xy"],
+        [[2, 3, 4, 6], "ij"],
+        [[2, 3, 4, 6], "xy"],
+        [[0, 2], "ij"],
+        [[4, 0], "xy"],
+        [[6, 0, 2], "ij"],
+        [[2, 0, 3, 0], ""],
+        [[2, 1], ""],
+    ],
+)
+def test_meshgrid(shapes, indexing):
+    dtype = torch.float32
+    atol = 0
+    rtol = 0
+    tensors = []
+    for shape in shapes:
+        tensors.append(torch.rand([] if shape == 0 else shape, dtype=dtype))
+    tensors_hi = [hi.asarray(t).cuda() for t in tensors]
+    grid_torch = torch.meshgrid(*tensors, indexing=indexing) if indexing else torch.meshgrid(*tensors)
+    grid_hi = ops.meshgrid(*tensors_hi, indexing=indexing) if indexing else ops.meshgrid(*tensors_hi)
+    for i in range(len(grid_torch)):
+        np.testing.assert_allclose(
+            actual=grid_hi[i].cpu().numpy(), desired=grid_torch[i].cpu().numpy(), atol=atol, rtol=rtol
+        )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
