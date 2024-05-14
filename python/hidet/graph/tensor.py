@@ -346,15 +346,18 @@ class Tensor:
 
     def __getitem__(self, item):
         from hidet.graph.ops import strided_slice
+        from .ops import take, reshape, flatten
 
         if isinstance(item, Tensor):
-            if len(item.shape) > 1:
-                raise NotImplementedError("Tensor indexing via Tensor currently only supports 1D index tensor")
             if not item.dtype.is_integer():
                 raise TypeError("Tensor indexing via Tensor requires integer index tensor")
-            from .ops import take
 
-            return take(self, item, axis=0)
+            if len(item.shape) == 1:
+                return take(self, item, axis=0)
+
+            if len(item.shape) >= 2:
+                item_1d = reshape(item, flatten(item).shape)
+                return take(self, item_1d, axis=0).reshape(tuple(item.shape) + tuple(self.shape[1:]))
 
         if isinstance(item, list):
             item = tuple(item)

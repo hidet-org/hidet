@@ -19,6 +19,7 @@ import hidet as hi
 from hidet import ops
 from hidet.ir.utils import broadcast_shape
 from hidet.utils import prod
+from hidet.graph.tensor import asarray
 
 
 def check_transform(shape, numpy_op, hidet_op, dtype=np.float32, atol=0, rtol=0):
@@ -193,6 +194,38 @@ def test_symbolic_broadcast():
         # This should never work without further conditions on n and m
         with pytest.raises(ValueError):
             broadcast_shape([n], [m])
+
+
+def numpy_getitem(data, item):
+    return data[item]
+
+
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 1000], [2, 3]],
+        [[16, 1000], [1, 2]],
+        [[1, 1000, 1, 1], [10, 2, 3]],
+        [[16, 1000, 1, 1], [3, 2, 4, 2]],
+        [[1, 128, 128, 128], [2, 2]],
+        [[1, 128, 128, 128], [2]],
+        [[129], [2]],
+        [[129], [2, 3]],
+    ],
+)
+def test_getitem(a_shape, b_shape):
+    for device in ['cuda', 'cpu']:
+        a = np.array(np.random.randn(*a_shape)).astype('float32')
+        b = np.array(np.random.randint(low=0, high=a_shape[0], size=b_shape)).astype('int32')
+        atol = 0
+        rtol = 0
+
+        numpy_result = numpy_getitem(a, b)
+        a = asarray(a).to(device=device)
+        b = asarray(b).to(device=device)
+
+        hidet_result = a[b].cpu().numpy()
+        np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
 @pytest.mark.parametrize(
