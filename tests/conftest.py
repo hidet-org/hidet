@@ -67,13 +67,16 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(autouse=True)
-def clear_memory_cache():
+def clear_before_test():
     """
     Clear the memory cache before each test.
     """
     # run before each test
     import gc
     import torch
+
+    # If previous test failed job queue for `paralles_imap` might be not free
+    hidet.utils.multiprocess._job_queue = None
 
     torch.cuda.empty_cache()
     hidet.runtime.storage.current_memory_pool('cuda').clear()
