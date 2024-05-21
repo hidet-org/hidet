@@ -307,9 +307,8 @@ def register_hidet_options():
     if not os.path.exists(config_file_path):
         os.makedirs(config_file_path)
     config_file_path = os.path.join(config_file_path, 'hidet.toml')
-    if not os.path.exists(config_file_path):
-        _write_default_config(config_file_path, create_toml_doc())
-    else:
+    # Load hidet config
+    if os.path.exists(config_file_path):
         _load_config(config_file_path)
 
 
