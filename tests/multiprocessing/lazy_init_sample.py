@@ -11,7 +11,12 @@
 # limitations under the License.
 import os
 
-
+# CUDA API prohibits the following sequence:
+# - call CUDA API func
+# - linux fork
+# - call CUDA API func from forked process
+# By such reason we shouldn't call any CUDA API during hidet iniitialisation (`import hidet`).
+# This test check it.
 def main():
     import hidet
 
