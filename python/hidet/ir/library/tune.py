@@ -19,6 +19,7 @@ from hidet.ir.module import IRModule
 from hidet.utils import prod
 from hidet.utils.multiprocess import parallel_imap
 
+
 Choice = TypeVar('Choice')
 
 
@@ -138,6 +139,9 @@ def extract_ir_modules(template_func) -> List[IRModule]:
         )
 
     # Generate IR for all set of params
+    from hidet.drivers.utils import lazy_initialize_cuda
+
+    lazy_initialize_cuda()
     if len(kwargs_list) == 1:
         ir_modules = [_extract_ir_modules(kwargs_list[0])]
     else:
