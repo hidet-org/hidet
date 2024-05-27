@@ -122,3 +122,44 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
 
     latency = start.elapsed_time(end) / bench_iters
     return latency
+
+
+def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
+    END_OF_SENTENCE_ID = tokenizer.eos_token_id
+
+    def one_iter(inputs):
+        # text_output = ''
+        for i in range(genlen):
+            outputs = model(inputs)
+            logits = outputs.logits
+            last_token_logits = logits[:, -1, :]
+            probs = torch.softmax(last_token_logits, dim=-1)
+            predicted_token_ids = torch.argmax(probs, dim=-1)
+            if any(id == END_OF_SENTENCE_ID for id in predicted_token_ids):
+                break
+            # predicted_text = tokenizer.decode(predicted_token_ids[0])
+            # text_output += predicted_text + ' '
+
+            predicted_token_ids = torch.reshape(predicted_token_ids, (bs, 1))
+            inputs = torch.cat([inputs, predicted_token_ids], dim=1)
+        # print(text_output)
+        return (i + 1) * bs
+
+    torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
+    for _ in range(warmup_iters):
+        num_tokens = one_iter(inputs)
+    torch.cuda.empty_cache()
+
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    torch.cuda.synchronize()
+    start.record()
+    for _ in range(bench_iters):
+        num_tokens = one_iter(inputs)
+    end.record()
+    end.synchronize()
+    torch.cuda.empty_cache()
+
+    latency = start.elapsed_time(end) / bench_iters
+    token_per_second = num_tokens / latency * 1000.0
+    return token_per_second
