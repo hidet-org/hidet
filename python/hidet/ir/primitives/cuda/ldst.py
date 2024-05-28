@@ -20,6 +20,8 @@ from hidet.ir.primitives.func import register_primitive_function, call_primitive
 from hidet.ir.type import DataType
 from hidet.utils import initialize
 
+INDENT = "  "
+
 
 def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
     dtype = data_type(dtype)
@@ -53,6 +55,10 @@ def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: 
         else:
             inst_name = f'st.{space}.b{nbits}'
     return inst_name
+
+
+def indent(inst: str) -> str:
+    return INDENT + inst
 
 
 @initialize()
@@ -103,65 +109,16 @@ def register_functions():
                     register_primitive_function(name=cuda_store.name, func_or_type=cuda_store)
 
 
-@initialize()
-def register_primitive_functions_with_body():
-    # pylint: disable=import-outside-toplevel
-    from hidet.ir.type import ReferenceType
-    from hidet.ir.expr import Var
-    from hidet.ir.stmt import AsmStmt
-    from hidet.ir.builders import FunctionBuilder
-
-    # lds128
-    with FunctionBuilder('cuda_lds128', kind='cuda_internal') as fb:
-        # params
-        regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
-        smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))
-        fb.extend_params(regs_vars + [smem_addr_var])
-        # body
-        body = AsmStmt(
-            r"{"
-            r"  .reg.u64 u64addr;"
-            r"  cvta.to.shared.u64 u64addr, %4;"
-            r"  ld.shared.v4.f32 {%0, %1, %2, %3}, [u64addr];"
-            r"}",
-            outputs=[('=f', reg) for reg in regs_vars],
-            inputs=[('l', smem_addr_var)],
-            is_volatile=True,
-        )
-        fb.set_body(body)
-    register_primitive_function(name='cuda_lds128', func_or_type=fb.get())
-
-    # sts128
-    with FunctionBuilder('cuda_sts128', kind='cuda_internal') as fb:
-        # params
-        regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
-        smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))
-        fb.extend_params(regs_vars + [smem_addr_var])
-        # body
-        body = AsmStmt(
-            r"{"
-            r"  .reg.u64 u64addr;"
-            r"  cvta.to.shared.u64 u64addr, %0;"
-            r"  st.shared.v4.f32 [u64addr], {%1, %2, %3, %4};"
-            r"}",
-            outputs=[],
-            inputs=[('l', smem_addr_var)] + [('f', reg) for reg in regs_vars],
-            is_volatile=True,
-        )
-        fb.set_body(body)
-    register_primitive_function(name='cuda_sts128', func_or_type=fb.get())
-
-
 def resolve_pointed_dtype(addr: Expr) -> str:
     ptr_type = infer_type(addr)
     if not isinstance(ptr_type, (PointerType, TensorPointerType)):
-        raise ValueError('Expect a pointer type, got {}'.format(ptr_type))
+        raise ValueError("Expect a pointer type, got {}".format(ptr_type))
     if isinstance(ptr_type, PointerType):
         dtype = ptr_type.base_type
     else:
         dtype = ptr_type.tensor_type.dtype
     if not isinstance(dtype, DataType):
-        raise ValueError('Expect a pointer to a scalar type, got {}'.format(ptr_type))
+        raise ValueError("Expect a pointer to a scalar type, got {}".format(ptr_type))
     return dtype.name
 
 
@@ -219,9 +176,274 @@ def store(addr: Expr, value: Expr, space: str = 'generic', sync: Optional[str] =
     return call_primitive_func(func_name, [addr, value])
 
 
+@initialize()
+def register_ldg():
+    from hidet.ir.dtypes import u32, i32, boolean
+    from hidet.ir.expr import Var, cast, deref
+    from hidet.ir.stmt import AsmStmt
+    from hidet.ir.builders import FunctionBuilder
+    from hidet.ir.type import void_p
+
+    for load_bytes in [4, 8, 16, 32]:
+        for cache_operation in ["always", "last_use"]:
+            cache_policy = ".lu" if cache_operation == "last_use" else ""
+            func_name = f"cuda_ldg{load_bytes}{cache_policy}".replace(".", "_")
+            with FunctionBuilder(func_name, kind="cuda_internal") as fb:
+                insts = []
+                insts.append(".reg .pred p;")
+                nr_outputs = load_bytes // u32.nbytes
+                nr_outputs_per_inst = min(nr_outputs, 4)
+                nr_insts = nr_outputs // nr_outputs_per_inst
+                reg_vars = [Var(f"reg{i}", void_p) for i in range(nr_outputs)]
+                addr_var = Var("addr", void_p)
+                pred_var = Var("pred", boolean)
+                fb.extend_params(reg_vars + [addr_var, pred_var])
+                insts.append(f"setp.ne.b32 p, %{1 + nr_outputs}, 0;")
+                vector_size = f".v{nr_outputs_per_inst}" if nr_outputs_per_inst > 1 else ""
+                ld_inst = f"ld.global{vector_size}{cache_policy}.u32"
+                mov = [f"mov.b32 %{i}, %{i + nr_outputs + 2};" for i in range(nr_outputs)]
+                insts += mov
+                cur = 0
+                extra_addr_var = []
+                for i in range(nr_insts):
+                    dst = [f"%{j}" for j in range(cur, cur + nr_outputs_per_inst)]
+                    dst = "{" + ", ".join(dst) + "}"
+                    src = nr_outputs if cur == 0 else 2 * nr_outputs + 2 + i - 1
+                    insts.append(f"@p {ld_inst} {dst}, [%{src}];")
+                    cur += nr_outputs_per_inst
+                    if cur > 0:
+                        extra_addr_var.append(("l", addr_var + 4 * i))
+
+                insts = list(map(indent, insts))
+                doc = "{" + "".join(insts) + "}"
+                body = AsmStmt(
+                    doc,
+                    outputs=[("=r", deref(cast(var, PointerType(u32)))) for var in reg_vars],
+                    inputs=[("l", addr_var), ("r", cast(pred_var, i32))]
+                    + [("r", deref(cast(var, PointerType(u32)))) for var in reg_vars]
+                    + extra_addr_var,
+                    is_volatile=True,
+                )
+                fb.set_body(body)
+            register_primitive_function(name=func_name, func_or_type=fb.get())
+
+
+@initialize()
+def register_stg():
+    from hidet.ir.dtypes import u32, i32, boolean
+    from hidet.ir.expr import Var, cast, deref
+    from hidet.ir.stmt import AsmStmt
+    from hidet.ir.builders import FunctionBuilder
+    from hidet.ir.type import void_p
+
+    for store_bytes in [4, 8, 16, 32, 64]:
+        func_name = f"cuda_stg{store_bytes}"
+        with FunctionBuilder(func_name, kind="cuda_internal") as fb:
+            insts = []
+            insts.append(".reg .pred p;")
+            nr_inputs = store_bytes // u32.nbytes
+            nr_inputs_per_inst = min(nr_inputs, 4)
+            nr_insts = nr_inputs // nr_inputs_per_inst
+            reg_vars = [Var(f"reg{i}", void_p) for i in range(nr_inputs)]
+            addr_var = Var("addr", void_p)
+            pred_var = Var("pred", boolean)
+            fb.extend_params(reg_vars + [addr_var, pred_var])
+            insts.append("setp.ne.b32 p, %1, 0;")
+            vector_size = f".v{nr_inputs_per_inst}" if nr_inputs_per_inst > 1 else ""
+            st_inst = f"st.global{vector_size}.u32"
+            cur = 2
+            extra_addr_var = []
+            for i in range(nr_insts):
+                src = [f"%{j}" for j in range(cur, cur + nr_inputs_per_inst)]
+                src = "{" + ", ".join(src) + "}"
+                dst = 0 if i == 0 else nr_inputs + 2 + i - 1
+                insts.append(f"@p {st_inst} [%{dst}], {src};")
+                cur += nr_inputs_per_inst
+                if i > 0:
+                    extra_addr_var.append(("l", addr_var + 4 * i))
+
+            insts = list(map(indent, insts))
+            doc = "{" + "".join(insts) + "}"
+            body = AsmStmt(
+                doc,
+                outputs=[],
+                inputs=[("l", addr_var), ("r", cast(pred_var, i32))]
+                + [("r", deref(cast(var, PointerType(u32)))) for var in reg_vars]
+                + extra_addr_var,
+                is_volatile=True,
+            )
+            fb.set_body(body)
+        register_primitive_function(name=func_name, func_or_type=fb.get())
+
+
+def ldg256(reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg32", [reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard])
+
+
+def ldg128(reg0, reg1, reg2, reg3, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg16", [reg0, reg1, reg2, reg3, gmem_addr, pred_guard])
+
+
+def ldg64(reg0, reg1, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg8", [reg0, reg1, gmem_addr, pred_guard])
+
+
+def ldg32(reg0, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg4", [reg0, gmem_addr, pred_guard])
+
+
+def ldg256_lu(reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg32_lu", [reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard])
+
+
+def ldg128_lu(reg0, reg1, reg2, reg3, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg16_lu", [reg0, reg1, reg2, reg3, gmem_addr, pred_guard])
+
+
+def ldg64_lu(reg0, reg1, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg8_lu", [reg0, reg1, gmem_addr, pred_guard])
+
+
+def ldg32_lu(reg0, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_ldg4_lu", [reg0, gmem_addr, pred_guard])
+
+
+def stg512(
+    reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, reg8, reg9, reg10, reg11, reg12, reg13, reg15, gmem_addr, pred_guard
+):
+    return call_primitive_func(
+        "cuda_stg64",
+        [
+            reg0,
+            reg1,
+            reg2,
+            reg3,
+            reg4,
+            reg5,
+            reg6,
+            reg7,
+            reg8,
+            reg9,
+            reg10,
+            reg11,
+            reg12,
+            reg13,
+            reg15,
+            gmem_addr,
+            pred_guard,
+        ],
+    )
+
+
+def stg256(reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_stg32", [reg0, reg1, reg2, reg3, reg4, reg5, reg6, reg7, gmem_addr, pred_guard])
+
+
+def stg128(reg0, reg1, reg2, reg3, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_stg16", [reg0, reg1, reg2, reg3, gmem_addr, pred_guard])
+
+
+def stg64(reg0, reg1, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_stg8", [reg0, reg1, gmem_addr, pred_guard])
+
+
+def stg32(reg0, gmem_addr, pred_guard):
+    return call_primitive_func("cuda_stg4", [reg0, gmem_addr, pred_guard])
+
+
+@initialize()
+def register_lds():
+    from hidet.ir.dtypes import u32
+    from hidet.ir.expr import Var, cast, deref
+    from hidet.ir.stmt import AsmStmt
+    from hidet.ir.builders import FunctionBuilder
+    from hidet.ir.type import void_p
+
+    for load_bytes in [4, 8, 16]:
+        func_name = f"cuda_lds{load_bytes*8}"
+        with FunctionBuilder(func_name, kind="cuda_internal") as fb:
+            insts = []
+            insts.append(".reg.u64 u64addr;")
+            nr_outputs = load_bytes // u32.nbytes
+            assert nr_outputs <= 4, "Exceeds maximum outputs"
+            reg_vars = [Var(f"reg{i}", void_p) for i in range(nr_outputs)]
+            addr_var = Var("addr", void_p)
+            fb.extend_params(reg_vars + [addr_var])
+            insts.append(f"cvta.to.shared.u64 u64addr, %{nr_outputs};")
+            vector_size = f".v{nr_outputs}" if nr_outputs > 1 else ""
+            ld_inst = f"ld.shared{vector_size}.u32"
+            dst = [f"%{j}" for j in range(nr_outputs)]
+            dst = "{" + ", ".join(dst) + "}"
+            insts.append(f"{ld_inst} {dst}, [u64addr];")
+
+            insts = list(map(indent, insts))
+            doc = "{" + "".join(insts) + "}"
+            body = AsmStmt(
+                doc,
+                outputs=[("=r", deref(cast(var, PointerType(u32)))) for var in reg_vars],
+                inputs=[("l", addr_var)],
+                is_volatile=True,
+            )
+            fb.set_body(body)
+        register_primitive_function(name=func_name, func_or_type=fb.get())
+
+
+@initialize()
+def register_sts():
+    from hidet.ir.dtypes import u32
+    from hidet.ir.expr import Var, cast, deref
+    from hidet.ir.stmt import AsmStmt
+    from hidet.ir.builders import FunctionBuilder
+    from hidet.ir.type import void_p
+
+    for store_bytes in [4, 8, 16]:
+        func_name = f"cuda_sts{store_bytes*8}"
+        with FunctionBuilder(func_name, kind="cuda_internal") as fb:
+            insts = []
+            insts.append(".reg.u64 u64addr;")
+            nr_inputs = store_bytes // u32.nbytes
+            assert nr_inputs <= 4, "Exceeds maximum inputs"
+            reg_vars = [Var(f"reg{i}", void_p) for i in range(nr_inputs)]
+            addr_var = Var("addr", void_p)
+            fb.extend_params(reg_vars + [addr_var])
+            insts.append("cvta.to.shared.u64 u64addr, %0;")
+            vector_size = f".v{nr_inputs}" if nr_inputs > 1 else ""
+            st_inst = f"st.shared{vector_size}.u32"
+            src = [f"%{j + 1}" for j in range(nr_inputs)]
+            src = "{" + ", ".join(src) + "}"
+            insts.append(f"{st_inst} [u64addr], {src};")
+
+            insts = list(map(indent, insts))
+            doc = "{" + "".join(insts) + "}"
+            body = AsmStmt(
+                doc,
+                outputs=[],
+                inputs=[("l", addr_var)] + [("r", deref(cast(var, PointerType(u32)))) for var in reg_vars],
+                is_volatile=True,
+            )
+            fb.set_body(body)
+        register_primitive_function(name=func_name, func_or_type=fb.get())
+
+
 def lds128(reg0, reg1, reg2, reg3, smem_addr):
-    return call_primitive_func('cuda_lds128', [reg0, reg1, reg2, reg3, smem_addr])
+    return call_primitive_func("cuda_lds128", [reg0, reg1, reg2, reg3, smem_addr])
+
+
+def lds64(reg0, reg1, smem_addr):
+    return call_primitive_func("cuda_lds64", [reg0, reg1, smem_addr])
+
+
+def lds32(reg0, smem_addr):
+    return call_primitive_func("cuda_lds32", [reg0, smem_addr])
 
 
 def sts128(reg0, reg1, reg2, reg3, smem_addr):
-    return call_primitive_func('cuda_sts128', [reg0, reg1, reg2, reg3, smem_addr])
+    return call_primitive_func("cuda_sts128", [reg0, reg1, reg2, reg3, smem_addr])
+
+
+def sts64(reg0, reg1, smem_addr):
+    return call_primitive_func("cuda_sts64", [reg0, reg1, smem_addr])
+
+
+def sts32(reg0, smem_addr):
+    return call_primitive_func("cuda_sts32", [reg0, smem_addr])
