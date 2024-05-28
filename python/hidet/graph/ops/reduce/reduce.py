@@ -161,11 +161,13 @@ class ReduceTask(Task):
 
                 # Warp reduce by shuffle down
                 mask = active_mask()
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 16, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 8, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 4, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 2, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 1, 32))
+
+                # The order of operands does matter. See issue #212
+                rv = ro.combine(shfl_down_sync(mask, rv, 16, 32), rv)
+                rv = ro.combine(shfl_down_sync(mask, rv, 8, 32), rv)
+                rv = ro.combine(shfl_down_sync(mask, rv, 4, 32), rv)
+                rv = ro.combine(shfl_down_sync(mask, rv, 2, 32), rv)
+                rv = ro.combine(shfl_down_sync(mask, rv, 1, 32), rv)
                 rv = shfl_sync(mask, rv, 0, 32)
 
                 # write to staging area

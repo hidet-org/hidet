@@ -14,7 +14,7 @@ from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import functools
 import torch
-from hidet.graph.tensor import Tensor, full_like, from_torch
+from hidet.graph.tensor import Tensor, full_like, from_torch, ones_like
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
@@ -1339,3 +1339,22 @@ def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
 @register_function(torch.meshgrid)
 def torch_meshgrid(*tensors, indexing=None):
     return ops.meshgrid(tensors, indexing)
+
+
+@register_function(torch.all)
+def torch_all(input):
+    return ops.all(input, axis=None, keepdims=False)
+
+
+@register_function(torch.all)
+def torch_all(input, dim, keepdim=False, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.all(..., out=...)")
+    return ops.all(input, axis=dim, keepdims=keepdim)
+
+
+@register_function(torch.ones_like)
+def torch_ones_like(
+    x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format
+):
+    return ones_like(x)
