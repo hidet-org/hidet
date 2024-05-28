@@ -85,7 +85,13 @@ composition_tests = [
     (TensorLayout((4, 3), (3, 1)), TensorLayout((8))),
     (TensorLayout((4, 3, 1), (3, 1, 0)), TensorLayout((24))),
     (TensorLayout(3, 1), TensorLayout(4, 1)),
-    (TensorLayout((48, 24, 5), (1, 128, 3072)), TensorLayout(32, 1)),
+    # remove this testcase because the divisibility check fails.
+    # CUTLASS removes the divisibility check because they should support
+    # dynamic shapes.
+    # We keep the divisibility check to reject incorrect composition results
+    # (TensorLayout((48, 24, 5), (1, 128, 3072)), TensorLayout(32, 1)),
+    # FIXME: the testcase
+    # (TensorLayout((4, 3), (3, 1)), TensorLayout((24))),
 ]
 
 

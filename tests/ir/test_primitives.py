@@ -17,25 +17,39 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import var, tensor_var
 from hidet.ir.module import IRModule
-from hidet.ir.primitives import lds128, sts128
+from hidet.ir.primitives import lds128, sts128, lds64, lds32, sts64, sts32
 from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.drivers import build_ir_module
 
 
-def test_lds128(capfd):
-    with FunctionBuilder('test_lds128_grid', kind='cuda_kernel', grid_dim=1, block_dim=1) as fb:
+@pytest.mark.parametrize("load_bits", [128, 64, 32])
+def test_lds(load_bits, capfd):
+    from hidet.ir.dtypes import u32
+    from hidet.ir.type import ReferenceType
+
+    nr_regs = load_bits // (u32.nbytes * 8)
+    with FunctionBuilder(f"test_lds{load_bits}_grid", kind="cuda_kernel", grid_dim=1, block_dim=1) as fb:
         # params
-        regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'float32')
+        regs = [var(f"reg{i}", "float32") for i in range(nr_regs)]
+        smem_tensor = tensor_var("smem_tensor", [nr_regs], "float32")
         fb += DeclareStmt(smem_tensor, scope=DeclareScope.Shared)
         for reg in regs:
             fb += DeclareStmt(reg)
 
         # body
-        for i in range(4):
+        for i in range(nr_regs):
             fb += BufferStoreStmt(smem_tensor, [i], i)
-        fb += lds128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});', regs[0], regs[1], regs[2], regs[3])
+        reg_vars = [~i for i in regs]
+        if load_bits == 128:
+            lds = lds128
+        elif load_bits == 64:
+            lds = lds64
+        elif load_bits == 32:
+            lds = lds32
+        fb += lds(*reg_vars, smem_tensor)
+        fmt = " ".join(["%.2f" for i in range(nr_regs)])
+        var_args = ", ".join([r"{}" for i in range(nr_regs)])
+        fb += BlackBoxStmt(f'printf("{fmt}\\n", {var_args});', *regs)
         fb.set_body(fb.finish())
 
     func = fb.get()
@@ -44,29 +58,41 @@ def test_lds128(capfd):
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()
-    assert captured.out == '0.00 1.00 2.00 3.00\n'
+    expected = " ".join(["{:.2f}".format(float(i)) for i in range(nr_regs)])
+    assert captured.out == expected + "\n"
 
 
-def test_sts128(capfd):
-    with FunctionBuilder('test_sts128_grid', kind='cuda_kernel', grid_dim=1, block_dim=1) as fb:
+@pytest.mark.parametrize("store_bits", [128, 64, 32])
+def test_sts(store_bits, capfd):
+    from hidet.ir.dtypes import u32
+    from hidet.ir.type import ReferenceType
+
+    nr_regs = store_bits // (u32.nbytes * 8)
+    with FunctionBuilder(f"test_sts{store_bits}_grid", kind="cuda_kernel", grid_dim=1, block_dim=1) as fb:
         # params
-        regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'float32')
+        regs = [var(f"reg{i}", "float32") for i in range(nr_regs)]
+        smem_tensor = tensor_var("smem_tensor", [nr_regs], "float32")
         fb += DeclareStmt(smem_tensor, scope=DeclareScope.Shared)
         for reg in regs:
             fb += DeclareStmt(reg)
 
         # body
-        for i in range(4):
+        for i in range(nr_regs):
             fb += AssignStmt(regs[i], i)
-        fb += sts128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        fb += BlackBoxStmt(
-            r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
-            smem_tensor[0],
-            smem_tensor[1],
-            smem_tensor[2],
-            smem_tensor[3],
-        )
+
+        reg_vars = [~i for i in regs]
+        if store_bits == 128:
+            sts = sts128
+        elif store_bits == 64:
+            sts = sts64
+        elif store_bits == 32:
+            sts = sts32
+        fb += sts(*reg_vars, smem_tensor)
+        fmt = " ".join(["%.2f" for i in range(nr_regs)])
+        var_args = ", ".join([r"{}" for i in range(nr_regs)])
+        smem_vars = [smem_tensor[i] for i in range(nr_regs)]
+        fb += BlackBoxStmt(f'printf("{fmt}\\n", {var_args});', *smem_vars)
+        fb.set_body(fb.finish())
 
     func = fb.get()
     ir_module = IRModule(functions={func.name: func})
@@ -74,8 +100,9 @@ def test_sts128(capfd):
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()
-    assert captured.out == '0.00 1.00 2.00 3.00\n'
+    expected = " ".join(["{:.2f}".format(float(i)) for i in range(nr_regs)])
+    assert captured.out == expected + "\n"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pytest.main(__file__)
