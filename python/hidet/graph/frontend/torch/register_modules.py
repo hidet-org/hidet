@@ -175,6 +175,9 @@ class HidetLinear(HidetModule):
         super().__init__(torch_module)
         steal = dynamo_config['steal_weights']
         self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
+        self.torch_params['weight'] = None
+        self.hidet_params['weight'] = None
+        torch.cuda.empty_cache()
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
@@ -428,6 +431,11 @@ class HidetMultiheadAttention(HidetModule):
         steal = dynamo_config['steal_weights']
         self.in_proj_weight_transposed = ops.transpose(self.param('in_proj_weight', steal=steal), [1, 0])
         self.out_proj_weight_transposed = ops.transpose(self.param('out_proj.weight', steal=steal), [1, 0])
+        self.torch_params['in_proj_weight'] = None
+        self.torch_params['out_proj.weight'] = None
+        self.hidet_params['in_proj_weight'] = None
+        self.hidet_params['out_proj.weight'] = None
+        torch.cuda.empty_cache()
 
     def __call__(
         self,
