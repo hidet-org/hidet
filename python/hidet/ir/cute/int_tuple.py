@@ -42,10 +42,15 @@
 ##################################################################################################/
 # This file is a python implementation for utilities in CuTe, which will be
 # used for integrating CuTe dialect.
+from hidet.ir.expr import Expr, is_constant
+
+
+def is_integer(i):
+    return isinstance(i, (int, Expr))
 
 
 def repeat_like(a, val: int = 0):
-    if isinstance(a, int):
+    if is_integer(a):
         return val
     else:
         assert isinstance(a, tuple)
@@ -77,14 +82,14 @@ def signum(a):
 
 
 def depth(a):
-    if isinstance(a, int):
-        return 1
-    else:
-        assert isinstance(a, tuple)
+    if isinstance(a, tuple):
         d = 0
         for i in a:
             d = max(depth(i), d)
-        return d
+        return d + 1
+    else:
+        assert is_integer(a)
+        return 0
 
 
 def flatten(a):
@@ -330,3 +335,13 @@ def filter_zeros(a, b):
     else:
         assert isinstance(a, int)
         return 1 if a == 0 else b
+
+
+def is_static(a):
+    if isinstance(a, int):
+        return True
+    elif isinstance(a, Expr):
+        return is_constant(a)
+    else:
+        assert isinstance(a, tuple)
+        return all(is_static(v) for v in a)

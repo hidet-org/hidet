@@ -361,7 +361,7 @@ def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id:
             with sb.for_loop('j', mapping.task_shape[1]) as j:
                 p = var('p', int32)
                 sb += DeclareStmt(p, int32(0))
-                with sb.for_mapping(['ii', 'jj'], mapping, worker_id) as (ii, jj):
+                with sb.for_mapping(mapping, ['ii', 'jj'], worker_id) as (ii, jj):
                     with sb.if_then(LogicalAnd(ii == i, jj == j)):
                         sb += printf('%.{}f '.format(precision), cast(seg[p], float32))
                     sb += syncwarp()

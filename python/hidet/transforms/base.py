@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional
+from typing import List, Optional, Callable, Union
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 
@@ -52,6 +52,27 @@ class Pass:
         for instrument in ctx.instruments:
             instrument.after_pass(self.name, ir_module)
         return ir_module
+
+    @staticmethod
+    def apply_transforms(
+        node: Union[IRModule, Function],
+        transforms: List[Callable[[Union[IRModule, Function]], Union[IRModule, Function]]],
+        repeat_limit=1,
+    ):
+        while True:
+            prev_node = node
+            for rewriter in transforms:
+                node = rewriter(node)
+            # with open(./outs/apply_transform_{}.txt.format(repeat_limit), w) as f:
+            #     f.write(str(node))
+            if prev_node is node:
+                break
+            repeat_limit -= 1
+            if repeat_limit == 0:
+                break
+            if repeat_limit < -100:
+                raise RuntimeError("Exceeded repeat hard limit 100")
+        return node
 
     def process_module(self, ir_module: IRModule) -> IRModule:
         new_funcs = {}

@@ -17,18 +17,30 @@ from .type_functor import TypeFunctor, TypeRewriter, TypeVisitor
 from .mapping_functor import MappingFunctor, MappingRewriter, MappingVisitor
 from .layout_functor import LayoutFunctor, LayoutRewriter, LayoutVisitor
 from .module_functor import ModuleFunctor, ModuleRewriter, ModuleVisitor
+from .cute_functor import CuteFunctor, CuteVisitor, CuteRewriter
 
 
-class IRFunctor(ModuleFunctor, StmtFunctor, ComputeFunctor, ExprFunctor, MappingFunctor, LayoutFunctor, TypeFunctor):
+class IRFunctor(
+    ModuleFunctor, StmtFunctor, ComputeFunctor, ExprFunctor, MappingFunctor, LayoutFunctor, TypeFunctor, CuteFunctor
+):
     pass
 
 
-class IRVisitor(ModuleVisitor, StmtVisitor, ComputeVisitor, ExprVisitor, MappingVisitor, LayoutVisitor, TypeVisitor):
+class IRVisitor(
+    ModuleVisitor, StmtVisitor, ComputeVisitor, ExprVisitor, MappingVisitor, LayoutVisitor, TypeVisitor, CuteVisitor
+):
     pass
 
 
 class IRRewriter(
-    ModuleRewriter, StmtRewriter, ComputeRewriter, ExprRewriter, MappingRewriter, LayoutRewriter, TypeRewriter
+    ModuleRewriter,
+    StmtRewriter,
+    ComputeRewriter,
+    ExprRewriter,
+    MappingRewriter,
+    LayoutRewriter,
+    TypeRewriter,
+    CuteRewriter,
 ):
     def rewrite(self, node):
         return self.visit(node)
