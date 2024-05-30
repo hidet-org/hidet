@@ -36,7 +36,7 @@ class CpuAutoScheduler(AutoScheduler):
 
             iter_names = [f'i{i}' for i in range(len(node.shape))]
             with fb.for_loop('w', extent=prod(node.shape), attr='p') as w:
-                with fb.for_mapping(iter_names, row_spatial(*node.shape), worker=w) as task_index:
+                with fb.for_mapping(row_spatial(*node.shape), iter_names, worker=w) as task_index:
                     out_param: Var = param_map[node]
                     compute_lower = ComputeExprLower(node.value, param_map=param_map)
                     stmts, value = compute_lower.lower()

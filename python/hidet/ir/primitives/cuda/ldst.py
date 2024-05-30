@@ -20,8 +20,6 @@ from hidet.ir.primitives.func import register_primitive_function, call_primitive
 from hidet.ir.type import DataType
 from hidet.utils import initialize
 
-INDENT = "  "
-
 
 def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
     dtype = data_type(dtype)
@@ -55,10 +53,6 @@ def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: 
         else:
             inst_name = f'st.{space}.b{nbits}'
     return inst_name
-
-
-def indent(inst: str) -> str:
-    return INDENT + inst
 
 
 @initialize()
@@ -214,7 +208,6 @@ def register_ldg():
                     if cur > 0:
                         extra_addr_var.append(("l", addr_var + 4 * i))
 
-                insts = list(map(indent, insts))
                 doc = "{" + "".join(insts) + "}"
                 body = AsmStmt(
                     doc,
@@ -262,7 +255,6 @@ def register_stg():
                 if i > 0:
                     extra_addr_var.append(("l", addr_var + 4 * i))
 
-            insts = list(map(indent, insts))
             doc = "{" + "".join(insts) + "}"
             body = AsmStmt(
                 doc,
@@ -376,7 +368,6 @@ def register_lds():
             dst = "{" + ", ".join(dst) + "}"
             insts.append(f"{ld_inst} {dst}, [u64addr];")
 
-            insts = list(map(indent, insts))
             doc = "{" + "".join(insts) + "}"
             body = AsmStmt(
                 doc,
@@ -413,7 +404,6 @@ def register_sts():
             src = "{" + ", ".join(src) + "}"
             insts.append(f"{st_inst} [u64addr], {src};")
 
-            insts = list(map(indent, insts))
             doc = "{" + "".join(insts) + "}"
             body = AsmStmt(
                 doc,

@@ -42,10 +42,14 @@
 ##################################################################################################/
 # This file is a python implementation for the layout (core concept) in CuTe, which will be
 # used for integrating CuTe dialect.
-from hidet.ir import Expr
+from typing import Union, Tuple, List
+import enum
+from enum import auto as enum_auto
+
+from hidet.ir.expr import Expr
 from .int_tuple import (
+    repeat_like,
     signum,
-    depth,
     flatten,
     prefix_product,
     size,
@@ -57,11 +61,9 @@ from .int_tuple import (
     compact_col_major,
     idx2crd,
     filter_zeros,
+    is_integer,
+    is_static,
 )
-
-
-def is_integer(i):
-    return isinstance(i, (int, Expr))
 
 
 # cute layout
@@ -88,8 +90,26 @@ class TensorLayout:
         else:
             assert isinstance(i, tuple)
             crd = i
-        assert (is_integer(i) and is_integer(self.shape)) or len(crd) == len(self.shape)
+        assert (is_integer(crd) and is_integer(self.shape)) or len(crd) == len(self.shape)
         return crd2idx(crd, self.shape, self.stride)
+
+    def __eq__(self, other):
+        left_shape = self.shape
+        left_stride = self.stride
+        right_shape = other.shape
+        right_stride = other.stride
+        if (not congruent(left_shape, right_shape)) or (not congruent(left_stride, right_stride)):
+            return False
+        left_shape = flatten(left_shape)
+        left_stride = flatten(left_stride)
+        right_shape = flatten(right_shape)
+        right_stride = flatten(right_stride)
+        if isinstance(left_stride, tuple):
+            return all(
+                s1 == s2 and d1 == d2 for s1, s2, d1, d2 in zip(left_shape, right_shape, left_stride, right_stride)
+            )
+        else:
+            return left_shape == right_shape and left_stride == right_stride
 
     def size(self):
         return size(self.shape)
@@ -104,6 +124,8 @@ class TensorLayout:
             return abs_sub_layout(abs_sub_layout.size() - 1) + 1
 
     def depth(self):
+        from .int_tuple import depth
+
         return depth(self.shape)
 
     def reversed(self):
@@ -244,3 +266,184 @@ def logical_product(a: TensorLayout, b: TensorLayout):
 
 def logical_divide(a: TensorLayout, b: TensorLayout):
     return composition(a, make_layout(b, complement(b, a.size())))
+
+
+def max_common_vector(a: TensorLayout, b: TensorLayout):
+    if is_static(a.shape) and is_static(a.stride) and is_static(b.shape) and is_static(b.stride):
+        common = coalesce(composition(a, right_inverse(b)))
+        if is_integer(common.shape):
+            shape, stride = common.shape, common.stride
+        else:
+            shape, stride = common.shape[0], common.stride[0]
+        if stride == 1:
+            return shape
+        else:
+            return 1
+    else:
+        return 1
+
+
+class Label(enum.Enum):
+    Thread = enum_auto()
+    QuadPair = enum_auto()
+    Warp = enum_auto()
+    WarpGroup = enum_auto()
+    ThreadBlock = enum_auto()
+    ThreadBlockCluster = enum_auto()
+
+
+label_names = {
+    Label.Thread: "thread",
+    Label.QuadPair: "quad_pair",
+    Label.Warp: "warp",
+    Label.WarpGroup: "warp_group",
+    Label.ThreadBlock: "thread_block",
+    Label.ThreadBlockCluster: "thread_block_cluster",
+}
+
+
+name_to_label = {
+    "thread": Label.Thread,
+    "quad_pair": Label.QuadPair,
+    "warp": Label.Warp,
+    "warp_group": Label.WarpGroup,
+    "thread_block": Label.ThreadBlock,
+    "thread_block_cluster": Label.ThreadBlockCluster,
+}
+
+
+class Atom:
+    def __init__(
+        self,
+        level: Union[str, Label],
+        shape: Tuple[int, ...],
+        repeat_shape: Tuple[int, ...],
+        repeat_layout: TensorLayout,
+    ):
+        if isinstance(level, str):
+            level = name_to_label[level]
+        self.level = level
+        self.shape = shape
+        if repeat_shape is None:
+            repeat_shape = repeat_like(self.shape, 1)
+        if repeat_layout is None:
+            repeat_layout = TensorLayout(repeat_shape)
+        self.repeat_shape = repeat_shape
+        self.repeat_layout = repeat_layout
+
+    def str_indented(self, depth: int = 0):
+        raise NotImplementedError()
+
+
+class ThrValAtom(Atom):
+    def __init__(
+        self,
+        level: Union[str, Label],
+        shape: Tuple[int, ...],
+        layout: TensorLayout,
+        repeat_shape: Tuple[int, ...] = None,
+        repeat_layout: TensorLayout = None,
+    ):
+        super().__init__(level, shape, repeat_shape, repeat_layout)
+        self.layout = layout
+
+    def str_indented(self, depth: int = 0):
+        indent = " " * (depth * 2)
+        prev_indent = " " * (max(0, depth - 1) * 2)
+        return (
+            "{"
+            + f"\n{indent}level: {label_names[self.level]}, \n{indent}shape: {self.shape}, "
+            + f"\n{indent}layout: {self.layout}, \n{indent}repeat_shape: {self.repeat_shape}, "
+            + f"\n{indent}repeat_layout: {self.repeat_layout}"
+            + f"\n{prev_indent}"
+            + "}"
+        )
+
+
+class Level(Atom):
+    def __init__(
+        self,
+        unit: Union[str, Label],
+        level: Union[str, Label],
+        shape: Tuple[int, ...],
+        layout: TensorLayout,
+        repeat_shape: Tuple[int, ...] = None,
+        repeat_layout: TensorLayout = None,
+    ):
+        super().__init__(level, shape, repeat_shape, repeat_layout)
+        if isinstance(unit, str):
+            unit = name_to_label[unit]
+        self.unit = unit
+        self.layout = layout
+
+    def str_indented(self, depth: int = 0):
+        indent = " " * (depth * 2)
+        prev_indent = " " * (max(0, depth - 1) * 2)
+        return (
+            "{"
+            + f"\n{indent}unit: {label_names[self.unit]}, \n{indent}level: {label_names[self.level]}, "
+            + f"\n{indent}shape: {self.shape}, \n{indent}layout: {self.layout}, "
+            + f"\n{indent}repeat_shape: {self.repeat_shape}, \n{indent}repeat_layout: {self.repeat_layout}"
+            + f"\n{prev_indent}"
+            + "}"
+        )
+
+
+def zoom(atom_shape: Tuple[int, ...], atom: TensorLayout, repeat_shape: Tuple[int, ...], repeat_layout: TensorLayout):
+    shape = tuple(x * y for x, y in zip(atom_shape, repeat_shape))
+    layout = composition(TensorLayout(atom_shape, compact_col_major(shape)), make_layout(atom, complement(atom)))
+    layout = logical_product(layout, make_layout(repeat_layout, complement(repeat_layout)))
+    layout = make_layout(layout[0][0], layout[1][0])
+    return shape, layout
+
+
+def chain(
+    atom_shape: Tuple[int, ...],
+    atom_thrval_layout: TensorLayout,
+    atom_repeat_shape: Tuple[int, ...],
+    atom_repeat_layout: TensorLayout,
+    levels: List[Level],
+):
+    shape, layout = zoom(atom_shape, atom_thrval_layout, atom_repeat_shape, atom_repeat_layout)
+    for level in levels:
+        shape, layout = zoom(shape, layout, level.shape, level.layout)
+        layout = make_layout(
+            make_layout(coalesce(make_layout(layout[0][0][0], layout[1])), layout[0][0][1]), layout[0][1]
+        )
+        shape, layout = zoom(shape, layout, level.repeat_shape, level.repeat_layout)
+        layout = make_layout(layout[0][0], coalesce(make_layout(layout[0][1], layout[1])))
+    return shape, layout
+
+
+class TiledTensorLayout:
+    def __init__(self, atom: ThrValAtom, levels: List[Level] = None):
+        self.atom = atom
+        if levels is None:
+            levels = []
+        self.levels = levels
+        self._shape, self.tv_layout = chain(
+            self.atom.shape, self.atom.layout, self.atom.repeat_shape, self.atom.repeat_layout, self.levels
+        )
+
+    def str_indented(self, depth: int = 0):
+        indent = " " * (depth * 2)
+        prev_indent = " " * (max(0, depth - 1) * 2)
+        return (
+            "{"
+            + f"\n{indent}atom: {self.atom.str_indented(depth+1)}, \n{indent}levels:["
+            + ", ".join([f"{level.str_indented(depth+1)}" for level in self.levels])
+            + f"]\n{prev_indent}"
+            + "}"
+        )
+
+    def shape(self):
+        return self.shape
+
+    def thrval_layout(self):
+        return self.tv_layout
+
+    def thr_layout(self):
+        return self.tv_layout[0][0]
+
+    def val_layout(self):
+        return coalesce(make_layout(self.tv_layout[0][1], self.tv_layout[1]))

@@ -888,7 +888,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Expr(self, expr: Expr):
         value = self.visit(expr.value)
-        if isinstance(value, ir.Call):
+        if isinstance(value, ir.Expr):
             self.current_scope.append(ir.EvaluateStmt(value))
         elif isinstance(value, ir.Stmt):
             # buf.write([i, j], value) would return a BufferStoreStmt

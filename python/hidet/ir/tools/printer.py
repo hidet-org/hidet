@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional, List, Union, Dict, Tuple
+import contextlib
 
 import hidet.utils.structure
 from hidet.ir.node import Node
@@ -45,16 +46,60 @@ from hidet.utils.namer import Namer
 
 from hidet.ir.functors import IRFunctor
 
+from hidet.ir.cute.type import TiledTensorType
+from hidet.ir.cute.expr import CallOp
+from hidet.ir.cute.expr import Op as CuteOp
+from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
+from hidet.ir.cute.algorithm import TiledCopy
+
 
 class IRPrinter(IRFunctor):
     def __init__(self):
         super().__init__(use_memo=False)
         self.namer = Namer()
+        self.attributes: Dict[str, str] = {}
         self.ir_module: Optional[IRModule] = None
         self.show_var_id = hidet.option.get_option('debug_show_var_id')
 
+        self.scoped_vars: List[List[Var]] = []
+
     def __call__(self, node):
         return self.visit(node)
+
+    def add_scope_var(self, v):
+        if len(self.scoped_vars) > 0:
+            self.scoped_vars[-1].append(v)
+
+    @contextlib.contextmanager
+    def scope(self):
+        self.scoped_vars.append([])
+        yield
+        self.scoped_vars.pop()
+        # for v in scoped_vars:
+        #     self.namer.remove_name_for(v)
+
+    def get_attr_abbr(self, hint: str, attr_string: str):
+        if attr_string in self.attributes:
+            return self.attributes[attr_string]
+        else:
+            idx = 0
+            while True:
+                abbr = '#' + hint + ("" if idx == 0 else str(idx))
+                if abbr in self.attributes.values():
+                    idx += 1
+                else:
+                    break
+            self.attributes[attr_string] = abbr
+            return abbr
+
+    def astext(self, node):
+        body: Doc = self.visit(node)
+        attrs_doc = Doc()
+        for attr_value, attr_name in self.attributes.items():
+            attrs_doc += '{}: {}'.format(attr_name, attr_value) + NewLine()
+        if len(self.attributes) > 0:
+            attrs_doc += NewLine()
+        return attrs_doc + body
 
     def visit_Tuple(self, tp: Tuple):
         return doc_join([self(v) for v in tp], ', ')
@@ -89,11 +134,14 @@ class IRPrinter(IRFunctor):
 
         # attributes
         attr_doc = Doc()
-        for attr_name, attr_value in func.attrs.items():
+        attrs = {'kind': func.kind}
+        attrs.update(func.attrs)
+        for attr_name, attr_value in attrs.items():
             attr_doc += (NewLine() + '# {}: {}'.format(attr_name, attr_value)).indent(4)
 
         # body
-        body_doc = self(func.body).indent(4)
+        with self.scope():
+            body_doc = self(func.body).indent(4)
 
         return head_doc + attr_doc + body_doc + NewLine()
 
@@ -292,27 +340,34 @@ class IRPrinter(IRFunctor):
     def visit_LetStmt(self, stmt: LetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            self.add_scope_var(bind_var)
             doc += NewLine() + 'let ' + self(bind_var) + ': ' + self(bind_var.type) + ' = ' + self(bind_value)
         doc += self(stmt.body)
-        # doc += self(stmt.body).indent()
+        # doc += self(stmt.body).indent(4)
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):
-        rng = Text('range(') + self(stmt.extent) + ')'
+        rng = Text('range(') + self(stmt.extent) + '):'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
         if stmt.attr.unroll or stmt.attr.parallel:
             doc += '  # ' + str(stmt.attr)
-        doc += self(stmt.body).indent(4)
+        self.add_scope_var(stmt.loop_var)
+        with self.scope():
+            doc += self(stmt.body).indent(4)
         return doc
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on ' + self(stmt.worker)
-        doc += self(stmt.body).indent(4)
+        for loop_var in stmt.loop_vars:
+            self.add_scope_var(loop_var)
+        with self.scope():
+            doc += self(stmt.body).indent(4)
         return doc
 
     def visit_WhileStmt(self, stmt: WhileStmt):
         doc = NewLine() + 'while ' + self(stmt.cond)
-        doc += self(stmt.body).indent(4)
+        with self.scope():
+            doc += self(stmt.body).indent(4)
         return doc
 
     def visit_BreakStmt(self, stmt: BreakStmt):
@@ -323,10 +378,12 @@ class IRPrinter(IRFunctor):
 
     def visit_IfStmt(self, stmt: IfStmt):
         doc = NewLine() + Text('if ') + self(stmt.cond)
-        doc += self(stmt.then_body).indent(4)
-        if stmt.else_body:
-            doc += NewLine() + Text('else')
-            doc += self(stmt.else_body).indent(4)
+        with self.scope():
+            doc += self(stmt.then_body).indent(4)
+        with self.scope():
+            if stmt.else_body:
+                doc += NewLine() + Text('else')
+                doc += self(stmt.else_body).indent(4)
         return doc
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
@@ -389,10 +446,13 @@ class IRPrinter(IRFunctor):
         return doc
 
     def visit_SeqStmt(self, stmt: SeqStmt):
-        doc = Doc()
-        for s in stmt.seq:
-            doc += self(s)
-        return doc
+        if len(stmt.seq) == 0:
+            return NewLine() + Text('pass')
+        else:
+            doc = Doc()
+            for s in stmt.seq:
+                doc += self(s)
+            return doc
 
     def visit_DataType(self, t: DataType):
         return Text('{}'.format(t.name))
@@ -579,10 +639,52 @@ class IRPrinter(IRFunctor):
     def visit_ConcatLayout(self, layout: ConcatLayout):
         return Text('concat(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
 
+    def visit_TiledTensorLayout(self, layout: TiledTensorLayout):
+        return self.get_attr_abbr(hint="tiled_tensor_layout", attr_string=layout.str_indented(1))
+
+    def visit_TiledCopy(self, tiled_copy: TiledCopy):
+        return self.get_attr_abbr(hint="tiled_copy", attr_string=tiled_copy.str_indented(1))
+
+    def visit_CuteOp(self, op: CuteOp):
+        args_doc = [self(v) for v in op.args]
+        attrs_doc = []
+        for k, v in op.attrs.items():
+            if v is None:
+                continue
+            if isinstance(v, (list, tuple)):
+                attrs_doc.append(self(k) + '=' + '[' + self(v) + ']')
+            elif isinstance(v, dict):
+                attrs_doc.append(self(k) + '=' + '{' + self(v) + '}')
+            elif isinstance(v, TensorLayout):
+                attrs_doc.append(self(k) + '=' + str(v))
+            elif isinstance(v, TiledTensorLayout):
+                attrs_doc.append(self(k) + '=' + self.visit_TiledTensorLayout(v))
+            elif isinstance(v, DeclareScope):
+                attrs_doc.append(self(k) + '=' + str(v))
+            elif isinstance(v, TiledCopy):
+                attrs_doc.append(self(k) + '=' + self.visit_TiledCopy(v))
+            elif not isinstance(v, Node):
+                attrs_doc.append(self(k) + '=' + str(v))
+            else:
+                attrs_doc.append(self(k) + '=' + self(v))
+        return op.name + '(' + doc_join(args_doc + attrs_doc, ', ') + ')'
+
+    def visit_CallOp(self, call: CallOp):
+        return self.visit_CuteOp(call.op)
+
+    def visit_TiledTensorType(self, t: TiledTensorType):
+        attrs_doc = []
+        if isinstance(t.layout, TensorLayout):
+            attrs_doc.append('layout=' + str(t.layout))
+        elif isinstance(t.layout, TiledTensorLayout):
+            attrs_doc.append('layout=' + self.visit_TiledTensorLayout(t.layout))
+        attrs_doc.append('scope=' + str(t.scope))
+        return self(t.dtype) + '[' + doc_join(attrs_doc, ', ') + ']'
+
 
 def astext(obj: Node) -> str:
     if isinstance(obj, Node):
         printer = IRPrinter()
-        return str(printer(obj))
+        return str(printer.astext(obj))
     else:
         raise ValueError()

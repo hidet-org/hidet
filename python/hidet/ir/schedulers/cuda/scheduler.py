@@ -55,7 +55,7 @@ class CudaAutoScheduler(AutoScheduler):
             mapping: TaskMapping = row_spatial(*node.shape)
             iter_names = [f'i{i}' for i in range(len(node.shape))]
             with fb.if_then(worker < mapping.num_workers):
-                with fb.for_mapping(iter_names, mapping, worker) as task_index:
+                with fb.for_mapping(mapping, iter_names, worker) as task_index:
                     out_param: Var = params[-1]
                     compute_lower = ComputeExprLower(node.value, param_map=param_map)
                     stmts, value = compute_lower.lower()
