@@ -1358,3 +1358,15 @@ def torch_ones_like(
     x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format
 ):
     return ones_like(x)
+
+
+@register_function(torch.argmax)
+@register_method(torch.Tensor.argmax)
+def torch_argmax(x, dim: Int = None, keepdim: bool = False):
+    return ops.argmax(x, dim, keepdim)
+
+
+@register_function(torch.argmin)
+@register_method(torch.Tensor.argmin)
+def torch_argmin(x, dim: Int = None, keepdim: bool = False):
+    return ops.argmin(x, dim, keepdim)
