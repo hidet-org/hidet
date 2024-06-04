@@ -788,6 +788,16 @@ def torch_tensor(
         return from_torch(tt)
 
 
+@register_function(torch.as_tensor)
+def torch_as_tensor(data: Any, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None) -> Tensor:
+    if isinstance(data, Tensor):
+        device = device_from_torch(torch_device=device) if device is not None else device
+        return data.to(device=device, dtype=dtype_from_torch(dtype))
+    else:
+        tt = torch.as_tensor(data, dtype=dtype, device=device)
+        return from_torch(tt)
+
+
 @register_function(torch.sigmoid)
 def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
