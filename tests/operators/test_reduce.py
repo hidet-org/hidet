@@ -115,22 +115,23 @@ def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func):
     )
 
 
-@pytest.mark.parametrize("shape", [[11, 22, 34]])
-@pytest.mark.parametrize("dim", [0, 1, 2])
+@pytest.mark.parametrize("shape", [[11, 22, 34], [3, 44, 55, 66, 7], [6], [1]])
+@pytest.mark.parametrize("dim", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize("keep_dim", [False, True])
 @pytest.mark.parametrize("reduce_func", [argmax, argmin])
 def test_argmax_argmin(shape, dim, keep_dim: bool, reduce_func):
     op_dict = {argmax: np.argmax, argmin: np.argmin}
     np_op = op_dict[reduce_func]
-    check_unary(
-        shape,
-        numpy_op=lambda x: np_op(x, axis=dim, keepdims=keep_dim),
-        hidet_op=lambda x: reduce_func(x, dim=dim, keep_dim=keep_dim),
-        device='cuda',
-        dtype=np.float16,
-        atol=0,
-        rtol=0,
-    )
+    if dim < len(shape):
+        check_unary(
+            shape,
+            numpy_op=lambda x: np_op(x, axis=dim, keepdims=keep_dim),
+            hidet_op=lambda x: reduce_func(x, dim=dim, keep_dim=keep_dim),
+            device='cuda',
+            dtype=np.float16,
+            atol=0,
+            rtol=0,
+        )
 
 
 @pytest.mark.parametrize("shape", [[11, 22, 34]])
