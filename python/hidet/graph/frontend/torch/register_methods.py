@@ -309,6 +309,23 @@ def tensor_new_zeros(self: Tensor, *size, dtype=None, layout=None, device=None, 
     return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)
 
 
+@register_method(torch.Tensor.new_full)
+def tensor_new_full(
+    self: Tensor, size, fill_value, *, dtype=None, layout=None, device=None, requires_grad=False, pin_memory=False
+):
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+    if dtype is None:
+        dtype = self.dtype
+    if device is None:
+        device = self.device
+
+    _ = pin_memory
+    _ = requires_grad
+
+    return ops.full(size, dtype=dtype, device=device, value=fill_value)
+
+
 @register_method(torch.Tensor.zero_)
 def tensor_zero_(self: Tensor):
     return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)

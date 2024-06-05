@@ -967,6 +967,7 @@ def torch_max(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.max)
+@register_method(torch.Tensor.max)
 def torch_max(
     x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
 ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
@@ -979,6 +980,7 @@ def torch_max(
 
 
 @register_function(torch.max)
+@register_method(torch.Tensor.max)
 def torch_max_v3(
     x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
 ) -> Tuple[Tensor, Tensor]:
