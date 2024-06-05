@@ -119,25 +119,6 @@ with torch.no_grad():
 #
 # in case you want to use PyTorch's CUDA Graph feature.
 #
-# Use low-precision data type
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
-# Hidet provides a configuration to use low-precision data type. By default, hidet will use the same data type as
-# the original PyTorch model. You can configure it via :func:`~hidet.graph.frontend.torch.DynamoConfig.use_fp16` and
-# :func:`~hidet.graph.frontend.torch.DynamoConfig.use_fp16_reduction`:
-#
-# .. code-block:: python
-#
-#     # automatically transform the model to use float16 data type
-#     hidet.torch.dynamo_config.use_fp16(True)
-#
-#     # use float16 data type as the accumulate data type in operators with reduction
-#     hidet.torch.dynamo_config.use_fp16_reduction(True)
-#
-# You do not need to change the inputs feed to the model, as hidet will automatically cast the inputs to the
-# configured data type automatically in the optimized model.
-#
-#
 # Print the input graph
 # ~~~~~~~~~~~~~~~~~~~~~
 #

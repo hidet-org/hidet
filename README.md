@@ -39,7 +39,6 @@ x = torch.rand(1, 3, 224, 224).cuda()
 # Optional: set optimization options (see our documentation for more details)
 #   import hidet 
 #   hidet.torch.dynamo_config.search_space(2)  # tune each tunable operator
-#   hidet.torch.dynamo_config.use_fp16()       # use float16 for acceleration
 model_opt = torch.compile(model, backend='hidet')  
 
 # Run the optimized model

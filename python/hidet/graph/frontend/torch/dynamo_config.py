@@ -9,15 +9,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional
+
+
+def dynamo_config_warning():
+    warnings.warn(
+        'Configuration by dynamo_config is depricated. '
+        'Please pass the options via mode and options arguments of torch.compile() '
+    )
 
 
 class DynamoConfig:
     def __init__(self):
         self._search_space: int = 0
         self._parallel_k: str = 'default'
-        self._use_fp16: bool = False
-        self._use_fp16_reduction: bool = False
         self._use_attention: bool = False
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
@@ -36,8 +42,6 @@ class DynamoConfig:
         """
         self._search_space: int = 0
         self._parallel_k: str = 'default'
-        self._use_fp16: bool = False
-        self._use_fp16_reduction: bool = False
         self._use_attention: bool = False
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
@@ -97,15 +101,13 @@ class DynamoConfig:
         """
         Whether to use float16 data type
         """
-        self._use_fp16 = flag
-        return self
+        dynamo_config_warning()
 
     def use_fp16_reduction(self, flag=True):
         """
         Whether to use float16 data type for reduction
         """
-        self._use_fp16_reduction = flag
-        return self
+        dynamo_config_warning()
 
     def use_attention(self, flag=False):
         """
