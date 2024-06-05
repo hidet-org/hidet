@@ -149,14 +149,12 @@ class BenchModel:
         print('Benchmarking {} with backend {}...'.format(self, 'inductor(mode={})'.format(mode)))
         return self.bench_with_backend('inductor', mode=mode)
 
-    def bench_hidet(self, use_cuda_graph=True, use_fp16=False, use_fp16_reduction=False) -> float:
+    def bench_hidet(self, use_cuda_graph=True) -> float:
         print('Benchmarking {} with backend {}...'.format(self, 'hidet(space={})'.format(self.search_space)))
         config = hidet.torch.dynamo_config
         config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
         config.use_tensor_core(self.tensor_core)
-        config.use_fp16(use_fp16)
-        config.use_fp16_reduction(use_fp16_reduction)
         return self.bench_with_backend('hidet')
 
     @staticmethod

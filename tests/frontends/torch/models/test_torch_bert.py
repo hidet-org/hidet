@@ -17,9 +17,9 @@ import hidet
 
 @pytest.mark.parametrize('batch_size', [1])
 @pytest.mark.parametrize('seq_length', [128])
-@pytest.mark.parametrize('use_fp16,use_tensor_core', [(False, False), (False, True), (True, True)])
+@pytest.mark.parametrize('use_tensor_core', [False, True])
 @pytest.mark.parametrize('dynamic', [False])  # TODO: enable dynamic when torch dynamo is fixed
-def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core, dynamic):
+def test_bert(batch_size: int, seq_length: int, use_tensor_core, dynamic):
     tokens_tensor = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
     segments_tensors = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
     args = (tokens_tensor.cuda(),)
@@ -29,11 +29,9 @@ def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core, dynam
     y1 = model(*args, **kwargs).last_hidden_state
 
     try:
-        hidet.torch.dynamo_config.use_fp16(use_fp16)
         hidet.torch.dynamo_config.use_tensor_core(use_tensor_core)
-
         y2 = model_opt(*args, **kwargs).last_hidden_state
-        tol = 1e-1 if use_fp16 else 1e-2
+        tol = 1e-2
         torch.testing.assert_close(y1, y2, atol=tol, rtol=tol)
     finally:
         # in case of failure, reset the config
