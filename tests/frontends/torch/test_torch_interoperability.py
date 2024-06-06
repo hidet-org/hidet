@@ -25,6 +25,25 @@ def test_as_torch_tensor():
     torch.testing.assert_close(b, c.torch())
 
 
+@pytest.mark.parametrize(
+    'shape1,shape2', [([2, 2], [2, 2]), ([2, 3, 4], [2, 3, 4]), ([2, 3, 4], [2, 3, 1]), ([2, 3, 4], [2, 1, 1])]
+)
+def test_torch_div(shape1, shape2):
+    check_module(
+        FunctionalModule(op=lambda x, y: torch.div(x, y)),
+        args=[torch.randn(shape1), torch.randn(shape2)],
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+    check_module(
+        FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor')),
+        args=[torch.randn(shape1), torch.randn(shape2)],
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+
 @pytest.mark.parametrize('shape,expanded_shape', [([2, 1], [2, 11]), ([2, 3, 4], [2, 3, 4]), ([1], [6])])
 def test_expand_as(shape, expanded_shape):
     check_module(
