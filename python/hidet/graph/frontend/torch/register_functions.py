@@ -432,6 +432,19 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
         return x / y
 
 
+@register_function(torch.div)
+@register_method(torch.Tensor.div)
+def div(x: Tensor, y: Tensor, *, rounding_mode: str = None, out=None):
+    result = truediv(x, y)
+    if rounding_mode is None:
+        return result
+    elif rounding_mode == 'floor':
+        return ops.floor(result)
+    else:
+        assert rounding_mode == 'trunc'
+        raise NotImplementedError("torch.div(..., rounding_mode='trunc') is currently not supported by Hidet")
+
+
 @register_function(operator.sub)
 def sub(x: Tensor, y: Tensor):
     return x - y
