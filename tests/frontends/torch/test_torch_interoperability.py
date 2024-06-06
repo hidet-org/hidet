@@ -12,6 +12,7 @@
 import pytest
 import torch
 import hidet
+from hidet.testing.torch_utils import check_module, FunctionalModule
 
 
 def test_as_torch_tensor():
@@ -22,6 +23,16 @@ def test_as_torch_tensor():
     b = torch.abs(a)
     c = hidet.ops.abs(a)
     torch.testing.assert_close(b, c.torch())
+
+
+@pytest.mark.parametrize('shape,expanded_shape', [([2, 1], [2, 11]), ([2, 3, 4], [2, 3, 4]), ([1], [6])])
+def test_expand_as(shape, expanded_shape):
+    check_module(
+        FunctionalModule(op=lambda x, y: x.expand_as(y)),
+        args=[torch.randn(shape), torch.randn(expanded_shape)],
+        atol=0,
+        rtol=0,
+    )
 
 
 if __name__ == '__main__':

@@ -250,6 +250,11 @@ def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
     return ops.broadcast(self, sizes)
 
 
+@register_method(torch.Tensor.expand_as)
+def tensor_expand_as(self: Tensor, other: Tensor) -> Tensor:
+    return ops.broadcast(self, other.shape)
+
+
 @register_method(torch.Tensor.masked_fill)
 def tensor_masked_fill(self: Tensor, mask: Tensor, value: float) -> Tensor:
     return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
