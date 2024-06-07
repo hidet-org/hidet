@@ -54,5 +54,10 @@ def test_expand_as(shape, expanded_shape):
     )
 
 
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_tensor_sigmod(shape):
+    check_module(FunctionalModule(op=lambda x: x.sigmoid_()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
