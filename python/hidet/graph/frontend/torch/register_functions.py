@@ -812,6 +812,9 @@ def torch_as_tensor(data: Any, dtype: Optional[torch.dtype] = None, device: Opti
 
 
 @register_function(torch.sigmoid)
+@register_function(torch.sigmoid_)
+@register_method(torch.Tensor.sigmoid)
+@register_method(torch.Tensor.sigmoid_)
 def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
@@ -1362,8 +1365,10 @@ def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
 
 
 @register_function(torch.meshgrid)
-def torch_meshgrid(*tensors, indexing=None):
-    return ops.meshgrid(tensors, indexing)
+def torch_meshgrid(*tensors, indexing='ij'):
+    if len(tensors) == 1 and isinstance(tensors[0], (list, tuple)):
+        tensors = tensors[0]
+    return ops.meshgrid(tensors, indexing=indexing)
 
 
 @register_function(torch.all)

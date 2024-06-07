@@ -745,6 +745,9 @@ def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
 def meshgrid(*tensors: Tensor, indexing: str = "ij") -> List[Tensor]:
     if indexing not in ("xy", "ij"):
         raise ValueError(f"meshgrid: indexing must be 'xy' or 'ij', but got {indexing}")
+    if isinstance(tensors[0], (list, tuple)):
+        tensors = tensors[0]
+
     tensors = list(tensors)
     output_rank = len(tensors)
     if output_rank < 2:
