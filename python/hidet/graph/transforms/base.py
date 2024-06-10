@@ -77,9 +77,6 @@ class PassContext:
             # target reduce precision:
             # [None, 'float16', 'float32']
             'reduce_precision': None,
-            # use attention or not
-            # [True, False]
-            'use_attention': False,
             # mma primitive:
             # ['simt', 'mma']
             'mma': 'simt',
@@ -95,9 +92,6 @@ class PassContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        from ..transforms.graph_patterns.attn_patterns import deregister_attn_patterns
-
-        deregister_attn_patterns()
         popped = self._stack.pop()
         assert popped == self
 
@@ -189,25 +183,6 @@ class PassContext:
               Use 'float32' to accumulate.
         """
         self.configs['reduce_precision'] = dtype
-        return self
-
-    def set_use_attention(self, flag=False) -> PassContext:
-        """
-        Set to use fused attention schedule
-
-        """
-        # fmha requires sm75+
-        cc = hidet.option.cuda.get_arch_pair()
-        if cc < (7, 5):
-            return self
-
-        from ..transforms.graph_patterns.attn_patterns import register_attn_patterns, deregister_attn_patterns
-
-        self.configs['use_attention'] = flag
-        if flag:
-            register_attn_patterns()
-        else:
-            deregister_attn_patterns()
         return self
 
     def set_verbose(self) -> PassContext:

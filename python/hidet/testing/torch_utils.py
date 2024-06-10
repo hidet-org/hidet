@@ -72,7 +72,6 @@ class Backend:
         import os
 
         hidet.torch.dynamo_config.search_space(self.search_space)
-        hidet.torch.dynamo_config.use_attention(True)
         hidet.torch.dynamo_config.use_tensor_core(True)
         hidet.torch.dynamo_config.use_cuda_graph(True)
         hidet.option.search_space(self.search_space)
