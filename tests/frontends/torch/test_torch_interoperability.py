@@ -59,5 +59,23 @@ def test_tensor_sigmod(shape):
     check_module(FunctionalModule(op=lambda x: x.sigmoid_()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
 
 
+@pytest.mark.parametrize(
+    'shape,src_shape',
+    [
+        ([2, 3, 4], [2, 3, 4]),
+        ([2, 3, 4], [2, 3, 1]),
+        ([2, 3, 4], [2, 1, 1]),
+        ([2, 3, 4], [1, 1]),
+        ([2, 3, 4], [1]),
+        ([5, 3, 4, 1], [3, 1, 1]),
+        ([5, 3, 4, 1], [4, 1]),
+    ],
+)
+def test_torch_copy(shape, src_shape):
+    check_module(
+        FunctionalModule(op=lambda x, y: x.copy_(y)), args=[torch.randn(shape), torch.randn(src_shape)], atol=0, rtol=0
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
