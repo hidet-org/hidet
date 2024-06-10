@@ -1091,6 +1091,7 @@ def rshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Te
 
 
 @register_function(torch.rsqrt)
+@register_method(torch.Tensor.rsqrt)
 def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.rsqrt(..., out=...)")
@@ -1338,6 +1339,15 @@ def torch_clone(x: Tensor, *, memory_format=torch.preserve_format):
         return x
     else:
         return x.copy()
+
+
+@register_method(torch.Tensor.copy_)
+def torch_copy(x: Tensor, src: Tensor, non_blocking: bool = False):
+    if non_blocking:
+        warnings.warn_once("torch.Tensor.copy_ with non_blocking=True is not supported. Treating as non_blocking=False")
+    if x.shape != src.shape:
+        src = ops.broadcast(src, x.shape)
+    return torch_clone(src)
 
 
 @register_function(torch.chunk)
