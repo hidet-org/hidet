@@ -101,13 +101,11 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
 
 
 def get_compiled_graph(flow_graph: FlowGraph):
-    use_attention = dynamo_config['use_attention']
     search_space = dynamo_config['search_space']
     parallel_k = dynamo_config['parallel_k']
     tensor_core = dynamo_config['use_tensor_core']
     save_dir = dynamo_config['dump_graph_ir']
     with PassContext() as ctx:
-        ctx.set_use_attention(use_attention)
         if save_dir:
             graph_dir = resolve_save_dir_multigraph(save_dir)
             ctx.save_graph_instrument(graph_dir)

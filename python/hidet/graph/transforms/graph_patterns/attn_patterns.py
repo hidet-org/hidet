@@ -13,12 +13,13 @@ from hidet.graph import ops
 from hidet.ir.dtypes import f16
 from hidet.ir.expr import is_true
 from hidet.graph.transforms.graph_patterns import MatchDict
-from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
+from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
 from hidet.graph.ops.matmul import MatmulOp
 from hidet.graph.ops.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
 from hidet.graph.ops.activation import SoftmaxOp
 from hidet.graph.ops.attention import attention
+from hidet.utils import initialize
 
 
 class ReorderMulScaleRewriteRule(SubgraphRewriteRule):
@@ -109,30 +110,14 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
             return None
 
 
-registered_attn_rules = []
-
-
+@initialize()
 def attn_patterns():
-    registered_attn_rules.append(AttentionRewriteRule())
-    registered_attn_rules.append(AttentionMaskAddRewriteRule())
-    registered_attn_rules.append(ReorderMulScaleRewriteRule())
-    registered_attn_rules.append(ReorderDivScaleRewriteRule())
-    for attn_rule in registered_attn_rules:
-        register_rewrite_rule(attn_rule)
+    from hidet.option import cuda
 
-
-def register_attn_patterns():
-    if len(registered_attn_rules) != 0:
-        return
-    registered_attn_rules.append(AttentionRewriteRule())
-    registered_attn_rules.append(AttentionMaskAddRewriteRule())
-    registered_attn_rules.append(ReorderMulScaleRewriteRule())
-    registered_attn_rules.append(ReorderDivScaleRewriteRule())
-    for attn_rule in registered_attn_rules:
-        register_rewrite_rule(attn_rule)
-
-
-def deregister_attn_patterns():
-    for attn_rule in registered_attn_rules:
-        deregister_rewrite_rule(attn_rule)
-    registered_attn_rules.clear()
+    cc = cuda.get_arch_pair()
+    # fmha requires sm75+
+    if cc >= (7, 5):
+        register_rewrite_rule(AttentionRewriteRule())
+        register_rewrite_rule(AttentionMaskAddRewriteRule())
+        register_rewrite_rule(ReorderMulScaleRewriteRule())
+        register_rewrite_rule(ReorderDivScaleRewriteRule())
