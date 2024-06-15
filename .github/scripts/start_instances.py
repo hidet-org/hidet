@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     # e.g., ' 1, 2, ,3,,' -> ['1', '2', '3']
     hw_config_ids = os.environ.get('HW_CONFIG').replace(' ', '')
+    hw_config_ids = '2'
     repo_org = os.environ.get('REPO_NAME').split('/')[0]
     if hw_config_ids == 'all':
         query = (

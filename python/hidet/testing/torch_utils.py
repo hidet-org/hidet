@@ -54,7 +54,7 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
 
 # Class to initialise backend, run compilation
 class Backend:
-    def __init__(self, backend, dtype, search_space=2) -> None:
+    def __init__(self, backend, dtype, cache='', search_space=2) -> None:
         assert backend in [
             'hidet',
             'max-autotune',
@@ -64,6 +64,7 @@ class Backend:
         self.backend = backend
         self.dtype = dtype
         self.search_space = search_space
+        self.cache = cache
         if self.backend == 'hidet':
             self.init_hidet()
 
@@ -75,6 +76,7 @@ class Backend:
         hidet.torch.dynamo_config.use_tensor_core(True)
         hidet.torch.dynamo_config.use_cuda_graph(True)
         hidet.option.search_space(self.search_space)
+        hidet.option.cache_dir(hidet.option.get_cache_dir() + self.cache)
 
         # hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
         # hidet.option.parallel_tune(max_parallel_jobs=1)
@@ -93,7 +95,7 @@ class Backend:
 
     def compile(self, model):
         if self.backend == 'hidet':
-            model = torch.compile(model, backend=self.backend)
+            model = torch.compile(model, backend='hidet', mode='max-autotune')
         elif self.backend == 'eager':
             pass
         else:

@@ -13,7 +13,6 @@ from typing import List, Dict, Tuple, Union, Optional, Iterable
 from dataclasses import dataclass
 import os
 import json
-import time
 from collections import namedtuple
 import tabulate
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
@@ -165,27 +164,13 @@ class CompiledTask:
         return outputs
 
     def pick_best_candidate(self, inputs, outputs) -> int:
-        import hidet
+        from hidet.utils.benchmark.bench import find_best_candidate
 
         key = self._get_symbol_values()
         if key not in self.dispatch_table:
             if len(self.candidates) > 1:
-                warmup, number, repeat = hidet.option.get_bench_config()
-                latencies = []
-                for idx, candidate in enumerate(self.candidates):
-                    for _ in range(warmup):
-                        candidate(*inputs, *outputs)
-                    candidate_latency = 0.0
-                    for _ in range(repeat):
-                        hidet.cuda.synchronize()
-                        t1 = time.time()
-                        for _ in range(number):
-                            candidate(*inputs, *outputs)
-                        hidet.cuda.synchronize()
-                        t2 = time.time()
-                        candidate_latency += (t2 - t1) * 1000 / number
-                    latencies.append(candidate_latency / repeat)
-                self.dispatch_table[key] = latencies.index(min(latencies))
+                best_idx, latencies = find_best_candidate(self.candidates, *inputs, *outputs)
+                self.dispatch_table[key] = best_idx
 
                 # write a benchmark report
                 report_name = '_'.join('{}_{}'.format(a, b) for a, b in zip(self.meta_data.symbols, key))

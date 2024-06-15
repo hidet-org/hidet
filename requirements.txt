@@ -42,3 +42,7 @@ tomlkit
 
 # for parser
 lark
+
+# for performance measurements
+scipy
+
