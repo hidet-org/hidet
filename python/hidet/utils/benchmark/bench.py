@@ -12,8 +12,11 @@
 from typing import List, Optional, Callable, Tuple, Any, Dict, Union
 import time
 from dataclasses import dataclass
-
+from scipy import stats
 import numpy as np
+import nvtx
+import hidet
+import hidet.cuda
 
 
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
@@ -33,7 +36,6 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
     """
 
     # Estimate the runtime of the function
-    import hidet
 
     fn()
     hidet.cuda.synchronize()
@@ -69,7 +71,7 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
         return np.mean(times).item()
 
 
-def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
+def benchmark_func(run_func, *args, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
     """Benchmark given function.
 
     The given function ``run_func`` will be executed :math:`warmup + repeat * number` times. Each :math:`number` times
@@ -98,27 +100,95 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
         - When median == True, a single latency number is returned.
         - When median == False, the latency of each repeat is returned, as a list of floats.
     """
-    import nvtx
-    import hidet.cuda
 
     results = []
     with nvtx.annotate('warmup'):
         for _ in range(warmup):
-            run_func()
+            run_func(*args)
             hidet.cuda.synchronize()
+
     for i in range(repeat):
         with nvtx.annotate(f'repeat {i}'):
             hidet.cuda.synchronize()
-            start_time = time.time()
+            start_time = time.time_ns()
             for _ in range(number):
-                run_func()
+                run_func(*args)
             hidet.cuda.synchronize()
-            end_time = time.time()
-        results.append((end_time - start_time) * 1000 / number)
+            end_time = time.time_ns()
+        results.append((end_time - start_time) / 10**6 / number)
     if median:
         return float(np.median(results))
     else:
         return results
+
+
+@dataclass
+class CandidateData:
+    idx: int
+    latencies: List[float] = None
+    median: float = 0.0
+    in_game: bool = True
+
+
+def find_best_candidate(candidates: List[Callable[..., None]], *args):
+    P_VALUE_THRESHOLD = 0.01
+    num_candidates = len(candidates)
+    candidates_data = [CandidateData(idx=idx) for idx, _ in enumerate(candidates)]
+    repeats = (7, 31)
+    for cur_repeat in repeats:
+        for idx, cand in enumerate(candidates):
+            if candidates_data[idx].in_game:
+                lats = benchmark_func(cand, *args, warmup=5, number=1, repeat=cur_repeat, median=False)
+                candidates_data[idx].latencies = lats
+
+        for cand in candidates_data:
+            if cand.in_game:
+                cand.median = np.median(cand.latencies)
+
+        # We have samples for every cansidate.
+        # Start with candidate with minimum median. Likely it drop a lot of slower candidates.
+        # Just optimisation. The next loop is enough for functionality
+        min_lat_cand = min((cand for cand in candidates_data if cand.in_game), key=lambda cand: cand.median)
+        min_idx = min_lat_cand.idx
+        for i in range(num_candidates):
+            if i == min_idx or not candidates_data[i].in_game:
+                continue
+            _, p_value = stats.ttest_ind(
+                candidates_data[min_idx].latencies, candidates_data[i].latencies, alternative='less'
+            )
+            if p_value < P_VALUE_THRESHOLD:
+                candidates_data[i].in_game = False
+        # If left only one candidate - good we found the best
+        left_candidates = [cand for cand in candidates_data if cand.in_game]
+
+        if len(left_candidates) == 1:
+            return (left_candidates[0].idx, [cand.median for cand in candidates_data])
+
+        # Compare all candidates betwee each other. Comparison use T-test
+        for i in range(num_candidates):
+            if not candidates_data[i].in_game:
+                continue
+            for j in range(num_candidates):
+                if not candidates_data[j].in_game or i == j:
+                    continue
+                _, p_value = stats.ttest_ind(
+                    candidates_data[i].latencies, candidates_data[j].latencies, alternative='less'
+                )
+                if p_value < P_VALUE_THRESHOLD:
+                    candidates[j].in_game = False
+
+        # If left only one candidate - good we found the best
+        left_candidates = [cand for cand in candidates_data if cand.in_game]
+        if len(left_candidates) == 1:
+            return (left_candidates[0].idx, [cand.median for cand in candidates_data])
+
+    # Can not prove that one candidate statistically significant than all other.
+    # There are several but we can not order them using above method.
+    # Should choose some candidate. Choose one with minimal median
+    best = min((cand for cand in candidates_data if cand.in_game), key=lambda cand: cand.median)
+    best_idx = best.idx
+    latensies = [cand.median for cand in candidates_data]
+    return (best_idx, latensies)
 
 
 @dataclass

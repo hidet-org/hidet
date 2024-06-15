@@ -236,8 +236,13 @@ def build_ir_module_batch(
         num_workers = min(len(ir_modules), 128)
     else:
         num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
-    # shuffle the candidates to avoid grouping long-compilation time candidates together
+    # Shuffle the candidates to avoid grouping long-compilation time candidates together
+    # Make compilation deterministic
+    random.seed(42)
+    # Shuffle
     random.shuffle(ir_modules)
+    # Make random number a random again
+    random.seed()
     if num_workers > 1 and len(ir_modules) > 1:
         lazy_initialize_cuda()
         per_worker_jobs = 1 if len(ir_modules) < num_workers else len(ir_modules) // num_workers
