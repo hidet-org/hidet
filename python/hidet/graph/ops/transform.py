@@ -253,6 +253,29 @@ class IdxSelTask(Task):
         super().__init__(name='idxsel', inputs=[data, index], outputs=[output])
 
 
+class RepeatInterleaveTask(Task):
+    def __init__(self, data: TensorInput, repeats: int, dim: int = None):
+        # NOTE: Currently we only support the case where `repeats` is int, as that is what we actually encountered
+        # while benchmarking models.
+        if dim is None:
+            # if dim is None: flatten the input tensor and repeat the whole tensor
+            output_shape = [prod(data.shape) * repeats]
+        else:
+            output_shape = data.shape[:dim] + [data.shape[dim] * repeats] + data.shape[dim + 1 :]
+
+        def fmap(*output_indices):
+            if dim is None:
+                idx = output_indices[0] // repeats
+                return data[index_deserialize(idx, data.shape)]
+            else:
+                idx = output_indices[dim] // repeats
+                return data[output_indices[:dim] + (idx,) + output_indices[dim + 1 :]]
+
+        out = compute(name='out', shape=output_shape, fcompute=lambda *indices: fmap(*indices))
+
+        super().__init__(name='repeat_interleave', inputs=[data], outputs=[out])
+
+
 class StridedSliceTask(Task):
     def __init__(
         self,
@@ -474,6 +497,15 @@ class IdxSelOp(Operator):
         )
 
 
+class RepeatInterleaveOp(Operator):
+    def __init__(self, data: Tensor, repeats: int, dim: int = None):
+        super().__init__(
+            inputs=[data],
+            attributes={'repeats': repeats, 'dim': dim},
+            task=RepeatInterleaveTask(input_like(data, 'data'), repeats, dim=dim),
+        )
+
+
 class StridedSliceOp(Operator):
     def __init__(
         self,
@@ -645,6 +677,10 @@ def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 def index_select(data: Tensor, index: Tensor, dim: int) -> Tensor:
     return IdxSelOp(data, index, dim).outputs[0]
+
+
+def repeat_interleave(data: Tensor, repeats: int, dim: int = None) -> Tensor:
+    return RepeatInterleaveOp(data, repeats, dim=dim).outputs[0]
 
 
 def strided_slice(

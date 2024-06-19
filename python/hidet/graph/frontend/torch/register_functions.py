@@ -459,6 +459,7 @@ def neg(x: Tensor):
 
 @register_function(torch.nn.functional.softmax)
 @register_method(torch.Tensor.softmax)
+@register_function(torch.softmax)
 def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     if dtype is not None:
         x = ops.cast(x, dtype_from_torch(dtype))
@@ -618,6 +619,20 @@ def permute(x: Tensor, *args):
         args = args[0]
     dims = [int(v) for v in args]
     return ops.transpose(x, dims)
+
+
+@register_function(torch.repeat_interleave)
+@register_method(torch.Tensor.repeat_interleave)
+def repeat_interleave(
+    x: Tensor, repeats: Union[int, Tensor], dim: Optional[int] = None, *, output_size: Optional[int] = None
+):
+    if output_size is not None:
+        raise NotImplementedError("hidet: repeat_interleave with out_size is not supported yet")
+    if isinstance(repeats, Tensor):
+        raise NotImplementedError("hidet: repeat_interleave with Tensor repeats is not supported yet")
+    if repeats <= 0:
+        raise ValueError("repeat_interleave: repeats must be positive")
+    return ops.repeat_interleave(x, repeats, dim=dim)
 
 
 @register_function(torch.swapaxes)
@@ -1206,6 +1221,7 @@ def torch_conj(x: Tensor) -> Tensor:
 @register_function(torch.cuda.synchronize)
 @register_function(torch.amp.autocast_mode._enter_autocast)
 @register_function(torch.amp.autocast_mode._exit_autocast)
+@register_function(torch._C._set_grad_enabled)
 def torch_noop(*args, **kwargs):
     return
 
@@ -1294,7 +1310,9 @@ def isinf(x: Tensor) -> Tensor:
 
 @register_function(torch._C._nn.pad)
 @register_function(torch.nn.functional.pad)
-def torch_pad(x: Tensor, pad: Union[Tuple[int, ...], List[int]], mode: str = 'constant', value=0):
+def torch_pad(x: Tensor, pad: Union[Tuple[int, ...], List[int]], mode: str = 'constant', value=None):
+    if value is None:
+        value = 0.0
     if isinstance(pad, tuple):
         pad = list(pad)
     # Torch's pad list has form [p2left, p2right, p1left, p1right, p0left, p0right]
@@ -1353,6 +1371,14 @@ def torch_copy(x: Tensor, src: Tensor, non_blocking: bool = False):
 @register_function(torch.chunk)
 def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
     return ops.split(x, parts_or_sections=chunks, axis=dim)
+
+
+@register_function(torch.unbind)
+@register_method(torch.Tensor.unbind)
+def torch_unbind(x: Tensor, dim: int = 0):
+    num_chunks = x.shape[dim]
+    chunks = torch_chunk(x, num_chunks, dim=dim)
+    return tuple(chunk.squeeze(dim) for chunk in chunks)
 
 
 @register_function(torch.einsum)

@@ -260,5 +260,17 @@ def test_meshgrid(shapes, indexing):
         )
 
 
+@pytest.mark.parametrize(
+    "input_shape, repeats, dim", [([2, 3, 4], 2, 0), ([1, 2, 9], 3, 1), ([1, 3, 4], 4, 2), ([1, 2, 3], 3, None)]
+)
+def test_repeat_interleave(input_shape, repeats, dim):
+    input_tensor = torch.randn(input_shape)
+    input_tensor_hidet = hidet.from_torch(input_tensor)
+    output_tensor = torch.repeat_interleave(input_tensor, repeats, dim=dim)
+    output_tensor_hidet = ops.repeat_interleave(input_tensor_hidet, repeats, dim=dim)
+
+    np.testing.assert_allclose(output_tensor.numpy(), output_tensor_hidet.numpy(), atol=0, rtol=0)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
