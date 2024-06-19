@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple, Sequence, Union
 import warnings
-
 import numpy as np
 
+from hidet.utils.py import same_list
 import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
@@ -345,32 +345,20 @@ class Tensor:
                 return '{}\nfrom {}'.format(head, self.trace)
 
     def __getitem__(self, item):
-        from hidet.graph.ops import strided_slice
-        from .ops import take, reshape, flatten
+        from .ops import strided_slice, take
+        from .ops import reshape, transpose
 
         if isinstance(item, Tensor):
             if not item.dtype.is_integer():
                 raise TypeError("Tensor indexing via Tensor requires integer index tensor")
 
-            if len(item.shape) == 1:
-                return take(self, item, axis=0)
-
-            if len(item.shape) >= 2:
-                item_1d = reshape(item, flatten(item).shape)
-                return take(self, item_1d, axis=0).reshape(tuple(item.shape) + tuple(self.shape[1:]))
+            return take(self, item, axis=0)
 
         if isinstance(item, list):
             item = tuple(item)
 
         if not isinstance(item, tuple):
             item = tuple([item])
-
-        # now, the item could have
-        # 1. integer index
-        # 2. slice
-        # 3. Ellipsis
-        # 4. None
-        # e.g., [1, 3:5, ..., None]
 
         # process Ellipsis
         # e.g., x[1, ..., 2] -> x[1, :, :, 2]
@@ -381,6 +369,63 @@ class Tensor:
             ellipsis_ndim = len(self.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
             ellipsis_ndim = max(ellipsis_ndim, 0)
             item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1 :]
+
+        # if some elements in item are tensors
+        # advanced indexing will be used
+        if any(isinstance(it, Tensor) for it in item):
+            tensor_indices = []
+            slice_indices = []
+            for i, it in enumerate(item):
+                if isinstance(it, Tensor):
+                    tensor_indices.append(i)
+                else:
+                    slice_indices.append(i)
+
+            if len(self.shape) == 2 and same_list(tensor_indices, list(range(2)), use_equal=True):
+                x = self
+            else:
+                x = transpose(self, tensor_indices + slice_indices + list(range(len(item), len(self.shape))))
+            n = len(tensor_indices)
+
+            item_sum = item[tensor_indices[0]] * prod(x.shape[1:n])
+            for i in range(1, n):
+                item_sum += item[tensor_indices[i]] * prod(x.shape[i + 1 : n])
+            x = take(reshape(x, (prod(x.shape[:n]),) + x.shape[n:]), item_sum)
+
+            # check if there is slice index between tensor indices
+            # if no, slice indices that came before tensor indices need to go to their initial positions
+            # otherwise, they stay as they are at the current line
+            if tensor_indices[-1] - tensor_indices[0] + 1 == n:
+                transpose_back = []
+                new_item = []
+                idx = 0
+                for _ in range(len(slice_indices)):
+                    if slice_indices[idx] == idx:
+                        transpose_back.append(len(item[tensor_indices[0]].shape) + idx)
+                        new_item.append(item[idx])
+                        idx += 1
+                    else:
+                        break
+
+                for i in range(len(item[tensor_indices[0]].shape)):
+                    transpose_back.append(i)
+                    new_item.append(slice(None))
+
+                for idx in range(idx, len(slice_indices)):
+                    transpose_back.append(idx + len(item[tensor_indices[0]].shape))
+                    new_item.append(item[idx + n])
+
+                if len(x.shape) != 2 or not same_list(tensor_indices, list(range(2)), use_equal=True):
+                    x = transpose(x, transpose_back)
+            else:
+                new_item = [slice(None) for _ in range(n)] + [item[idx] for idx in slice_indices]
+            return x.__getitem__(new_item)
+
+        # now, the item could have
+        # 1. integer index
+        # 2. slice
+        # 3. None
+        # e.g., [1, 3:5, ..., None]
 
         # process None
         # e.g., x[2, None, 3] -> x[2, 1, 3]

@@ -17,6 +17,7 @@ import torch
 import hidet
 import hidet as hi
 from hidet import ops
+from hidet import symbol, trace_from
 from hidet.ir.utils import broadcast_shape
 from hidet.utils import prod
 from hidet.graph.tensor import asarray
@@ -213,7 +214,7 @@ def numpy_getitem(data, item):
         [[129], [2, 3]],
     ],
 )
-def test_getitem(a_shape, b_shape):
+def test_getitem_nd(a_shape, b_shape):
     for device in ['cuda', 'cpu']:
         a = np.array(np.random.randn(*a_shape)).astype('float32')
         b = np.array(np.random.randint(low=0, high=a_shape[0], size=b_shape)).astype('int32')
@@ -258,6 +259,145 @@ def test_meshgrid(shapes, indexing):
         np.testing.assert_allclose(
             actual=grid_hi[i].cpu().numpy(), desired=grid_torch[i].cpu().numpy(), atol=atol, rtol=rtol
         )
+
+
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[('a', 1), ('b', 1000)], [('c', 2), ('d', 3)]],
+        [[('a', 16), ('b', 1000)], [('c', 1), ('d', 2)]],
+        [[('a', 1), ('b', 1000), ('c', 1), ('d', 1)], [('e', 10), ('f', 2), ('g', 3)]],
+        [[('a', 16), ('b', 1000), ('c', 1), ('d', 1)], [('e', 3), ('f', 2), ('g', 4), ('h', 2)]],
+        [[('a', 1), ('b', 128), ('c', 128), ('d', 128)], [('e', 2), ('f', 2)]],
+        [[('a', 1), ('b', 128), ('c', 128), ('d', 128)], [('e', 2)]],
+        [[('a', 129)], [('b', 2)]],
+        [[('a', 129)], [('b', 2), ('c', 3)]],
+    ],
+)
+def test_getitem_nd_dynamic(a_shape, b_shape):
+    for dev in ['cuda', 'cpu']:
+        a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
+        a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
+
+        b_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in b_shape]
+        b_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in b_shape]
+        a = np.array(np.random.randn(*a_concrete_shape)).astype('float32')
+        b = np.array(np.random.randint(low=0, high=a_concrete_shape[0], size=b_concrete_shape)).astype('int32')
+        numpy_result = a[b]
+        a_hidet = asarray(a).to(device=dev)
+        b_hidet = asarray(b).to(device=dev)
+        sym_a = symbol(a_symbolic_shape, dtype=a_hidet.dtype, device=a_hidet.device)
+        sym_b = symbol(b_symbolic_shape, dtype=b_hidet.dtype, device=b_hidet.device)
+        sym_result = sym_a[sym_b]
+
+        func = trace_from(sym_result, [sym_a, sym_b])
+        hidet_result = func(a_hidet, b_hidet).cpu().numpy()
+        np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=0, rtol=0)
+
+
+@pytest.mark.parametrize(
+    "a_shape, b_shape, c_shape",
+    [
+        [[10, 150], [2, 3], [1, 3]],
+        [[16, 130], [1, 2], [1, 1]],
+        [[10, 140], [10, 3], [10, 3]],
+        [[16, 136], [1, 2], [4, 2]],
+        [[128, 128], [2, 2], [2, 2]],
+        [[10, 128], [2, 1], [1, 1]],
+        [[129, 138], [1, 2], [1, 1]],
+        [[129, 138], [2, 3], [2, 3]],
+    ],
+)
+def test_getitem_advanced(a_shape, b_shape, c_shape):
+    for device in ['cuda', 'cpu']:
+        a = np.array(np.random.randn(*a_shape)).astype('float32')
+        b = np.array(np.random.randint(low=0, high=10, size=b_shape)).astype('int32')
+        c = np.array(np.random.randint(low=0, high=128, size=c_shape)).astype('int32')
+        atol = 0
+        rtol = 0
+
+        numpy_result = a[b, c]
+        a = asarray(a).to(device=device)
+        b = asarray(b).to(device=device)
+        c = asarray(c).to(device=device)
+
+        hidet_result = a[b, c].cpu().numpy()
+        np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+@pytest.mark.parametrize(
+    "a_shape, b_shape, c_shape",
+    [
+        [[('a', 10), ('b', 150), 10], [2, 3], [1, 3]],
+        [[('a', 16), ('b', 130)], [1, 2], [1, 1]],
+        [[('a', 10), ('b', 140), 10], [10, 3], [10, 3]],
+        [[('a', 16), ('b', 136), 11, 1], [1, 2], [4, 2]],
+        [[('a', 128), ('b', 128)], [2, 2], [2, 2]],
+        [[('a', 10), ('b', 128)], [2, 1], [1, 1]],
+        [[('a', 129), ('b', 138)], [1, 2], [1, 1]],
+        [[('a', 129), ('b', 138)], [2, 3], [2, 3]],
+    ],
+)
+def test_getitem_advanced_dynamic(a_shape, b_shape, c_shape):
+    for dev in ['cuda', 'cpu']:
+        a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
+        a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
+
+        b_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in b_shape]
+        b_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in b_shape]
+
+        c_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in c_shape]
+        c_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in c_shape]
+
+        a = np.array(np.random.randn(*a_concrete_shape)).astype('float32')
+        b = np.array(np.random.randint(low=0, high=10, size=b_concrete_shape)).astype('int32')
+        c = np.array(np.random.randint(low=0, high=128, size=c_concrete_shape)).astype('int32')
+
+        numpy_result = a[b, c]
+        a_hidet = asarray(a).to(device=dev)
+        b_hidet = asarray(b).to(device=dev)
+        c_hidet = asarray(c).to(device=dev)
+
+        sym_a = symbol(a_symbolic_shape, dtype=a_hidet.dtype, device=a_hidet.device)
+        sym_b = symbol(b_symbolic_shape, dtype=b_hidet.dtype, device=b_hidet.device)
+        sym_c = symbol(c_symbolic_shape, dtype=c_hidet.dtype, device=c_hidet.device)
+        sym_result = sym_a[sym_b, sym_c]
+
+        func = trace_from(sym_result, [sym_a, sym_b, sym_c])
+        hidet_result = func(a_hidet, b_hidet, c_hidet).cpu().numpy()
+        np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=0, rtol=0)
+
+
+def test_adv_indexing_with_slices():
+    def tests(x, ind1, ind2):
+        y1 = x[ind1, :]
+        y2 = x[ind1, ...]
+        y3 = x[..., ind1, :]
+        y4 = x[:, :, ind1, :]
+
+        y5 = x[ind1, :, ind2]
+        y6 = x[ind1, ..., ind2]
+        y7 = x[..., ind1, :, ind2]
+        y8 = x[:, :, ind1, ind2]
+
+        y9 = x[ind1, ind2, :]
+        y10 = x[ind1, ind2, ...]
+        y11 = x[ind1, ind2, :]
+        y12 = x[:, ind2, ind1, :]
+
+        y13 = x[:, :, ind1, :10]
+        return [y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13]
+
+    x = hidet.randn(shape=(10, 11, 12, 13), dtype='float32', device='cuda')
+    ind1 = hidet.randint(low=0, high=10, shape=(1, 1)).cuda()
+    ind2 = hidet.randint(low=0, high=10, shape=(1, 2)).cuda()
+
+    outs1 = tests(x, ind1, ind2)
+
+    x, ind1, ind2 = [t.cpu().numpy() for t in [x, ind1, ind2]]
+
+    outs2 = tests(x, ind1, ind2)
+    [np.testing.assert_allclose(actual=ho.cpu().numpy(), desired=no) for ho, no in zip(outs1, outs2)]
 
 
 @pytest.mark.parametrize(
