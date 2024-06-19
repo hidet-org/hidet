@@ -77,5 +77,29 @@ def test_torch_copy(shape, src_shape):
     )
 
 
+@pytest.mark.parametrize(
+    'shape, repeats, dim',
+    [
+        ([2, 3, 4], 2, 1),
+        ([2, 3, 4], 3, 2),
+        ([2, 3, 4], 4, 0),
+        ([2, 3, 4], 1, None),
+        ([2, 3, 4], 3, None),
+        ([2, 3, 4], 1, 2),
+        ([3], 3, None),
+        ([4], 1, None),
+    ],
+)
+def test_torch_repeat_interleave(shape, repeats, dim):
+    check_module(
+        FunctionalModule(op=lambda x: x.repeat_interleave(repeats, dim)), args=[torch.randn(shape)], atol=0, rtol=0
+    )
+
+
+@pytest.mark.parametrize('shape, dim', [([2, 3, 4], 0), ([2, 3, 4], 1), ([2, 3, 1], 2), ([1], 0), ([3, 1], 1)])
+def test_torch_unbind(shape, dim):
+    check_module(FunctionalModule(op=lambda x: x.unbind(dim)), args=[torch.randn(shape)], atol=0, rtol=0)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
