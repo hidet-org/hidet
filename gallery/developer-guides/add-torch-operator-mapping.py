@@ -91,7 +91,7 @@ class Model(nn.Module):
 
 def run_model():
     model = Model().cuda()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode='max-autotune')
 
     x = torch.randn(10, 10, device='cuda')
     y1 = model_opt(x)

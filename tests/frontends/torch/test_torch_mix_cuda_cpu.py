@@ -30,7 +30,7 @@ def test_torch_mix_cuda_cpu():
     x = torch.randn(3, 4, device='cpu')
     y = model(x)
 
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode=None)
     y1 = model_opt(x)
 
     torch.testing.assert_close(y, y1, rtol=0.0, atol=0.0)

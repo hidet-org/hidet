@@ -136,7 +136,9 @@ if __name__ == '__main__':
         '--params', type=str, help='Specify Input Parameters. Different operators have different formats.'
     )
     parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
-    parser.add_argument('--backend', type=str, default='hidet', help='Only hidet supported in this script')
+    parser.add_argument('--backend', type=str, default='hidet', help='Unused')
+    parser.add_argument('--mode', type=str, default='max-autotune', help='Unused')
+
     args = parser.parse_args()
     assert args.backend == 'hidet'
 
@@ -147,7 +149,7 @@ if __name__ == '__main__':
     else:
         raise ValueError(f'Benchmark function for operator {operator} not implemented')
 
-    Backend(backend='hidet', dtype=dtype).init_hidet()
+    Backend(backend='hidet', mode='max-autotune', dtype=dtype).init_hidet()
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision(dtype)

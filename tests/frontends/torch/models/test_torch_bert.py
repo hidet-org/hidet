@@ -25,7 +25,7 @@ def test_bert(batch_size: int, seq_length: int, use_tensor_core, dynamic):
     args = (tokens_tensor.cuda(),)
     kwargs = {'token_type_ids': segments_tensors.cuda()}
     model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-uncased').cuda().eval()
-    model_opt = torch.compile(model, backend='hidet', dynamic=dynamic)
+    model_opt = torch.compile(model, backend='hidet', mode=None, dynamic=dynamic)
     y1 = model(*args, **kwargs).last_hidden_state
 
     try:

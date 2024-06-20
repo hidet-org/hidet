@@ -30,8 +30,8 @@ def get_full_model_name(model_name):
     return short_to_full_model_name[model_name]
 
 
-def bench_causal_lm(model_name, bs, genlen, dtype, backend):
-    comp_backend = Backend(backend, dtype)
+def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
+    comp_backend = Backend(backend, mode, dtype)
 
     dtype = getattr(torch, dtype)
     model_name = get_full_model_name(model_name)
@@ -57,8 +57,8 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend):
     return latency
 
 
-def bench_masked_lm(model_name, seqlen, bs, dtype, backend):
-    comp_backend = Backend(backend, dtype)
+def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode):
+    comp_backend = Backend(backend, mode, dtype)
 
     dtype = getattr(torch, dtype)
     model_name = get_full_model_name(model_name)
@@ -96,15 +96,11 @@ if __name__ == '__main__':
         help='Specify Input Parameters. E.g., [bs=1][,][seqlen=256][,][genlen=1]',
     )
     parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
-    parser.add_argument(
-        '--backend',
-        type=str,
-        default='hidet',
-        help='torch.compile backend: hidet or max-autotune or max-autotune-no-cudagraphs',
-    )
+    parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend')
+    parser.add_argument('--mode', type=str, default='max-autotune', help='torch.compile mode')
     args = parser.parse_args()
 
-    model_name, dtype, backend = args.model, args.dtype, args.backend
+    model_name, dtype, backend, mode = args.model, args.dtype, args.backend, args.mode
 
     seqlen = SEQLEN_DEFAULT
     bs = BS_DEFAULT
@@ -120,8 +116,8 @@ if __name__ == '__main__':
             genlen = int(value)
 
     if model_class[get_full_model_name(model_name)] == 'AutoModelForMaskedLM':
-        latency = bench_masked_lm(model_name, seqlen, bs, dtype, backend)
+        latency = bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode)
     elif model_class[get_full_model_name(model_name)] == 'AutoModelForCausalLM':
-        latency = bench_causal_lm(model_name, bs=bs, genlen=genlen, dtype=dtype, backend=backend)
+        latency = bench_causal_lm(model_name, bs=bs, genlen=genlen, dtype=dtype, backend=backend, mode=mode)
 
     print(latency)

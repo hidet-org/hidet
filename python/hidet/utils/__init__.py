@@ -19,7 +19,7 @@ from . import stack_limit
 
 from .py import prod, Timer, repeat_until_converge, COLORS, get_next_file_index, factorize, HidetProfiler, TableBuilder
 from .py import same_list, strict_zip, index_of, initialize, gcd, lcm, error_tolerance, green, red, cyan, bold, blue
-from .py import str_indent, unique, assert_close
+from .py import str_indent, unique, assert_close, cdiv
 from .benchmark import Bench, benchmark_func
 from .structure import DirectedGraph
 from .cache_utils import cache_dir, cache_file, clear_op_cache, clear_cache_dir

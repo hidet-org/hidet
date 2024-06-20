@@ -31,7 +31,9 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
     args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
     args_torch = [x.clone().cuda() if isinstance(x, torch.Tensor) else x for x in args]
     # we use a lambda to make sure the model is compiled by pytorch
-    model_opt = torch.compile(lambda *args, **kwargs: model(*args, **kwargs), backend='hidet', dynamic=dynamic)
+    model_opt = torch.compile(
+        lambda *args, **kwargs: model(*args, **kwargs), backend='hidet', mode=None, dynamic=dynamic
+    )
 
     torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
     torch_outputs = model(*args_torch)
@@ -54,16 +56,10 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
 
 # Class to initialise backend, run compilation
 class Backend:
-    def __init__(self, backend, dtype, cache='', search_space=2) -> None:
-        assert backend in [
-            'hidet',
-            'max-autotune',
-            'max-autotune-no-cudagraphs',
-            'eager',
-        ], 'backend is hidet or max-autotune or max-autotune-no-cudagraphs or eager supported only'
+    def __init__(self, backend, mode, dtype, cache='') -> None:
         self.backend = backend
+        self.mode = mode
         self.dtype = dtype
-        self.search_space = search_space
         self.cache = cache
         if self.backend == 'hidet':
             self.init_hidet()
@@ -72,10 +68,7 @@ class Backend:
         import hidet
         import os
 
-        hidet.torch.dynamo_config.search_space(self.search_space)
         hidet.torch.dynamo_config.use_tensor_core(True)
-        hidet.torch.dynamo_config.use_cuda_graph(True)
-        hidet.option.search_space(self.search_space)
         hidet.option.cache_dir(hidet.option.get_cache_dir() + self.cache)
 
         # hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
@@ -95,11 +88,11 @@ class Backend:
 
     def compile(self, model):
         if self.backend == 'hidet':
-            model = torch.compile(model, backend='hidet', mode='max-autotune')
+            model = torch.compile(model, backend='hidet', mode=self.mode)
         elif self.backend == 'eager':
             pass
         else:
-            model = torch.compile(model, mode=self.backend)
+            model = torch.compile(model, backend=self.backend, mode=self.mode)
         return model
 
 

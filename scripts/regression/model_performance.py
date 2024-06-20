@@ -60,7 +60,7 @@ def bench_hf_transformers(model_name, seqlen, dtype):
     inputs = {'input_ids': inputs['input_ids']}
     torch_inputs = tuple(i.clone().cuda() for i in inputs.values())
     with torch.no_grad(), torch.autocast("cuda"):
-        model = torch.compile(model, backend='hidet')
+        model = torch.compile(model, backend='hidet', mode='max-autotune')
         latency = bench_torch_model(model, torch_inputs)
         del model
     return latency
@@ -72,7 +72,7 @@ def bench_torchvision(model_cls, shape, dtype):
     model = model.eval().to(dtype).cuda()
     torch_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
     with torch.no_grad(), torch.autocast("cuda"):
-        model = torch.compile(model, backend='hidet')
+        model = torch.compile(model, backend='hidet', mode='max-autotune')
         latency = bench_torch_model(model, torch_inputs)
         del model
     return latency
@@ -84,7 +84,7 @@ def bench_torchhub(repo_name, model_name, shape, dtype):
     model = model.eval().to(dtype).cuda()
     torch_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
     with torch.no_grad(), torch.autocast("cuda"):
-        model = torch.compile(model, backend='hidet')
+        model = torch.compile(model, backend='hidet', mode='max-autotune')
         latency = bench_torch_model(model, torch_inputs)
         del model
     return latency
@@ -136,8 +136,6 @@ def llama_regression():
     return None
 
 def model_performance_regression(report_file):
-    # Uncomment below line to limit parallel jobs if running out of CPU memory
-    # hidet.option.parallel_tune(16)
     hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
     result_groups = []
     result_groups.append(torchvision_regression('resnet50'))

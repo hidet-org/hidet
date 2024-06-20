@@ -30,8 +30,8 @@ def test_pegasus():
     tokenizer = PegasusTokenizer.from_pretrained("google/pegasus-cnn_dailymail")
     model = PegasusForConditionalGeneration.from_pretrained("google/pegasus-cnn_dailymail").cuda().eval()
 
-    model.model.encoder = torch.compile(model.model.encoder, backend='hidet', dynamic=True)
-    model.model.decoder = torch.compile(model.model.decoder, backend='hidet', dynamic=True)
+    model.model.encoder = torch.compile(model.model.encoder, backend='hidet', mode=None, dynamic=True)
+    model.model.decoder = torch.compile(model.model.decoder, backend='hidet', mode=None, dynamic=True)
 
     batch = tokenizer(src_text, truncation=True, return_tensors="pt").to('cuda')
     translated = model.generate(**batch)

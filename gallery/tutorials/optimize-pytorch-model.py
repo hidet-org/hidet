@@ -76,7 +76,7 @@ model = model.cuda().eval()
 
 with torch.no_grad():
     hidet.torch.dynamo_config.correctness_report()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode='max-autotune')
     model_opt(x)
 
 # %%
@@ -142,5 +142,5 @@ dynamo.reset()  # clear the compiled cache
 
 with torch.no_grad():
     hidet.torch.dynamo_config.print_input_graph(True)
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode='max-autotune')
     model_opt(x)
