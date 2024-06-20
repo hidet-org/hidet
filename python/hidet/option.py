@@ -303,11 +303,8 @@ def register_hidet_options():
         description='The auth token to use for accessing private huggingface models.',
     )
 
-    config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet')
-    if not os.path.exists(config_file_path):
-        os.makedirs(config_file_path)
-    config_file_path = os.path.join(config_file_path, 'hidet.toml')
     # Load hidet config
+    config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet', 'hidet.toml')
     if os.path.exists(config_file_path):
         _load_config(config_file_path)
 
