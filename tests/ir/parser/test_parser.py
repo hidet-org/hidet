@@ -48,7 +48,7 @@ def get_matmul_task():
     s = symbol_var('s')
     a = tensor_input('a', 'float16', [s, 256])
     b = tensor_input('b', 'float16', [256, 512])
-    task = MatmulF16Task(a, b)
+    task = MatmulF16Task(a, b, 'float32')
     mods = task.implement_cuda('.')
     mod = mods[0]
     return mod

@@ -9,10 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Tuple
+from typing import List, Tuple, Union
+from functools import partial
+
 from hidet.ir import dtypes
-from hidet.ir.dtypes import float16
-from hidet.ir.expr import if_then_else, Int, Expr
+from hidet.ir.type import DataType, data_type
+from hidet.ir.dtypes import float16, float32
+from hidet.ir.expr import if_then_else, Int, Expr, cast
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
@@ -26,7 +29,7 @@ from hidet.graph.ops.utils import broadcast_indices
 
 
 class MatmulF16Task(Task):
-    def __init__(self, a: TensorNode, b: TensorNode, parallel_k_parts: int = 1):
+    def __init__(self, a: TensorNode, b: TensorNode, acc_dtype: Union[DataType, str], parallel_k_parts: int = 1):
         if not a.type.dtype == float16 or not b.type.dtype == float16:
             raise ValueError('Both inputs must be float16 tensors')
 
@@ -54,24 +57,31 @@ class MatmulF16Task(Task):
         k_size = a.shape[-1]
         c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
         k_part_extent = cdiv(k_size, parallel_k_parts)
+        acc_dtype = data_type(acc_dtype)
 
-        c = compute(
-            name='c',
-            shape=c_shape,
-            fcompute=lambda k_part, *indices: reduce(
-                shape=[k_part_extent],
-                fcompute=lambda k: if_then_else(
-                    k_part * k_part_extent + k < k_size,
+        def inner_compute(k_part, indices, k):
+            return if_then_else(
+                k_part * k_part_extent + k < k_size,
+                cast(
                     a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
                     * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
-                    float16(0.0),
+                    acc_dtype,
                 ),
-                reduce_type='sum',
-            ),
-        )
+                acc_dtype(0.0),
+            )
+
+        def outer_compute(k_part, *indices):
+            return float16(
+                reduce(shape=[k_part_extent], fcompute=partial(inner_compute, k_part, indices), reduce_type='sum')
+            )
+
+        c = compute(name='c', shape=c_shape, fcompute=outer_compute)
 
         super().__init__(
-            name='matmul_f16_pk', inputs=[a, b], outputs=[c], attributes={'parallel_k_parts': parallel_k_parts}
+            name='matmul_f16_pk',
+            inputs=[a, b],
+            outputs=[c],
+            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts},
         )
 
     def allow_prologue(self) -> bool:
@@ -135,11 +145,17 @@ class MatmulF16Task(Task):
         a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
         k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
+        acc_dtype = self.attrs['acc_dtype']
 
         if use_cublas:
             from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
+            from hidet.cuda.cublas import cublasComputeType
 
             dtype = self.inputs[0].type.dtype
+            if acc_dtype == float32:
+                compute_type = cublasComputeType.CUBLAS_COMPUTE_32F
+            else:
+                compute_type = cublasComputeType.CUBLAS_COMPUTE_16F
             # Hack to reduce redundant schedules. When use_cublas == False, other tuning params are irrelevant
             # and we only need one copy of the schedule.
             schedule_filter = (
@@ -152,19 +168,20 @@ class MatmulF16Task(Task):
                 and mma == 'm16n8k16'
             )
             tune.check(schedule_filter)
-            return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype)
+            return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type)
 
         # schedule parameters
-        mma_configs = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
-        tune.check(mma in mma_configs)
-        mma_config = mma_configs[mma]
+        mma_configs_f16 = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
+        mma_configs_f32 = {'m16n8k8': MmaConfig.m16n8k8_f16_f32(), 'm16n8k16': MmaConfig.m16n8k16_f16_f32()}
+        tune.check(mma in mma_configs_f16 or mma in mma_configs_f32)
+        mma_config = mma_configs_f16[mma] if acc_dtype == float16 else mma_configs_f32[mma]
 
         mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
         warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
         grid_dim: Tuple[Int, Int, Int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
-        dynamic_smem_bytes = max(2 * (block_m + block_n) * block_k * 2, block_m * block_n * 2)
+        dynamic_smem_bytes = max(2 * (block_m + block_n) * block_k * 2, block_m * block_n * acc_dtype.nbytes)
 
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
         tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
@@ -217,7 +234,7 @@ class MatmulF16Task(Task):
             def warp_mma(
                 regs_a: float16[mma_config.a_elements],
                 regs_b: float16[mma_config.b_elements],
-                regs_c: float16[mma_config.c_elements],
+                regs_c: acc_dtype[mma_config.c_elements],
             ):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
 
@@ -305,7 +322,7 @@ class MatmulF16Task(Task):
                 smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
                 regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
                 regs_b = register_tensor(float16, [2, mma_count_n, mma_config.b_elements])
-                regs_c = register_tensor(float16, [mma_count_m, mma_count_n, mma_config.c_elements])
+                regs_c = register_tensor(acc_dtype, [mma_count_m, mma_count_n, mma_config.c_elements])
 
                 for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
                     regs_c[i, j, p] = 0.0
@@ -348,11 +365,11 @@ class MatmulF16Task(Task):
                                 delta_n = wj * warp_n + mj * mma_n + j
                                 in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
                                 if in_bound:
-                                    gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                    gmem_c[delta_m, delta_n] = float16(regs_c[mi, mj, p])
                                 p += 1
                 else:
-                    smem_c = tensor_pointer('float16', shape=[block_m, block_n])
-                    smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
+                    smem_c = tensor_pointer(acc_dtype, shape=[block_m, block_n])
+                    smem_c = dynamic_shared_memory(byte_offset=0, dtype=acc_dtype)
 
                     for k_round in range(warp_count_k):
                         for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
@@ -373,7 +390,7 @@ class MatmulF16Task(Task):
                             syncthreads()
                     for i, j in store_smem_c_map.on(threadIdx.x):
                         if offset_m + i < m_size and offset_n + j < n_size:
-                            gmem_c[i, j] = smem_c[i, j]
+                            gmem_c[i, j] = float16(smem_c[i, j])
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
@@ -382,17 +399,18 @@ class MatmulF16Task(Task):
 
 
 class MatmulF16Op(Operator):
-    def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
+    def __init__(self, a: Tensor, b: Tensor, acc_dtype: Union[DataType, str], parallel_k_parts=1):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
+        acc_dtype = data_type(acc_dtype)
         super().__init__(
             inputs=[a, b],
-            attributes={'parallel_k_parts': parallel_k_parts},
-            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
+            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts},
+            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, parallel_k_parts),
         )
 
 
-def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
+def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1, acc_dtype: Union[DataType, str] = "float32") -> Tensor:
     if len(a.shape) < 2 or len(b.shape) < 2:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     # TODO: impliment dynamic run-time shape assertion
@@ -402,4 +420,5 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
-    return MatmulF16Op(a, b, parallel_k_parts).outputs[0]
+    acc_dtype = data_type(acc_dtype)
+    return MatmulF16Op(a, b, acc_dtype, parallel_k_parts).outputs[0]
