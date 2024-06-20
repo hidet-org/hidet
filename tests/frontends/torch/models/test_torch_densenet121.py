@@ -14,6 +14,7 @@ import pytest
 from hidet.testing.torch_utils import check_module
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('shape', [[1, 3, 224, 224]])
 def test_densenet121(shape):
     model = torch.hub.load('pytorch/vision:v0.6.0', 'densenet121', pretrained=True).cuda().eval().to(torch.float16)

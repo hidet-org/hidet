@@ -37,11 +37,8 @@ x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
 model = model.cuda().eval()
 
-# uncomment the following line to enable kernel tuning
-# hidet.torch.dynamo_config.search_space(2)
-
 # optimize the model with 'hidet' backend
-model_opt = torch.compile(model, backend='hidet')
+model_opt = torch.compile(model, backend='hidet', mode='max-autotune')
 
 # run the optimized model
 y1 = model_opt(x)

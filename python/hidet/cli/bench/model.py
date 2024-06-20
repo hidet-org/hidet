@@ -149,24 +149,17 @@ class BenchModel:
         print('Benchmarking {} with backend {}...'.format(self, 'inductor(mode={})'.format(mode)))
         return self.bench_with_backend('inductor', mode=mode)
 
-    def bench_hidet(self, use_cuda_graph=True) -> float:
+    def bench_hidet(self, mode, use_cuda_graph=True) -> float:
         print('Benchmarking {} with backend {}...'.format(self, 'hidet(space={})'.format(self.search_space)))
         config = hidet.torch.dynamo_config
         config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
         config.use_tensor_core(self.tensor_core)
-        return self.bench_with_backend('hidet')
+        return self.bench_with_backend('hidet', mode=mode)
 
     @staticmethod
     def headers() -> List[str]:
-        return [
-            'model',
-            'inputs',
-            'eager',
-            'reduce-overhead',
-            'max-autotune',
-            'hidet({})'.format(BenchModel.search_space),
-        ]
+        return ['model', 'inputs', 'eager', 'reduce-overhead', 'max-autotune', 'hidet+max-autotune']
 
     def benchmark(self) -> List[Any]:
         return [
@@ -175,7 +168,7 @@ class BenchModel:
             self.bench_eager(),
             self.bench_inductor('reduce-overhead'),
             self.bench_inductor('max-autotune'),
-            self.bench_hidet(),
+            self.bench_hidet('max-autotune'),
         ]
 
 

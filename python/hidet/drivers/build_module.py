@@ -200,18 +200,26 @@ def build_ir_module_batch(
         ir_module, output_dir = args
         build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
 
-    def regroup_modules(modules, per_worker_jobs, num_workers):
-        if len(modules) >= num_workers:
-            initial_list_len = per_worker_jobs * num_workers
-            # first assign equal amount of the jobs to every worker
-            initial_list = [modules[i : i + per_worker_jobs] for i in range(0, initial_list_len, per_worker_jobs)]
-            # take the remaining jobs and assign them each to a worker, adding at most one job to each worker
-            reminder_len = len(modules) - initial_list_len
-            for i, j in zip(range(initial_list_len, len(modules)), range(reminder_len)):
-                initial_list[j].append(modules[i])
-            return initial_list
-        else:
+    def regroup_modules(modules, num_workers):
+        from hidet.utils import cdiv
+
+        _, _, max_candidates_per_job = option.get_parallel_tune()
+        len_modules = len(modules)
+        if len_modules <= num_workers:
             return modules
+
+        num_new_jobs = cdiv(len_modules, num_workers * max_candidates_per_job) * num_workers
+        job_per_worker = len_modules // num_new_jobs
+        num_modules_for_1st_pass = job_per_worker * num_new_jobs
+        # first assign equal amount of the jobs to every worker
+        list = [modules[i : i + job_per_worker] for i in range(0, num_modules_for_1st_pass, job_per_worker)]
+        # take the remaining jobs and assign them each to a worker, adding at most one job to each worker
+        reminder_len = len(modules) - job_per_worker * num_new_jobs
+        for i, j in zip(range(num_modules_for_1st_pass, len(modules)), range(reminder_len)):
+            list[j].append(modules[i])
+
+        assert sum(len(i) for i in list) == len(modules)
+        return list
 
     # check if regrouped IRModules have unique function names
     def check_function_singular(module_list: Union[Sequence[IRModule], Sequence[Sequence[IRModule]]]) -> bool:
@@ -231,7 +239,7 @@ def build_ir_module_batch(
         return True
 
     # calculate the number of workers
-    max_num_worker, mem_for_worker = option.get_parallel_tune()
+    max_num_worker, mem_for_worker, _ = option.get_parallel_tune()
     if hidet.option.compile_server.enabled():
         num_workers = min(len(ir_modules), 128)
     else:
@@ -245,8 +253,7 @@ def build_ir_module_batch(
     random.seed()
     if num_workers > 1 and len(ir_modules) > 1:
         lazy_initialize_cuda()
-        per_worker_jobs = 1 if len(ir_modules) < num_workers else len(ir_modules) // num_workers
-        ir_modules_list = regroup_modules(ir_modules, per_worker_jobs, num_workers)
+        ir_modules_list = regroup_modules(ir_modules, num_workers)
         assert check_function_singular(
             ir_modules_list
         ), 'duplicate function names detected after regrouping candidates for batch compilation'

@@ -27,8 +27,9 @@ def create_model_reduce(axis):
 @pytest.mark.parametrize('dtype', ['float32'])
 @pytest.mark.parametrize('axis', [[1, 2]])
 def test_dynamic_shape_w_mark_dynamic(operator, dtype, axis):
-    hidet_backend = Backend('hidet', dtype, search_space=0)
-    torch_backend = Backend('eager', dtype)
+    # Testing functionality. No needs in max-autotune
+    hidet_backend = Backend(backend='hidet', mode='default', dtype=dtype)
+    torch_backend = Backend('eager', None, dtype)
     dtype = getattr(torch, dtype)
 
     model_creator = getattr(sys.modules[__name__], "create_model_" + operator)
@@ -65,8 +66,9 @@ def test_dynamic_shape_w_mark_dynamic(operator, dtype, axis):
 @pytest.mark.parametrize('dtype', ['float32'])
 @pytest.mark.parametrize('axis', [[1, 2]])
 def test_dynamic_shape_w_heuristic_mark(operator, dtype, axis):
-    hidet_backend = Backend('hidet', dtype, search_space=0)
-    torch_backend = Backend('eager', dtype)
+    # Testing functionality. No needs in max-autotune
+    hidet_backend = Backend(backend='hidet', mode='default', dtype=dtype)
+    torch_backend = Backend('eager', None, dtype)
     dtype = getattr(torch, dtype)
 
     model_creator = getattr(sys.modules[__name__], "create_model_" + operator)

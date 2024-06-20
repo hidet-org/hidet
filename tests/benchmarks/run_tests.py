@@ -22,12 +22,24 @@ def run_command(cmd):
     return stdout
 
 
-def get_bench_cmd(run_name, runfile, run_param_name, dtype, backend):
+def get_bench_cmd(run_name, runfile, run_param_name, dtype, backend, mode):
     if run_name in external_models:
         runfile = './models/bench/' + runfile
     else:
         runfile = str(pathlib.Path(__file__).parent.resolve()) + '/' + runfile
-    cmd = ['python', runfile, run_name, '--params', run_param_name, '--dtype', dtype, '--backend', backend]
+    cmd = [
+        'python',
+        runfile,
+        run_name,
+        '--params',
+        run_param_name,
+        '--dtype',
+        dtype,
+        '--backend',
+        backend,
+        '--mode',
+        mode,
+    ]
     return cmd
 
 
@@ -37,13 +49,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--configs', type=str, default='run_configs.json', help='Specify configurations file to use for benchmarking'
     )
-    parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend: hidet or max-autotune')
+    parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend')
+    parser.add_argument('--mode', type=str, default='max-autotune', help='torch.compile mode')
+
     args = parser.parse_args()
     configs_file = args.configs
     fh = open(configs_file)
     run_configs = json.load(fh)
     fh.close()
     backend = args.backend
+    mode = args.mode
     hw_config = os.environ.get('HW_CONFIG')
     for run_config in run_configs:
         # Append hardware_config column
@@ -57,7 +72,7 @@ if __name__ == '__main__':
         run_param_name = run_config['param_name']
         run_dtype_id = run_config['dtype_id']
         run_dtype_name = run_config['dtype_name']
-        cmd = get_bench_cmd(run_name, runfile, run_param_name, run_dtype_name, backend)
+        cmd = get_bench_cmd(run_name, runfile, run_param_name, run_dtype_name, backend, mode)
         outputs = run_command(cmd)
         if outputs:
             # The second last line of All benchmark scripts' stdout is the latency. (Last line is empty)

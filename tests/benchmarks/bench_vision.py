@@ -4,8 +4,8 @@ import torchvision
 from hidet.testing.torch_utils import bench_torch_model, Backend
 
 
-def bench_torchvision(model_name, shape, dtype, backend, cache):
-    comp_backend = Backend(backend, dtype, cache)
+def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
+    comp_backend = Backend(backend, mode, dtype, cache)
 
     dtype = getattr(torch, dtype)
     if any(name in model_name for name in ['deeplab', 'fcn', 'lraspp']):
@@ -36,12 +36,14 @@ if __name__ == '__main__':
     parser.add_argument('model', type=str, help='Specify model')
     parser.add_argument('--params', type=str, default='1x3x224x224', help='Specify Input Size. E.g., 1x3x224x224')
     parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
-    parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend: hidet or max-autotune')
+    parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend')
+    parser.add_argument('--mode', type=str, default='max-autotune', help='torch.compile mode')
     parser.add_argument('--cache', type=str, default='', help='')
 
     args = parser.parse_args()
 
-    model, dtype, backend, cache = args.model, args.dtype, args.backend, args.cache
+    model, dtype, backend, mode, cache = args.model, args.dtype, args.backend, args.mode, args.cache
     shape = [int(d) for d in args.params.split('x')]
-    latency = bench_torchvision(model, shape, dtype, backend, cache)
+    latency = bench_torchvision(model, shape, dtype, backend, mode, cache)
+
     print(latency)

@@ -44,7 +44,7 @@ class TensorToModule(nn.Module):
 
 def test_tensor_cpu():
     model = TensorCpuModule()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode=None)
 
     x_cpu = torch.randn(10, device='cpu')
     model_opt(x_cpu)
@@ -55,7 +55,7 @@ def test_tensor_cpu():
 
 def test_tensor_cuda():
     model = TensorCudaModule()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode=None)
 
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)
@@ -66,7 +66,7 @@ def test_tensor_cuda():
 
 def test_tensor_to():
     model = TensorToModule()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', mode=None)
 
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)

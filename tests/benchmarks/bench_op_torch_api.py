@@ -138,8 +138,8 @@ def create_model_transpose(params: str, dtype):
 
 # Main benchmark function for ops.
 # Calls bench_torch_model
-def bench_op(operator, params, dtype, backend):
-    comp_backend = Backend(backend, dtype)
+def bench_op(operator, params, dtype, backend, mode):
+    comp_backend = Backend(backend, mode, dtype)
     dtype = getattr(torch, dtype)
 
     model_creator = getattr(sys.modules[__name__], "create_model_" + operator)
@@ -160,9 +160,11 @@ if __name__ == '__main__':
     )
     parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
     parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend: hidet or max-autotune')
+    parser.add_argument('--mode', type=str, default='max-autotune', help='Unused')
+
     args = parser.parse_args()
 
-    operator, dtype, backend = args.operator, args.dtype, args.backend
+    operator, dtype, backend, mode = args.operator, args.dtype, args.backend, args.mode
     params = args.params
-    latency = bench_op(operator, params, dtype, backend)
+    latency = bench_op(operator, params, dtype, backend, mode)
     print(latency)

@@ -174,8 +174,8 @@ def register_hidet_options():
     register_option(
         name='parallel_tune',
         type_hint='int, float',
-        default_value=(-1, 1.5),
-        description='The pair (max_parallel_jobs, mem_gb_per_job) that describe '
+        default_value=(-1, 1.5, 32),
+        description='The pair (max_parallel_jobs, mem_gb_per_job, max_candidates_per_job) that describe '
         'the maximum number of parallel jobs and memory reserved for each job',
     )
     register_option(
@@ -706,7 +706,7 @@ def get_parallel_build() -> bool:
     return OptionContext.current().get_option('parallel_build')
 
 
-def parallel_tune(max_parallel_jobs: int = -1, mem_gb_per_job: float = 1.5):
+def parallel_tune(max_parallel_jobs: int = -1, mem_gb_per_job: float = 1.5, max_candidates_per_job: int = 32):
     """
     Specify the maximum number of parallel compilation jobs to do,
     and the number of GiB preserved for each job.
@@ -719,7 +719,7 @@ def parallel_tune(max_parallel_jobs: int = -1, mem_gb_per_job: float = 1.5):
     mem_gb_per_job: float
         The minimum amount of memory (in GiB) reserved for each tuning job, default 1.5GiB.
     """
-    OptionContext.current().set_option('parallel_tune', (max_parallel_jobs, mem_gb_per_job))
+    OptionContext.current().set_option('parallel_tune', (max_parallel_jobs, mem_gb_per_job, max_candidates_per_job))
 
 
 def get_parallel_tune() -> Tuple[int, float]:
