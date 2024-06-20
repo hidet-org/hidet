@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, Tuple
 import numpy as np
+import torch
 from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
 
@@ -134,7 +135,6 @@ def check_torch_unary(
         for dev in ['cuda', 'cpu']:
             check_torch_unary(shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
-    import torch
     import hidet
 
     torch_data = torch.randn(*shape, dtype=getattr(torch, dtype)).to(device=device)
@@ -160,11 +160,24 @@ def check_torch_binary(
         for dev in ['cuda', 'cpu']:
             check_torch_binary(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
-    import torch
     import hidet
 
     torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=device)
     torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=device)
+    hidet_a = hidet.from_torch(torch_a)
+    hidet_b = hidet.from_torch(torch_b)
+    torch_result: torch.Tensor = torch_func(torch_a, torch_b)
+    hidet_result: hidet.Tensor = hidet_func(hidet_a, hidet_b)
+    np.testing.assert_allclose(
+        actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
+    )
+
+
+def check_torch_binary_with_inputs(
+    torch_a: torch.Tensor, torch_b: torch.Tensor, torch_func, hidet_func, atol=0.0, rtol=0.0
+):
+    import hidet
+
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
     torch_result: torch.Tensor = torch_func(torch_a, torch_b)
@@ -188,7 +201,6 @@ def check_torch_binary_dynamic(
         for dev in ['cuda', 'cpu']:
             check_torch_binary_dynamic(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
-    import torch
 
     a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
     a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
@@ -224,7 +236,6 @@ def check_torch_ternary(
         for dev in ['cuda', 'cpu']:
             check_torch_ternary(a_shape, b_shape, c_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
-    import torch
     import hidet
 
     torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=device)

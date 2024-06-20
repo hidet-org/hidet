@@ -219,7 +219,9 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
     return bs, m, n, k, stride_a, stride_b, stride_c
 
 
-def get_cublas_matmul_schedule(a_shape, b_shape, c_shape, a_dtype, b_dtype, c_dtype):
+def get_cublas_matmul_schedule(
+    a_shape, b_shape, c_shape, a_dtype, b_dtype, c_dtype, compute_type: Optional[Union[cublasComputeType, int]] = None
+):
     import hidet
     from hidet.lang.cuda import cublas
     from hidet.lang import attrs
@@ -227,7 +229,7 @@ def get_cublas_matmul_schedule(a_shape, b_shape, c_shape, a_dtype, b_dtype, c_dt
 
     try:
         bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(a_shape, b_shape, c_shape)
-        compute_type: cublasComputeType = resolve_cublas_compute_type(a_dtype, b_dtype, None)
+        compute_type: cublasComputeType = resolve_cublas_compute_type(a_dtype, b_dtype, compute_type)
     except NotImplementedError:
         # Unable to resolve cublas params, skip using cublas
         tune.check(False)

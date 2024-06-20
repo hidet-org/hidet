@@ -15,7 +15,7 @@ import torch
 
 import hidet
 from hidet import ops
-from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary
+from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary, check_torch_binary_with_inputs
 
 
 # @pytest.mark.skip(reason="when running matmul_x86 multiple times, it will produce wrong result. need fix.")
@@ -113,6 +113,36 @@ def test_matmul_fp16(a_shape, b_shape):
         rtol=1e-1,
         device='cuda',
     )
+
+
+# This test checks the correctness of the implementation of using f16/f32 accumulator of tensor's core mma
+def test_matmul_fp16_fp32():
+    from hidet.graph.ops.matmul.matmul_f16 import matmul_f16
+
+    m, n, k = 128, 128, 65536 + 8
+    a = torch.ones((m, k), dtype=torch.float16, device="cuda")
+    a = torch.concat([a, -a], dim=1)
+    b = torch.ones((k * 2, n), dtype=torch.float16, device="cuda")
+
+    check_torch_binary_with_inputs(
+        a,
+        b,
+        lambda x, y: torch.matmul(x, y),
+        lambda x, y: ops.squeeze(matmul_f16(x, y, acc_dtype="float32"), 0),
+        atol=1e-2,
+        rtol=1e-2,
+    )
+
+    with pytest.raises(AssertionError) as e_info:
+        e_info
+        check_torch_binary_with_inputs(
+            a,
+            b,
+            lambda x, y: torch.matmul(x, y),
+            lambda x, y: ops.squeeze(matmul_f16(x, y, acc_dtype="float16"), 0),
+            atol=1e-2,
+            rtol=1e-2,
+        )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, ("s", 128)], [("s", 128), 128]]])
