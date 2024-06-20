@@ -1444,3 +1444,10 @@ def torch_argmax(x, dim: Int = None, keepdim: bool = False):
 @register_method(torch.Tensor.argmin)
 def torch_argmin(x, dim: Int = None, keepdim: bool = False):
     return ops.argmin(x, dim, keepdim)
+
+
+@register_function(torch.any)
+def tensor_any(input: Tensor, dim, keepdim=False, *, out=None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.any(..., out=...)")
+    return ops.any(input, axis=dim, keepdims=keepdim)
