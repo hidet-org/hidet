@@ -250,6 +250,14 @@ def flatten(x: Tensor, start_dim: int, end_dim: int = -1):
 
 @register_function(operator.getitem)
 def getitem(x: Tensor, index):
+    if isinstance(index, Tensor):
+        if x.device != index.device:
+            if index.device.kind == 'cpu':
+                index = index.to(device=x.device)
+            else:
+                raise NotImplementedError(
+                    'getitem: index tensor must be either on CPU or the same device as the tensor'
+                )
     return x[index]
 
 
