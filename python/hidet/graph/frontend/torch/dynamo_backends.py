@@ -112,6 +112,7 @@ def get_compiled_graph(flow_graph: FlowGraph):
         if tensor_core:
             ctx.set_mma('mma' if tensor_core else 'simt')
         ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
+        ctx.allow_source_graph_removal(True)
         logger.info('start to optimize the flow graph')
         graph_opt: FlowGraph = optimize(flow_graph)
         logger.info('finish optimizing the flow graph')
@@ -204,7 +205,7 @@ def hidet_backend(graph_module, example_inputs, **kwargs):
             return wrapper
 
         flow_graph, inputs, output_format = get_flow_graph(interpreter, example_inputs)
-
+        del interpreter
         cgraph = get_compiled_graph(flow_graph)
 
         return HidetCompiledModel(cgraph, inputs, output_format)

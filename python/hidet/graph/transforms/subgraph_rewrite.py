@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=unused-import
-from typing import List, Optional, Dict, Tuple, Set
+import gc
+from typing import List, Optional, Dict, Tuple, Set, Union
 import logging
 import warnings
 
@@ -48,7 +49,14 @@ class SubgraphRewritePass(GraphPass):
             self.rewrite_rules = rewrite_rules
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
-        graph = graph_utils.functors.clone(graph)
+        graph_before_clone = graph
+        graph = graph_utils.functors.clone(graph_before_clone)
+        ctx = PassContext.current()
+        if ctx.is_source_graph_removal_allowed():
+            graph_before_clone.invalid_cache()
+            graph_before_clone.inputs = None
+            graph_before_clone.outputs = None
+
         for _ in range(self.max_num_transforms):
             updated, graph = self.try_transform(graph, self.rewrite_rules)
             if not updated:
