@@ -85,6 +85,9 @@ class PassContext:
             'parallel_k': 'default',
             # print lower details
             'verbose': False,
+            # Allow source graph removal.
+            # It is used to get rid of unnecessary tensors during the optimizations
+            'allow_source_graph_removal': False,
         }
 
     def __enter__(self) -> PassContext:
@@ -285,6 +288,12 @@ class PassContext:
         from .instruments import ConvertGraphToVCuda  # pylint: disable=import-outside-toplevel
 
         self.instruments.append(ConvertGraphToVCuda(enable))
+
+    def allow_source_graph_removal(self, allow: Optional[bool] = True):
+        self.configs['allow_source_graph_removal'] = allow
+
+    def is_source_graph_removal_allowed(self):
+        return self.configs['allow_source_graph_removal']
 
 
 class GraphPass:

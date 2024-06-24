@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
+import gc
 from typing import Callable, Dict, List, Optional, Union
 from collections import defaultdict
 import hidet.cuda
@@ -292,7 +293,6 @@ class MemoryPool:
         self.memory_api: MemoryAPI = memory_api
         self.block_size: int = block_size
         self.max_reserve_size: int = max_reserve_size
-
         self.reserved_size: int = 0
         self.active_blocks = 0
         self.memory_blocks: Dict[int, List[Storage]] = defaultdict(list)
@@ -308,6 +308,7 @@ class MemoryPool:
             addr = self.memory_api.malloc(allocated)
             if addr == 0 and allocated != 0:
                 # out of memory
+                gc.collect()
                 self.clear()
                 addr = self.memory_api.malloc(allocated)
                 if addr == 0:
@@ -334,6 +335,8 @@ class MemoryPool:
                 storage.addr = 0
         self.memory_blocks.clear()
         self.reserved_size = 0
+        if hidet.cuda.available():
+            hidet.cuda.synchronize()
 
     def status(self, color=False) -> str:
         allocated = self.memory_api.allocated
