@@ -97,8 +97,6 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
         if isinstance(arg, torch.dtype):
             dtype = arg
         elif isinstance(arg, torch.device):
-            if self.is_symbolic() and instantiate_device(device_from_torch(arg)) != self.device:
-                raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg
         elif isinstance(arg, Tensor):
             dtype = arg.dtype
@@ -114,9 +112,10 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
     _ = copy
     _ = non_blocking
 
-    return self.to(
-        dtype=dtype_from_torch(dtype).name if dtype else None, device=device_from_torch(device) if device else None
-    )
+    temp = self.to(dtype=dtype_from_torch(dtype).name if dtype else None)
+    if self.is_symbolic() and instantiate_device(device_from_torch(device)) != self.device:
+        return ops.transfer(temp, dst_device=device_from_torch(device))
+    return temp.to(device=device_from_torch(device) if device else None)
 
 
 @register_method(torch.Tensor.view)
