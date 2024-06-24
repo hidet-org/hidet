@@ -12,5 +12,6 @@
 
 from .tiled_tensor_view import TiledTensorView, tiled_tensor_view
 from .partition import PartitionSrc, PartitionDst, partition_src, partition_dst
-from .rearrange import Rearrange
+from .rearrange import Rearrange, rearrange
 from .copy import Copy, copy, Mask, mask
+from .arithmetic import Arithmetic, arithmetic

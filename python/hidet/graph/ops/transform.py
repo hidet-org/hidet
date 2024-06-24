@@ -16,6 +16,7 @@ from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
+from hidet.ir.cute import TensorLayout, compact_row_major, coalesce
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput, normalize_slice
 from .transpose2d import TransposeOp2D
@@ -89,12 +90,10 @@ class ReshapeTask(Task):
             shape=y_shape,
             fcompute=lambda *indices: x[index_map(indices, src_shape=x.shape, dst_shape=y_shape)],
         )
+        inverse_map = InverseMap.from_lambda(inverse_map, num_args=len(x.shape))
+        inverse_map.tile_mapping = TensorLayout(1)
         super().__init__(
-            name='reshape',
-            inputs=[x],
-            outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x.shape))},
-            attributes={'shape': y_shape},
+            name='reshape', inputs=[x], outputs=[y], inverse_map={x: inverse_map}, attributes={'shape': y_shape}
         )
 
     def normalize_shape(self, origin_shape: Sequence[Int], shape: Sequence[Int]):
@@ -172,12 +171,36 @@ class RearrangeTask(Task):
                 y_indices.append(cnt)
             return y_indices
 
-        super().__init__(
-            name='rearrange',
-            inputs=[x],
-            outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(inverse_map, len(x_shape))},
-        )
+        inverse_map = InverseMap.from_lambda(inverse_map, len(x_shape))
+        if any(not is_constant(v) for v in x_shape):  # dynamic shape
+            dim_set = set()
+            for dims in plan:
+                for i in dims:
+                    dim_set.add(i)
+            if all(i in dim_set or (is_constant(v) and v == 1) for i, v in enumerate(x_shape)):
+                inverse_map.tile_mapping = TensorLayout(1)
+            else:
+                inverse_map.tile_mapping = None
+        elif len(plan) == 0 or all(len(dims) == 0 for dims in plan):  # empty tensor
+            inverse_map.tile_mapping = None
+        else:
+            x_shape_value = [int(v) for v in x_shape]
+            from hidet.ir import cute
+
+            dst_shape = cute.flatten(tuple(tuple(x_shape_value[i] for i in dims) for dims in plan))
+            dst_stride_prime = compact_row_major(dst_shape)
+            dst_stride = [0] * len(x_shape_value)
+            idx = 0
+            for dims in plan:
+                for i in dims:
+                    dst_stride[i] = dst_stride_prime[idx]
+                    idx += 1
+
+            inverse_map.tile_mapping = coalesce(
+                TensorLayout(tuple(reversed(x_shape_value)), tuple(reversed(dst_stride)))
+            )
+        super().__init__(name='rearrange', inputs=[x], outputs=[y], inverse_map={x: inverse_map})
+        self.plan = plan
 
 
 class ConcatTask(Task):

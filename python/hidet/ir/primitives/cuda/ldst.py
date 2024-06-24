@@ -205,8 +205,8 @@ def register_ldg():
                     src = nr_outputs if cur == 0 else 2 * nr_outputs + 2 + i - 1
                     insts.append(f"@p {ld_inst} {dst}, [%{src}];")
                     cur += nr_outputs_per_inst
-                    if cur > 0:
-                        extra_addr_var.append(("l", addr_var + 4 * i))
+                    if i > 0:
+                        extra_addr_var.append(("l", cast(addr_var, ~u32) + 4 * i))
 
                 doc = "{" + "".join(insts) + "}"
                 body = AsmStmt(
@@ -253,7 +253,7 @@ def register_stg():
                 insts.append(f"@p {st_inst} [%{dst}], {src};")
                 cur += nr_inputs_per_inst
                 if i > 0:
-                    extra_addr_var.append(("l", addr_var + 4 * i))
+                    extra_addr_var.append(("l", cast(addr_var, ~u32) + 4 * i))
 
             doc = "{" + "".join(insts) + "}"
             body = AsmStmt(

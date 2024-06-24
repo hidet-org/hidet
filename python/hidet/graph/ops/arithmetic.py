@@ -18,6 +18,7 @@ from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, if_then_else, logical_or, is_constant, is_true
 from hidet.ir.tools import rewrite
 from hidet.utils import prod, same_list
+from hidet.ir.cute import TensorLayout
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from .utils import normalize_slice, normalize_dim
@@ -69,12 +70,10 @@ class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None):
         shape = x.shape
         y = compute(name='y', shape=shape, fcompute=lambda *indices: op(x.__getitem__(indices)))
+        inverse_map = InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))
+        inverse_map.tile_mapping = TensorLayout(1)
         super().__init__(
-            name=name,
-            inputs=[x],
-            outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
-            attributes={} if attrs is None else attrs,
+            name=name, inputs=[x], outputs=[y], inverse_map={x: inverse_map}, attributes={} if attrs is None else attrs
         )
 
 
@@ -99,7 +98,12 @@ class BinaryElementwiseTask(Task):
                     lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
                     num_args=len(inp_shape),
                 )
-
+        # layout := 1:0 means identity layout
+        # It's obvious that arithmetic operations don't apply layout
+        # modification on tensors, so the tile mapping function can be
+        # considered as identity
+        for _, v in inverse_map.items():
+            v.tile_mapping = TensorLayout(1)
         super().__init__(name=name, inputs=[x, y], outputs=[z], inverse_map=inverse_map)
 
 
@@ -114,16 +118,14 @@ class VariadicElementwiseTask(Task):
                 *[arg[broadcast_indices(indices, shape, out_shape)] for shape, arg in zip(shapes, args)]
             ),
         )
-        super().__init__(
-            name=name,
-            inputs=list(args),
-            outputs=[out],
-            inverse_map={
-                v: InverseMap.identity(len(v_shape))
-                for v, v_shape in zip(args, shapes)
-                if is_true(prod(v_shape) == prod(out_shape)) and len(v_shape) == len(out_shape)
-            },
-        )
+        inverse_map = {
+            v: InverseMap.identity(len(v_shape))
+            for v, v_shape in zip(args, shapes)
+            if is_true(prod(v_shape) == prod(out_shape)) and len(v_shape) == len(out_shape)
+        }
+        for _, v in inverse_map.items():
+            v.tile_mapping = TensorLayout(1)
+        super().__init__(name=name, inputs=list(args), outputs=[out], inverse_map=inverse_map)
 
 
 class CompositeElementwiseTask(Task):
@@ -151,12 +153,10 @@ class CompositeElementwiseTask(Task):
             fcompute=lambda *indices: composite_op(binary_op, left_unary_op, right_unary_op, x.__getitem__(indices)),
         )
 
+        inverse_map = InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))
+        inverse_map.tile_mapping = TensorLayout(1)
         super().__init__(
-            name=name,
-            inputs=[x],
-            outputs=[z],
-            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
-            attributes={} if attrs is None else attrs,
+            name=name, inputs=[x], outputs=[z], inverse_map={x: inverse_map}, attributes={} if attrs is None else attrs
         )
 
 
@@ -177,16 +177,15 @@ class WhereTask(Task):
             ),
         )
 
-        super().__init__(
-            name='where',
-            inputs=[cond, x, y],
-            outputs=[z],
-            inverse_map={
-                v: InverseMap.identity(len(v_shape))
-                for v, v_shape in zip([cond, x, y], [cond_shape, x_shape, y_shape])
-                if prod(v_shape) == prod(z_shape) and len(v_shape) == len(z_shape)
-            },
-        )
+        inverse_map = {
+            v: InverseMap.identity(len(v_shape))
+            for v, v_shape in zip([cond, x, y], [cond_shape, x_shape, y_shape])
+            if prod(v_shape) == prod(z_shape) and len(v_shape) == len(z_shape)
+        }
+        for _, v in inverse_map.items():
+            v.tile_mapping = TensorLayout(1)
+
+        super().__init__(name='where', inputs=[cond, x, y], outputs=[z], inverse_map=inverse_map)
 
 
 class SetStridedSliceTask(Task):

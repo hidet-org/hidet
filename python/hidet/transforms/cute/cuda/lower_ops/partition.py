@@ -11,13 +11,12 @@
 # limitations under the License.
 from typing import List, Union
 from hidet.ir.expr import Expr
-from hidet.ir.type import PointerType
+from hidet.ir.type import PointerType, TensorType
 from hidet.ir.tools import infer_type
-from hidet.ir.stmt import DeclareScope
 from hidet.lang.cuda import threadIdx
 
 from hidet.ir.cute.ops.partition import PartitionSrc, PartitionDst
-from hidet.ir.cute.layout import composition
+from hidet.ir.cute import composition
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -28,15 +27,21 @@ class PartitionSrcEmitter(OpEmitter):
         assert isinstance(args[0], Buffer)
         src: Buffer = args[0]
         dst: Buffer = output
-        src_var = src.var
-        src_ty = infer_type(src_var)
-        assert isinstance(src_ty, PointerType)
+        src_buf = src.buffer
+        src_off = src.offset
+        src_ty = infer_type(src_buf)
+        assert isinstance(src_ty, (PointerType, TensorType))
+        if isinstance(src_ty, TensorType):
+            indices = [0] * len(src_ty.shape)
+            src_buf = ~src_buf[indices]
         _, src_thrval_layout = op.tiled_copy.src_tv_layout()
-        if src.scope == DeclareScope.Register:
-            self.assign(dst.var, src_var)
+        if src.scope.is_register():
+            self.assign(dst.buffer, src_buf)
+            assert dst.offset is None
         else:
             thr_layout = composition(src.layout, src_thrval_layout[0][0])
-            self.assign(dst.var, src_var + thr_layout(threadIdx.x))
+            self.assign(dst.buffer, src_buf)
+            self.assign(dst.offset, thr_layout(threadIdx.x, base=src_off))
 
 
 @register_impl(PartitionDst)
@@ -45,12 +50,18 @@ class PartitionDstEmitter(OpEmitter):
         assert isinstance(args[0], Buffer)
         src: Buffer = args[0]
         dst: Buffer = output
-        src_var = src.var
-        src_ty = infer_type(src_var)
-        assert isinstance(src_ty, PointerType)
+        src_buf = src.buffer
+        src_off = src.offset
+        src_ty = infer_type(src_buf)
+        assert isinstance(src_ty, (PointerType, TensorType))
+        if isinstance(src_ty, TensorType):
+            indices = [0] * len(src_ty.shape)
+            src_buf = ~src_buf[indices]
         _, dst_thrval_layout = op.tiled_copy.dst_tv_layout()
-        if src.scope == DeclareScope.Register:
-            self.assign(dst.var, src_var)
+        if src.scope.is_register():
+            self.assign(dst.buffer, src_buf)
+            assert dst.offset is None
         else:
             thr_layout = composition(src.layout, dst_thrval_layout[0][0])
-            self.assign(dst.var, src_var + thr_layout(threadIdx.x))
+            self.assign(dst.buffer, src_buf)
+            self.assign(dst.offset, thr_layout(threadIdx.x, base=src_off))

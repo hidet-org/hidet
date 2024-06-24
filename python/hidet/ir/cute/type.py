@@ -11,7 +11,7 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from typing import Union
-from hidet.ir.cute import TensorLayout, TiledTensorLayout
+from hidet.ir.cute import TensorLayout, TiledTensorLayout, ComposedTensorLayout
 
 from hidet.ir.type import BaseType, DataType
 from hidet.ir.stmt import DeclareScope
@@ -21,7 +21,10 @@ class TiledTensorType(BaseType):
     """Yet Another Tiled Tensor Type"""
 
     def __init__(
-        self, dtype: DataType, layout: Union[TiledTensorLayout, TensorLayout], scope: Union[DeclareScope, str] = None
+        self,
+        dtype: DataType,
+        layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout],
+        scope: Union[DeclareScope, str] = None,
     ):
         if isinstance(scope, str):
             scope = DeclareScope.from_str(scope)
@@ -34,7 +37,9 @@ class TiledTensorType(BaseType):
 
 
 def tiled_tensor(
-    dtype: DataType, layout: Union[TiledTensorLayout, TensorLayout], scope: Union[DeclareScope, str] = None
+    dtype: DataType,
+    layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout],
+    scope: Union[DeclareScope, str] = None,
 ):
     assert isinstance(dtype, DataType)
     return TiledTensorType(dtype, layout, scope)

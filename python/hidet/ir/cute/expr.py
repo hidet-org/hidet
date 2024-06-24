@@ -24,6 +24,7 @@ class Op(Node):
     def __init__(self, args: List[Expr] = None, attrs: Dict[str, CConst] = None):
         self.args: List[Expr] = args if args is not None else []
         self.attrs: Dict[str, CConst] = attrs if attrs is not None else {}
+        self.annotations: Dict[str, CConst] = {}
 
     @classmethod
     def op_name(cls):
@@ -35,6 +36,19 @@ class Op(Node):
     @property
     def name(self):
         return self.op_name()
+
+    def reforward(
+        self, args: List[Expr], attrs_update: Dict[str, CConst] = None, annotations_update: Dict[str, CConst] = None
+    ):
+        attrs = self.attrs.copy()
+        annotations = self.annotations.copy()
+        if attrs_update is not None:
+            attrs.update(attrs_update)
+        if annotations_update is not None:
+            annotations.update(annotations_update)
+        ret = self.__class__(*args, **attrs)
+        ret.annotations = annotations
+        return ret
 
     def make_call(self):
         return CallOp(self)

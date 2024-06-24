@@ -42,11 +42,16 @@
 ##################################################################################################/
 # This file is a python implementation for utilities in CuTe, which will be
 # used for integrating CuTe dialect.
-from hidet.ir.expr import Expr, is_constant
+from typing import Union
+from hidet.ir.expr import Expr, Constant, is_constant, if_then_else
 
 
 def is_integer(i):
     return isinstance(i, (int, Expr))
+
+
+def constant_value(a: Union[Constant, int]):
+    return a.value if isinstance(a, Constant) else a
 
 
 def repeat_like(a, val: int = 0):
@@ -66,7 +71,7 @@ def unflatten(a, profile: int):
         left = right = 0
         ret = []
         for i in profile:
-            if isinstance(i, int):
+            if is_integer(i):
                 right += 1
                 ret.append(a[left])
             else:
@@ -77,8 +82,11 @@ def unflatten(a, profile: int):
 
 
 def signum(a):
-    assert isinstance(a, int)
-    return (0 < a) - (a < 0)
+    assert is_integer(a)
+    if isinstance(a, Expr):
+        return 1
+    else:
+        return (0 < a) - (a < 0)
 
 
 def depth(a):
@@ -93,16 +101,19 @@ def depth(a):
 
 
 def flatten(a):
-    if isinstance(a, int):
+    if is_integer(a):
         return a
     else:
         assert isinstance(a, tuple)
         if len(a) == 1:
-            return a
+            if depth(a) > 1:
+                return flatten(a[0])
+            else:
+                return a
         else:
             ret = tuple()
             for i in a:
-                if isinstance(i, int):
+                if is_integer(i):
                     ret += tuple([i])
                 else:
                     assert isinstance(i, tuple)
@@ -111,7 +122,7 @@ def flatten(a):
 
 
 def rank(a):
-    if isinstance(a, int):
+    if is_integer(a):
         return 1
     else:
         assert isinstance(a, tuple)
@@ -119,7 +130,7 @@ def rank(a):
 
 
 def product(a):
-    if isinstance(a, int):
+    if is_integer(a):
         return a
     else:
         ret = 1
@@ -133,20 +144,26 @@ def product_each(a):
 
 
 def prefix_product(a, init: int = 1):
-    if isinstance(a, int):
+    if is_integer(a):
         return init
     else:
         from itertools import accumulate
-        import operator
 
-        return unflatten(tuple(accumulate(tuple([init]) + flatten(a)[:-1], operator.mul)), a)
+        def mul(a: Union[Expr, int], b: Union[Expr, int]):
+            if isinstance(a, Expr) or isinstance(b, Expr):
+                return a * b
+            else:
+                assert isinstance(a, int) and isinstance(b, int)
+                return a * b
+
+        return unflatten(tuple(accumulate(tuple([init]) + flatten(a)[:-1], mul)), a)
 
 
 def size(a):
     if isinstance(a, tuple):
         return product(a)
     else:
-        assert isinstance(a, int)
+        assert is_integer(a)
         return a
 
 
@@ -168,12 +185,40 @@ def ceil_div(a, b):
         assert isinstance(b, tuple) and len(a) == len(b)
         return tuple(ceil_div(x, y) for x, y in zip(a, b))
     else:
-        assert isinstance(a, int) and isinstance(b, int)
-        if b != 0:
+        assert is_integer(a) and is_integer(b)
+        if not is_constant(b) or b != 0:
             return (a + b - 1) // b
         else:
             assert a == 0
             return 1
+
+
+def shape_min(a, b):
+    if isinstance(a, tuple):
+        assert isinstance(b, tuple) and len(a) == len(b)
+        return (shape_min(x, y) for x, y in zip(a, b))
+    else:
+        assert is_integer(a)
+        if isinstance(b, tuple):
+            return shape_min(a, product(b))
+        else:
+            assert is_integer(b)
+            if any(isinstance(v, Expr) for v in [a, b]):
+                return if_then_else(a > b, b, a)
+            else:
+                return min(a, b)
+
+
+def shape_abs(a):
+    if isinstance(a, tuple):
+        return tuple(shape_abs(x) for x in a)
+    else:
+        assert is_integer(a)
+        if not is_constant(a):
+            return if_then_else(a > 0, a, -a)
+        else:
+            a = constant_value(a)
+            return abs(a)
 
 
 def shape_div(a, b):
@@ -188,13 +233,17 @@ def shape_div(a, b):
                 b = shape_div(b, product(v))
             return tuple(r)
     else:
-        assert isinstance(a, int)
+        assert is_integer(a)
         if isinstance(b, tuple):
             return shape_div(a, product(b))
         else:
-            assert isinstance(b, int)
-            # assert a % b == 0 or b % a == 0
-            return a // b if a // b != 0 else signum(a) * signum(b)
+            assert is_integer(b)
+            if any(isinstance(v, Expr) for v in [a, b]):
+                return if_then_else(a // b != 0, a // b, signum(a) * signum(b))
+            else:
+                # commented out, re-enable after we fix all the testcases
+                # assert a % b == 0 or b % a == 0
+                return a // b if a // b != 0 else signum(a) * signum(b)
 
 
 def elem_scale(a, b):
@@ -271,12 +320,29 @@ def crd2idx(coord, shape, stride=None):
                     coord = coord // product(s)
                 return ret
             else:
-                assert isinstance(stride, int)
+                assert is_integer(stride)
                 return coord * stride
 
 
 def compact_col_major(shape, current: int = 1):
     return prefix_product(shape, current)
+
+
+def compact_row_major(shape, current: int = 1):
+    if is_integer(shape):
+        return current
+    else:
+        from itertools import accumulate
+
+        def mul(a: Union[Expr, int], b: Union[Expr, int]):
+            if isinstance(a, Expr) or isinstance(b, Expr):
+                return a * b
+            else:
+                assert isinstance(a, int) and isinstance(b, int)
+                return a * b
+
+        a = reversed(flatten(shape)[1:] + tuple([current]))
+        return unflatten(tuple(reversed(list(accumulate(a, mul)))), shape)
 
 
 # TODO: This function seems to have the same functionality as
@@ -333,8 +399,8 @@ def filter_zeros(a, b):
         assert isinstance(b, tuple) and len(b) == len(a)
         return tuple(filter_zeros(x, y) for x, y in zip(a, b))
     else:
-        assert isinstance(a, int)
-        return 1 if a == 0 else b
+        assert is_integer(a)
+        return 1 if is_constant(a) and a == 0 else b
 
 
 def is_static(a):

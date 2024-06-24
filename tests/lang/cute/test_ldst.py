@@ -151,14 +151,13 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy):
 
             regs = register_tensor("float16", shape=[nr_regs])
             t_regs = tiled_tensor_view(regs, tiled_tensor_layout, "register")
-            txsx_o = partition_src(t_smem, lds_tiled_copy)
+            # txsx_o = partition_src(t_smem, lds_tiled_copy)
             txrx = partition_dst(t_regs, lds_tiled_copy)
-            copy(lds_tiled_copy, txsx_o, txrx)
+            copy(lds_tiled_copy, partition_src(t_smem, lds_tiled_copy), txrx)
 
             # we comment out the last copy operation because we don't have
             # stg instrcutions to support it. I will fix this in some later PRs.
-            t_g_out = tiled_tensor_view(out_ptr, gmem_layout_out, "global")
-            txgx_o = partition_dst(t_g_out, stg_tiled_copy)
+            txgx_o = partition_dst(tiled_tensor_view(out_ptr, gmem_layout_out, "global"), stg_tiled_copy)
             # copy(stg_tiled_copy, txrx, txgx_o)
 
     func = script_module.build()

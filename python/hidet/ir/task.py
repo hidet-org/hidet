@@ -21,6 +21,7 @@ from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 from hidet.ir.target import Target
+from hidet.ir.cute import TensorLayout
 
 
 class InverseMap(Node):
@@ -29,6 +30,7 @@ class InverseMap(Node):
 
         self.axes: List[Var] = axes
         self.indices: List[Expr] = [simplify(e) for e in indices]
+        self.tile_mapping: Optional[TensorLayout] = None
 
     @staticmethod
     def from_obj(obj: Union[InverseMap, Callable[[Any], Any]]):

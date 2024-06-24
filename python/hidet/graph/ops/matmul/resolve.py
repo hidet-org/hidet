@@ -22,7 +22,7 @@ from hidet.utils.py import gcd, factorize, prod, cdiv
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
-from .matmul_f16 import matmul_f16
+from .matmul_f16_cute import matmul_f16_cute
 from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
 
@@ -215,7 +215,7 @@ class MatmulResolveRule(ResolveRule):
                 latencies: List[float] = []
                 print('Searching the best parallel_k for {} x {} among {}'.format(a.shape, b.shape, candidates))
                 for candidate in candidates:
-                    cc = matmul_f16(aa, bb, parallel_k_parts=candidate)
+                    cc = matmul_f16_cute(aa, bb, parallel_k_parts=candidate)
                     # if candidate > 1:
                     #     cc = cc.sum(0)
                     graph = hidet.trace_from([cc], [aa, bb])
@@ -236,7 +236,7 @@ class MatmulResolveRule(ResolveRule):
             k_parts = min(max(parallel_k, 1), 32)
         else:
             raise ValueError(f'invalid parallel_k: {parallel_k}')
-        c = matmul_f16(a, b, parallel_k_parts=k_parts).sum(0)
+        c = matmul_f16_cute(a, b, parallel_k_parts=k_parts).sum(0)
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
