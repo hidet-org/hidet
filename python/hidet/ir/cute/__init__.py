@@ -28,13 +28,18 @@ from .int_tuple import (
     congruent,
     compatible,
     crd2idx,
+    compact_row_major,
     compact_col_major,
     idx2crd,
     filter_zeros,
+    is_integer,
+    is_static,
 )
 from .layout import (
     TiledTensorLayout,
+    ComposedTensorLayout,
     TensorLayout,
+    filter,
     coalesce,
     composition,
     complement,
@@ -44,3 +49,5 @@ from .layout import (
     logical_divide,
     make_layout,
 )
+from .layout import ThrValAtom, Level
+from .algorithm import CopyAtom, TiledCopy

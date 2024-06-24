@@ -15,7 +15,7 @@ from hidet.ir.type import PointerType, TensorPointerType, TensorType
 from hidet.ir.tools import infer_type
 
 from hidet.ir.cute.ops.tiled_tensor_view import TiledTensorView
-from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
+from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout, ComposedTensorLayout
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -23,8 +23,8 @@ from .registry import OpEmitter, Buffer, register_impl
 @register_impl(TiledTensorView)
 class TiledTensorViewEmitter(OpEmitter):
     def emit(self, op: TiledTensorView, args: List[Union[Buffer, Expr]], output: Buffer):
-        src: Expr = args[0]
-        dst: Var = output.var
+        src: Union[Buffer, Expr] = args[0] if isinstance(args[0], Expr) else args[0].buffer
+        dst: Var = output.buffer
         src_ty = infer_type(src)
         assert isinstance(src_ty, (TensorType, TensorPointerType, PointerType))
         import math
@@ -40,12 +40,15 @@ class TiledTensorViewEmitter(OpEmitter):
         else:
             tensor_size = None
         if isinstance(op.layout, TiledTensorLayout):
-            val_layout = op.layout.val_layout()
-            assert tensor_size is None or tensor_size == val_layout.size()
+            assert tensor_size is None or tensor_size == op.layout.val_count()
         else:
-            assert isinstance(op.layout, TensorLayout)
+            assert isinstance(op.layout, (TensorLayout, ComposedTensorLayout))
             assert tensor_size is None or tensor_size == op.layout.size()
         if isinstance(src_ty, (TensorType, TensorPointerType)):
             self.assign(dst, ~src[indices])
         else:
             self.assign(dst, src)
+        from hidet.ir.dtypes import i32
+
+        if output.buffer is not None:
+            output.offset = i32(0)

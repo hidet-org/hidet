@@ -1,1 +1,10 @@
-demo_ldsm
+demo*
+graph
+*.csv
+*.cu
+*.txt
+*nsys*
+*sqlite
+log*
+pattern*
+*.png

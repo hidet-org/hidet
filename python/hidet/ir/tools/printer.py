@@ -49,8 +49,10 @@ from hidet.ir.functors import IRFunctor
 from hidet.ir.cute.type import TiledTensorType
 from hidet.ir.cute.expr import CallOp
 from hidet.ir.cute.expr import Op as CuteOp
-from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
+from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout
 from hidet.ir.cute.algorithm import TiledCopy
+from hidet.ir.cute.ops import TiledTensorView, PartitionSrc, PartitionDst, Copy, Mask, Rearrange
+from hidet.ir.cute.collective import CollectiveStore
 
 
 class IRPrinter(IRFunctor):
@@ -655,7 +657,7 @@ class IRPrinter(IRFunctor):
                 attrs_doc.append(self(k) + '=' + '[' + self(v) + ']')
             elif isinstance(v, dict):
                 attrs_doc.append(self(k) + '=' + '{' + self(v) + '}')
-            elif isinstance(v, TensorLayout):
+            elif isinstance(v, (TensorLayout, ComposedLayout)):
                 attrs_doc.append(self(k) + '=' + str(v))
             elif isinstance(v, TiledTensorLayout):
                 attrs_doc.append(self(k) + '=' + self.visit_TiledTensorLayout(v))
@@ -674,12 +676,33 @@ class IRPrinter(IRFunctor):
 
     def visit_TiledTensorType(self, t: TiledTensorType):
         attrs_doc = []
-        if isinstance(t.layout, TensorLayout):
+        if isinstance(t.layout, (TensorLayout, ComposedTensorLayout)):
             attrs_doc.append('layout=' + str(t.layout))
         elif isinstance(t.layout, TiledTensorLayout):
             attrs_doc.append('layout=' + self.visit_TiledTensorLayout(t.layout))
         attrs_doc.append('scope=' + str(t.scope))
         return self(t.dtype) + '[' + doc_join(attrs_doc, ', ') + ']'
+
+    def visit_TiledTensorView(self, op: TiledTensorView):
+        return self.visit_CuteOp(op)
+
+    def visit_PartitionSrc(self, op: PartitionSrc):
+        return self.visit_CuteOp(op)
+
+    def visit_PartitionDst(self, op: PartitionDst):
+        return self.visit_CuteOp(op)
+
+    def visit_Copy(self, op: Copy):
+        return self.visit_CuteOp(op)
+
+    def visit_Mask(self, op: Mask):
+        return self.visit_CuteOp(op)
+
+    def visit_Rearrange(self, op: Rearrange):
+        return self.visit_CuteOp(op)
+
+    def visit_CollectiveStore(self, op: CollectiveStore):
+        return self.visit_CuteOp(op)
 
 
 def astext(obj: Node) -> str:

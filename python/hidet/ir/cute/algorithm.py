@@ -9,39 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Tuple, List
-from hidet.ir.cute.layout import Label, Atom, Level, chain
-from hidet.ir.cute import TensorLayout
-from hidet.ir.cute.layout import label_names
-
-
-class CopyAtom(Atom):
-    def __init__(
-        self,
-        level: Union[str, Label],
-        shape: Tuple[int],
-        src_thrval_layout: TensorLayout,
-        dst_thrval_layout: TensorLayout = None,
-        repeat_shape: Tuple[int] = None,
-        repeat_layout: TensorLayout = None,
-    ):
-        super().__init__(level, shape, repeat_shape, repeat_layout)
-        if dst_thrval_layout is None:
-            dst_thrval_layout = src_thrval_layout
-        self.src_thrval_layout = src_thrval_layout
-        self.dst_thrval_layout = dst_thrval_layout
-
-    def str_indented(self, depth: int = 0):
-        indent = ' ' * (depth * 2)
-        prev_indent = ' ' * (max(0, depth - 1) * 2)
-        return (
-            "{"
-            + f"\n{indent}level: {label_names[self.level]}, \n{indent}shape: {self.shape}, "
-            + f"\n{indent}src: {self.src_thrval_layout}, \n{indent}dst: {self.dst_thrval_layout}"
-            + f"\n{indent}repeat_shape: {self.repeat_shape}, \n{indent}repeat_layout: {self.repeat_layout}"
-            + f"\n{prev_indent}"
-            + "}"
-        )
+from typing import List
+from hidet.ir.cute.layout import CopyAtom, Level, chain
+from hidet.ir.cute import TensorLayout, TiledTensorLayout, filter
+from hidet.ir.cute.int_tuple import rank
 
 
 class TiledCopy:
@@ -50,6 +21,11 @@ class TiledCopy:
             levels = []
         self.copy_atom = copy_atom
         self.levels = levels
+
+    @staticmethod
+    def from_tiled_tensor_layout(layout: TiledTensorLayout):
+        copy_atom = CopyAtom.from_tv_atom(layout.atom)
+        return TiledCopy(copy_atom, layout.levels)
 
     def src_tv_layout(self):
         shape, src_thrval_layout = chain(
@@ -70,6 +46,22 @@ class TiledCopy:
             self.levels,
         )
         return shape, dst_thrval_layout
+
+    def val_remain_layout(self):
+        from hidet.ir.cute.int_tuple import depth
+
+        shape, src_thrval_layout = self.src_tv_layout()
+        atom_shape = self.copy_atom.shape
+        if atom_shape == shape:
+            val = self.copy_atom.src_thrval_layout[1]
+            assert depth(val.stride_tuple) == 1
+            if rank(val.stride) == 1:
+                ret = TensorLayout((1,), val.stride_tuple)
+            else:
+                ret = val[1:]
+        else:
+            ret = src_thrval_layout[1]
+        return filter(ret, False)
 
     def str_indented(self, depth: int = 0):
         indent = ' ' * (depth * 2)

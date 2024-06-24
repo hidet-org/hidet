@@ -380,7 +380,7 @@ def initialize(*args, **kwargs):
     return decorator
 
 
-def gcd(a: int, b: int) -> int:
+def gcd(a: int, b: int, *args) -> int:
     """
     Get the greatest common divisor of non-negative integers a and b.
 
@@ -396,6 +396,8 @@ def gcd(a: int, b: int) -> int:
     ret: int
         The greatest common divisor.
     """
+    if len(args) > 0:
+        return gcd(gcd(a, b), *args)
     assert a >= 0 and b >= 0
     return a if b == 0 else gcd(b, a % b)
 
