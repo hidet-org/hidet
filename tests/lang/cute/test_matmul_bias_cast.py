@@ -52,7 +52,7 @@ def test_pattern():
 
     import torch._dynamo as dynamo
 
-    options = {"triton.cudagraphs": True, "epilogue_fusion": True, "max_autotune": True}
+    options = {"triton.cudagraphs": False, "epilogue_fusion": True, "max_autotune": True}
     D = graph(*graph_args)
     graph_opt = torch.compile(graph, options=options)
     D_opt = graph_opt(*graph_args)
