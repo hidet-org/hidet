@@ -101,51 +101,6 @@ def benchmark_cudnn_conv2d_gemm(dtype, compute_type, n, c, h, w, k, p, q, r, s, 
     print("-------------------------------------------------")
 
 
-def benchmark_cudnn_conv2d_autoselect_algo(dtype, compute_type, n, c, h, w, k, p, q, r, s, padding, stride, dilations):
-    # Uses cudnn Legacy-API to autoselect the fastest algorithm
-    tx = tw = ty = dtype
-    pad_dim1, pad_dim2 = padding
-    str_dim1, str_dim2 = stride
-    dil_dim1, dil_dim2 = dilations
-
-    tensor_x = hidet.randn((n, c, h, w), device='cuda', dtype=tx)
-    tensor_w = hidet.randn((k, c, r, s), device='cuda', dtype=tw)
-    tensor_y = hidet.empty((n, k, p, q), device='cuda', dtype=ty)
-
-    latencies = do_bench(
-        lambda: hidet.cuda.cudnn.conv2d_autoselect_algo(
-            n,
-            c,
-            h,
-            w,
-            k,
-            r,
-            s,
-            tensor_x,
-            tensor_w,
-            tensor_y,
-            tx,
-            tw,
-            ty,
-            compute_type,
-            pad_dim1,
-            pad_dim2,
-            str_dim1,
-            str_dim2,
-            dil_dim1,
-            dil_dim2,
-        ),
-        warmup=10,
-        rep=100,
-    )
-
-    print(
-        f"cudnn_autoselect_algo Results for Configuration: dtype = {dtype}, input shape = {[n,c,h,w]}, "
-        f"weight shape = {[k,c,r,s]}, padding = {padding}, stride = {stride}, dilations = {dilations}:"
-    )
-    print("Median Latency Is: " + str(latencies[1]) + " milliseconds")
-    print("-------------------------------------------------")
-
 
 def benchmark_torch_conv2d(dtype, compute_type, n, c, h, w, k, p, q, r, s, padding, stride, dilations):
     # Native PyTorch Eager-mode Execution
@@ -189,11 +144,7 @@ def benchmark_hidet_conv2d(dtype, compute_type, n, c, h, w, k, p, q, r, s, paddi
     graph = hidet.graph.optimize(graph)
     graph = graph.cuda_graph()
 
-    latencies = do_bench(
-        lambda: graph.run_async(),
-        warmup=10,
-        rep=100,
-    )
+    latencies = do_bench(lambda: graph.run_async(), warmup=10, rep=100)
 
     print(
         f"Optimized Hidet Results for Configuration: dtype = {dtype}, input shape = {[n,c,h,w]}, "
@@ -216,11 +167,10 @@ if __name__ == '__main__':
         [4, 64, 56, 56, 128, 56, 56, 1, 1, [0, 0], [1, 1], [1, 1]],
         [8, 64, 56, 56, 128, 56, 56, 1, 1, [0, 0], [1, 1], [1, 1]],
     ]
-    dtypes = [['float32', cudnnDataType.CUDNN_DATA_FLOAT], ['float16', cudnnDataType.CUDNN_DATA_HALF]]#, ['float64', cudnnDataType.CUDNN_DATA_DOUBLE]]
+    dtypes = [['float32', cudnnDataType.CUDNN_DATA_FLOAT], ['float16', cudnnDataType.CUDNN_DATA_HALF]]
 
     for data_type in dtypes:
         for size in sizes:
             benchmark_cudnn_conv2d_gemm(*(data_type + size))
             benchmark_torch_conv2d(*(data_type + size))
-            benchmark_cudnn_conv2d_autoselect_algo(*(data_type + size))
             benchmark_hidet_conv2d(*(data_type + size))

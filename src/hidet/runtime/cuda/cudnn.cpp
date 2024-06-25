@@ -10,6 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <chrono>
 #include <hidet/runtime/cuda/cuda.h>
 #include <hidet/runtime/cuda/context.h>
 #include <hidet/runtime/cuda/cudnn.h>
@@ -632,6 +633,7 @@ DLL void hidet_cudnn_conv2d_gemm(
     int tx, int tw, int ty, int compute_type,
     int pad_dim1, int pad_dim2, int str_dim1, int str_dim2, int dil_dim1, int dil_dim2)
 {
+    auto begin1 = std::chrono::steady_clock::now();
     lazy_load_cudnn();
 
     cudnnHandle_t cur_handle = CudnnContext::current_handle();
@@ -659,90 +661,40 @@ DLL void hidet_cudnn_conv2d_gemm(
     CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_descriptor));
     CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(ty),
                                            out_n, out_c, out_h, out_w));
-    size_t workspaceSize{0};
-    CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(cur_handle, input_descriptor, kernel_descriptor,
-                convolution_descriptor, output_descriptor, CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM, 
-                &workspaceSize));
-    void *workspace = request_cuda_workspace(workspaceSize, false);
+    
+    // size_t workspaceSize{0};
+    // CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(cur_handle, input_descriptor, kernel_descriptor,
+    //             convolution_descriptor, output_descriptor, CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM, 
+    //             &workspaceSize));
+    
+    size_t workspaceSize{2000000};
+    // std::cout << workspaceSize << std::endl;
+    // void *workspace = request_cuda_workspace(workspaceSize, false);
+    void *workspace = hidet_cuda_malloc_async(workspaceSize, cur_stream);
 
     void *p_alpha = nullptr;
     void *p_beta = nullptr;
     cudnnDataType_t compType = cudnnDataType_t(compute_type);
     set_alpha_beta(&p_alpha, &p_beta, compType);
+    auto end1 = std::chrono::steady_clock::now();
+    std::cout << "Time difference 1 = " << std::chrono::duration_cast<std::chrono::microseconds>(end1 - begin1).count() << "[µs]" << std::endl;
 
+    auto begin2 = std::chrono::steady_clock::now();
     CHECK_CUDNN(cudnnConvolutionForward(cur_handle, p_alpha, input_descriptor, ptr_x, kernel_descriptor, ptr_w,
                                         convolution_descriptor, CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM,
                                         workspace, workspaceSize,
                                         p_beta, output_descriptor, ptr_y));
+    auto end2 = std::chrono::steady_clock::now();
+    std::cout << "Time difference 2 = " << std::chrono::duration_cast<std::chrono::microseconds>(end2 - begin2).count() << "[µs]" << std::endl;
 
+    auto begin3 = std::chrono::steady_clock::now();
     CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_descriptor));
     CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_descriptor));
     CHECK_CUDNN(cudnnDestroyFilterDescriptor(kernel_descriptor));
     CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
-}
-
-DLL void hidet_cudnn_conv2d_autoselect_algo(
-    int n, int c, int h, int w, int k, int r, int s,
-    void *ptr_x, void *ptr_w, void *ptr_y,
-    int tx, int tw, int ty, int compute_type,
-    int pad_dim1, int pad_dim2, int str_dim1, int str_dim2, int dil_dim1, int dil_dim2)
-{
-    lazy_load_cudnn();
-
-    cudnnHandle_t cur_handle = CudnnContext::current_handle();
-
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUDNN(cudnnSetStream(cur_handle, cur_stream));
-
-    // Build descriptors and launch the kernel
-    cudnnTensorDescriptor_t input_descriptor;
-    CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_descriptor));
-    CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(tx), n, c, h, w));
-    cudnnFilterDescriptor_t kernel_descriptor;
-    CHECK_CUDNN(cudnnCreateFilterDescriptor(&kernel_descriptor));
-    CHECK_CUDNN(cudnnSetFilter4dDescriptor(kernel_descriptor, cudnnDataType_t(tw), CUDNN_TENSOR_NCHW, k, c, r, s));
-    cudnnConvolutionDescriptor_t convolution_descriptor;
-    CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&convolution_descriptor));
-    CHECK_CUDNN(cudnnSetConvolution2dDescriptor(convolution_descriptor, pad_dim1, pad_dim2, str_dim1, str_dim2, dil_dim1, dil_dim2,
-                                                CUDNN_CROSS_CORRELATION, cudnnDataType_t(compute_type)));
-
-    int out_n{0}, out_c{0}, out_h{0}, out_w{0};
-    CHECK_CUDNN(cudnnGetConvolution2dForwardOutputDim(convolution_descriptor, input_descriptor, kernel_descriptor,
-                                                      &out_n, &out_c, &out_h, &out_w));
-    cudnnTensorDescriptor_t output_descriptor;
-    CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_descriptor));
-    CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(ty),
-                                           out_n, out_c, out_h, out_w));
-
-    int returnedAlgoCount;
-    cudnnConvolutionFwdAlgoPerf_t perfResults;
-
-    CHECK_CUDNN(cudnnGetConvolutionForwardAlgorithm_v7(cur_handle, input_descriptor, kernel_descriptor,
-                                                       convolution_descriptor, output_descriptor, 
-                                                        1, &returnedAlgoCount, &perfResults));
-    cudnnConvolutionFwdAlgo_t convolution_algorithm = perfResults.algo;
-
-    size_t workspaceSize{0};
-    CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(cur_handle, input_descriptor, kernel_descriptor,
-                convolution_descriptor, output_descriptor, convolution_algorithm, 
-                &workspaceSize));
-    void *workspace = request_cuda_workspace(workspaceSize, false);
-
-    void *p_alpha = nullptr;
-    void *p_beta = nullptr;
-    cudnnDataType_t compType = cudnnDataType_t(compute_type);
-    set_alpha_beta(&p_alpha, &p_beta, compType);
-
-    CHECK_CUDNN(cudnnConvolutionForward(cur_handle, p_alpha, input_descriptor, ptr_x, kernel_descriptor, ptr_w,
-                                        convolution_descriptor, convolution_algorithm,
-                                        workspace, workspaceSize,
-                                        p_beta, output_descriptor, ptr_y));
-
-    CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_descriptor));
-    CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_descriptor));
-    CHECK_CUDNN(cudnnDestroyFilterDescriptor(kernel_descriptor));
-    CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
+    hidet_cuda_free_async(workspace, cur_stream);
+    auto end3 = std::chrono::steady_clock::now();
+    std::cout << "Time difference 3 = " << std::chrono::duration_cast<std::chrono::microseconds>(end3 - begin3).count() << "[µs]" << std::endl;
 }
 
 DLL void hidet_cudnn_conv2d(
