@@ -252,7 +252,7 @@ class RearrangeEmitter(OpEmitter):
         src_ty = infer_type(src_buf)
         assert isinstance(src_ty, (TensorType, PointerType))
         if isinstance(src_ty, TensorType):
-            src_buf = ~src.buf[0]
+            src_buf = ~src_buf[0]
             src_dtype = src_ty.dtype
         else:
             src_dtype = src_ty.base_type
