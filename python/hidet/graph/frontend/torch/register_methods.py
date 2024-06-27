@@ -113,9 +113,9 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
     _ = non_blocking
 
     temp = self.to(dtype=dtype_from_torch(dtype).name if dtype else None)
-    if self.is_symbolic() and instantiate_device(device_from_torch(device)) != self.device:
+    if self.is_symbolic() and device is not None and instantiate_device(device_from_torch(device)) != self.device:
         return ops.transfer(temp, dst_device=device_from_torch(device))
-    return temp.to(device=device_from_torch(device) if device else None)
+    return temp.to(device=device_from_torch(device) if device is not None else None)
 
 
 @register_method(torch.Tensor.view)
