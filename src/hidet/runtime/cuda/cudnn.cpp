@@ -598,7 +598,7 @@ CudnnContext *CudnnContext::global()
     {
         // create cudnn handle for each gpu
         int count = hidet_cuda_device_count();
-        assert(count <= HIDET_CUBLAS_MAX_GPUS);
+        assert(count <= HIDET_CUDNN_MAX_GPUS);
 
         int current_device = hidet_cuda_get_device();
         for (int i = 0; i < count; i++)
