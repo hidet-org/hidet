@@ -101,7 +101,6 @@ def benchmark_cudnn_conv2d_gemm(dtype, compute_type, n, c, h, w, k, p, q, r, s, 
     print("-------------------------------------------------")
 
 
-
 def benchmark_torch_conv2d(dtype, compute_type, n, c, h, w, k, p, q, r, s, padding, stride, dilations):
     # Native PyTorch Eager-mode Execution
     data = np.array(np.random.randn(n, c, h, w)).astype(dtype)
@@ -129,7 +128,7 @@ def benchmark_torch_conv2d(dtype, compute_type, n, c, h, w, k, p, q, r, s, paddi
 
 def benchmark_hidet_conv2d(dtype, compute_type, n, c, h, w, k, p, q, r, s, padding, stride, dilations):
     # Uses optimized Hidet Graph implementation
-    tx = tw = ty = dtype
+    tx = tw = dtype
     pad_dim1, pad_dim2 = padding
     str_dim1, str_dim2 = stride
     dil_dim1, dil_dim2 = dilations
