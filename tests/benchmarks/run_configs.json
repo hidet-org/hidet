@@ -4,8 +4,8 @@
         "id": 1,
         "name": "bert-base-uncased",
         "runfile": "bench_transformer.py",
-        "param_id": 1,
-        "param_name": "seqlen=256",
+        "param_id": 14,
+        "param_name": "bs=16,seqlen=256",
         "dtype_id": 1,
         "dtype_name": "float16"
     },
