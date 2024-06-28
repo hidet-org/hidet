@@ -58,7 +58,8 @@ def to_ctypes_arg(hidet_type: BaseType, obj):
     Given a Python value obj, convert it to a corresponding ctypes value which can
     be used as a ctypes FFI argument.
     """
-    from hidet import Tensor
+    from hidet import Tensor as HidetTensor
+    from torch import Tensor as TorchTensor
 
     if isinstance(hidet_type, DataType):
         if hidet_type not in _dtypes_mapping:
@@ -70,8 +71,10 @@ def to_ctypes_arg(hidet_type: BaseType, obj):
         raise TypeError(f"The Hidet type {hidet_type} cannot be used as an FFI parameter")
 
     # PointerType or TensorType
-    if isinstance(obj, Tensor):
+    if isinstance(obj, HidetTensor):
         return obj.storage.addr
+    elif isinstance(obj, TorchTensor):
+        return obj.data_ptr()
     elif isinstance(obj, int):
         return obj
     elif obj.__class__.__name__ == 'Tensor' and obj.__module__ == 'torch':

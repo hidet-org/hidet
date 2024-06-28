@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence
+import time
 import numpy.testing
 import torch
 import torch.backends.cudnn
@@ -105,14 +106,23 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize()
-    start.record()
+
+    # import cProfile
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
+    start = time.time_ns()
     for _ in range(bench_iters):
         out = model(*torch_inputs)  # pylint:disable=unused-variable
-    end.record()
-    end.synchronize()
+    torch.cuda.synchronize()
+    end = time.time_ns()
+
+    # profiler.disable()
+    # profiler.dump_stats('10.prof')
+
     torch.cuda.empty_cache()
 
-    latency = start.elapsed_time(end) / bench_iters
+    latency = (end - start) / bench_iters / 10**6
     return latency
 
 
