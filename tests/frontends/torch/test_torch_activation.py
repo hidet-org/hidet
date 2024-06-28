@@ -22,6 +22,12 @@ def test_relu(shape, dtype):
     check_module(torch.nn.ReLU(), [torch.randn(shape, dtype=dtype)])
 
 
+@pytest.mark.parametrize('shape', [(1, 1, 1), (33,), (3, 1)])
+@pytest.mark.parametrize('dtype', [torch.float32])
+def test_relu_inplace(shape, dtype):
+    check_module(torch.nn.ReLU(inplace=True), [torch.randn(shape, dtype=dtype)])
+
+
 @pytest.mark.parametrize("shape", [(10, 20)])
 @pytest.mark.parametrize("dtype", [torch.float32])
 def test_hardsigmoid(shape, dtype):

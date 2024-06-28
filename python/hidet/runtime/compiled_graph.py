@@ -122,9 +122,11 @@ class CompiledGraph:
         self.graph_execution: GraphExecution = graph_execution
         self.graph_string: str = graph_string
 
-        # derived properties (will be initialized in _init_compiled_graph at the end of this constructor)
+        # derived properties
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
         self.is_dynamic: bool = False
+        self._init_dynamic_dims()
+        self.cpu_space_size, self.cuda_space_size = self._init_space_sizes()
 
         # runtime state
         self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
@@ -202,7 +204,7 @@ class CompiledGraph:
         else:
             return outs
 
-    def _init_compiled_graph(self):
+    def _init_dynamic_dims(self):
         # initialize the derived properties
         for tensor_index, sig in enumerate(self.meta.inputs):
             for dim_index, dim in enumerate(sig.shape):
@@ -213,6 +215,7 @@ class CompiledGraph:
         else:
             self.is_dynamic = False
 
+    def _init_compiled_graph(self):
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
         for i in range(len(self.weights)):
@@ -245,6 +248,13 @@ class CompiledGraph:
                         kernel_array[task_idx] = ctypes_func_pointer(compiled_task.candidates[sch_idx].ctypes_func)
                     self.dispatch_table[tuple(symbol_dims)] = kernel_array
 
+    def _init_space_sizes(self):
+        if self.is_dynamic:
+            return (None, None)
+        buffer = Array(i64, 2)
+        self._get_workspace_size(buffer)
+        return list(buffer)
+
     def _update_symbol_table(self, symbol_dims: Tuple[int, ...], best_candidates: List[int]):
         kernel_array = Array(void_p, len(self.compiled_tasks))
         for task_idx, best_candidate in enumerate(best_candidates):
@@ -271,8 +281,13 @@ class CompiledGraph:
             runtime_api.set_symbol_value(name, symbol_dims[-1])
         return tuple(symbol_dims)
 
-    def _create_outputs(self, inputs):
-        from hidet.graph.tensor import empty, Tensor
+    def _create_outputs(self, inputs, output_to_torch_tensor):
+        from torch import empty as torch_empty
+        from torch import device as torch_device
+        from torch import Tensor as TorchTensor
+        from hidet.graph.tensor import empty
+        from hidet.graph.tensor import Tensor as HidetTensor
+        from hidet.graph.frontend.torch.utils import dtype_to_torch
 
         outputs = []
         exec_idx_to_output_idx: Dict[int, int] = {}
@@ -297,13 +312,23 @@ class CompiledGraph:
 
                 if output_index not in self.meta.share_map:
                     # create the output tensor
-                    outputs.append(empty(shape=shape, dtype=sig.dtype, device=sig.device))
+                    if output_to_torch_tensor:
+                        torch_dtype = dtype_to_torch(data_type(sig.dtype))
+                        torch_dev = torch_device(sig.device)
+                        outputs.append(torch_empty(size=shape, dtype=torch_dtype, device=torch_dev))
+                    else:
+                        outputs.append(empty(shape=shape, dtype=sig.dtype, device=sig.device))
                 else:
                     # this output tensor shares the storage with one input tensor, reuse the storage
-                    input_tensor: Tensor = inputs[self.meta.share_map[output_index]]
-                    outputs.append(
-                        Tensor(shape=shape, dtype=sig.dtype, device=sig.device, storage=input_tensor.storage)
-                    )
+                    if output_to_torch_tensor:
+                        input_tensor: TorchTensor = inputs[self.meta.share_map[output_index]]
+                        assert isinstance(input_tensor, TorchTensor)
+                        outputs.append(input_tensor.view(shape))
+                    else:
+                        input_tensor: HidetTensor = inputs[self.meta.share_map[output_index]]
+                        outputs.append(
+                            HidetTensor(shape=shape, dtype=sig.dtype, device=sig.device, storage=input_tensor.storage)
+                        )
 
                 # record the exec_idx of this output tensor, in case the graph returns the same tensor multiple times
                 exec_idx_to_output_idx[exec_idx] = output_index
@@ -311,9 +336,13 @@ class CompiledGraph:
         return outputs
 
     def _prepare_workspace(self):
-        buffer = Array(i64, 2)
-        self._get_workspace_size(buffer)
-        required_cpu_workspace, required_cuda_workspace = list(buffer)
+        if self.is_dynamic:
+            buffer = Array(i64, 2)
+            self._get_workspace_size(buffer)
+            required_cpu_workspace, required_cuda_workspace = list(buffer)
+        else:
+            required_cpu_workspace = self.cpu_space_size
+            required_cuda_workspace = self.cuda_space_size
 
         if self.cpu_workspace is None or self.cpu_workspace.num_bytes < required_cpu_workspace:
             self.cpu_workspace = Storage.new('cpu', required_cpu_workspace)
@@ -323,9 +352,9 @@ class CompiledGraph:
             self.cuda_workspace = Storage.new('cuda', required_cuda_workspace)
             self._set_workspace(1, self.cuda_workspace.addr)
 
-    def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...]):
+    def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...], output_to_torch_tensor):
         # create output tensors
-        outputs = self._create_outputs(inputs)
+        outputs = self._create_outputs(inputs, output_to_torch_tensor)
 
         # prepare workspace
         self._prepare_workspace()
@@ -423,7 +452,7 @@ class CompiledGraph:
         self.weights = weights
         self._init_compiled_graph()
 
-    def run_async(self, inputs):
+    def run_async(self, inputs, output_to_torch_tensor=False):
         """
         Run the model asynchronously.
 
@@ -445,9 +474,12 @@ class CompiledGraph:
         symbol_dims = self._update_symbol_dims(inputs)
 
         if symbol_dims in self.dispatch_table:
-            return self._run_fast_path(inputs, symbol_dims)
+            return self._run_fast_path(inputs, symbol_dims, output_to_torch_tensor)
         else:
-            return self._run_slow_path(inputs, symbol_dims)
+            res = self._run_slow_path(inputs, symbol_dims)
+            if output_to_torch_tensor:
+                res = [tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in res]
+            return res
 
     def cuda_graph(self):
         """

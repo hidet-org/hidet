@@ -302,33 +302,64 @@ compiled_task_cache = CompiledTaskCache()
 
 
 def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs):
-    from hidet import ir
+    from hidet.ir import data_type
+    from hidet.graph.frontend.torch.utils import dtype_to_torch
+    from torch import Tensor as TorchTensor
 
     symbol_map = {}
     for i, (traced, new) in enumerate(zip(traced_inputs, inputs)):
-        traced_dev_kind = traced.device.partition(':')[0]
-        if traced_dev_kind != new.device.target:
-            raise RuntimeError(
-                f"device mismatch at arg {i} between original: {traced.device} and new: {new.device.kind}"
-            )
-        if ir.data_type(traced.dtype) != new.dtype:
-            raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
-        traced_shape = traced.shape
-        concrete_shape = new.shape
-        if len(traced_shape) != len(concrete_shape):
-            raise RuntimeError(
-                f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
-            )
-        for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
-            if isinstance(orig_shape, int) and orig_shape != new_shape:
+        if isinstance(new, TorchTensor):
+            traced_dev_kind = traced.device.partition(':')[0]
+            new_device_target = 'cuda' if new.device.type in ['cuda', 'vcuda'] else 'cpu'
+            if traced_dev_kind != new_device_target:
                 raise RuntimeError(
-                    f'shape mismatch at dimension {j}, original: \
-                                    {orig_shape} vs. new: {new_shape}'
+                    f"device mismatch at arg {i} between original: {traced.device} and new: {new.device.kind}"
                 )
-            elif orig_shape not in symbol_map:
-                symbol_map[orig_shape] = new_shape
-            elif symbol_map[orig_shape] != new_shape:
+            if dtype_to_torch(data_type(traced.dtype)) != new.dtype:
+                raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
+            traced_shape = traced.shape
+            concrete_shape = new.shape
+            if len(traced_shape) != len(concrete_shape):
                 raise RuntimeError(
-                    f"There exists multiple instances of the same symbol {orig_shape}\
-                    with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
+                    f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
                 )
+            for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
+                if isinstance(orig_shape, int) and orig_shape != new_shape:
+                    raise RuntimeError(
+                        f'shape mismatch at dimension {j}, original: \
+                                        {orig_shape} vs. new: {new_shape}'
+                    )
+                elif orig_shape not in symbol_map:
+                    symbol_map[orig_shape] = new_shape
+                elif symbol_map[orig_shape] != new_shape:
+                    raise RuntimeError(
+                        f"There exists multiple instances of the same symbol {orig_shape}\
+                        with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
+                    )
+        else:
+            traced_dev_kind = traced.device.partition(':')[0]
+            if traced_dev_kind != new.device.target:
+                raise RuntimeError(
+                    f"device mismatch at arg {i} between original: {traced.device} and new: {new.device.kind}"
+                )
+            if data_type(traced.dtype) != new.dtype:
+                raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
+            traced_shape = traced.shape
+            concrete_shape = new.shape
+            if len(traced_shape) != len(concrete_shape):
+                raise RuntimeError(
+                    f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
+                )
+            for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
+                if isinstance(orig_shape, int) and orig_shape != new_shape:
+                    raise RuntimeError(
+                        f'shape mismatch at dimension {j}, original: \
+                                        {orig_shape} vs. new: {new_shape}'
+                    )
+                elif orig_shape not in symbol_map:
+                    symbol_map[orig_shape] = new_shape
+                elif symbol_map[orig_shape] != new_shape:
+                    raise RuntimeError(
+                        f"There exists multiple instances of the same symbol {orig_shape}\
+                        with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
+                    )

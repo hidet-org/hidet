@@ -152,19 +152,27 @@ class CudaGraph:
             assert err == 0, err
             self._memory_api.unfreeze()
 
-    def copy_inputs(self, inputs: Sequence[Tensor], stream: Optional[Stream]):
+    def copy_inputs(self, inputs, stream: Optional[Stream]):
+        from hidet import Tensor as HidetTensor
+        from torch import Tensor as TorchTensor
+        from hidet.graph.frontend.torch.utils import dtype_from_torch
+
         if len(inputs) != len(self._inputs):
             raise ValueError("the number of inputs does not match")
         for src, dst in zip(inputs, self._inputs):
-            if src.is_symbolic():
+            if isinstance(src, HidetTensor) and src.is_symbolic():
+                raise ValueError("the input tensor is symbolic")
+            if isinstance(src, TorchTensor) and src.data_ptr() == 0:
                 raise ValueError("the input tensor is symbolic")
             if not same_list(src.shape, dst.shape):
                 raise ValueError("the shape of input does not match")
-            if src.dtype != dst.dtype:
+            src_dtype = dtype_from_torch(src.dtype) if isinstance(src, TorchTensor) else src.dtype
+            if src_dtype != dst.dtype:
                 raise ValueError("the dtype of input does not match")
-            if src.device != dst.device:
+            if str(src.device) != str(dst.device):
                 raise ValueError("the device of input does not match")
-            memcpy_async(dst=dst.storage.addr, src=src.storage.addr, num_bytes=dst.nbytes, stream=stream)
+            src_storage_addr = src.data_ptr() if isinstance(src, TorchTensor) else src.storage.addr
+            memcpy_async(dst=dst.storage.addr, src=src_storage_addr, num_bytes=dst.nbytes, stream=stream)
 
     @property
     def inputs(self) -> List[Tensor]:
@@ -200,7 +208,12 @@ class CudaGraph:
         stream.synchronize()
         return self.outputs
 
-    def run_async(self, inputs: Optional[Sequence[Tensor]] = None, stream: Optional[Stream] = None) -> List[Tensor]:
+    def run_async(
+        self,
+        inputs: Optional[Sequence[Tensor]] = None,
+        stream: Optional[Stream] = None,
+        output_to_torch_tensor: bool = False,
+    ):
         """
         Run the cuda graph asynchronously. If the inputs are provided, the inputs will be copied to the
         internal inputs of the cuda graph before running.
@@ -213,14 +226,18 @@ class CudaGraph:
         stream: Optional[Stream]
             The optional stream to run the cuda graph. If not provided, the current stream will be used.
 
+        output_to_torch_tensor: bool
+            If True list of torch.Tensor will be returned, opposite list of hidet.Tensor.
+
         Returns
         -------
-        outputs: List[Tensor]
+        outputs:
             The outputs of the cuda graph.
         """
         if stream is None:
             stream = current_stream()
         if inputs is not None:
             self.copy_inputs(inputs, stream)
+        # TODO: if output_to_torch_tensor == True we can speed up writing directly to torch.Tensor
         cudart.cudaGraphLaunch(self._graph_exec, stream)
         return self.outputs

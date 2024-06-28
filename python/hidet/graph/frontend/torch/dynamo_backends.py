@@ -124,15 +124,11 @@ def get_compiled_graph(flow_graph: FlowGraph):
     return cgraph
 
 
-def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
-    torch_inputs: List[torch.Tensor] = []
-    for x in inputs:
+def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[torch.Tensor]:
+    for i, x in enumerate(inputs):
         if not x.is_contiguous():
-            # warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
-            x = x.contiguous()
-        torch_inputs.append(x)
-    hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
-    return hidet_inputs
+            inputs[i] = x.contiguous()
+    return inputs
 
 
 class HidetCompiledModel:
@@ -170,9 +166,12 @@ class HidetCompiledModel:
                 # ignore constant
                 pass
 
-        hidet_inputs = preprocess_inputs(tensor_args)
-        hidet_outputs: List[hidet.Tensor] = self.cgraph.run_async(hidet_inputs)
-        outputs: Sequence[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
+        tensor_args = preprocess_inputs(tensor_args)
+        outputs = self.cgraph.run_async(tensor_args, output_to_torch_tensor=True)
+        outputs: Sequence[torch.Tensor] = [
+            tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in outputs
+        ]
+
         return deserialize_output(self.output_format, outputs)
 
 

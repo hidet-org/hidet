@@ -221,7 +221,7 @@ def register_hidet_options():
     register_option(
         name='runtime_check',
         type_hint='bool',
-        default_value=True,
+        default_value=False,
         description='Whether to check shapes of compiled graph and tasks during execution.',
         choices=[True, False],
     )
