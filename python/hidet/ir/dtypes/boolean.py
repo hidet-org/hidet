@@ -35,6 +35,9 @@ class Boolean(DataType):
     def is_vector(self) -> bool:
         return False
 
+    def is_boolean(self) -> bool:
+        return True
+
     def constant(self, value: Any):
         from hidet.ir.expr import constant
 

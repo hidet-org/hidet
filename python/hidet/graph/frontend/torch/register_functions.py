@@ -269,9 +269,6 @@ def setitem(x: Tensor, item, setvalue):
     if not isinstance(item, tuple):
         item = tuple([item])
 
-    if not isinstance(setvalue, (int, float)):
-        raise NotImplementedError('Currently Tensor __setitem__ only supports int or float values')
-
     # now, the item could have
     # 1. integer index
     # 2. slice
@@ -321,7 +318,11 @@ def setitem(x: Tensor, item, setvalue):
             ends.append(v.stop)
             steps.append(v.step)
 
-    out = ops.set_strided_slice(x, starts, ends, steps, setvalue)
+    if isinstance(setvalue, Tensor):
+        squeeze_dims = [i for i, dimlen in enumerate(setvalue.shape) if dimlen == 1]
+        setvalue = ops.squeeze(setvalue, squeeze_dims)
+
+    out = ops.set_strided_slice(x, setvalue, starts, ends, steps)
     return out
 
 

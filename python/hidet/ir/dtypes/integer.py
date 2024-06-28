@@ -45,6 +45,9 @@ class IntegerType(DataType):
     def is_vector(self) -> bool:
         return False
 
+    def is_boolean(self) -> bool:
+        return False
+
     def constant(self, value: Any):
         from hidet.ir.expr import Constant, constant
 

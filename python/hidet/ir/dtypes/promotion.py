@@ -131,6 +131,8 @@ def promote_type(t1: DataType, t2: DataType) -> DataType:
         return t2
     elif t1.is_float() and t2.is_integer():
         return t1
+    elif t1.is_boolean() and t2.is_boolean():
+        return t1
     else:
         pair = (t1, t2)
         if pair not in _promotion_table:

@@ -192,11 +192,11 @@ class SetStridedSliceTask(Task):
     def __init__(
         self,
         data: TensorNode,
+        setvalue: Union[int, float, TensorNode],
         starts: List[Optional[int]],
         ends: List[Optional[int]],
         axes: List[int],
         strides: List[int],
-        setvalue: [Union[int, float]],
     ):
         assert len(starts) == len(ends) == len(axes) == len(strides)
         if len(axes) != len(set(axes)):
@@ -216,17 +216,37 @@ class SetStridedSliceTask(Task):
                 )
             axis2info[axis] = (start, end, stride)
 
+        if isinstance(setvalue, TensorNode):
+            inputs = [data, setvalue]
+        else:
+            inputs = [data]
+
         def fmap(indices):
-            ret = data.type.dtype(setvalue)
+            if isinstance(setvalue, TensorNode):
+                ret = setvalue
+            else:
+                ret = data.type.dtype(setvalue)
+
+            new_val = True
+            new_indices = []
             for axis, index in enumerate(indices):
                 start, end, stride = axis2info[axis]
-                ret = if_then_else(
-                    logical_or(index < start, index >= end, (index - start) % stride != 0), data[indices], ret
+                new_val = if_then_else(
+                    logical_or(index < start, index >= end, (index - start) % stride != 0), False, new_val
                 )
-            return ret
+                if start + 1 < end:
+                    new_indices.append((index - start) // stride)
+
+            if isinstance(setvalue, TensorNode):
+                if len(new_indices) != 0:
+                    ret = ret[new_indices]
+                else:
+                    ret = ret[(0,) * ret.ndim]
+
+            return if_then_else(new_val, ret, data[indices])
 
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
-        super().__init__(name='set_slice', inputs=[data], outputs=[out])
+        super().__init__(name='set_slice', inputs=inputs, outputs=[out])
 
 
 class RollTask(Task):
@@ -702,18 +722,29 @@ class SetStridedSliceOp(Operator):
     def __init__(
         self,
         data: Tensor,
+        setvalue: Optional[Union[int, float, Tensor]],
         starts: Sequence[Optional[int]],
         ends: Sequence[Optional[int]],
         strides: Optional[Sequence[Optional[int]]] = None,
-        setvalue: Optional[Union[int, float]] = 0.0,
     ):
+        if setvalue is None:
+            setvalue = 0.0
+
         starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes=None, strides=strides)
-        task = SetStridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides, setvalue)
-        super().__init__(
-            inputs=[data],
-            attributes={'starts': starts, 'ends': ends, 'strides': strides, 'setvalue': setvalue},
-            task=task,
-        )
+
+        attributes = {'starts': starts, 'ends': ends, 'strides': strides}
+
+        if isinstance(setvalue, Tensor):
+            task = SetStridedSliceTask(
+                input_like(data, 'data'), input_like(setvalue, 'setvalue'), starts, ends, axes, strides
+            )
+            inputs = [data, setvalue]
+        else:
+            task = SetStridedSliceTask(input_like(data, 'data'), setvalue, starts, ends, axes, strides)
+            inputs = [data]
+            attributes['setvalue'] = setvalue
+
+        super().__init__(inputs=inputs, attributes=attributes, task=task)
 
 
 class RollOp(Operator):
@@ -1070,9 +1101,9 @@ def composite_elementwise(
 
 def set_strided_slice(
     data: Tensor,
+    setvalue: Optional[Union[int, float]],
     starts: Sequence[Optional[int]],
     ends: Sequence[Optional[int]],
     strides: Optional[Sequence[Optional[int]]] = None,
-    setvalue: Optional[Union[int, float]] = 0.0,
 ) -> Tensor:
-    return SetStridedSliceOp(data, starts, ends, strides, setvalue).outputs[0]
+    return SetStridedSliceOp(data, setvalue, starts, ends, strides).outputs[0]

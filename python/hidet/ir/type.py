@@ -174,6 +174,9 @@ class DataType(BaseType):
     def is_vector(self) -> bool:
         raise NotImplementedError()
 
+    def is_boolean(self) -> bool:
+        raise NotImplementedError()
+
     def constant(self, value: Any):
         raise NotImplementedError()
 

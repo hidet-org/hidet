@@ -35,6 +35,9 @@ class ComplexType(DataType):
     def is_complex(self) -> bool:
         return True
 
+    def is_boolean(self) -> bool:
+        return False
+
     def constant(self, value: Any):
         from hidet.ir.expr import Constant, constant
 
