@@ -18,3 +18,4 @@ from .memory import memcpy, memcpy_async, memset, memset_async, memory_info
 from .event import Event
 
 from . import cublas
+from . import cudnn
