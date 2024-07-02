@@ -116,7 +116,7 @@ def adaptive_avg_pool3d(x: Tensor, output_size):
 
 
 @register_function(torch.nn.functional.relu)
-def relu(x: Tensor, inplace: bool):
+def relu(x: Tensor, inplace: bool = False):
     # if inplace:
     #     warnings.warn_once('hidet: relu with inplace=True is not supported. Treat as inplace=False.')
     _ = inplace
@@ -1188,6 +1188,7 @@ def torch_sum(
 
 
 @register_function(torch.cumsum)
+@register_method(torch.Tensor.cumsum)
 def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.cumsum(..., out=...)")
