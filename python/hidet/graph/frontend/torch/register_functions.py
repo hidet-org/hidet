@@ -1432,7 +1432,9 @@ def torch_all(input, dim, keepdim=False, *, out=None):
 def torch_ones_like(
     x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format
 ):
-    return ones_like(x)
+    dtype = dtype_from_torch(dtype) if dtype is not None else dtype_from_torch(x.dtype)
+    device = device_from_torch(device) if device is not None else device_from_torch(x.device)
+    return ones_like(x, dtype=dtype, device=device)
 
 
 @register_function(torch.argmax)
