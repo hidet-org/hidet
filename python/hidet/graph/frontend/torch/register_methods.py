@@ -237,7 +237,7 @@ def tensor_type(self: Tensor, dtype: Union[str, torch.dtype], non_blocking: bool
 @register_method(torch.Tensor.expand)
 def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
     if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
-        sizes = sizes[0]
+        sizes = list(sizes[0])
     else:
         sizes: List[int] = list(sizes)
     assert len(sizes) >= len(self.shape)
