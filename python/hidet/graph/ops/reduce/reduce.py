@@ -500,12 +500,23 @@ def min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tenso
     return ReduceMinOp(x, dims, keep_dim).outputs[0]
 
 
-def var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False, correction: int = 0) -> Tensor:
     x = x - x.mean(dims=dims, keep_dim=True)
-    return square(x).mean(dims=dims, keep_dim=keep_dim)
+    variance = square(x).mean(dims=dims, keep_dim=keep_dim)
+    if correction == 1:
+        if isinstance(dims, int):
+            n = x.shape[dims]
+        # we cannot use the built-in 'sum' here because it is shadowed by the 'sum' function defined in this file
+        else:
+            n = 0
+            for d in dims:
+                n += x.shape[d]
+        variance = variance * n / (n - correction)
+    return variance
 
 
 def std(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+
     return sqrt(var(x, dims=dims, keep_dim=keep_dim))
 
 

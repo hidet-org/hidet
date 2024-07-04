@@ -29,6 +29,7 @@ from .utils import symbol_like_torch
 
 logger = logging.getLogger(__name__)
 
+
 # TODO: after search_space=1 will be tuned switch search_space from 0 to 1
 def process_options(kwargs):
     # Default options for case mode is not passed to torch.compile()

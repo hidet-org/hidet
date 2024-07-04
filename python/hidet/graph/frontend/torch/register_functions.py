@@ -14,7 +14,7 @@ from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import functools
 import torch
-from hidet.graph.tensor import Tensor, full_like, from_torch, ones_like
+from hidet.graph.tensor import Tensor, full_like, from_torch, ones_like, randn
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
@@ -207,6 +207,11 @@ def and_(x: Union[Tensor, Expr], y: Union[Tensor, Expr]):
         return ops.logical_and(x, y)
     else:
         return expr.logical_and(x, y)
+
+
+@register_function(operator.invert)
+def invert(x: Tensor):
+    return ops.bitwise_invert(x)
 
 
 @register_function(torch.nn.functional.batch_norm)
@@ -835,6 +840,39 @@ def torch_as_tensor(data: Any, dtype: Optional[torch.dtype] = None, device: Opti
         return from_torch(tt)
 
 
+@register_function(torch.randn)
+def torch_randn(*size, generator=None, out=None, layout=None, device=None, requires_grad=False, pin_memory=False):
+    if generator is not None:
+        raise NotImplementedError("hidet: currently does not support torch.randn(..., generator=..., ...)")
+    if out is not None:
+        raise NotImplementedError("hidet: currently does not support torch.randn(..., out=..., ...)")
+    if layout is not None:
+        raise NotImplementedError("hidet: currently does not support torch.randn(..., layout=..., ...)")
+    if pin_memory:
+        raise NotImplementedError("hidet: currently does not support torch.randn(..., pin_memory=True, ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+
+    device = device_from_torch(torch_device=device) if device is not None else device
+
+    if len(size) == 1 and isinstance(size[0], (list, tuple)):
+        size = size[0]
+    return randn(size, device=device)
+
+
+@register_function(torch.randn_like)
+def torch_randn_like(input, generator=None, out=None, layout=None, device=None, requires_grad=False, pin_memory=False):
+    return torch_randn(
+        input.shape,
+        generator=generator,
+        out=out,
+        layout=layout,
+        device=device if device is not None else input.device,
+        requires_grad=requires_grad,
+        pin_memory=pin_memory,
+    )
+
+
 @register_function(torch.sigmoid)
 @register_function(torch.sigmoid_)
 @register_method(torch.Tensor.sigmoid)
@@ -967,6 +1005,7 @@ def scaled_dot_product_attention(
 
 
 @register_function(torch.gather)
+@register_function(torch.Tensor.gather)
 def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
     if sparse_grad:
         warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
@@ -1165,6 +1204,26 @@ def torch_mean(
     return output
 
 
+@register_function(torch.var)
+@register_method(torch.Tensor.var)
+def torch_var(
+    x: Tensor,
+    dim: Union[int, Tuple[int]],
+    *,
+    unbiased: bool = True,
+    correction: int = 1,
+    dtype: Optional[DataType] = None,
+    keepdim: bool = False,
+) -> Tensor:
+    if dtype:
+        x = x.astype(dtype_from_torch(dtype))
+
+    if not unbiased:
+        correction = 0
+    output = ops.var(x, dims=dim, keep_dim=keepdim, correction=correction)
+    return output
+
+
 @register_function(torch.sum)
 @register_method(torch.Tensor.sum)
 def torch_sum(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
@@ -1284,6 +1343,7 @@ def zeros_like(
 
 
 @register_function(torch.clamp)
+@register_method(torch.Tensor.clamp)
 def clamp(
     x: Tensor,
     min: Optional[Union[Tensor, Number]] = None,
