@@ -286,6 +286,11 @@ class Tensor:
 
         return greater(self, utils.convert_to_tensor(other, self))
 
+    def __ge__(self, other):
+        from .ops import greater_equal, utils
+
+        return greater_equal(self, utils.convert_to_tensor(other, self))
+
     # we do not define __eq__ method for Tensor
 
     def __ne__(self, other):
