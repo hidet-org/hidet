@@ -263,6 +263,16 @@ def getitem(x: Tensor, index):
                 raise NotImplementedError(
                     'getitem: index tensor must be either on CPU or the same device as the tensor'
                 )
+    elif isinstance(index, (tuple, list)):
+        index = list(index)
+        for i, v in enumerate(index):
+            if isinstance(v, Tensor) and x.device != v.device:
+                if v.device.kind == 'cpu':
+                    index[i] = v.to(device=x.device)
+                else:
+                    raise NotImplementedError(
+                        'getitem: index tensor must be either on CPU or the same device as the tensor'
+                    )
     return x[index]
 
 
