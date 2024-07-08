@@ -166,6 +166,8 @@ def tensor_contiguous(self: Tensor) -> Tensor:
 
 @register_method(torch.Tensor.reshape)
 def tensor_reshape(self: Tensor, *shape: int) -> Tensor:
+    if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+        shape = shape[0]
     return ops.reshape(self, shape)
 
 
