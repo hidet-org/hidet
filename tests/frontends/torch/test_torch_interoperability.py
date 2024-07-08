@@ -25,6 +25,12 @@ def test_as_torch_tensor():
     torch.testing.assert_close(b, c.torch())
 
 
+def test_torch_reshape_tuple_arg():
+    a = torch.randn(4741, 2, 2)
+    func = FunctionalModule(op=lambda x: x.reshape((4741, 4)))
+    check_module(func, args=[a], atol=0, rtol=0)
+
+
 @pytest.mark.parametrize(
     'shape1,shape2', [([2, 2], [2, 2]), ([2, 3, 4], [2, 3, 4]), ([2, 3, 4], [2, 3, 1]), ([2, 3, 4], [2, 1, 1])]
 )

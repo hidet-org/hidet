@@ -658,6 +658,11 @@ def transpose(x: Tensor, dim0: int, dim1: int):
     return ops.transpose(x, [dim0, dim1])
 
 
+@register_function(torch.reshape)
+def reshape(x: Tensor, shape: Tuple[int]):
+    return ops.reshape(x, shape)
+
+
 @register_function(torch.nn.functional.dropout)
 @register_function(torch.nn.functional.dropout1d)
 @register_function(torch.nn.functional.dropout2d)
