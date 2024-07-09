@@ -58,6 +58,11 @@ def process_options(kwargs):
         else:
             raise ValueError(f'hidet_backend: unknown torch.compile mode={mode}')
 
+    for option, value in kwargs.get('options', {}).items():
+        if not hidet.option.is_option_exist(option):
+            raise ValueError(f'hidet_backend: unknown torch.compile option={option}')
+        hidet.option.set_option(option, value)
+
 
 # NOTES ABOUT DYNAMIC SHAPE.
 # From pytorch we got two argument:

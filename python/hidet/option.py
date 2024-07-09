@@ -875,6 +875,22 @@ def debug_show_verbose_flow_graph(enable: bool = True):
     OptionContext.current().set_option('debug_show_verbose_flow_graph', enable)
 
 
+def is_option_exist(name: str) -> bool:
+    """Checking is options exist/registered.
+
+    Parameters
+    ----------
+    name: str
+        Name of the option.
+
+    Returns
+    -------
+    ret: bool
+        True if option exists/registered, False otherwise.
+    """
+    return name in OptionRegistry.registered_options
+
+
 class cuda:
     """
     The CUDA related options.
