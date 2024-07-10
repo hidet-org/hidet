@@ -124,5 +124,92 @@ def test_torch_var(shape, dim):
     )
 
 
+@pytest.mark.parametrize('embed_dim', [512])
+@pytest.mark.parametrize('num_heads', [8])
+@pytest.mark.parametrize('batch_first', [False, True])
+@pytest.mark.parametrize('batch_size', [32])
+@pytest.mark.parametrize('target_len, src_len', [[77, 77]])
+@pytest.mark.parametrize('have_mask', [True])
+@pytest.mark.parametrize('is_causal', [False])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+def test_torch_multihead_attention(
+    embed_dim, num_heads, batch_first, batch_size, target_len, src_len, have_mask, is_causal, dtype
+):
+    torch_attention = torch.nn.MultiheadAttention(
+        embed_dim, num_heads, batch_first=batch_first, device='cuda', dtype=dtype
+    )
+    query_shape = [target_len, batch_size, embed_dim] if not batch_first else [batch_size, target_len, embed_dim]
+
+    query = torch.randn(query_shape, dtype=dtype, device='cuda')
+    key = query
+    value = query
+
+    if have_mask:
+        mask = torch.full((target_len, src_len), float('-inf'), dtype=dtype, device='cuda').triu(1)
+    else:
+        mask = None
+    if not have_mask:
+        is_causal = False
+
+        # same as above, but just check the first element in the output tuple
+    check_module(
+        model=FunctionalModule(op=lambda *args: torch_attention(*args)[0]),
+        args=[query, key, value, None, False, mask, False, is_causal],
+        atol=1e-2,
+        rtol=1e-2,
+    )
+
+
+@pytest.mark.parametrize('d_model', [512])
+@pytest.mark.parametrize('nhead', [8])
+@pytest.mark.parametrize('dim_feedforward', [2048])
+@pytest.mark.parametrize('dropout', [0.0])
+@pytest.mark.parametrize('activation', [torch.nn.functional.relu])
+@pytest.mark.parametrize('batch_first', [False])
+@pytest.mark.parametrize('norm_first', [True])
+@pytest.mark.parametrize('src_shape', [[77, 32, 512]])
+@pytest.mark.parametrize('need_mask', [True])
+@pytest.mark.parametrize('mask_shape', [[77, 77]])
+@pytest.mark.parametrize('is_causal', [True])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+def test_torch_transformer_encoder(
+    d_model,
+    nhead,
+    dim_feedforward,
+    dropout,
+    activation,
+    batch_first,
+    norm_first,
+    src_shape,
+    need_mask,
+    mask_shape,
+    is_causal,
+    dtype,
+):
+    torch_layer = torch.nn.TransformerEncoderLayer(
+        d_model=d_model,
+        nhead=nhead,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        activation=activation,
+        batch_first=batch_first,
+        norm_first=norm_first,
+        device='cuda',
+        dtype=dtype,
+    )
+
+    src = torch.randn(src_shape, dtype=dtype, device='cuda')
+    mask = torch.full(mask_shape, float('-inf'), dtype=dtype, device='cuda').triu(1) if need_mask else None
+
+    if not need_mask:
+        is_causal = False
+
+    torch_encoder = torch.nn.TransformerEncoder(torch_layer, num_layers=12)
+
+    # Change the atol to 5e-2 since the test is quite flaky here...
+    # for atol=1e-2 sometimes the test fails with way less than 1% of mismatch
+    check_module(model=torch_encoder, args=[src, mask, None, is_causal], atol=5e-2, rtol=1e-2)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

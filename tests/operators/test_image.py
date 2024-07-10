@@ -23,7 +23,7 @@ from hidet.testing import check_binary
 from hidet.graph.tensor import asarray
 from hidet.utils.ort_utils import create_ort_session, ort_inference
 from hidet.testing import check_torch_unary
-from hidet.graph.frontend.torch import register_functions as regs
+from hidet.graph.frontend.torch import register_functions as reg_funcs
 
 
 class TorchResizeModel(torch.nn.Module):
