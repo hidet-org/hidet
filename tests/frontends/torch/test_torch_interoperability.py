@@ -60,6 +60,13 @@ def test_expand_as(shape, expanded_shape):
     )
 
 
+@pytest.mark.parametrize('shape, new_shape', [[[2, 3, 4], [6, 4]], [[2, 3, 4], [12, 2]]])
+def test_view_as(shape, new_shape):
+    check_module(
+        FunctionalModule(op=lambda x: x.view_as(torch.randn(new_shape))), args=[torch.randn(shape)], atol=0, rtol=0
+    )
+
+
 @pytest.mark.parametrize('shape', [[2, 3]])
 def test_tensor_sigmod(shape):
     check_module(FunctionalModule(op=lambda x: x.sigmoid_()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)

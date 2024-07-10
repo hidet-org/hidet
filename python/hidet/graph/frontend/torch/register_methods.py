@@ -158,6 +158,11 @@ def tensor_view(self: Tensor, *args) -> Tensor:
         return ops.reshape(self, dst_shape)
 
 
+@register_method(torch.Tensor.view_as)
+def torch_view_as(self: Tensor, other: Tensor) -> Tensor:
+    return ops.reshape(self, other.shape)
+
+
 @register_method(torch.Tensor.contiguous)
 def tensor_contiguous(self: Tensor) -> Tensor:
     # hidet tensor is always contiguous
