@@ -22,7 +22,6 @@ def dynamo_config_warning():
 
 class DynamoConfig:
     def __init__(self):
-        self._search_space: int = 0
         self._parallel_k: str = 'default'
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
@@ -39,7 +38,6 @@ class DynamoConfig:
         """
         Reset the configuration to the default values
         """
-        self._search_space: int = 0
         self._parallel_k: str = 'default'
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
@@ -65,8 +63,7 @@ class DynamoConfig:
         level: int
             The search space level.
         """
-        self._search_space = level
-        return self
+        dynamo_config_warning()
 
     def use_tensor_core(self, flag=True):
         """

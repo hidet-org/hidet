@@ -34,26 +34,21 @@ logger = logging.getLogger(__name__)
 def process_options(kwargs):
     # Default options for case mode is not passed to torch.compile()
     hidet.option.search_space(0)
-    hidet.torch.dynamo_config.search_space(0)
     hidet.torch.dynamo_config.use_cuda_graph(False)
 
     if 'mode' in kwargs:
         mode = kwargs['mode']
         if mode == 'max-autotune':
             hidet.option.search_space(2)
-            hidet.torch.dynamo_config.search_space(2)
             hidet.torch.dynamo_config.use_cuda_graph(True)
         elif mode == 'max-autotune-no-cudagraphs':
             hidet.option.search_space(2)
-            hidet.torch.dynamo_config.search_space(2)
             hidet.torch.dynamo_config.use_cuda_graph(False)
         elif mode == 'reduce-overhead':
             hidet.option.search_space(0)
-            hidet.torch.dynamo_config.search_space(0)
             hidet.torch.dynamo_config.use_cuda_graph(True)
         elif mode == 'default':
             hidet.option.search_space(0)
-            hidet.torch.dynamo_config.search_space(0)
             hidet.torch.dynamo_config.use_cuda_graph(False)
         else:
             raise ValueError(f'hidet_backend: unknown torch.compile mode={mode}')
@@ -107,7 +102,6 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
 
 
 def get_compiled_graph(flow_graph: FlowGraph):
-    search_space = dynamo_config['search_space']
     parallel_k = dynamo_config['parallel_k']
     tensor_core = dynamo_config['use_tensor_core']
     save_dir = dynamo_config['dump_graph_ir']
@@ -123,9 +117,9 @@ def get_compiled_graph(flow_graph: FlowGraph):
         graph_opt: FlowGraph = optimize(flow_graph)
         logger.info('finish optimizing the flow graph')
 
-    logger.info('schedule search space: %d', search_space)
+    logger.info('schedule search space: %d', hidet.option.get_search_space())
     logger.info('start to build the optimized computation graph')
-    cgraph: CompiledGraph = graph_opt.build(space=search_space)
+    cgraph: CompiledGraph = graph_opt.build(space=hidet.option.get_search_space())
     logger.info('finish building computation graph')
     return cgraph
 

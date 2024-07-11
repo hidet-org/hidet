@@ -17,7 +17,6 @@ import hidet
 
 
 class BenchModel:
-    search_space = 0
     dtype = None  # torch.float32
     tensor_core: bool = False
     disable_torch_cudnn_tf32 = False
@@ -150,9 +149,8 @@ class BenchModel:
         return self.bench_with_backend('inductor', mode=mode)
 
     def bench_hidet(self, mode, use_cuda_graph=True) -> float:
-        print('Benchmarking {} with backend {}...'.format(self, 'hidet(space={})'.format(self.search_space)))
+        print('Benchmarking {} with backend {}...'.format(self, 'hidet(mode={})'.format(mode)))
         config = hidet.torch.dynamo_config
-        config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
         config.use_tensor_core(self.tensor_core)
         return self.bench_with_backend('hidet', mode=mode)
