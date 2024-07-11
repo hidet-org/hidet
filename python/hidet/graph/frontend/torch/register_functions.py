@@ -11,6 +11,7 @@
 # limitations under the License.
 # pylint: disable=protected-access, c-extension-no-member, function-redefined
 from typing import Optional, Union, Sequence, Any, Tuple, List
+import math
 import operator
 import functools
 import torch
@@ -22,7 +23,7 @@ from hidet.ir import expr
 from hidet.ir.dtypes import promote_type
 from hidet.ir.expr import Expr, Int, is_constant
 from hidet.runtime.device import Device
-from .interpreter import register_function, register_method
+from .registry import register_function, register_method
 from .interpreter import warnings
 from .utils import dtype_from_torch, device_from_torch, normalize_to_scalar, convert_to_scalar_if_possible
 
@@ -980,7 +981,6 @@ def mish(x: Tensor, inplace: bool = False):
 def scaled_dot_product_attention(
     q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
 ):
-    import math
 
     if not math.isclose(dropout_p, 0.0):
         warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
@@ -1177,6 +1177,7 @@ def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.sqrt)
+@register_function(torch._C._te.sqrt)
 def sqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.sqrt(..., out=...)")
@@ -1535,3 +1536,76 @@ def torch_any_v1(input: Tensor, dim, keepdim=False, *, out=None) -> Tensor:
 @register_function(torch.any)
 def torch_any_v2(input: Tensor) -> Tensor:
     return ops.any(input)
+
+
+# Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
+# Hidet never should see them.
+@register_function(torch._C._has_torch_function)
+@register_function(torch._C._has_torch_function_unary)
+@register_function(torch._C._has_torch_function_variadic)
+@register_function(torch._C._get_tracing_state)
+@register_function(torch._jit_internal.is_scripting)
+@register_function(torch.are_deterministic_algorithms_enabled)
+@register_function(torch._C._is_tracing)
+@register_function(torch.jit._trace.is_tracing)
+@register_function(torch._dynamo.external_utils.is_compiling)
+@register_function(torch._utils.is_compiling)
+@register_function(torch.compiler.is_compiling)
+@register_function(torch._assert)
+@register_function(torch._assert_scalar)
+@register_function(torch._assert_tensor_metadata)
+@register_function(math.acos)
+@register_function(math.acosh)
+@register_function(math.asin)
+@register_function(math.asinh)
+@register_function(math.atan)
+@register_function(math.atan2)
+@register_function(math.atanh)
+@register_function(math.ceil)
+@register_function(math.comb)
+@register_function(math.copysign)
+@register_function(math.cos)
+@register_function(math.cosh)
+@register_function(math.degrees)
+@register_function(math.dist)
+@register_function(math.erf)
+@register_function(math.erfc)
+@register_function(math.exp)
+@register_function(math.expm1)
+@register_function(math.fabs)
+@register_function(math.factorial)
+@register_function(math.floor)
+@register_function(math.fmod)
+@register_function(math.frexp)
+@register_function(math.fsum)
+@register_function(math.gamma)
+@register_function(math.gcd)
+@register_function(math.hypot)
+@register_function(math.isclose)
+@register_function(math.isfinite)
+@register_function(math.isinf)
+@register_function(math.isnan)
+@register_function(math.isqrt)
+# @register_function(math.lcm)
+@register_function(math.ldexp)
+@register_function(math.lgamma)
+@register_function(math.log)
+@register_function(math.log10)
+@register_function(math.log1p)
+@register_function(math.log2)
+@register_function(math.modf)
+# @register_function(math.nextafter)
+@register_function(math.perm)
+@register_function(math.pow)
+@register_function(math.prod)
+@register_function(math.radians)
+@register_function(math.remainder)
+@register_function(math.sin)
+@register_function(math.sinh)
+@register_function(math.sqrt)
+@register_function(math.tan)
+@register_function(math.tanh)
+@register_function(math.trunc)
+# @register_function(math.ulp)
+def torch_should_not_appear_function(*args, **kwargs):
+    raise RuntimeError('These function should not apper in fxgraph')

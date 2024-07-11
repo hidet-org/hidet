@@ -1482,7 +1482,7 @@ class Transpiler:
 
 
 def get_hidet_function(fn):
-    from hidet.graph.frontend.torch.interpreter import Registry
+    from hidet.graph.frontend.torch.registry import Registry
 
     if fn in Registry.registered_functions:
         return Registry.registered_functions[fn]
@@ -1490,7 +1490,7 @@ def get_hidet_function(fn):
 
 
 def get_hidet_method(fn):
-    from hidet.graph.frontend.torch.interpreter import Registry
+    from hidet.graph.frontend.torch.registry import Registry
 
     if fn in Registry.registered_methods:
         return Registry.registered_methods[fn]
@@ -1498,7 +1498,7 @@ def get_hidet_method(fn):
 
 
 def get_hidet_module(mod):
-    from hidet.graph.frontend.torch.interpreter import Registry
+    from hidet.graph.frontend.torch.registry import Registry
 
     if mod in Registry.registered_modules:
         return Registry.registered_modules[mod]

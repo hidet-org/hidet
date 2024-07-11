@@ -19,7 +19,7 @@ from hidet.ir.expr import Expr
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
 from hidet.runtime.device import instantiate_device
-from .interpreter import register_method
+from .registry import register_method
 from .utils import dtype_from_torch, device_from_torch, dtype_to_torch
 
 

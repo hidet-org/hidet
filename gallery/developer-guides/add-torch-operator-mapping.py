@@ -53,7 +53,7 @@ import torch
 from torch import nn
 
 # hidet employs an interpreter to convert a fx.Graph to FlowGraph
-from hidet.graph.frontend.torch.interpreter import Registry
+from hidet.graph.frontend.torch.registry import Registry
 
 # the following three modules register the conversion rules
 import hidet.graph.frontend.torch.register_functions
@@ -112,7 +112,7 @@ except Exception as e:
 from typing import Optional
 from hidet import ops
 from hidet import Tensor
-from hidet.graph.frontend.torch.interpreter import (
+from hidet.graph.frontend.torch.registry import (
     register_function,
     register_module,
     register_method,
