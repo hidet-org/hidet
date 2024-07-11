@@ -25,7 +25,7 @@ def enable_compiled_server():
     pass
 
 def setup_hidet_flags(dtype):
-    hidet.torch.dynamo_config.search_space(2)
+    hidet.option.search_space(2)
     hidet.torch.dynamo_config.use_tensor_core(True)
     hidet.torch.dynamo_config.use_cuda_graph(True)
     hidet.torch.dynamo_config.dump_graph_ir("./graph_ir")
