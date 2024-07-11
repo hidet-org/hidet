@@ -26,6 +26,8 @@ from .dynamo_config import dynamo_config
 from .interpreter import Interpreter
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .utils import symbol_like_torch
+from .registry import allow_in_graph_registered_funcs_only
+
 
 logger = logging.getLogger(__name__)
 
@@ -208,3 +210,6 @@ def hidet_backend(graph_module, example_inputs, **kwargs):
         cgraph = get_compiled_graph(flow_graph)
 
         return HidetCompiledModel(cgraph, inputs, output_format)
+
+
+allow_in_graph_registered_funcs_only()

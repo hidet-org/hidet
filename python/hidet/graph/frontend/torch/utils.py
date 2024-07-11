@@ -20,7 +20,17 @@ from hidet.utils import prod
 from .availability import available
 
 
+def tensor_from_torch(tensor) -> Tensor:
+    import hidet.graph.tensor
+
+    if tensor.requires_grad:
+        tensor = tensor.detach()
+    return hidet.graph.tensor.from_torch(tensor)
+
+
 def dtype_from_torch(torch_dtype) -> Optional[DataType]:
+    import torch
+
     if not available():
         raise RuntimeError('torch is not available')
 
@@ -29,8 +39,6 @@ def dtype_from_torch(torch_dtype) -> Optional[DataType]:
 
     if isinstance(torch_dtype, DataType):
         return torch_dtype
-
-    import torch
 
     if isinstance(torch_dtype, str):
         torch_dtype = getattr(torch, torch_dtype)

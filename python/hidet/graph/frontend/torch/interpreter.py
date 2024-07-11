@@ -10,75 +10,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List, Union
+from typing import Dict, Any, Callable, Optional, Tuple, Set, List
 import logging
 import inspect
-import operator
-import itertools
 import tabulate
 import torch
 
 from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor
 from .utils import relative_absolute_error
+from .registry import Registry, ExpectedRegistry, OverloadedFunction, HidetModule
+from .utils import tensor_from_torch
 
 logger = logging.getLogger(__name__)
-
-
-class OverloadedFunction:
-    def __init__(self):
-        from inspect import Signature
-
-        self.signatures: List[Signature] = []
-        self.functions: List[Callable] = []
-
-    def __call__(self, *args, **kwargs):
-        dispatched = self.resolve(*args, **kwargs)
-        if dispatched is None:
-            raise RuntimeError('Can not dispatch function')
-        return dispatched(*args, **kwargs)
-
-    @staticmethod
-    def from_lambda(func: Callable):
-        of = OverloadedFunction()
-        of.overload(func)
-        return of
-
-    def resolve(self, *args, **kwargs) -> Optional[Callable]:
-        for sig, func in zip(self.signatures, self.functions):
-            try:
-                sig.bind(*args, **kwargs)
-            except TypeError:
-                continue
-            else:
-                return func
-        return None
-
-    def overload(self, func: Callable):
-        self.functions.append(func)
-        self.signatures.append(inspect.signature(func))
-        return self
-
-
-class Registry:
-    # registered modules, like torch.nn.Conv2d, torch.nn.Linear.
-    registered_modules: Dict[Type[torch.nn.Module], Type['HidetModule']] = {}
-    # registered functions, like torch.add, torch.mul, torch.nn.functional.relu, and torch.ops.aten.cos.
-    registered_functions: Dict[Callable, OverloadedFunction] = {}
-    # registered methods, like torch.Tensor.add, torch.Tensor.mul, torch.Tensor.relu.
-    registered_methods: Dict[Callable, OverloadedFunction] = {}
-
-
-class ExpectedRegistry:
-    operator_functions: Set[Callable] = set(c for c in operator.__dict__.values() if callable(c))
-    torch_functional: Set[Callable] = set(c for c in torch.nn.functional.__dict__.values() if callable(c))
-    torch_modules: Set[Type[torch.nn.Module]] = set(
-        c for c in torch.nn.__dict__.values() if isinstance(c, type) and issubclass(c, torch.nn.Module)
-    )
-    torch_root_functions: Set[Callable] = set(c for c in torch.__dict__.values() if callable(c))
-    torch_tensor_methods: Set[Callable] = set(
-        getattr(torch.Tensor, name) for name in dir(torch.Tensor) if callable(getattr(torch.Tensor, name))
-    )
 
 
 class UniqueWarnings:
@@ -110,94 +54,6 @@ class UniqueWarnings:
 
 
 warnings = UniqueWarnings()
-
-
-def register_module(torch_cls: Type[torch.nn.Module]):
-    def decorator(hidet_cls: Type[HidetModule]):
-        Registry.registered_modules[torch_cls] = hidet_cls
-        return hidet_cls
-
-    return decorator
-
-
-def register_function(func: Union[Callable, str]):
-    def decorator(hidet_func):
-        if func not in Registry.registered_functions:
-            Registry.registered_functions[func] = OverloadedFunction()
-        Registry.registered_functions[func].overload(hidet_func)
-        return hidet_func
-
-    return decorator
-
-
-def register_method(method: Callable):
-    def decorator(hidet_method):
-        if method not in Registry.registered_functions:
-            Registry.registered_methods[method] = OverloadedFunction()
-        Registry.registered_methods[method].overload(hidet_method)
-        return hidet_method
-
-    return decorator
-
-
-def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
-    import hidet.graph.tensor
-
-    if tensor.requires_grad:
-        tensor = tensor.detach()
-    return hidet.graph.tensor.from_torch(tensor)
-
-
-class HidetModule:
-    def __init__(self, torch_module: torch.nn.Module):
-        self.mod: torch.nn.Module = torch_module
-        self.torch_params: Dict[str, Optional[torch.Tensor]] = dict(
-            itertools.chain(self.mod.named_parameters(), self.mod.named_buffers())
-        )
-        self.hidet_params: Dict[str, Optional[Tensor]] = {}
-
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError()
-
-    def _get_weight_norm_hook(self, name: str):
-        from torch.nn.utils.weight_norm import WeightNorm
-
-        for hook in self.mod._forward_pre_hooks.values():  # pylint: disable=protected-access
-            if isinstance(hook, WeightNorm) and hook.name == name:
-                return hook
-        return None
-
-    def _used_weight_norm(self, name: str) -> bool:
-        return self._get_weight_norm_hook(name) is not None
-
-    def _compute_weight_norm(self, name: str) -> Tensor:
-        hook = self._get_weight_norm_hook(name)
-        return hook.compute_weight(self.mod)
-
-    def param(self, name: str, optional=False, steal=False) -> Optional[Tensor]:
-        if name not in self.torch_params:
-            # see https://pytorch.org/docs/stable/generated/torch.nn.utils.weight_norm.html
-            # to learn more about weight norm.
-            if self._used_weight_norm(name):
-                self.torch_params[name] = self._compute_weight_norm(name)
-                return self.param(name, optional)
-
-            if optional:
-                return None
-            raise RuntimeError(f"hidet: {self.mod} has no parameter/buffer {name}")
-
-        if name not in self.hidet_params:
-            if self.torch_params[name] is None:
-                self.hidet_params[name] = None
-            else:
-                torch_param: torch.Tensor = self.torch_params[name]
-                if steal:
-                    del self.torch_params[name]
-                    setattr(self.mod, name, None)
-                self.hidet_params[name] = tensor_from_torch(torch_param)
-                del torch_param
-                torch.cuda.empty_cache()
-        return self.hidet_params[name]
 
 
 class Interpreter:

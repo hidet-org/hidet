@@ -16,7 +16,8 @@ from typing import Tuple, Optional
 import torch
 from hidet.graph import ops
 from hidet.graph.tensor import Tensor
-from .interpreter import HidetModule, register_module, warnings
+from .registry import HidetModule, register_module
+from .interpreter import warnings
 from . import register_functions as reg_funcs, register_methods as reg_methods
 from .dynamo_config import dynamo_config
 

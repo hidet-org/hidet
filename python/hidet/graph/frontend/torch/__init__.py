@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .availability import available, dynamo_available, imported
-from . import utils
+
+# from . import utils
 from .dynamo_config import dynamo_config, DynamoConfig
 
 
