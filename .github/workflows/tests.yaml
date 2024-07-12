@@ -7,13 +7,15 @@ on:
   pull_request:
   workflow_call:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+
+  build-docs:
     if: github.repository == 'CentML/hidet' || github.repository == 'hidet-org/hidet'
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-      cancel-in-progress: true
-    runs-on: [self-hosted, Linux, X64, gpu]
+    runs-on: arc-runner-set
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
@@ -22,10 +24,10 @@ jobs:
         run: |
           apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
@@ -34,41 +36,89 @@ jobs:
         with:
           cmake-version: '3.19.x'
 
-      - name: Install dependencies via pip
+      - name: Setup Hidet
+        uses: ./.github/actions/setup-hidet
+  
+      - name: List installed packages
         run: |
-          python -m pip install --upgrade pip
-          pip install torch torchvision torchaudio 
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          pip list
 
-      - name: Build hidet
+      - name: Install docs dependencies
         run: |
-          bash scripts/wheel/build_wheel.sh
-          WHEEL=$(find ./scripts/wheel/built_wheel -maxdepth 1 -name '*.whl')
-          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
-          echo "Built wheel: ${{ env.WHEEL_NAME }}"
-
-      - name: Install hidet
+          pip install -r docs/requirements.txt
+    
+      - name: Build docs
         run: |
-          pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
+          cd docs; make clean; make html
 
+  list-test-dirs:
+    if: github.repository == 'CentML/hidet' || github.repository == 'hidet-org/hidet'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+
+      - name: Checkout Hidet
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - id: set-matrix
+        run: |
+          python .github/scripts/set_test_matrix.py
+          
+  run-test:
+    needs: list-test-dirs
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+    runs-on: arc-runner-set
+    container:
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
+      options: --gpus all
+    steps:
+      - name: Install dependencies via apt
+        run: |
+          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.19.x'
+
+      - name: Setup Hidet
+        uses: ./.github/actions/setup-hidet
+  
       - name: List installed packages
         run: |
           pip list
 
       # Run tests
-
       - name: Run tests
         run: |
           rm -rf ~/.config/hidet
-          python -m pytest -v --durations=20 --clear-cache ./tests
+          python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
-      # Build the docs
-
-      - name: Install docs dependencies
-        run: |
-          pip install -r docs/requirements.txt
-
-      - name: Build docs
-        run: |
-          cd docs; make clean; make html
+  final-status-indicator:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    name: Pass All Functional Tests
+    needs: [run-test]
+    steps:
+      - run: exit 1
+        if: >-
+          ${{
+               contains(needs.*.result, 'failure')
+            || contains(needs.*.result, 'cancelled')
+            || contains(needs.*.result, 'skipped')
+          }}
