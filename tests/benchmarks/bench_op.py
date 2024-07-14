@@ -1,10 +1,29 @@
-import sys
-import os
 import argparse
-import numpy as np
 import hidet
 
 from hidet.testing.torch_utils import bench_torch_model, Backend
+
+
+def init_hidet():
+    import hidet
+    import os
+
+    hidet.option.search_space(2)
+
+    # hidet.option.cache_dir(hidet.option.get_cache_dir() + '')
+    # hidet.option.parallel_tune(max_parallel_jobs=1)
+    # hidet.option.debug_cache_tuning(True)
+    # hidet.option.save_lower_ir(True)
+    # hidet.option.debug_show_verbose_flow_graph(True)
+
+    # Initialise compiler server
+    if os.environ.get('CI_CS_HOSTNAME'):
+        hidet.option.compile_server.addr(os.environ.get('CI_CS_HOSTNAME'))
+        hidet.option.compile_server.port(int(os.environ.get('CI_CS_PORT')))
+        hidet.option.compile_server.username(os.environ.get('CI_CS_USERNAME'))
+        hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
+        hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
+        hidet.option.compile_server.enable(flag=True)
 
 
 def bench_matmul_f16(params: str, *args, **kwargs) -> float:
@@ -149,7 +168,7 @@ if __name__ == '__main__':
     else:
         raise ValueError(f'Benchmark function for operator {operator} not implemented')
 
-    Backend(backend='hidet', mode='max-autotune', dtype=dtype).init_hidet()
+    init_hidet()
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision(dtype)
