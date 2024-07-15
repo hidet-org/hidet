@@ -50,6 +50,10 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
         raise ValueError('torch_outputs and hidet_outputs have different length')
 
     for torch_output, hidet_output in zip(torch_outputs, hidet_outputs):
+        # Turns out np.testing.assert_allclose sometimes can pass even if the shapes are different
+        assert (
+            torch_output.shape == hidet_output.shape
+        ), f"Shape mismatch --- eager: {torch_output.shape} vs hidet: {hidet_output.shape}"
         torch_output = torch_output.detach().cpu().numpy()
         hidet_output = hidet_output.detach().cpu().numpy()
         numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)
