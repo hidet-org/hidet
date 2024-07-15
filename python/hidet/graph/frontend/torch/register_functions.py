@@ -285,6 +285,15 @@ def setitem(x: Tensor, item, setvalue):
     if not isinstance(item, tuple):
         item = tuple([item])
 
+    if isinstance(setvalue, Tensor):
+        if x.device != setvalue.device:
+            # turns out setvalue can be on any device, and it will be moved to x.device
+            setvalue = ops.transfer(setvalue, x.device)
+        # Turns out the dtype of setvalue can be different from x.dtype,
+        # and in this case setvalue seems to be casted to x.dtype.
+        if setvalue.dtype != x.dtype:
+            setvalue = ops.cast(setvalue, x.dtype)
+
     # now, the item could have
     # 1. integer index
     # 2. slice

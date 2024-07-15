@@ -39,6 +39,32 @@ def test_setitem_with_tensor(a_shape, b_shape, indices):
 
 
 @pytest.mark.parametrize(
+    "x_device, setvalue_device, x_dtype, setvalue_dtype",
+    [
+        ['cuda', 'cpu', torch.float32, torch.float16],
+        ['cpu', 'cuda', torch.float16, torch.float32],
+        ['cpu', 'cuda', torch.float32, torch.float16],
+        ['cuda', 'cpu', torch.float16, torch.float32],
+    ],
+)
+def test_setitem_device_dtype_special(x_device, setvalue_device, x_dtype, setvalue_dtype):
+    x = torch.randn([3, 3, 3], device=x_device, dtype=x_dtype)
+    setvalue = torch.randn([3, 3, 2], device=setvalue_device, dtype=setvalue_dtype)
+
+    def setitem_func(x, setvalue):
+        x[..., :2] = setvalue
+
+    setitem_func_compiled = torch.compile(setitem_func, backend='hidet')
+
+    x1 = x.clone()
+    setitem_func(x, setvalue)
+    setitem_func_compiled(x1, setvalue)
+
+    assert x1.dtype == x.dtype, f"dtype mismatch: {x1.dtype} vs {x.dtype}"
+    assert x1.device == x.device, f"device mismatch: {x1.device} vs {x.device}"
+
+
+@pytest.mark.parametrize(
     "a_shape, setvalue, indices",
     [
         [[10, 11, 12, 13], 1.0, (slice(None), slice(9), slice(8), 0)],
