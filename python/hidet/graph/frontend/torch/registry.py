@@ -96,7 +96,7 @@ def register_function(func: Union[Callable, str]):
 
 def register_method(method: Callable):
     def decorator(hidet_method):
-        if method not in Registry.registered_functions:
+        if method not in Registry.registered_methods:
             Registry.registered_methods[method] = OverloadedFunction()
         Registry.registered_methods[method].overload(hidet_method)
         return hidet_method

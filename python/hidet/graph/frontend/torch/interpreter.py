@@ -176,7 +176,7 @@ class Interpreter:
         if isinstance(caused_callable, OverloadedFunction):
             dispatched = caused_callable.resolve(*args, **kwargs)
             if dispatched is None:
-                msg = ['Can not interpreting {} given arguments: '.format(target_name)]
+                msg = ['Can not interpret {} given arguments: '.format(target_name)]
                 msg.append('  {}({})'.format(target_name, args_string))
                 msg.append('Possible candidates are: ')
                 for overload, sig in zip(caused_callable.functions, caused_callable.signatures):

@@ -366,7 +366,7 @@ def cat(tensors: List[Tensor], dim: int = 0):
 
 
 @register_function(torch.cat)
-def cat(tensors: List[Tensor], axis: int):  # PyTorch supports axis as well as the argument name
+def cat_v2(tensors: List[Tensor], axis: int):  # PyTorch supports axis as well as the argument name
     dtype = functools.reduce(promote_type, [t.dtype for t in tensors])
     tensors = [ops.cast(t, dtype) for t in tensors]
     return ops.concat(tensors, axis)
@@ -1063,15 +1063,19 @@ def minimum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor
 
 
 @register_function(torch.max)
+@register_method(torch.Tensor.max)
 def torch_max(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
-    return ops.max(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+    # According to the PyTorch documentation,
+    # calling torch.max(tensor(...)) or some_tensor.max() results in a singleton tensor with shape torch.Size([]).
+    return ops.max(x, dims=list(range(len(x.shape))), keep_dim=False)
 
 
 @register_function(torch.max)
 @register_method(torch.Tensor.max)
-def torch_max(
+def torch_max_v2(
     x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
 ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     if out is not None:
@@ -1085,7 +1089,7 @@ def torch_max(
 @register_function(torch.max)
 @register_method(torch.Tensor.max)
 def torch_max_v3(
-    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Optional[Union[Tensor, Tuple[Tensor, ...], List[Tensor]]] = None
 ) -> Tuple[Tensor, Tensor]:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
@@ -1095,14 +1099,19 @@ def torch_max_v3(
 
 
 @register_function(torch.min)
+@register_method(torch.Tensor.min)
 def torch_min(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
-    return ops.min(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+    # Same as torch.max,
+    # torch.min(tensor(...)) or some_tensor.min() results in a singleton tensor with shape torch.Size([]).
+    return ops.min(x, dims=list(range(len(x.shape))), keep_dim=False)
 
 
 @register_function(torch.min)
-def torch_min(
+@register_method(torch.Tensor.min)
+def torch_min_v2(
     x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
 ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     if out is not None:
@@ -1114,6 +1123,7 @@ def torch_min(
 
 
 @register_function(torch.min)
+@register_method(torch.Tensor.min)
 def torch_min_v3(
     x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
 ) -> Tuple[Tensor, Tensor]:
@@ -1212,13 +1222,15 @@ def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> 
 def torch_mean(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
     if dtype:
         x = x.astype(dtype_from_torch(dtype))
-    output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+    # turns out here keep_dim should be False too, similar to torch.max/min/sum
+    output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=False)
     return output
 
 
 @register_function(torch.mean)
 @register_method(torch.Tensor.mean)
-def torch_mean(
+def torch_mean_v2(
     x: Tensor, dim, keepdim=False, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None
 ) -> Tensor:
     if out is not None:
@@ -1254,13 +1266,13 @@ def torch_var(
 def torch_sum(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
     if dtype:
         x = x.astype(dtype_from_torch(dtype))
-    output = ops.sum(x, dims=list(range(len(x.shape))), keep_dim=True)
+    output = ops.sum(x, dims=list(range(len(x.shape))), keep_dim=False)
     return output
 
 
 @register_function(torch.sum)
 @register_method(torch.Tensor.sum)
-def torch_sum(
+def torch_sum_v2(
     x: Tensor, dim, keepdim=False, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None
 ) -> Tensor:
     if out is not None:
