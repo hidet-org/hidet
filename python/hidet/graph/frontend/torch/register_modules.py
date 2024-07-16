@@ -225,7 +225,7 @@ class HidetLayerNorm(HidetModule):
             x=x,
             normalized_shape=self.mod.normalized_shape,
             weight=self.param('weight'),
-            bias=self.param('bias'),
+            bias=self.param('bias', optional=True),
             eps=self.mod.eps,
         )
 

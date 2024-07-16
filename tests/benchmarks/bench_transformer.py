@@ -13,9 +13,13 @@ model_class = {
     'bert-base-uncased': 'AutoModelForMaskedLM',
     'meta-llama/Llama-2-7b-hf': 'AutoModelForCausalLM',
     'meta-llama/Llama-2-7b-chat-hf': 'AutoModelForCausalLM',
+    'meta-llama/CodeLlama-7b-hf': 'AutoModelForCausalLM',
     'google/gemma-2b': 'AutoModelForCausalLM',
     'mistralai/Mistral-7B-v0.1': 'AutoModelForCausalLM',
     'openai-community/gpt2-xl': 'AutoModelForCausalLM',
+    'mosaicml/mpt-7b': 'AutoModelForCausalLM',
+    'DiscoResearch/mixtral-7b-8expert': 'AutoModelForCausalLM',
+    # 'mistralai/Mixtral-8x7B-v0.1': 'AutoModelForCausalLM',
 }
 
 
@@ -26,6 +30,10 @@ def get_full_model_name(model_name):
         'gemma-2b': 'google/gemma-2b',
         'mistral': 'mistralai/Mistral-7B-v0.1',
         'gpt2-xl': 'openai-community/gpt2-xl',
+        'mpt-7b': 'mosaicml/mpt-7b',
+        'codellama-7b': 'meta-llama/CodeLlama-7b-hf',
+        # 'mixtral': 'mistralai/Mixtral-8x7B-v0.1',
+        'mixtral': 'DiscoResearch/mixtral-7b-8expert',
     }
     return short_to_full_model_name[model_name]
 
@@ -59,7 +67,6 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
 
 def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode):
     comp_backend = Backend(backend, mode, dtype)
-
     dtype = getattr(torch, dtype)
     model_name = get_full_model_name(model_name)
 

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.graph import ops
-from hidet.ir.dtypes import f16
+from hidet.ir.dtypes import f16, f32
 from hidet.ir.expr import is_true
 from hidet.graph.transforms.graph_patterns import MatchDict
 from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule
@@ -105,6 +105,8 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
             and len(q.shape) == len(k.shape) == len(v.shape)
             and is_true(q.shape[-1] == v.shape[-1] and q.shape[-1] <= 160)
         ):
+            if mask is not None and mask.dtype == f32:
+                mask = mask.to(f16)
             return [attention(q, k, v, mask)]
         else:
             return None

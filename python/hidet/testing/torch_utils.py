@@ -75,7 +75,7 @@ class Backend:
 
         hidet.torch.dynamo_config.use_tensor_core(True)
         hidet.option.cache_dir(hidet.option.get_cache_dir() + self.cache)
-
+        hidet.torch.dynamo_config.steal_weights(True)
         # hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
         # hidet.option.parallel_tune(max_parallel_jobs=1)
         # hidet.option.debug_cache_tuning(True)
