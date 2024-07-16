@@ -412,5 +412,26 @@ def test_repeat_interleave(input_shape, repeats, dim):
     np.testing.assert_allclose(output_tensor.numpy(), output_tensor_hidet.numpy(), atol=0, rtol=0)
 
 
+@pytest.mark.parametrize(
+    "shape, kernel_size, dilation, padding, stride",
+    [
+        ([1, 3, 10, 10], 2, 1, 0, 1),
+        ([2, 3, 99, 99], 3, 2, 1, 3),
+        ([3, 1, 10, 9], 3, 4, 5, 6),
+        ([3, 4, 5, 7], 3, 1, 4, 2),
+        ([3, 44, 41], 2, 3, 0, 5),
+        ([4, 24, 122], 4, 2, 1, 2),
+        ([3, 1, 45, 33], 3, 4, 5, 6),
+        ([4, 10, 13], 2, 1, 0, 1),
+    ],
+)
+def test_unfold(shape, kernel_size, dilation, padding, stride):
+    check_transform_torch(
+        shape,
+        lambda x: torch.nn.functional.unfold(x, kernel_size, dilation, padding, stride),
+        lambda x: ops.im2col(x, kernel_size, dilation, padding, stride),
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

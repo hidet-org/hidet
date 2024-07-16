@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant
+from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
@@ -405,6 +405,50 @@ class TrilTask(Task):
         super().__init__(name='tril', inputs=[x], attributes={'diagonal': diagonal}, outputs=[out])
 
 
+class Im2ColTask(Task):
+    def __init__(
+        self, x: TensorNode, kernel_size: List[Int], dilation: List[Int], padding: List[Int], stride: List[Int]
+    ):
+        dtype = x.type.dtype
+        batch_size = x.shape[0]
+        n_input_plane = x.shape[1]
+        input_height = x.shape[2]
+        input_width = x.shape[3]
+
+        output_height = (input_height + 2 * padding[0] - (dilation[0] * (kernel_size[0] - 1) + 1)) // stride[0] + 1
+        output_width = (input_width + 2 * padding[1] - (dilation[1] * (kernel_size[1] - 1) + 1)) // stride[1] + 1
+        n_output_plane = n_input_plane * kernel_size[0] * kernel_size[1]
+        output_length = output_height * output_width
+
+        output_shape = [batch_size, n_output_plane, output_length]
+
+        def fmap(*indices):
+            b_i, ck_i, o_i = indices
+            c_i = ck_i // prod(kernel_size)
+            ck_i %= prod(kernel_size)
+            k_hi = ck_i // kernel_size[1]
+            k_wi = ck_i % kernel_size[1]
+            o_hi = o_i // output_width
+            o_wi = o_i % output_width
+
+            i_hi = o_hi * stride[0] - padding[0] + k_hi * dilation[0]
+            i_wi = o_wi * stride[1] - padding[1] + k_wi * dilation[1]
+            return if_then_else(
+                logical_or(i_hi < 0, i_wi < 0, i_hi >= input_height, i_wi >= input_width),
+                dtype.zero,
+                x[b_i, c_i, i_hi, i_wi],
+            )
+
+        out = compute(name='out', shape=output_shape, fcompute=fmap)
+
+        super().__init__(
+            name='im2col',
+            inputs=[x],
+            attributes={'kernel_size': kernel_size, 'dilation': dilation, 'padding': padding, 'stride': stride},
+            outputs=[out],
+        )
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
@@ -588,6 +632,15 @@ class TriuOp(Operator):
 class TrilOp(Operator):
     def __init__(self, x: Tensor, diagonal: Int = 0):
         super().__init__(inputs=[x], attributes={'diagonal': diagonal}, task=TrilTask(input_like(x, 'x'), diagonal))
+
+
+class Im2ColOp(Operator):
+    def __init__(self, x: Tensor, kernel_size: List[Int], dilation: List[Int], padding: List[Int], stride: List[Int]):
+        super().__init__(
+            inputs=[x],
+            attributes={'kernel_size': kernel_size, 'dilation': dilation, 'padding': padding, 'stride': stride},
+            task=Im2ColTask(input_like(x, 'x'), kernel_size, dilation, padding, stride),
+        )
 
 
 def reshape(x: Tensor, shape) -> Tensor:
@@ -838,3 +891,28 @@ def meshgrid(*tensors: Tensor, indexing: str = "ij") -> List[Tensor]:
             grid = transpose(grid, (1, 0))
         outputs.append(grid)
     return outputs
+
+
+def im2col(
+    x: Tensor,
+    kernel_size: Union[int, List[int]],
+    dilation: Union[int, List[int]] = 1,
+    padding: Union[int, List[int]] = 0,
+    stride: Union[int, List[Int]] = 1,
+):
+    nd = len(x.shape)
+    if nd == 3:
+        x = x.unsqueeze(0)
+    if isinstance(kernel_size, int):
+        kernel_size = [kernel_size] * 2
+    if isinstance(dilation, int):
+        dilation = [dilation] * 2
+    if isinstance(padding, int):
+        padding = [padding] * 2
+    if isinstance(stride, int):
+        stride = [stride] * 2
+    x = Im2ColOp(x, kernel_size, dilation, padding, stride).outputs[0]
+
+    if nd == 3:
+        return x.squeeze(0)
+    return x

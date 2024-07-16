@@ -353,6 +353,7 @@ def setitem(x: Tensor, item, setvalue):
 
 @register_function(operator.mul)
 @register_function(torch.mul)
+@register_function(torch.multiply)
 @register_function(torch.ops.aten.mul.Tensor)
 def mul(x: Tensor, y: Tensor):
     return x * y
@@ -1557,6 +1558,12 @@ def torch_any_v1(input: Tensor, dim, keepdim=False, *, out=None) -> Tensor:
 @register_function(torch.any)
 def torch_any_v2(input: Tensor) -> Tensor:
     return ops.any(input)
+
+
+@register_function(torch.nn.functional.unfold)
+def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) -> Tensor:
+    assert 3 <= len(input.shape) <= 4, "torch.nn.functional.unfold accepts 3D or 4D tensor only"
+    return ops.im2col(input, kernel_size, dilation, padding, stride)
 
 
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
