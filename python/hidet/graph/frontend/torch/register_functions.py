@@ -15,7 +15,7 @@ import math
 import operator
 import functools
 import torch
-from hidet.graph.tensor import Tensor, full_like, from_torch, ones_like, randn
+from hidet.graph.tensor import Tensor, from_torch, ones_like, randn
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
@@ -754,13 +754,6 @@ def where(condition: Tensor, x: Union[Tensor, Number], y: Union[Tensor, Number])
     return ops.where(cond=condition, x=x, y=y)
 
 
-@register_function(torch.pow)
-def pow(base: Tensor, exponent: Union[Number, Tensor]):
-    if isinstance(exponent, (int, float, bool)):
-        exponent = full_like(base, exponent)
-    return ops.pow(base, exponent)
-
-
 @register_function(torch.scalar_tensor)
 def scalar_tensor(value):
     return ops.full([1], value)
@@ -991,6 +984,10 @@ def mish(x: Tensor, inplace: bool = False):
 def scaled_dot_product_attention(
     q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
 ):
+    from hidet import boolean, float16, float32
+
+    if attn_mask is not None and attn_mask.dtype == float32:
+        attn_mask = attn_mask.to(float16)
 
     if not math.isclose(dropout_p, 0.0):
         warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
@@ -1000,8 +997,6 @@ def scaled_dot_product_attention(
     k_transpose_scaled = ops.transpose(k, [i for i in range(k_rank - 2)] + [k_rank - 1, k_rank - 2]) / math.sqrt(
         k.shape[-1]
     )
-
-    from hidet import boolean, float16
 
     type_match = (
         q.dtype == k.dtype == v.dtype == float16
