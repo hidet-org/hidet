@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -117,6 +118,10 @@ def adaptive_avg_pool3d(x: Tensor, output_size):
 
 
 @register_function(torch.nn.functional.relu)
+@register_function(torch.relu)
+@register_function(torch.relu_)
+@register_method(torch.Tensor.relu)
+@register_method(torch.Tensor.relu_)
 def relu(x: Tensor, inplace: bool = False):
     # if inplace:
     #     warnings.warn_once('hidet: relu with inplace=True is not supported. Treat as inplace=False.')
@@ -166,6 +171,9 @@ def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
 
 @register_function(operator.add)
 @register_function(torch.ops.aten.add.Tensor)
+@register_function(torch.add)
+@register_method(torch.Tensor.add)
+@register_method(torch.Tensor.add_)
 def add(x: Tensor, y: Tensor):
     return x + y
 
@@ -182,12 +190,18 @@ def imul(x: Tensor, y: Tensor):
 
 @register_function(torch.sin)
 @register_function(torch.ops.aten.sin.default)
+@register_function(torch.sin_)
+@register_method(torch.Tensor.sin)
+@register_method(torch.Tensor.sin_)
 def sin(x: Tensor):
     return ops.sin(x)
 
 
 @register_function(torch.cos)
 @register_function(torch.ops.aten.cos.default)
+@register_function(torch.cos_)
+@register_method(torch.Tensor.cos)
+@register_method(torch.Tensor.cos_)
 def cos(x: Tensor):
     return ops.cos(x)
 
@@ -195,22 +209,86 @@ def cos(x: Tensor):
 @register_function(operator.not_)
 def not_(x: Union[Tensor, Expr]):
     if isinstance(x, Tensor):
-        return ops.logical_not(x)
+        # not x when len(x) > 1 is not supported as it
+        # results in 'RuntimeError: bool value of Tensor with more than one value is ambiguous'
+        # return ops.logical_not(x)
+        assert len(x.shape) <= 1, "not x when len(x) > 1 is not supported"
+        return not x.item()
     elif isinstance(x, Expr):
         return expr.logical_not(x)
     else:
         return not x
 
 
+@register_function(torch.logical_not)
+@register_method(torch.Tensor.logical_not)
+@register_method(torch.Tensor.logical_not_)
+def logical_not(x: Tensor):
+    return ops.logical_not(x)
+
+
 @register_function(operator.and_)
+@register_function(torch.bitwise_and)
+@register_function(torch.ops.aten.bitwise_and.Tensor)
+@register_method(torch.Tensor.bitwise_and)
+@register_method(torch.Tensor.bitwise_and_)
 def and_(x: Union[Tensor, Expr], y: Union[Tensor, Expr]):
     if isinstance(x, Tensor) and isinstance(y, Tensor):
-        return ops.logical_and(x, y)
+        return ops.bitwise_and(x, y)
     else:
-        return expr.logical_and(x, y)
+        # TODO: Should this also be changed to bitwise_and for Expr?
+        return expr.bitwise_and(x, y)
+
+
+@register_function(torch.logical_and)
+@register_method(torch.Tensor.logical_and)
+@register_method(torch.Tensor.logical_and_)
+def logical_and(x: Tensor, y: Tensor):
+    return ops.logical_and(x, y)
+
+
+@register_function(torch.logical_or)
+@register_method(torch.Tensor.logical_or)
+@register_method(torch.Tensor.logical_or_)
+def logical_or(x: Tensor, y: Tensor):
+    return ops.logical_or(x, y)
+
+
+@register_function(operator.or_)
+@register_function(torch.bitwise_or)
+@register_function(torch.ops.aten.bitwise_or.Tensor)
+@register_method(torch.Tensor.bitwise_or)
+@register_method(torch.Tensor.bitwise_or_)
+def or_(x: Union[Tensor, Expr], y: Union[Tensor, Expr]):
+    if isinstance(x, Tensor) and isinstance(y, Tensor):
+        return ops.bitwise_or(x, y)
+    else:
+        return expr.bitwise_or(x, y)
+
+
+@register_function(operator.xor)
+@register_function(torch.bitwise_xor)
+@register_function(torch.ops.aten.bitwise_xor.Tensor)
+@register_method(torch.Tensor.bitwise_xor)
+@register_method(torch.Tensor.bitwise_xor_)
+def xor(x: Union[Tensor, Expr], y: Union[Tensor, Expr]):
+    if isinstance(x, Tensor) and isinstance(y, Tensor):
+        return ops.bitwise_xor(x, y)
+    else:
+        return expr.bitwise_xor(x, y)
+
+
+@register_function(torch.logical_xor)
+@register_method(torch.Tensor.logical_xor)
+@register_method(torch.Tensor.logical_xor_)
+def logical_xor(x: Tensor, y: Tensor):
+    return ops.logical_xor(x, y)
 
 
 @register_function(operator.invert)
+@register_function(torch.bitwise_not)
+@register_method(torch.Tensor.bitwise_not)
+@register_method(torch.Tensor.bitwise_not_)
 def invert(x: Tensor):
     return ops.bitwise_invert(x)
 
@@ -250,7 +328,8 @@ def batch_norm(
 
 
 @register_function(torch.flatten)
-def flatten(x: Tensor, start_dim: int, end_dim: int = -1):
+@register_method(torch.Tensor.flatten)
+def flatten(x: Tensor, start_dim: int = 0, end_dim: int = -1):
     return ops.flatten(x, start_dim, end_dim)
 
 
@@ -289,8 +368,6 @@ def setitem(x: Tensor, item, setvalue):
         if x.device != setvalue.device:
             # turns out setvalue can be on any device, and it will be moved to x.device
             setvalue = ops.transfer(setvalue, x.device)
-        # Turns out the dtype of setvalue can be different from x.dtype,
-        # and in this case setvalue seems to be casted to x.dtype.
         if setvalue.dtype != x.dtype:
             setvalue = ops.cast(setvalue, x.dtype)
 
@@ -355,6 +432,10 @@ def setitem(x: Tensor, item, setvalue):
 @register_function(torch.mul)
 @register_function(torch.multiply)
 @register_function(torch.ops.aten.mul.Tensor)
+@register_method(torch.Tensor.mul)
+@register_method(torch.Tensor.mul_)
+@register_method(torch.Tensor.multiply)
+@register_method(torch.Tensor.multiply_)
 def mul(x: Tensor, y: Tensor):
     return x * y
 
@@ -373,8 +454,27 @@ def cat_v2(tensors: List[Tensor], axis: int):  # PyTorch supports axis as well a
     return ops.concat(tensors, axis)
 
 
+@register_function(torch.squeeze)
+@register_method(torch.Tensor.squeeze)
+@register_method(torch.Tensor.squeeze_)
+def tensor_squeeze(self: Tensor, dim=None) -> Tensor:
+    if dim is None:
+        dims = [i for i, s in enumerate(self.shape) if s == 1]
+        return ops.squeeze(self, dims)
+    else:
+        dim = int(dim)
+        if self.shape[dim] != 1:
+            return self
+        else:
+            return ops.squeeze(self, [dim])
+
+
 @register_function(torch.unsqueeze)
+@register_method(torch.Tensor.unsqueeze)
+@register_method(torch.Tensor.unsqueeze_)
 def unsqueeze(x: Tensor, dim: int):
+    dim = int(dim)
+    dim = dim if dim >= 0 else dim + len(x.shape) + 1
     return ops.unsqueeze(x, [dim])
 
 
@@ -453,6 +553,9 @@ def interpolate(
 
 
 @register_function(operator.truediv)
+@register_function(torch.true_divide)
+@register_method(torch.Tensor.true_divide)
+@register_method(torch.Tensor.true_divide_)
 def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     import hidet
 
@@ -468,8 +571,12 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
 
 
 @register_function(torch.div)
+@register_function(torch.divide)
 @register_method(torch.Tensor.div)
-def div(x: Tensor, y: Tensor, *, rounding_mode: str = None, out=None):
+@register_method(torch.Tensor.div_)
+@register_method(torch.Tensor.divide)
+@register_method(torch.Tensor.divide_)
+def div(x: Tensor, y: Tensor, *, rounding_mode: Optional[str] = None, out=None):
     result = truediv(x, y)
     if rounding_mode is None:
         return result
@@ -481,13 +588,25 @@ def div(x: Tensor, y: Tensor, *, rounding_mode: str = None, out=None):
 
 
 @register_function(operator.sub)
+@register_function(torch.sub)
+@register_function(torch.subtract)
+@register_function(torch.ops.aten.sub.Tensor)
+@register_method(torch.Tensor.sub)
+@register_method(torch.Tensor.sub_)
+@register_method(torch.Tensor.subtract)
+@register_method(torch.Tensor.subtract_)
 def sub(x: Tensor, y: Tensor):
     return x - y
 
 
 @register_function(operator.neg)
 @register_function(torch.neg)
+@register_function(torch.negative)
 @register_function(torch.ops.aten.neg.default)
+@register_method(torch.Tensor.neg)
+@register_method(torch.Tensor.neg_)
+@register_method(torch.Tensor.negative)
+@register_method(torch.Tensor.negative_)
 def neg(x: Tensor):
     return -x
 
@@ -503,6 +622,7 @@ def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
 
 @register_function(operator.matmul)
 @register_function(torch.matmul)
+@register_method(torch.Tensor.matmul)
 def matmul(x: Tensor, y: Tensor):
     return ops.matmul(x, y)
 
@@ -608,6 +728,10 @@ def group_norm(
 
 
 @register_function(torch.tanh)
+@register_function(torch.tanh_)
+@register_function(torch.nn.functional.tanh)
+@register_method(torch.Tensor.tanh)
+@register_method(torch.Tensor.tanh_)
 def tanh(x: Tensor):
     return ops.tanh(x)
 
@@ -673,6 +797,10 @@ def repeat_interleave(
 @register_function(torch.swapaxes)
 @register_function(torch.transpose)
 @register_method(torch.Tensor.transpose)
+@register_method(torch.Tensor.swapaxes)
+@register_method(torch.Tensor.swapaxes_)
+@register_method(torch.Tensor.swapdims)
+@register_method(torch.Tensor.swapdims_)
 def transpose(x: Tensor, dim0: int, dim1: int):
     if dim0 < dim1:
         dim0, dim1 = dim1, dim0
@@ -736,6 +864,8 @@ def arange(
 
 
 @register_function(torch.addmm)
+@register_method(torch.Tensor.addmm)
+@register_method(torch.Tensor.addmm_)
 def addmm(
     input: Tensor, mat1: Tensor, mat2: Tensor, *, beta: Number = 1, alpha: Number = 1, out: Optional[Tensor] = None
 ):
@@ -749,9 +879,29 @@ def addmm(
     return y + input
 
 
+@register_function(torch.index_select)
+@register_method(torch.Tensor.index_select)
+def index_select(self: Tensor, dim: int, index: Tensor):
+    return ops.index_select(self, index, dim)
+
+
 @register_function(torch.where)
 def where(condition: Tensor, x: Union[Tensor, Number], y: Union[Tensor, Number]):
     return ops.where(cond=condition, x=x, y=y)
+
+
+@register_method(torch.Tensor.where)
+def tensor_where(self: Tensor, condition: Tensor, y: Union[Tensor, Number]):
+    return ops.where(cond=condition, x=self, y=y)
+
+
+@register_function(torch.pow)
+@register_method(torch.Tensor.pow)
+@register_method(torch.Tensor.pow_)
+def pow(base: Tensor, exponent: Union[Number, Tensor]):
+    if isinstance(exponent, (int, float, bool)):
+        exponent = full_like(base, exponent)
+    return ops.pow(base, exponent)
 
 
 @register_function(torch.scalar_tensor)
@@ -804,6 +954,7 @@ def empty(
 
 
 @register_function(torch.bmm)
+@register_method(torch.Tensor.bmm)
 def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
@@ -811,6 +962,8 @@ def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.baddbmm)
+@register_method(torch.Tensor.baddbmm)
+@register_method(torch.Tensor.baddbmm_)
 def baddbmm(input, batch1, batch2, *, beta=1, alpha=1, out: Optional[Tensor] = None) -> Tensor:
     import hidet
 
@@ -894,6 +1047,7 @@ def torch_randn_like(input, generator=None, out=None, layout=None, device=None, 
 
 @register_function(torch.sigmoid)
 @register_function(torch.sigmoid_)
+@register_function(torch.nn.functional.sigmoid)
 @register_method(torch.Tensor.sigmoid)
 @register_method(torch.Tensor.sigmoid_)
 def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
@@ -904,6 +1058,7 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 @register_function(torch.exp)
 @register_method(torch.Tensor.exp)
+@register_method(torch.Tensor.exp_)
 def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
@@ -952,6 +1107,7 @@ def tanhshrink(x: Tensor):
 
 
 @register_function(torch.nn.functional.hardshrink)
+@register_method(torch.Tensor.hardshrink)
 def hardshrink(x: Tensor, lambd=0.5):
     return ops.hardshrink(x, lambd)
 
@@ -962,6 +1118,8 @@ def softsign(x: Tensor):
 
 
 @register_function(torch.nn.functional.celu)
+@register_function(torch.celu)
+@register_function(torch.celu_)
 def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: celu with inplace=True is not supported. Treat as inplace=False.')
@@ -1035,6 +1193,7 @@ def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
 
 
 @register_function(torch.maximum)
+@register_method(torch.Tensor.maximum)
 def maximum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     a, b = x, other
     if len(a.shape) == 0 and a.device.is_cpu() and b.device.is_cuda() and not a.is_symbolic():
@@ -1047,6 +1206,7 @@ def maximum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor
 
 
 @register_function(torch.minimum)
+@register_method(torch.Tensor.minimum)
 def minimum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     a, b = x, other
     if len(a.shape) == 0 and a.device.is_cpu() and b.device.is_cuda() and not a.is_symbolic():
@@ -1064,8 +1224,6 @@ def torch_max(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
 
-    # According to the PyTorch documentation,
-    # calling torch.max(tensor(...)) or some_tensor.max() results in a singleton tensor with shape torch.Size([]).
     return ops.max(x, dims=list(range(len(x.shape))), keep_dim=False)
 
 
@@ -1100,8 +1258,6 @@ def torch_min(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
 
-    # Same as torch.max,
-    # torch.min(tensor(...)) or some_tensor.min() results in a singleton tensor with shape torch.Size([]).
     return ops.min(x, dims=list(range(len(x.shape))), keep_dim=False)
 
 
@@ -1121,7 +1277,7 @@ def torch_min_v2(
 @register_function(torch.min)
 @register_method(torch.Tensor.min)
 def torch_min_v3(
-    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Optional[Union[Tensor, Tuple[Tensor, ...], List[Tensor]]] = None
 ) -> Tuple[Tensor, Tensor]:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
@@ -1131,27 +1287,53 @@ def torch_min_v3(
 
 
 @register_function(operator.lt)
+@register_function(torch.lt)
+@register_function(torch.less)
+@register_method(torch.Tensor.lt)
+@register_method(torch.Tensor.lt_)
+@register_method(torch.Tensor.less)
+@register_method(torch.Tensor.less_)
 def lt(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a < b
 
 
 @register_function(operator.le)
+@register_function(torch.le)
+@register_function(torch.less_equal)
+@register_method(torch.Tensor.le)
+@register_method(torch.Tensor.le_)
+@register_method(torch.Tensor.less_equal)
+@register_method(torch.Tensor.less_equal_)
 def le(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a <= b
 
 
 @register_function(operator.gt)
+@register_function(torch.gt)
+@register_function(torch.greater)
+@register_method(torch.Tensor.gt)
+@register_method(torch.Tensor.gt_)
+@register_method(torch.Tensor.greater)
+@register_method(torch.Tensor.greater_)
 def gt(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a > b
 
 
 @register_function(operator.ge)
+@register_function(torch.ge)
+@register_function(torch.greater_equal)
+@register_method(torch.Tensor.ge)
+@register_method(torch.Tensor.ge_)
+@register_method(torch.Tensor.greater_equal)
+@register_method(torch.Tensor.greater_equal_)
 def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a >= b
 
 
-@register_method(torch.Tensor.eq)
 @register_function(operator.eq)
+@register_function(torch.eq)
+@register_method(torch.Tensor.eq)
+@register_method(torch.Tensor.eq_)
 def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     if isinstance(a, Tensor) or isinstance(b, Tensor):
         from hidet.graph.ops.utils import convert_to_tensor
@@ -1174,17 +1356,24 @@ def mod(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tenso
 
 
 @register_function(operator.lshift)
+@register_function(torch.bitwise_left_shift)
+@register_method(torch.Tensor.bitwise_left_shift)
+@register_method(torch.Tensor.bitwise_left_shift_)
 def lshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a << b
 
 
 @register_function(operator.rshift)
+@register_function(torch.bitwise_right_shift)
+@register_method(torch.Tensor.bitwise_right_shift)
+@register_method(torch.Tensor.bitwise_right_shift_)
 def rshift(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
     return a >> b
 
 
 @register_function(torch.rsqrt)
 @register_method(torch.Tensor.rsqrt)
+@register_method(torch.Tensor.rsqrt_)
 def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.rsqrt(..., out=...)")
@@ -1192,6 +1381,8 @@ def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.sqrt)
+@register_method(torch.Tensor.sqrt)
+@register_method(torch.Tensor.sqrt_)
 @register_function(torch._C._te.sqrt)
 def sqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
@@ -1202,6 +1393,7 @@ def sqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 @register_function(operator.pow)
 @register_function(torch.pow)
 @register_method(torch.Tensor.pow)
+@register_method(torch.Tensor.pow_)
 def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> Tensor:
     if isinstance(self, Tensor) and isinstance(exponent, Tensor):
         return ops.pow(self, exponent)
@@ -1281,6 +1473,7 @@ def torch_sum_v2(
 
 @register_function(torch.cumsum)
 @register_method(torch.Tensor.cumsum)
+@register_method(torch.Tensor.cumsum_)
 def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.cumsum(..., out=...)")
@@ -1291,7 +1484,11 @@ def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optio
 
 
 @register_function(torch.ne)
+@register_function(torch.not_equal)
 @register_method(torch.Tensor.ne)
+@register_method(torch.Tensor.ne_)
+@register_method(torch.Tensor.not_equal)
+@register_method(torch.Tensor.not_equal_)
 def torch_ne(x: Tensor, y: Union[Tensor, float, int], out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.ne(..., out=...)")
@@ -1329,6 +1526,12 @@ def torch_noop(*args, **kwargs):
 
 
 @register_function(torch.abs)
+@register_function(torch.abs_)
+@register_function(torch.absolute)
+@register_method(torch.Tensor.abs)
+@register_method(torch.Tensor.abs_)
+@register_method(torch.Tensor.absolute)
+@register_method(torch.Tensor.absolute_)
 def abs(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.abs(..., out=...)")
@@ -1336,6 +1539,9 @@ def abs(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.log)
+@register_function(torch.log_)
+@register_method(torch.Tensor.log)
+@register_method(torch.Tensor.log_)
 def log(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.log(..., out=...)")
@@ -1376,7 +1582,11 @@ def zeros_like(
 
 
 @register_function(torch.clamp)
+@register_function(torch.clip)
 @register_method(torch.Tensor.clamp)
+@register_method(torch.Tensor.clamp_)
+@register_method(torch.Tensor.clip)
+@register_method(torch.Tensor.clip_)
 def clamp(
     x: Tensor,
     min: Optional[Union[Tensor, Number]] = None,
@@ -1407,6 +1617,7 @@ def clamp(
 
 
 @register_function(torch.isinf)
+@register_method(torch.Tensor.isinf)
 def isinf(x: Tensor) -> Tensor:
     return ops.isinf(x)
 
@@ -1438,6 +1649,7 @@ def torch_pad(x: Tensor, pad: Union[Tuple[int, ...], List[int]], mode: str = 'co
 
 
 @register_function(torch.roll)
+@register_method(torch.Tensor.roll)
 def torch_roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence[int]] = None):
     return ops.roll(x, shifts, dims)
 
@@ -1472,8 +1684,32 @@ def torch_copy(x: Tensor, src: Tensor, non_blocking: bool = False):
 
 
 @register_function(torch.chunk)
+@register_method(torch.Tensor.chunk)
 def torch_chunk(x: Tensor, chunks: int, dim: int = 0):
-    return ops.split(x, parts_or_sections=chunks, axis=dim)
+    dim_size = x.shape[dim]
+    chunk_size = math.ceil(dim_size / chunks)
+    parts = []
+    for start in range(0, dim_size, chunk_size):
+        parts.append(min(chunk_size, dim_size - start))
+    assert sum(parts) == x.shape[dim]
+    return ops.split(x, axis=dim, parts_or_sections=parts)
+
+
+@register_function(torch.split)
+@register_method(torch.Tensor.split)
+def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
+    parts: List[int] = []
+    if isinstance(split_size, int):
+        remain_size = self.shape[dim]
+        while remain_size > 0:
+            part_size = min(split_size, remain_size)
+            parts.append(part_size)
+            remain_size -= part_size
+    else:
+        assert isinstance(split_size, (list, tuple))
+        parts = [int(v) for v in split_size]
+        assert sum(parts) == self.shape[dim]
+    return ops.split(self, axis=dim, parts_or_sections=parts)
 
 
 @register_function(torch.unbind)
@@ -1490,6 +1726,8 @@ def torch_einsum(equation, *operands):
 
 
 @register_function(torch.triu)
+@register_function(torch.Tensor.triu)
+@register_function(torch.Tensor.triu_)
 def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.triu(..., out=...)")
@@ -1497,6 +1735,8 @@ def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
 
 
 @register_function(torch.tril)
+@register_function(torch.Tensor.tril)
+@register_function(torch.Tensor.tril_)
 def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.tril(..., out=...)")
@@ -1516,7 +1756,7 @@ def torch_all(input):
 
 
 @register_function(torch.all)
-def torch_all(input, dim, keepdim=False, *, out=None):
+def torch_all_v2(input, dim, keepdim=False, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.all(..., out=...)")
     return ops.all(input, axis=dim, keepdims=keepdim)

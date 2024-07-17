@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-import math
 from typing import List, Union
 import torch
 
@@ -61,11 +60,6 @@ def tensor_bool(self: Tensor) -> Tensor:
 @register_method(torch.Tensor.type_as)
 def tensor_type_as(self: Tensor, other: Tensor) -> Tensor:
     return ops.cast(self, other.dtype)
-
-
-@register_method(torch.Tensor.index_select)
-def index_select(self: Tensor, dim: int, index: Tensor):
-    return ops.index_select(self, index, dim)
 
 
 @register_method(torch.Tensor.fill_)
@@ -176,60 +170,12 @@ def tensor_reshape(self: Tensor, *shape: int) -> Tensor:
     return ops.reshape(self, shape)
 
 
-@register_method(torch.Tensor.split)
-def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
-    parts: List[int] = []
-    if isinstance(split_size, int):
-        remain_size = self.shape[dim]
-        while remain_size > 0:
-            part_size = min(split_size, remain_size)
-            parts.append(part_size)
-            remain_size -= part_size
-    else:
-        assert isinstance(split_size, (list, tuple))
-        parts = [int(v) for v in split_size]
-        assert sum(parts) == self.shape[dim]
-    return ops.split(self, axis=dim, parts_or_sections=parts)
-
-
 @register_method(torch.Tensor.size)
 def tensor_size(self: Tensor, dim=None) -> List[Int]:
     if dim is None:
         return self.shape
     else:
         return self.shape[dim]
-
-
-@register_method(torch.Tensor.chunk)
-def tensor_chunk(self: Tensor, chunks, dim=0) -> List[Tensor]:
-    dim_size = self.shape[dim]
-    chunk_size = math.ceil(dim_size / chunks)
-    parts = []
-    for start in range(0, dim_size, chunk_size):
-        parts.append(min(chunk_size, dim_size - start))
-    assert sum(parts) == self.shape[dim]
-    return ops.split(self, axis=dim, parts_or_sections=parts)
-
-
-@register_method(torch.Tensor.squeeze)
-def tensor_squeeze(self: Tensor, dim=None) -> Tensor:
-    if dim is None:
-        dims = [i for i, s in enumerate(self.shape) if s == 1]
-        return ops.squeeze(self, dims)
-    else:
-        dim = int(dim)
-        if self.shape[dim] != 1:
-            return self
-        else:
-            return ops.squeeze(self, [dim])
-
-
-@register_method(torch.Tensor.unsqueeze)
-def tensor_unsqueeze(self: Tensor, dim) -> Tensor:
-    dim = int(dim)
-    if dim < 0:
-        dim = len(self.shape) + dim + 1
-    return ops.unsqueeze(self, [dim])
 
 
 @register_method(torch.Tensor.type)
@@ -266,11 +212,6 @@ def tensor_masked_fill(self: Tensor, mask: Tensor, value: float) -> Tensor:
     return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
 
 
-@register_method(torch.Tensor.flatten)
-def tensor_flatten(self: Tensor, start_dim=0, end_dim=-1):
-    return ops.flatten(self, start_dim=start_dim, end_dim=end_dim)
-
-
 @register_method(torch.Tensor.masked_fill_)
 def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
     return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
@@ -286,19 +227,16 @@ def tensor_detach(self: Tensor) -> Tensor:
     return self
 
 
-@register_method(torch.Tensor.any)
-def tensor_any(self: Tensor, dim=None, keepdim=False) -> Tensor:
-    return ops.any(self, axis=dim, keepdims=keepdim)
-
-
+# Turns out torch.Tensor.all/any is slightly different from torch.all
+# because of the default values of dim and keepdim
 @register_method(torch.Tensor.all)
 def tensor_all(self: Tensor, dim=None, keepdim=False) -> Tensor:
     return ops.all(self, axis=dim, keepdims=keepdim)
 
 
-@register_method(torch.Tensor.matmul)
-def tensor_matmul(self: Tensor, other: Tensor) -> Tensor:
-    return ops.matmul(self, other)
+@register_method(torch.Tensor.any)
+def tensor_any(self: Tensor, dim=None, keepdim=False) -> Tensor:
+    return ops.any(self, axis=dim, keepdims=keepdim)
 
 
 @register_method(torch.Tensor.new_zeros)
@@ -340,13 +278,3 @@ def tensor_new_full(
 @register_method(torch.Tensor.zero_)
 def tensor_zero_(self: Tensor):
     return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)
-
-
-@register_method(torch.Tensor.sin)
-def sin(x: Tensor):
-    return ops.sin(x)
-
-
-@register_method(torch.Tensor.cos)
-def cos(x: Tensor):
-    return ops.cos(x)

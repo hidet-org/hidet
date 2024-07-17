@@ -54,6 +54,9 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
         assert (
             torch_output.shape == hidet_output.shape
         ), f"Shape mismatch --- eager: {torch_output.shape} vs hidet: {hidet_output.shape}"
+        assert (
+            torch_output.dtype == hidet_output.dtype
+        ), f"dtype mismatch --- eager: {torch_output.dtype} vs hidet: {hidet_output.dtype}"
         torch_output = torch_output.detach().cpu().numpy()
         hidet_output = hidet_output.detach().cpu().numpy()
         numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)
