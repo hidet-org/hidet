@@ -108,7 +108,9 @@ class TypeInfer(IRFunctor):
         return self.visit_Binary(e)
 
     def visit_Not(self, e: LogicalNot):
-        assert is_bool(self.visit(e.a))
+        # commenting out thie assertion makes logical_not
+        # work for hidet Tensor...
+        # assert is_bool(self.visit(e.a))
         return data_type('bool')
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):

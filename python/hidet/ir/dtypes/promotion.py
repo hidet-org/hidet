@@ -133,6 +133,12 @@ def promote_type(t1: DataType, t2: DataType) -> DataType:
         return t1
     elif t1.is_boolean() and t2.is_boolean():
         return t1
+
+    # encountered while trying to add logical_xor
+    elif t1.is_boolean() and t2.is_integer():
+        return t2
+    elif t1.is_integer() and t2.is_boolean():
+        return t1
     else:
         pair = (t1, t2)
         if pair not in _promotion_table:

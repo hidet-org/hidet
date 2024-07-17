@@ -218,5 +218,99 @@ def test_torch_transformer_encoder(
     check_module(model=torch_encoder, args=[src, mask, None, is_causal], atol=5e-2, rtol=1e-2)
 
 
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_bitwise_and(shape):
+    a = torch.randint(low=0, high=10, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+    check_module(FunctionalModule(op=lambda x, y: x & y), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: torch.bitwise_and(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.bitwise_and(y)), args=[a, b], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_bitwise_or(shape):
+    a = torch.randint(low=0, high=10, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+    check_module(FunctionalModule(op=lambda x, y: x | y), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: torch.bitwise_or(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.bitwise_or(y)), args=[a, b], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_logical_and(shape):
+    a = torch.randint(low=0, high=2, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+
+    check_module(FunctionalModule(op=lambda x, y: torch.logical_and(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.logical_and(y)), args=[a, b], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_logical_or(shape):
+    a = torch.randint(low=0, high=2, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+
+    check_module(FunctionalModule(op=lambda x, y: torch.logical_or(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.logical_or(y)), args=[a, b], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_bitwise_not(shape):
+    a = torch.randint(low=0, high=10, size=shape, device='cuda')
+    check_module(FunctionalModule(op=lambda x: ~x), args=[a], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x: torch.bitwise_not(x)), args=[a], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x: x.bitwise_not()), args=[a], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_logical_not(shape):
+    a = torch.randint(low=0, high=2, size=shape, device='cuda')
+
+    check_module(FunctionalModule(op=lambda x: torch.logical_not(x)), args=[a], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x: x.logical_not()), args=[a], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_bitwise_xor(shape):
+    a = torch.randint(low=0, high=10, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+    check_module(FunctionalModule(op=lambda x, y: x ^ y), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: torch.bitwise_xor(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.bitwise_xor(y)), args=[a, b], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape', [[2, 3]])
+def test_logical_xor(shape):
+    a = torch.randint(low=0, high=2, size=shape, device='cuda')
+    b = torch.randint(low=0, high=10, size=shape, device='cuda')
+
+    check_module(FunctionalModule(op=lambda x, y: torch.logical_xor(x, y)), args=[a, b], atol=0, rtol=0)
+
+    check_module(FunctionalModule(op=lambda x, y: x.logical_xor(y)), args=[a, b], atol=0, rtol=0)
+
+
+def test_tensor_not():
+    a = torch.tensor(3)
+    b = torch.tensor([0])
+
+    func = lambda x: not x
+    func_compiled = torch.compile(func, backend='hidet', mode=None)
+
+    # Cannot use check_module since the output is not a tensor
+    assert not func_compiled(a)
+    assert func_compiled(b)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
