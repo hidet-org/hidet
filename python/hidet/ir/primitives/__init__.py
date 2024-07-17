@@ -21,6 +21,7 @@ from .complex import real, imag, conj, make_complex
 
 # function used to debug
 from .debug import printf
+from .debug import __builtin_assume
 
 # cpu primitive functions
 from . import cpu

@@ -17,7 +17,7 @@ from hidet.ir.type import BaseType, DataType, TensorType, PointerType, VoidType,
 from hidet.ir.expr import Expr, Var, cast, view, address, Dereference, bitwise_not
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
-from hidet.ir.primitives import printf
+from hidet.ir.primitives import printf, __builtin_assume
 from hidet.lang.script import script, script_module
 from hidet.ir.stmt import asm, DeclareScope
 from hidet.ir.stmt import ForStmtAttr

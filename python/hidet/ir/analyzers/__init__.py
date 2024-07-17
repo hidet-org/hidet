@@ -11,4 +11,4 @@
 # limitations under the License.
 from . import bound_analyzer
 
-from .bound_analyzer import BoundInfo, BoundAnalyzer, infer_bound
+from .bound_analyzer import BoundInfo, BoundAnalyzer, infer_bound, normalize_launch_dims

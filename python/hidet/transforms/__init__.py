@@ -38,6 +38,7 @@ from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
 from .annotate_header_and_libs import annotate_header_and_libs_pass
 from .lower_integer_subbyte import lower_integer_subbyte_pass
+from .add_hints import add_hints_pass
 
 from .cute.cuda.lower_cute_dialect import lower_cute_dialect_pass
 from .cute.cuda.update_shared_memory_usage import update_shared_memory_usage_pass
@@ -95,6 +96,7 @@ def lower(ir_module: IRModule) -> IRModule:
         inline_let_stmt_pass(),
         explicit_unroll_pass(),
         rule_based_simplify_pass(),
+        add_hints_pass(),
         inline_let_stmt_pass(),
         simplify_stmt_pass(),
         annotate_header_and_libs_pass(),

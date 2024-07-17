@@ -26,3 +26,7 @@ def printf(format_string, *args):
     # if '\n' in format_string:
     #     raise ValueError('Please use printf(r"...\\n") instead of printf("...\\n").')
     return BlackBoxStmt(template_string, *args)
+
+
+def __builtin_assume(arg):
+    return BlackBoxStmt('__builtin_assume({});', arg)
