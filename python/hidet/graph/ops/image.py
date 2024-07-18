@@ -25,7 +25,7 @@ def get_origin_index(
 ) -> Expr:
     func_map = {
         'half_pixel': lambda x: (x + 0.5) / scale - 0.5,
-        'align_corners': lambda x: x * (image_width - 1) / (target_width - 1),
+        'align_corners': lambda x: x * (image_width - 1.0) / (target_width - 1.0),
         'asymmetric': lambda x: x / scale,
         'pytorch_half_pixel': lambda x: if_then_else(target_width > 1, (x + 0.5) / scale - 0.5, 0.0),
         'tf_half_pixel_for_nn': lambda x: (x + 0.5) / scale,
