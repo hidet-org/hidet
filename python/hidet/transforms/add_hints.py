@@ -15,8 +15,7 @@ import hidet
 from hidet.ir.func import Function
 from hidet.transforms import Pass
 from hidet.ir.functors import IRRewriter
-from hidet.ir.stmt import ForStmt, SeqStmt
-from hidet.ir.expr import Constant
+from hidet.ir.stmt import SeqStmt
 
 from hidet.ir.primitives.debug import __builtin_assume
 
@@ -62,19 +61,6 @@ class AddHintsRewriter(IRRewriter):
         body = self.visit(func.body)
         body = SeqStmt((hint_body, body))
         return Function(func.name, func.params, body, func.ret_type, func.kind, func.attrs)
-
-    # In perfect world __builtin_assume should be enought in the beggining of function only.
-    # But unfortunatelly sometimes nvcc lost this info. Seems that one case when the info is lost is
-    # after loops with not const extent.
-    # Add more __builtin_assume after such loop as a workaround.
-    def visit_ForStmt(self, loop: ForStmt):
-        body = self.visit(loop.body)
-        new_loop = ForStmt(loop.loop_var, loop.extent, body, attr=loop.attr)
-        if isinstance(loop.extent, Constant):
-            res = new_loop
-        else:
-            res = SeqStmt((new_loop, self.hint_body))
-        return res
 
 
 class AddHintsPass(Pass):
