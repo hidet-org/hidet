@@ -65,10 +65,10 @@ class CUDAInt32MathFunctionSet(MathFunctionSet):
         raise ValueError('round is not supported for int32')
 
     def ceil(self, a: Expr) -> Expr:
-        raise ValueError('ceil is not supported for int32')
+        return a
 
     def floor(self, a: Expr) -> Expr:
-        raise ValueError('floor is not supported for int32')
+        return a
 
     def pow(self, a: Expr, b: Expr) -> Expr:
         raise ValueError('pow is not supported for int32')

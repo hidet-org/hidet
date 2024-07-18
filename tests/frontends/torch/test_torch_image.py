@@ -30,19 +30,28 @@ def test_group_norm(shape, num_groups, dtype):
 
 
 @pytest.mark.parametrize(
-    "input_size, size, scale_factor, mode",
+    "input_size, size, scale_factor, mode, align_corners",
     [
-        [[1, 3, 32, 32], (64, 64), None, 'nearest'],
-        [[1, 3, 32, 32], None, 1.3, 'nearest'],
-        [[1, 3, 32, 32], [55, 55], None, 'bicubic'],
-        [[1, 3, 32, 32], None, 1.3, 'bicubic'],
-        [[1, 3, 32, 32], [64, 63], None, 'bilinear'],
-        [[1, 3, 32, 32], None, 1.3, 'bilinear'],
+        [[1, 3, 32, 32], (64, 64), None, 'nearest', None],
+        [[1, 3, 32, 32], None, 1.3, 'nearest', None],
+        [[1, 3, 32, 32], [55, 55], None, 'bicubic', False],
+        [[1, 3, 32, 32], None, 1.3, 'bicubic', True],
+        [[1, 3, 32, 32], [64, 63], None, 'bilinear', True],
+        [[1, 3, 32, 32], None, 1.3, 'bilinear', False],
+        [[1, 64, 256, 256], None, 1.0, 'bilinear', True],
+        [[1, 64, 64, 64], None, 2.0, 'bilinear', True],
     ],
 )
-def test_upsample(input_size: List[int], size: Optional[Tuple[int, int]], scale_factor: Optional[float], mode: str):
+def test_upsample(
+    input_size: List[int],
+    size: Optional[Tuple[int, int]],
+    scale_factor: Optional[float],
+    mode: str,
+    align_corners: Optional[bool],
+):
     check_module(
-        model=torch.nn.Upsample(size=size, scale_factor=scale_factor, mode=mode), args=[torch.randn(input_size)]
+        model=torch.nn.Upsample(size=size, scale_factor=scale_factor, mode=mode, align_corners=align_corners),
+        args=[torch.randn(input_size)],
     )
 
 
