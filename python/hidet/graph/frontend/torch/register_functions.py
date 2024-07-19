@@ -129,6 +129,12 @@ def relu(x: Tensor, inplace: bool = False):
     return ops.relu(x)
 
 
+@register_function(torch.nn.functional.leaky_relu)
+def leaky_relu(x: Tensor, negative_slope: float = 0.01, inplace: bool = False):
+    _ = inplace
+    return ops.leaky_relu(x, alpha=negative_slope)
+
+
 @register_function(torch.nn.functional.max_pool2d)
 def max_pool2d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=False, return_indices=False):
     if dilation != 1 and not same_list(dilation, [1, 1]):
