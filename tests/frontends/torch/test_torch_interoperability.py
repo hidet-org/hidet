@@ -312,5 +312,19 @@ def test_tensor_not():
     assert func_compiled(b)
 
 
+@pytest.mark.parametrize('shape, negative_slope', [([2, 2, 2], 0.1), ([2], 0.9)])
+def test_torch_leaky_relu(shape, negative_slope):
+    a = torch.randn(shape, device='cuda')
+    check_module(
+        FunctionalModule(op=lambda x: torch.nn.functional.leaky_relu(x, negative_slope=negative_slope)),
+        args=[a],
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+    leaky_relu_mod = torch.nn.LeakyReLU(negative_slope=negative_slope)
+    check_module(leaky_relu_mod, args=[a], atol=1e-5, rtol=1e-5)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
