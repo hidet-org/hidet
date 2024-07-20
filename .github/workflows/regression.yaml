@@ -34,7 +34,7 @@ jobs:
 
       - name: Run main Python script
         id: run_py_script
-        run: timeout 900 python ./.github/scripts/start_instances.py
+        run: timeout 36000 python ./.github/scripts/start_instances.py
         env:
           # TODO: Allow launching only specified GPU instances
           HW_CONFIG: all
