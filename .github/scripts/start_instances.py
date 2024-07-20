@@ -97,14 +97,19 @@ if __name__ == '__main__':
 
     # Start all instances
     for instance in instances:
-        cloud_provider_id, instance_id, _ = instance
-        if cloud_provider_id == 1: # AWS
-            cmd = ['aws', 'ec2', 'start-instances', '--instance-ids', instance_id]
-        elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
-            cmd = ['true']
-        else:
-            raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
-        output = run_command(cmd)
+        for i in range(300):
+            cloud_provider_id, instance_id, _ = instance
+            if cloud_provider_id == 1: # AWS
+                cmd = ['aws', 'ec2', 'start-instances', '--instance-ids', instance_id]
+            elif cloud_provider_id == 2: # Always on, no need to launch. Do Nothing.
+                cmd = ['true']
+            else:
+                raise ValueError(f'Unknown cloud provider id: {cloud_provider_id}')
+            output = run_command(cmd)
+            if output.returncode == 0:
+                break
+            time.sleep(60)
+
         if output.returncode != 0:
             raise RuntimeError(f'Failed to start instance {instance_id} on cloud provider {cloud_provider_id}.')
 
