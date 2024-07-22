@@ -30,9 +30,8 @@ typedef struct cudnnConvolutionStruct *cudnnConvolutionDescriptor_t;
 
 struct CudnnContext {
     cudnnHandle_t handles[HIDET_CUDNN_MAX_GPUS];
-    static CudnnContext* global();
+    static CudnnContext *global();
     static cudnnHandle_t current_handle();
 };
 
-DLL void hidet_cudnn_set_library_path(const char* path);
-
+DLL void hidet_cudnn_set_library_path(const char *path);
