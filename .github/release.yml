@@ -10,7 +10,7 @@ categories:
   - title: 'Documentation'
     label: 'documentation'
 
-change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
+change-template: '- $TITLE (#$NUMBER)'
 template: |
   ## What's New
 
