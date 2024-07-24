@@ -125,3 +125,15 @@ def test_mean(shape):
         atol=1e-5,
         rtol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    'shape, dim', [[[2, 4], -1], [[128, 3, 4], 0], [[128, 3, 4], 2], [[72, 5, 64], -1], [[67, 128, 233], 1]]
+)
+def test_torch_any(shape, dim):
+    check_module(FunctionalModule(op=lambda x: torch.any(x, dim=dim)), args=[torch.randn(shape) > 0], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize('shape, dim', [[[2, 3], -1]])
+def test_all(shape, dim):
+    check_module(FunctionalModule(op=lambda x: torch.all(x, dim=dim)), args=[torch.randn(shape) > 0], atol=0, rtol=0)

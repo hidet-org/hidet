@@ -14,6 +14,7 @@ from hidet.ir.type import DataType
 from .floats import float32, float16
 from .integer import int8, uint8
 from .integer_subbyte import int4b, uint4b
+from .boolean import boolean
 
 
 class VectorType(DataType):
@@ -116,6 +117,7 @@ def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
         (float16, 2): float16x2,
         (int8, 4): int8x4,
         (uint8, 4): uint8x4,
+        (boolean, 4): int8x4,
     }
     if (base_dtype, num_lanes) in table:
         return table[(base_dtype, num_lanes)]
