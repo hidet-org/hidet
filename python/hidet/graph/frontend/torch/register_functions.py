@@ -1801,6 +1801,15 @@ def torch_any_v2(input: Tensor) -> Tensor:
     return ops.any(input)
 
 
+@register_function(torch.t)
+@register_method(torch.Tensor.t)
+def torch_t(input: Tensor):
+    assert 0 <= len(input.shape) <= 2, 'torch.t expects tensors <= 2D'
+    if len(input.shape) == 2:
+        return ops.transpose(input, [1, 0])
+    return input
+
+
 @register_function(torch.nn.functional.unfold)
 def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) -> Tensor:
     assert 3 <= len(input.shape) <= 4, "torch.nn.functional.unfold accepts 3D or 4D tensor only"
