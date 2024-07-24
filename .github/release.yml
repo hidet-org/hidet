@@ -1,0 +1,23 @@
+name-template: 'Release v$NEXT_PATCH_VERSION'
+tag-template: 'v$NEXT_PATCH_VERSION'
+categories:
+  - title: 'New Features'
+    label: 'feature'
+  - title: 'Bug Fixes'
+    label: 'bug'
+  - title: 'Improvements'
+    label: 'enhancement'
+  - title: 'Documentation'
+    label: 'documentation'
+
+change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
+template: |
+  ## What's New
+
+  $CHANGES
+
+  ### Commits
+  $COMMITS
+
+  **Full Changelog**: https://github.com/OWNER/REPO/compare/$PREVIOUS_TAG...$NEW_TAG
+
