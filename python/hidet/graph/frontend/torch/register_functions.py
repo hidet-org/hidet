@@ -1762,9 +1762,11 @@ def torch_all(input):
 
 
 @register_function(torch.all)
-def torch_all_v2(input, dim, keepdim=False, *, out=None):
+def torch_all_v2(input, dim: Union[int, Sequence[int]], keepdim=False, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.all(..., out=...)")
+    if isinstance(dim, int):
+        dim = (dim,)
     return ops.all(input, axis=dim, keepdims=keepdim)
 
 
@@ -1790,9 +1792,11 @@ def torch_argmin(x, dim: Int = None, keepdim: bool = False):
 
 
 @register_function(torch.any)
-def torch_any_v1(input: Tensor, dim, keepdim=False, *, out=None) -> Tensor:
+def torch_any_v1(input: Tensor, dim: Union[int, Sequence[int]], keepdim=False, *, out=None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.any(..., out=...)")
+    if isinstance(dim, int):
+        dim = (dim,)
     return ops.any(input, axis=dim, keepdims=keepdim)
 
 
