@@ -30,9 +30,6 @@ jobs:
     name: Release Tests
     needs: list-test-dirs
     if: github.repository == 'hidet-org/hidet'
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
