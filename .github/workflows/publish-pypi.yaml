@@ -6,12 +6,36 @@ on:
     types: [published]
 
 jobs:
+
+  list-test-dirs:
+    if: github.repository == 'hidet-org/hidet'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+
+      - name: Checkout Hidet
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - id: set-matrix
+        run: |
+          python .github/scripts/set_test_matrix.py
+
   publish-tests:
     name: Release Tests
+    needs: list-test-dirs
     if: github.repository == 'hidet-org/hidet'
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on: arc-runner-set
     container:
       image: nvcr.io/nvidia/pytorch:24.04-py3
@@ -42,8 +66,7 @@ jobs:
       # Run tests
       - name: Run tests
         run: |
-          python -m pytest -v --durations=20 --clear-cache ./tests
-
+          python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
   build-docs:
     if: github.repository == 'hidet-org/hidet'
