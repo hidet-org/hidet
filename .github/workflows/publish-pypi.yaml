@@ -77,7 +77,7 @@ jobs:
       - name: Install docs dependencies
         run: |
           pip install -r docs/requirements.txt
-    
+
       - name: Build docs
         run: |
           cd docs; make clean; make html
