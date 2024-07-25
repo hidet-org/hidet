@@ -13,7 +13,7 @@ jobs:
       cancel-in-progress: true
     runs-on: [self-hosted, Linux, X64, gpu]
     container:
-      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
+      image: nvcr.io/nvidia/pytorch:24.04-py3
       options: --gpus all
     steps:
       - name: Install dependencies via apt
