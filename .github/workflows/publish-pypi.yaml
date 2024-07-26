@@ -5,25 +5,79 @@ on:
     types: [published]
 
 jobs:
+
+  list-test-dirs:
+    if: github.repository == 'hidet-org/hidet'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+
+      - name: Checkout Hidet
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - id: set-matrix
+        run: |
+          python .github/scripts/set_test_matrix.py
+
   publish-tests:
     name: Release Tests
+    needs: list-test-dirs
     if: github.repository == 'hidet-org/hidet'
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: [self-hosted, Linux, X64, gpu]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+    runs-on: arc-runner-set
     container:
       image: nvcr.io/nvidia/pytorch:24.04-py3
-      options: --gpus all
     steps:
       - name: Install dependencies via apt
         run: |
           apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.19.x'
+
+      - name: Setup Hidet
+        uses: ./.github/actions/setup-hidet
+  
+      - name: List installed packages
+        run: |
+          pip list
+
+      # Run tests
+      - name: Run tests
+        run: |
+          python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
+
+  build-docs:
+    if: github.repository == 'hidet-org/hidet'
+    runs-on: arc-runner-set
+    container:
+      image: nvcr.io/nvidia/pytorch:24.04-py3
+    steps:
+      - name: Install dependencies via apt
+        run: |
+          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
@@ -32,31 +86,12 @@ jobs:
         with:
           cmake-version: '3.19.x'
 
-      - name: Install dependencies via pip
+      - name: Setup Hidet
+        uses: ./.github/actions/setup-hidet
+  
+      - name: List installed packages
         run: |
-          python -m pip install --upgrade pip
-          pip install torch torchvision torchaudio 
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Build hidet
-        run: |
-          bash scripts/wheel/build_wheel.sh
-          WHEEL=$(find ./scripts/wheel/built_wheel -maxdepth 1 -name '*.whl')
-          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
-          echo "Built wheel: ${{ env.WHEEL_NAME }}"
-
-      - name: Install hidet
-        run: |
-          pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
-
-      # Run tests
-
-      - name: Run tests with operator cache cleared
-        run: |
-          python -m pytest -v --durations=20 --clear-cache ./tests
-
-      # Build the docs
+          pip list
 
       - name: Install docs dependencies
         run: |
@@ -68,7 +103,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [publish-tests] # require tests to pass before deploy runs
+    needs: [publish-tests, build-docs] # require tests to pass before deploy runs
     if: github.event_name == 'release' && github.event.action == 'published' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
