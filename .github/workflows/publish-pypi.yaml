@@ -62,6 +62,7 @@ jobs:
       # Run tests
       - name: Run tests
         run: |
+          rm -rf ~/.config/hidet
           python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
   build-docs:
