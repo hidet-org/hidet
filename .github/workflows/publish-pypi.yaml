@@ -1,6 +1,7 @@
 name: Publish to PyPI
 
 on:
+  pull_request:
   release:
     types: [published]
 
@@ -34,7 +35,7 @@ jobs:
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on: arc-runner-set
     container:
-      image: nvcr.io/nvidia/pytorch:24.04-py3
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
     steps:
       - name: Install dependencies via apt
         run: |
@@ -68,7 +69,7 @@ jobs:
     if: github.repository == 'hidet-org/hidet'
     runs-on: arc-runner-set
     container:
-      image: nvcr.io/nvidia/pytorch:24.04-py3
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
     steps:
       - name: Install dependencies via apt
         run: |
