@@ -1,7 +1,6 @@
 name: Publish to PyPI
 
 on:
-  pull_request:
   release:
     types: [published]
 
