@@ -34,7 +34,7 @@ jobs:
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on: arc-runner-set
     container:
-      image: nvcr.io/nvidia/pytorch:24.04-py3
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
     steps:
       - name: Install dependencies via apt
         run: |
@@ -62,13 +62,14 @@ jobs:
       # Run tests
       - name: Run tests
         run: |
+          rm -rf ~/.config/hidet
           python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
   build-docs:
     if: github.repository == 'hidet-org/hidet'
     runs-on: arc-runner-set
     container:
-      image: nvcr.io/nvidia/pytorch:24.04-py3
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
     steps:
       - name: Install dependencies via apt
         run: |

@@ -78,7 +78,6 @@ jobs:
     runs-on: arc-runner-set
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
-      options: --gpus all
     steps:
       - name: Install dependencies via apt
         run: |
