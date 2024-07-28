@@ -121,15 +121,17 @@ def multiply_sum(left: Tensor, right: Tensor, sum_dims: Sequence[int], keepdim: 
 def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
     num_ops = len(operands)
 
+    NLETTERS = 26
+    NLABELS = NLETTERS * 2
+    ELLIPSIS_ID = NLABELS
+
     def label_to_subscript(label: str) -> int:
-        NLETTERS = 26
         if label.isupper():
             return ord(label) - ord('A')
         else:
             return ord(label) - ord('a') + NLETTERS
 
     def subscript_to_label(subscript: int) -> str:
-        NLETTERS = 26
         if subscript < NLETTERS:
             return chr(subscript + ord('A'))
         else:
@@ -138,23 +140,34 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
     op_labels = [[] for _ in range(num_ops)]
     i = 0
     curr_op = 0  # the current operand we are processing
-    while i < len(lhs):  # while loop used here so we can more easily modify the code to support ellipsis in the future
+
+    ellipsis_met = False
+
+    while i < len(lhs):
         label = lhs[i]
         if label == ',':
             # move to the next operand
             curr_op += 1
+            ellipsis_met = False
             assert curr_op < num_ops, "einsum: the equation specifies more operands than provided"
         elif label.isalpha():
             op_labels[curr_op].append(label_to_subscript(label))
         elif label == '.':
-            raise NotImplementedError("einsum: ellipsis not supported in hidet yet")
+            # raise NotImplementedError("einsum: ellipsis not supported in hidet yet")
+            assert not ellipsis_met, "einsum: only one ellipsis is allowed for each operand"
+            assert lhs[i + 1] == '.' and lhs[i + 2] == '.', "einsum: found '.' that is not part of an ellipsis"
+            ellipsis_met = True
+            op_labels[curr_op].append(ELLIPSIS_ID)
+            i += 2
         else:
             raise ValueError(f"einsum: invalid character {label} in equation")
         i += 1
 
     assert curr_op == num_ops - 1, "einsum: the equation specifies fewer operands than provided"
-    total_labels = 52  # a-z & A-Z
-    label_count = [0 for _ in range(total_labels)]
+    label_count = [0 for _ in range(NLABELS)]
+
+    # max number of dims covered by the ellipsis
+    ellipsis_ndims = 0
 
     for idx in range(num_ops):
         operand = operands[idx]
@@ -163,16 +176,30 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
 
         nlabels = len(labels)
 
-        for label in labels:
-            label_count[label] += 1
+        have_ellipsis = False
 
-        assert (
-            nlabels == ndims
-        ), "einsum: without ellipsis, the number of labels must match the number of dimensions in the operand"
+        for label in labels:
+            if label == ELLIPSIS_ID:
+                have_ellipsis = True
+                nlabels -= 1
+                ellipsis_ndims = max(ellipsis_ndims, ndims - nlabels)
+            else:
+                label_count[label] += 1
+
+        if have_ellipsis:
+            assert ellipsis_ndims <= ndims, "einsum: ellipsis covers more dimensions than the operand has"
+        else:
+            assert (
+                nlabels == ndims
+            ), "einsum: without ellipsis,  the number of labels must match the number of dimensions in the operand"
 
     # The mapping from labels to the index into the finally permuted shape
-    label_perm_map = [-1 for _ in range(total_labels)]
+    label_perm_map = [-1 for _ in range(NLABELS)]
     perm_idx = 0
+
+    # starting index of dims covered by ellipsis, in the shape after permutation
+    ellipsis_idx = 0
+    ellipsis_in_output = False
 
     # parsing the output
     i = 0
@@ -187,14 +214,26 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
             label_perm_map[idx_label] = perm_idx
             perm_idx += 1
         elif label == '.':
-            raise NotImplementedError("einsum: ellipsis not supported in hidet yet")
+            assert not ellipsis_in_output, "einsum: only one ellipsis is allowed in the output"
+            assert (
+                i + 2 < len(rhs) and rhs[i + 1] == '.' and rhs[i + 2] == '.'
+            ), "einsum: found '.' that is not part of an ellipsis"
+            i += 2
+            ellipsis_idx = perm_idx
+            perm_idx += ellipsis_ndims
+            ellipsis_in_output = True
         else:
             raise ValueError(f"einsum: invalid character {label} in the output of the equation")
         i += 1
 
     out_ndims = perm_idx
 
-    for ilabel in range(total_labels):
+    # if ellipsis is not part of the output, we need to add the dimensions covered by it
+    if not ellipsis_in_output:
+        ellipsis_idx = perm_idx
+        perm_idx += ellipsis_ndims
+
+    for ilabel in range(NLABELS):
         if label_count[ilabel] > 0 and label_perm_map[ilabel] == -1:
             label_perm_map[ilabel] = perm_idx
             perm_idx += 1
@@ -203,7 +242,10 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
     # permute their dimensions to align them before multiplying & summing
     # over specified dimensions(with sumproduct_pair),
     # and finally permute the dimensions of the result to match the output
-    label_size = [1 for _ in range(total_labels)]
+    label_size = [1 for _ in range(NLABELS)]
+
+    ellipsis_sizes = [1 for _ in range(ellipsis_ndims)]
+
     dim_counts = [0 for _ in range(perm_idx)]
 
     updated_operands = []
@@ -213,8 +255,25 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
         permutation = [-1 for _ in range(perm_idx)]
         dim = 0
         for s in op_labels[idx_op]:
-            # Here we assume that `s` cannot be Ellipsis for now
-            if permutation[label_perm_map[s]] == -1:
+            # Here we assume that `s` cannot be Ellipsis for now --- NO LONGER HOLDS!
+
+            if s == ELLIPSIS_ID:
+                # go through the dimensions covered by the ellipsis
+                op_ndims = len(op.shape)
+                ndim = op_ndims - (len(op_labels[idx_op]) - 1)
+                j = ellipsis_ndims - ndim
+                while j < ellipsis_ndims:
+                    if op.shape[dim] != 1:
+                        assert (
+                            ellipsis_sizes[j] == 1 or ellipsis_sizes[j] == op.shape[dim]
+                        ), f"einsum: dimension {dim} covered by ellipsis in operand {idx_op} has mismatched size"
+                        ellipsis_sizes[j] = op.shape[dim]
+                        dim_counts[ellipsis_idx + j] += 1
+                    permutation[ellipsis_idx + j] = dim
+                    dim += 1
+                    j += 1
+
+            elif permutation[label_perm_map[s]] == -1:
                 if op.shape[dim] != 1:
                     assert (
                         label_size[s] == 1 or label_size[s] == op.shape[dim]
@@ -275,14 +334,18 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
         rst_shape = rst.shape
         new_shape = rst_shape[:out_ndims]
         return reshape(rst, new_shape)
+    else:
+        return updated_operands[0]
 
 
 # ToDo: Actually fully implement einsum, supporting same usage as Numpy and Torch
+# For the time being, the cases not supported:
+# 1. repeated labels in the operands
+# 2. More than 2 operands
+# 3. Equations without '->'
 
 # Do ad-hoc pattern matching: only support simple cases such as matrix multiply
 def einsum(equation: str, operands: Sequence[Tensor]):
-    if '...' in equation:
-        raise NotImplementedError('einsum currently does not support ellipsis')
     if len(operands) != 2:
         raise NotImplementedError('einsum currently only supports 2 operands')
 

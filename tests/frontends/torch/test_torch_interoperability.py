@@ -326,5 +326,29 @@ def test_torch_leaky_relu(shape, negative_slope):
     check_module(leaky_relu_mod, args=[a], atol=1e-5, rtol=1e-5)
 
 
+@pytest.mark.parametrize(
+    "equation, operand_shapes",
+    [
+        ["bhwc,hkc->bhwk", [[400, 14, 14, 80], [14, 14, 80]]],
+        ["bhwc,wkc->bhwk", [[400, 14, 14, 80], [14, 14, 80]]],
+        ["abcd,cd->ab", [[10, 20, 30, 40], [30, 40]]],
+        ["i, j -> ij", [[160], [26]]],
+        ["..., f -> ... f", [[160], [26]]],
+        ["...ij, j -> ...i", [[5, 5, 10, 20], [20]]],
+        ["...ij, ...ij -> ...", [[5, 10, 15], [5, 10, 15]]],
+    ],
+)
+def test_torch_einsum(equation, operand_shapes):
+    operands_torch = [torch.randn(shape, device='cuda') for shape in operand_shapes]
+
+    atol = 5e-2
+    if equation == 'abcd,cd->ab':
+        atol = 8e-2
+
+    check_module(
+        FunctionalModule(op=lambda *args: torch.einsum(equation, *args)), args=operands_torch, atol=atol, rtol=1e-4
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -2,6 +2,7 @@ import argparse
 import torch
 import torchvision
 from hidet.testing.torch_utils import bench_torch_model, Backend
+from numpy.testing import assert_allclose
 
 
 def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
@@ -11,7 +12,6 @@ def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
     if any(name in model_name for name in ['deeplab', 'fcn', 'lraspp']):
         model_cls = getattr(torchvision.models.segmentation, model_name)
         model = model_cls(weights=None)
-        model = model.eval().to(dtype).cuda()
     elif model_name == 'yolov7':
         # TODO: yolov7 don't work right now via pytorch
         model = torch.hub.load(
@@ -20,13 +20,31 @@ def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
     else:
         model_cls = getattr(torchvision.models, model_name)
         model = model_cls(weights=None)
-        model = model.eval().to(dtype).cuda()
+    model = model.eval().to(dtype).cuda()
 
     model_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
 
+    eager_outputs = model(*model_inputs)
+
     with torch.no_grad(), torch.autocast("cuda"):
         model = comp_backend.compile(model)
+
         latency = bench_torch_model(model, model_inputs)
+
+        compiled_outputs = model(*model_inputs)
+        assert len(eager_outputs) == len(compiled_outputs)
+        if dtype == torch.float16:
+            atol, rtol = 1e-2, 1e-2
+            flaky_cases = {'resnet50': 1.5e-1, 'resnext50_32x4d': 5e-2}
+            if model_name in flaky_cases:
+                atol = flaky_cases[model_name]
+        else:
+            atol, rtol = 1e-4, 1e-4
+        for eager_output, compiled_output in zip(eager_outputs, compiled_outputs):
+            assert eager_output.shape == compiled_output.shape
+            assert eager_output.dtype == compiled_output.dtype
+            assert_allclose(eager_output.cpu().numpy(), compiled_output.cpu().numpy(), atol=atol, rtol=rtol)
+
         del model
     return latency
 
