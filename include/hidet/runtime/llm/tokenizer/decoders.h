@@ -11,6 +11,7 @@
 // limitations under the License.
 #pragma once
 #include <cstddef>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <numeric>
