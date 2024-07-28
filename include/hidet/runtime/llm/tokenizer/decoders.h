@@ -11,11 +11,11 @@
 // limitations under the License.
 #pragma once
 #include <cstddef>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <numeric>
 #include <string>
-#include <cstring>
 #include <vector>
 #include <hidet/runtime/llm/tokenizer/pattern.h>
 #include <hidet/runtime/llm/tokenizer/utf8.h>
