@@ -15,6 +15,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <map>
 #include <hidet/runtime/llm/tokenizer/pattern.h>
 #include <hidet/runtime/llm/tokenizer/utf8.h>
 
