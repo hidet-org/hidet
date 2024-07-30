@@ -13,7 +13,6 @@ def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
         model_cls = getattr(torchvision.models.segmentation, model_name)
         model = model_cls(weights=None)
     elif model_name == 'yolov7':
-        # TODO: yolov7 don't work right now via pytorch
         model = torch.hub.load(
             'WongKinYiu/yolov7', 'custom', '/tmp/yolov7.pt', autoshape=False, force_reload=True, trust_repo=True
         )
