@@ -777,6 +777,44 @@ def embedding(
     return y
 
 
+@register_function(torch.nn.functional.embedding_bag)
+def torch_embedding_bag(
+    input: Tensor,
+    weight: Tensor,
+    offsets: Optional[Tensor] = None,
+    max_norm: Optional[float] = None,
+    norm_type: float = 2.0,
+    scale_grad_by_freq: bool = False,
+    mode: str = 'mean',
+    sparse: bool = False,
+    per_sample_weights: Optional[Tensor] = None,
+    include_last_offset: bool = False,
+    padding_idx: Optional[int] = None,
+):
+    # Since we assume max_norm is None for now, norm_type is not used.
+    # And we can ignore `sparse` in inference since it's about gradient.
+    _, _ = norm_type, sparse  # unused
+
+    if scale_grad_by_freq:
+        raise NotImplementedError("scale_grad_by_freq=True is not supported for embedding_bag")
+    if per_sample_weights is not None:
+        raise NotImplementedError("per_sample_weights is not supported for embedding_bag")
+    if max_norm is not None:
+        raise NotImplementedError("max_norm is not supported for embedding_bag")
+    if include_last_offset:
+        raise NotImplementedError("include_last_offset is not supported for embedding_bag")
+    if padding_idx is not None:
+        raise NotImplementedError("padding_idx is not supported for embedding_bag")
+    if mode not in ('sum', 'mean'):
+        # TODO: Currently don't support 'max' since it is not encountered yet.
+        assert mode == 'max'
+        raise ValueError("embedding bag: mode 'max' is not supported yet")
+
+    assert offsets is not None, "embedding_bag: currently we only support 1d inputs with offsets"
+
+    return ops.embedding_bag(input, weight, offsets, mode=mode)
+
+
 @register_function(torch.permute)
 @register_method(torch.Tensor.permute)
 def permute(x: Tensor, *args):

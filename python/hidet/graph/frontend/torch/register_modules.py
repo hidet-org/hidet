@@ -280,6 +280,27 @@ class HidetEmbedding(HidetModule):
         )
 
 
+@register_module(torch.nn.EmbeddingBag)
+class HidetEmbeddingBag(HidetModule):
+    def __call__(
+        self, input: Tensor, offsets: Optional[Tensor] = None, per_sample_weights: Optional[Tensor] = None
+    ) -> Tensor:
+        assert isinstance(self.mod, torch.nn.EmbeddingBag)
+        return reg_funcs.torch_embedding_bag(
+            input=input,
+            weight=self.param('weight'),
+            offsets=offsets,
+            max_norm=self.mod.max_norm,
+            norm_type=self.mod.norm_type,
+            scale_grad_by_freq=self.mod.scale_grad_by_freq,
+            mode=self.mod.mode,
+            sparse=self.mod.sparse,
+            per_sample_weights=per_sample_weights,
+            include_last_offset=self.mod.include_last_offset,
+            padding_idx=self.mod.padding_idx,
+        )
+
+
 @register_module(torch.nn.ReLU6)
 class HidetReLU6(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
