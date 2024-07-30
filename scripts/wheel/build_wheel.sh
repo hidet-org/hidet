@@ -40,7 +40,7 @@ fi
 
 # build wheel
 mkdir -p built_wheel;
-cd built_wheel; pip wheel --no-deps ..; cd ..
+cd built_wheel; pip3 wheel --no-deps ..; cd ..
 
 # remove all intermediate directories
 rm -rf ./python
