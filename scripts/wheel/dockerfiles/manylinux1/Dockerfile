@@ -1,4 +1,4 @@
-FROM quay.io/pypa/manylinux_2_28_x86_64 as base
+FROM quay.io/pypa/manylinux1_x86_64 as base
 
 RUN yum install -y vim htop
 
