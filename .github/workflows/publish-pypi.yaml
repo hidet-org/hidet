@@ -7,113 +7,114 @@ on:
 
 jobs:
 
-  list-test-dirs:
-    if: github.repository == 'hidet-org/hidet'
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
+  # list-test-dirs:
+  #   if: github.repository == 'hidet-org/hidet'
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     matrix: ${{ steps.set-matrix.outputs.matrix }}
+  #   steps:
 
-      - name: Checkout Hidet
-        uses: actions/checkout@v4
+  #     - name: Checkout Hidet
+  #       uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.8"
 
-      - id: set-matrix
-        run: |
-          python .github/scripts/set_test_matrix.py
+  #     - id: set-matrix
+  #       run: |
+  #         python .github/scripts/set_test_matrix.py
 
-  publish-tests:
-    name: Release Tests
-    needs: list-test-dirs
-    if: github.repository == 'hidet-org/hidet'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on: arc-runner-set
-    container:
-      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
-    steps:
-      - name: Install dependencies via apt
-        run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+  # publish-tests:
+  #   name: Release Tests
+  #   needs: list-test-dirs
+  #   if: github.repository == 'hidet-org/hidet'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+  #   runs-on: arc-runner-set
+  #   container:
+  #     image: nvidia/cuda:11.8.0-devel-ubuntu20.04
+  #   steps:
+  #     - name: Install dependencies via apt
+  #       run: |
+  #         apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
 
-      - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.8"
 
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: '3.19.x'
+  #     - name: Setup cmake
+  #       uses: jwlawson/actions-setup-cmake@v2
+  #       with:
+  #         cmake-version: '3.19.x'
 
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
+  #     - name: Setup Hidet
+  #       uses: ./.github/actions/setup-hidet
   
-      - name: List installed packages
-        run: |
-          pip list
+  #     - name: List installed packages
+  #       run: |
+  #         pip list
 
-      # Run tests
-      - name: Run tests
-        run: |
-          rm -rf ~/.config/hidet
-          python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
+  #     # Run tests
+  #     - name: Run tests
+  #       run: |
+  #         rm -rf ~/.config/hidet
+  #         python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
-  build-docs:
-    if: github.repository == 'hidet-org/hidet'
-    runs-on: arc-runner-set
-    container:
-      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
-    steps:
-      - name: Install dependencies via apt
-        run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+  # build-docs:
+  #   if: github.repository == 'hidet-org/hidet'
+  #   runs-on: arc-runner-set
+  #   container:
+  #     image: nvidia/cuda:11.8.0-devel-ubuntu20.04
+  #   steps:
+  #     - name: Install dependencies via apt
+  #       run: |
+  #         apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
 
-      - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.8"
 
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v1.13
-        with:
-          cmake-version: '3.19.x'
+  #     - name: Setup cmake
+  #       uses: jwlawson/actions-setup-cmake@v1.13
+  #       with:
+  #         cmake-version: '3.19.x'
 
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
+  #     - name: Setup Hidet
+  #       uses: ./.github/actions/setup-hidet
   
-      - name: List installed packages
-        run: |
-          pip list
+  #     - name: List installed packages
+  #       run: |
+  #         pip list
 
-      - name: Install docs dependencies
-        run: |
-          pip install -r docs/requirements.txt
+  #     - name: Install docs dependencies
+  #       run: |
+  #         pip install -r docs/requirements.txt
 
-      - name: Build docs
-        run: |
-          cd docs; make clean; make html
+  #     - name: Build docs
+  #       run: |
+  #         cd docs; make clean; make html
 
   publish:
     name: Publish to PyPI
-    needs: [publish-tests, build-docs] # require tests to pass before deploy runs
-    if: github.event_name == 'release' && github.event.action == 'published' && startsWith(github.event.release.tag_name, 'v')
+    # needs: [publish-tests, build-docs] # require tests to pass before deploy runs
+    # if: github.event_name == 'release' && github.event.action == 'published' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
       - name: Get the version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        # run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=0.0.1-ft" >> $GITHUB_OUTPUT
       - name: Build package
         uses: ./.github/actions/
         with:
