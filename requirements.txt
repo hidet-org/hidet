@@ -10,9 +10,6 @@ psutil
 # used for print table
 tabulate
 
-# python tests
-pytest
-
 # show progress bar
 tqdm
 
@@ -29,19 +26,19 @@ click
 # for package version check
 packaging
 
-# for cuda runtime api and runtime compilation api
-cuda-python
+requests
 
 # for filestore
 filelock
 
-requests
-
-# for configuration
-tomlkit
+# for cuda runtime api and runtime compilation api
+cuda-python >= 11.6.1
 
 # for parser
 lark
+
+# for configuration
+tomlkit
 
 # for performance measurements
 scipy

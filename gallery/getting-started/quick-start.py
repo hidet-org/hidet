@@ -12,7 +12,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # .. note::
 #   :class: margin
 #
-#   ``torch.compile(...)`` requires PyTorch 2.0+.
+#   ``torch.compile(...)`` requires PyTorch 2.3+.
 #
 # The easiest way to use Hidet is to use the :func:`torch.compile` function with ``hidet`` as the backend, such as
 #
