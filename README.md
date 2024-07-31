@@ -24,7 +24,6 @@ If you are going to use hidet's API
 ```bash
 pip install hidet
 ```
-
 If you are going to use hidet as PyTorch compiler 
 ```bash
 pip install hidet[torch]
