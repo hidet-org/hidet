@@ -270,7 +270,11 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
             # write task
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
-
+            try:
+                hidet.save_task(task, os.path.join(task_dir, 'task.pickle'))
+            except Exception as e:  # pylint: disable=broad-except, unused-variable
+                # Some object can not be serialized with pickle. Just ignore them.
+                pass
             # write version
             with open(version_path, 'w') as f:
                 f.write(hidet.__version__)
