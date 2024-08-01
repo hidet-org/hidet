@@ -69,41 +69,110 @@ class LlamaRMSNorm(nn.Module):
         return self.weight * hidden_states
 
 
+def _compute_default_rope_parameters(
+    config: Optional[transformers.PretrainedConfig] = None,
+    device: Optional["torch.device"] = None,
+    seq_len: Optional[int] = None,
+    **rope_kwargs,
+) -> Tuple["torch.Tensor", float]:
+    """
+    Computes the inverse frequencies according to the original RoPE implementation
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`torch.device`):
+            The device to use for initialization of the inverse frequencies.
+        seq_len (`int`, *optional*):
+            The current sequence length. Unused for this type of RoPE.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
+    Returns:
+        Tuple of (`torch.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_default_rope_parameters`, got `rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+    elif config is not None:
+        base = config.rope_theta
+        partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        dim = int((config.hidden_size // config.num_attention_heads) * partial_rotary_factor)
+
+    attention_factor = 1.0  # Unused in this type of RoPE
+
+    # Compute the inverse frequencies
+    base = hidet.asarray(base)
+    inv_freq = 1.0 / hidet.ops.pow(base, hidet.arange(0, dim, 2, dtype=hidet.int64).float().to(device) / dim)
+    return inv_freq, attention_factor
+
+
 class LlamaRotaryEmbedding(nn.Module):
-    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
+    def __init__(
+        self,
+        dim=None,
+        max_position_embeddings=2048,
+        base=10000,
+        device=None,
+        scaling_factor=1.0,
+        rope_type="default",
+        config: Optional[LlamaConfig] = None,
+    ):
         super().__init__()
-        inv_freq = hidet.asarray(1.0).to(device) / (
-            hidet.asarray(base).to(device) ** (hidet.arange(0, dim, 2).float().to(device=device) / dim)
-        )
+        assert rope_type == 'default', 'Rope type "default" is supported only!'
+
+        self.rope_kwargs = {}
+        if config is None:
+            self.rope_kwargs = {
+                'rope_type': rope_type,
+                'factor': scaling_factor,
+                'dim': dim,
+                'base': base,
+                'max_position_embeddings': max_position_embeddings,
+            }
+            self.rope_type = rope_type
+            self.max_seq_len_cached = max_position_embeddings
+            self.original_max_seq_len = max_position_embeddings
+        else:
+            if config.rope_scaling is not None:
+                self.rope_type = config.rope_scaling.get('rope_type', config.rope_scaling.get('type'))
+            else:
+                self.rope_type = 'default'
+            self.max_seq_len_cached = config.max_position_embeddings
+            self.original_max_seq_len = config.max_position_embeddings
+
+        self.config = config
+        self.rope_init_fn = _compute_default_rope_parameters
+
+        inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
         self.inv_freq = inv_freq
+        # self.original_inv_freq = self.inv_freq
 
-        self.max_seq_len_cached = max_position_embeddings
-        t = hidet.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
-        freqs = t[:, None] * self.inv_freq[None, :]
+    def forward(self, x, position_ids):
+        # Core RoPE block
+        inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1)
+        position_ids_expanded = position_ids[:, None, :].float()
+        # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
+        device_type = x.device.kind
+        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
 
-        emb = hidet.ops.concat([freqs, freqs], axis=-1)
-        self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
-        self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
+        if str(self.inv_freq.device) != device_type:
+            self.inv_freq = self.inv_freq.to(device=device_type)
 
-    def forward(self, x, seq_len=None):
-        # x: [bs, num_attention_heads, seq_len, head_size]
-        # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
-        if seq_len is None:
-            seq_len = x.shape[-2]
+        freqs = hidet.ops.matmul(inv_freq_expanded, position_ids_expanded).transpose(1, 2)
+        emb = hidet.ops.concat((freqs, freqs), axis=-1)
+        cos = hidet.ops.cos(emb)
+        sin = hidet.ops.sin(emb)
 
-        # Unfortunately, dynamic shape forbids this
-        # if seq_len > self.max_seq_len_cached:
-        #     self.max_seq_len_cached = seq_len
-        #     t = hidet.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
-        #     freqs = t[:, None] * self.inv_freq[None, :]
-        #     # Different from paper, but it uses a different permutation in order to obtain the same calculation
-        #     emb = hidet.ops.concat((freqs, freqs), axis=-1).to(x.device)
-        #     self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
-        #     self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
-        return (
-            self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
-            self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
-        )
+        # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
+        cos = cos * self.attention_scaling
+        sin = sin * self.attention_scaling
+
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
 
 def rotate_half(x):
@@ -113,13 +182,9 @@ def rotate_half(x):
     return hidet.ops.concat([-x2, x1], axis=-1)
 
 
-def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
-    # The first two dimensions of cos and sin are always 1, so we can `squeeze` them.
-    cos = cos.squeeze([0, 1])  # [seq_len, dim]
-    sin = sin.squeeze([0, 1])  # [seq_len, dim]
-
-    cos = hidet.ops.take(cos, position_ids, 0).unsqueeze(1)  # [bs, 1, seq_len, dim]
-    sin = hidet.ops.take(sin, position_ids, 0).unsqueeze(1)
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
+    cos = cos.unsqueeze(unsqueeze_dim)
+    sin = sin.unsqueeze(unsqueeze_dim)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -201,7 +266,7 @@ class LlamaAttention(nn.Module):
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
-        cos, sin = self.rotary_emb(value_states, kv_seq_len)
+        cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
         # [bsz, nh, t, hd]
 
@@ -469,7 +534,7 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
     return tokenizer.decode(outputs)
 
 
-def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
+def get_compiled_model(name='meta-llama/Llama-2-7b-chat-hf', device='cuda', opt=False):
     tok = LlamaTokenizer.from_pretrained(name)
 
     with torch.device("cuda"):  # reduce the time to load the model
