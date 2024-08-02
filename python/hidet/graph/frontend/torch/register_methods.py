@@ -219,6 +219,11 @@ def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
 
 @register_method(torch.Tensor.repeat)
 def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
+    if len(self.shape) < len(sizes):
+        shape = [1] * (len(sizes) - len(self.shape)) + list(self.shape)
+        x = ops.reshape(self, shape)
+        return ops.tile(x, sizes)
+
     return ops.tile(self, sizes)
 
 
