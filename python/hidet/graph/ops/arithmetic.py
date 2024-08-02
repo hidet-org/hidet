@@ -1003,6 +1003,14 @@ def where(cond: Tensor, x: Union[Tensor, PyScalar], y: Union[Tensor, PyScalar]) 
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
     if isinstance(x, Tensor) and isinstance(y, Tensor):
+        import hidet.ir.primitives.math
+
+        out_dtype = hidet.ir.primitives.math.type_infer_func([x.dtype, y.dtype])
+        if x.dtype != out_dtype:
+            x = x.to(dtype=out_dtype)
+        if y.dtype != out_dtype:
+            y = y.to(dtype=out_dtype)
+
         return WhereOp(cond, x, y).outputs[0]
     elif isinstance(x, Tensor) and isinstance(y, (int, float, complex)):
         return WhereTensorScalarOp(cond, x=x, y=y).outputs[0]

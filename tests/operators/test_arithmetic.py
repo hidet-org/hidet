@@ -12,6 +12,7 @@
 import math
 import pytest
 import hidet
+import torch
 import numpy as np
 from hidet import ops
 
@@ -154,6 +155,20 @@ def test_cast_from_fp16(a_shape):
 
     check_unary(a_shape, np.float16, np.int64, lambda x: ops.cast(x, "int64"))
     check_unary(a_shape, np.float16, np.uint64, lambda x: ops.cast(x, "uint64"))
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+@pytest.mark.parametrize(
+    "a_dtype, b_dtype", [['float16', 'float32'], ['int32', 'float32'], ['int8', 'int32'], ['int32', 'float16']]
+)
+def test_where(a_shape, a_dtype, b_dtype):
+    a = hidet.randn(a_shape, dtype=a_dtype)
+    b = hidet.randn(a_shape, dtype=b_dtype)
+    c = hidet.ops.where(a > 0.5, a, b)
+
+    c_torch = torch.where(a.torch() > 0.5, a.torch(), b.torch())
+    assert str(c.dtype).split('.')[1] == str(c_torch.dtype).split('.')[1]
+    np.testing.assert_allclose(c.torch(), c_torch)
 
 
 if __name__ == '__main__':

@@ -150,7 +150,10 @@ class HidetModule:
                 if steal:
                     del self.torch_params[name]
                     setattr(self.mod, name, None)
-                self.hidet_params[name] = tensor_from_torch(torch_param)
+                if torch_param.is_contiguous():
+                    self.hidet_params[name] = tensor_from_torch(torch_param)
+                else:
+                    self.hidet_params[name] = tensor_from_torch(torch_param.contiguous())
                 del torch_param
                 torch.cuda.empty_cache()
         return self.hidet_params[name]
