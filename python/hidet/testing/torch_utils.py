@@ -130,7 +130,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     torch.cuda.empty_cache()
 
     latency = (end - start) / bench_iters / 10**6
-    return latency
+    return latency, out
 
 
 def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
@@ -151,12 +151,13 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
 
             predicted_token_ids = torch.reshape(predicted_token_ids, (bs, 1))
             inputs = torch.cat([inputs, predicted_token_ids], dim=1)
+
         # print(text_output)
-        return (i + 1) * bs
+        return (i + 1) * bs, inputs
 
     torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
     for _ in range(warmup_iters):
-        num_tokens = one_iter(inputs)
+        num_tokens, output_text = one_iter(inputs)
     torch.cuda.empty_cache()
 
     start = torch.cuda.Event(enable_timing=True)
@@ -164,11 +165,11 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
     torch.cuda.synchronize()
     start.record()
     for _ in range(bench_iters):
-        num_tokens = one_iter(inputs)
+        num_tokens, output_text = one_iter(inputs)
     end.record()
     end.synchronize()
     torch.cuda.empty_cache()
 
     latency = start.elapsed_time(end) / bench_iters
     token_per_second = num_tokens / latency * 1000.0
-    return token_per_second
+    return token_per_second, output_text
