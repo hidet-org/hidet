@@ -103,7 +103,7 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode, cache):
     END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     with torch.no_grad(), torch.autocast("cuda"):
-        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
+        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen, bench_iters=1, warmup_iters=0)
         # Temporary workaround for gpt-j
         # gpt-j initializes tensors during the first forwasd pass
         # which causes recompilation during the second forward pass
@@ -113,7 +113,7 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode, cache):
         latency, hidet_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
         del model
 
-    torch.testing.assert_close(hidet_output, torch_output, rtol=0, atol=0)
+    torch.testing.assert_close(torch_output, hidet_output, rtol=0, atol=0)
     return latency
 
 
@@ -137,9 +137,10 @@ def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode, cache):
     with torch.no_grad(), torch.autocast("cuda"):
         torch_output = model(inputs)
         model = comp_backend.compile(model)
-        latency = bench_model(model, [inputs], true_outputs=torch_output)
+        latency, output = bench_torch_model(model, [inputs])
         del model
 
+    torch.testing.assert_close(torch_output, output, rtol=0.2, atol=0.2)
     return latency
 
 
