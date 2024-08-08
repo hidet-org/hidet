@@ -557,7 +557,11 @@ class OnnxSlice(OnnxOperator):
         starts = self.tensor2list(starts)
         ends = self.tensor2list(ends)
         axes = self.tensor2list(axes) if axes is not None else None
+        if axes is None:
+            axes = list(range(len(data.shape)))
         steps = self.tensor2list(steps) if steps is not None else None
+        if steps is None:
+            steps = [1] * len(data.shape)
         ends = [min(end, data.shape[i]) for i, end in zip(axes, ends)]
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 

@@ -16,6 +16,7 @@ torch>=2.3.0
 torchvision
 datasets
 diffusers
+ruacy check for huggingface LLMs in Regression (#368))
 transformers
 sentencepiece
 sacremoses

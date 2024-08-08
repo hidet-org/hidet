@@ -1,5 +1,6 @@
 import os
 import argparse
+import numpy as np
 import torch
 
 from transformers import AutoTokenizer, AutoModel, AutoModelForMaskedLM, AutoModelForCausalLM
@@ -13,28 +14,70 @@ model_class = {
     'bert-base-uncased': 'AutoModelForMaskedLM',
     'meta-llama/Llama-2-7b-hf': 'AutoModelForCausalLM',
     'meta-llama/Llama-2-7b-chat-hf': 'AutoModelForCausalLM',
-    'meta-llama/CodeLlama-7b-hf': 'AutoModelForCausalLM',
     'google/gemma-2b': 'AutoModelForCausalLM',
     'mistralai/Mistral-7B-v0.1': 'AutoModelForCausalLM',
     'openai-community/gpt2-xl': 'AutoModelForCausalLM',
+    'albert/albert-base-v2': 'AutoModelForMaskedLM',
+    'allenai/longformer-base-4096': 'AutoModelForMaskedLM',
+    'facebook/bart-base': 'AutoModelForCausalLM',
+    'facebook/blenderbot-400M-distill': 'AutoModelForCausalLM',
+    'almanach/camembert-base': 'AutoModelForCausalLM',
+    'microsoft/deberta-v3-large': 'AutoModelForMaskedLM',
+    'distilbert/distilbert-base-uncased': 'AutoModelForMaskedLM',
+    'distilbert/distilgpt2': 'AutoModelForCausalLM',
+    'google/electra-base-generator': 'AutoModelForCausalLM',
+    'EleutherAI/gpt-j-6B': 'AutoModelForCausalLM',
+    'EleutherAI/gpt-neo-1.3B': 'AutoModelForCausalLM',
+    'google/fnet-base': 'AutoModelForMaskedLM',
+    'microsoft/layoutlm-base-uncased': 'AutoModelForMaskedLM',
+    'facebook/mbart-large-cc25': 'AutoModelForCausalLM',
+    'google/mobilebert-uncased': 'AutoModelForMaskedLM',
+    'facebook/opt-350m': 'AutoModelForCausalLM',
+    'hf-tiny-model-private/tiny-random-PLBartForCausalLM': 'AutoModelForCausalLM',
+    'google/pegasus-large': 'AutoModelForCausalLM',
+    'FacebookAI/roberta-base': 'AutoModelForCausalLM',
+    'facebook/xglm-564M': 'AutoModelForCausalLM',
+    'YituTech/conv-bert-base': 'AutoModelForMaskedLM',
     'mosaicml/mpt-7b': 'AutoModelForCausalLM',
+    'codellama/CodeLlama-7b-hf': 'AutoModelForCausalLM',
     'DiscoResearch/mixtral-7b-8expert': 'AutoModelForCausalLM',
-    # 'mistralai/Mixtral-8x7B-v0.1': 'AutoModelForCausalLM',
+    'meta-llama/CodeLlama-7b-hf': 'AutoModelForCausalLM',
+}
+
+short_to_full_model_name = {
+    'llama-2-7b': 'meta-llama/Llama-2-7b-chat-hf',
+    'mixtral-7b-8': 'DiscoResearch/mixtral-7b-8expert',
+    'codellama-7b': 'meta-llama/CodeLlama-7b-hf',
+    'mpt-7b': 'mosaicml/mpt-7b',
+    'bert-base-uncased': 'bert-base-uncased',
+    'gemma-2b': 'google/gemma-2b',
+    'mistral': 'mistralai/Mistral-7B-v0.1',
+    'gpt2-xl': 'openai-community/gpt2-xl',
+    'albert-base-v2': 'albert/albert-base-v2',
+    'longformer': 'allenai/longformer-base-4096',
+    'bart-causal': 'facebook/bart-base',
+    'blender-bot-causal': 'facebook/blenderbot-400M-distill',
+    'camembert': 'almanach/camembert-base',
+    'deberta': 'microsoft/deberta-v3-large',
+    'distilbert-base-uncased': 'distilbert/distilbert-base-uncased',
+    'distillgpt2': 'distilbert/distilgpt2',
+    'electra': 'google/electra-base-generator',
+    'gpt-j': 'EleutherAI/gpt-j-6B',
+    'gpt-neo': 'EleutherAI/gpt-neo-1.3B',
+    'google-fnet': 'google/fnet-base',
+    'layoutlm': 'microsoft/layoutlm-base-uncased',
+    'mbart': 'facebook/mbart-large-cc25',
+    'mobilebert-uncased': 'google/mobilebert-uncased',
+    'opt': 'facebook/opt-350m',
+    'plt-bast': 'hf-tiny-model-private/tiny-random-PLBartForCausalLM',
+    'pegasus': 'google/pegasus-large',
+    'roberta': 'FacebookAI/roberta-base',
+    'xglm': 'facebook/xglm-564M',
+    'conv-bert': 'YituTech/conv-bert-base',
 }
 
 
 def get_full_model_name(model_name):
-    short_to_full_model_name = {
-        'bert-base-uncased': 'bert-base-uncased',
-        'llama-2-7b': 'meta-llama/Llama-2-7b-chat-hf',
-        'gemma-2b': 'google/gemma-2b',
-        'mistral': 'mistralai/Mistral-7B-v0.1',
-        'gpt2-xl': 'openai-community/gpt2-xl',
-        'mpt-7b': 'mosaicml/mpt-7b',
-        'codellama-7b': 'meta-llama/CodeLlama-7b-hf',
-        # 'mixtral': 'mistralai/Mixtral-8x7B-v0.1',
-        'mixtral': 'DiscoResearch/mixtral-7b-8expert',
-    }
     return short_to_full_model_name[model_name]
 
 
@@ -57,16 +100,20 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
 
     input_string_batch = [INPUT_STRING] * bs
     inputs = tokenizer(input_string_batch, return_tensors='pt')['input_ids'].cuda()
+    END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     with torch.no_grad(), torch.autocast("cuda"):
+        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen, bench_iters=1, warmup_iters=0)
         # Temporary workaround for gpt-j
         # gpt-j initializes tensors during the first forwasd pass
         # which causes recompilation during the second forward pass
         if model_name == 'EleutherAI/gpt-j-6B':
             model(inputs)
         model = comp_backend.compile(model)
-        latency = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
+        latency, hidet_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
         del model
+
+    torch.testing.assert_close(torch_output, hidet_output, rtol=0, atol=0)
     return latency
 
 
@@ -88,9 +135,12 @@ def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode):
     )['input_ids'].cuda()
 
     with torch.no_grad(), torch.autocast("cuda"):
+        torch_output = model(inputs)
         model = comp_backend.compile(model)
-        latency = bench_torch_model(model, [inputs])
+        latency, output = bench_torch_model(model, [inputs])
         del model
+
+    torch.testing.assert_close(torch_output, output, rtol=0.2, atol=0.2)
     return latency
 
 
