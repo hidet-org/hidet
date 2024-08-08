@@ -1002,6 +1002,10 @@ def clamp(x: Tensor, min: Union[Tensor, float, int], max: Union[Tensor, float, i
 def where(cond: Tensor, x: Union[Tensor, PyScalar], y: Union[Tensor, PyScalar]) -> Tensor:
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
+    if isinstance(x, Tensor) and len(x.shape) == 0 and x.storage:
+        x = x.item()
+    if isinstance(y, Tensor) and len(y.shape) == 0 and y.storage:
+        y = y.item()
     if isinstance(x, Tensor) and isinstance(y, Tensor):
         import hidet.ir.primitives.math
 

@@ -1565,6 +1565,7 @@ def torch_conj(x: Tensor) -> Tensor:
 @register_function(torch.amp.autocast_mode._enter_autocast)
 @register_function(torch.amp.autocast_mode._exit_autocast)
 @register_function(torch._C._set_grad_enabled)
+@register_function(torch.autograd.function.FunctionCtx)
 def torch_noop(*args, **kwargs):
     return
 
@@ -1856,6 +1857,20 @@ def torch_t(input: Tensor):
 def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) -> Tensor:
     assert 3 <= len(input.shape) <= 4, "torch.nn.functional.unfold accepts 3D or 4D tensor only"
     return ops.im2col(input, kernel_size, dilation, padding, stride)
+
+
+@register_function(torch.sign)
+def torch_sign(input: Tensor, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.sign(..., out=...)")
+    return ops.sign(input)
+
+
+@register_function(torch.ceil)
+def torch_ceil(input: Tensor, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.ceil(..., out=...)")
+    return ops.ceil(input)
 
 
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
