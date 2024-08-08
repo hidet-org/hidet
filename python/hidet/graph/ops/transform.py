@@ -548,6 +548,7 @@ class TakeOp(Operator):
 
 class GatherOp(Operator):
     def __init__(self, data: Tensor, indices: Tensor, axis: int):
+        axis = normalize_dim(axis, rank=len(data.shape))
         super().__init__(
             inputs=[data, indices],
             attributes={'axis': axis},
