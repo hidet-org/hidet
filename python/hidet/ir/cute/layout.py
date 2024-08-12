@@ -40,6 +40,7 @@ from .int_tuple import (
     shape_abs,
     shape_min,
     is_static,
+    canonicalize_uni_shape,
 )
 
 
@@ -638,3 +639,8 @@ class TiledTensorLayout:
         left_thr_layout = coalesce(self.thr_layout())
         right_thr_layout = coalesce(other.thr_layout())
         return left_thr_layout == right_thr_layout and self.val_layout() == other.val_layout()
+
+
+def canonicalize(a: TensorLayout):
+    stride = canonicalize_uni_shape(a.shape, a.stride)
+    return TensorLayout(a.shape, stride)
