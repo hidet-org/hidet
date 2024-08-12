@@ -70,6 +70,7 @@ from hidet.ir.cute import (
     coalesce,
     make_layout,
     complement,
+    canonicalize,
     CopyAtom,
     TiledCopy,
     ThrValAtom,
@@ -738,6 +739,7 @@ class TileDerivation(GraphVisitor):
                                 TensorLayout(tuple(reversed(result_shape)), tuple(reversed(result_stride)))
                             )
                             layout = composition(tile_mapping, output_layout)
+                            layout = canonicalize(layout)
                             # assert all(is_constant(s) for s in output_shape)
                             self.tensor2tile[ti] = (self._tile_divide(layout), layout, tuple(output_shape))
             else:

@@ -48,6 +48,7 @@ from .layout import (
     logical_product,
     logical_divide,
     make_layout,
+    canonicalize,
 )
 from .layout import ThrValAtom, Level
 from .algorithm import CopyAtom, TiledCopy

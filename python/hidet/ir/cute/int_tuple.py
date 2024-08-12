@@ -377,6 +377,25 @@ def filter_zeros(a, b):
         return 1 if is_constant(a) and a == 0 else b
 
 
+def canonicalize_uni_shape(a, b):
+    """
+    Replace the elements of Tuple b that are paired with an 1-shape with an
+    0-stride
+
+    Example:
+    a = ((3, 4), 1)
+    b = ((1, 3), 1)
+    =>
+    b = ((1, 3), 0)
+    """
+    if isinstance(a, tuple):
+        assert isinstance(b, tuple) and len(b) == len(a)
+        return tuple(canonicalize_uni_shape(x, y) for x, y in zip(a, b))
+    else:
+        assert is_integer(a)
+        return 0 if is_constant(a) and a == 1 else b
+
+
 def is_static(a):
     if isinstance(a, int):
         return True

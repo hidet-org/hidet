@@ -76,3 +76,39 @@ def test_pattern():
     np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")
+
+
+def test_longformer_issue404():
+    args = [1, 2304, 768, 512]
+
+    def graph(a, b, bias):
+        c = a @ b
+        c = c + bias
+        return c
+
+    M, N, K, L = args
+    graph_args = data(*args)
+
+    import torch._dynamo as dynamo
+
+    options = {"triton.cudagraphs": False, "epilogue_fusion": True, "max_autotune": True}
+    D = graph(*graph_args)
+    graph_opt = torch.compile(graph, options=options)
+    D_opt = graph_opt(*graph_args)
+    np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+    np.testing.assert_allclose(actual=D_opt.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+
+    torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
+    print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
+
+    hidet.torch.dynamo_config.reset()
+    hidet.torch.dynamo_config.parallel_k(strategy="disabled")
+
+    D = graph(*graph_args)
+    dynamo.reset()
+    graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
+    D_hidet = graph_hidet(*graph_args)
+    np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+    np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
+    print(f"hidet(torch.compile): {hidet_mean} ms")
