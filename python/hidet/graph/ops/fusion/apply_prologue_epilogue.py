@@ -1907,11 +1907,11 @@ def apply_prologue_epilogue_batch(
         return apply_prologue_epilogue(*args)
 
     jobs = [(m, fused_task, target, working_dir) for m in anchor_modules]
-    if len(jobs) == 1:
-        fused_modules: List[IRModule] = [apply_prologue_epilogue(*jobs[0])]
-    else:
+    max_num_worker, _, _ = hidet.option.get_parallel_tune()
+    if max_num_worker != 1 and len(jobs) > 1:
         fused_modules: List[IRModule] = list(
             tqdm(parallel_imap(_apply_prologue_epilogue_batch, jobs), desc='Appling fusing', total=len(jobs), ncols=80)
         )
-
+    else:
+        fused_modules: List[IRModule] = [apply_prologue_epilogue(*j) for j in jobs]
     return fused_modules
