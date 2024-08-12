@@ -40,7 +40,20 @@ from .compare import logical_not, logical_and, logical_or, logical_xor
 from .quant import symmetric_quantize, symmetric_dequantize
 from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .cumulative import cumsum
-from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape, im2col
+from .transform import (
+    squeeze,
+    unsqueeze,
+    flatten,
+    concat,
+    cast,
+    take,
+    rearrange,
+    strided_slice,
+    reshape,
+    im2col,
+    as_strided,
+    flip,
+)
 from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather, index_select, triu, tril
 from .transform import permute_dims, meshgrid, repeat_interleave
 from .fusion import fused_operator

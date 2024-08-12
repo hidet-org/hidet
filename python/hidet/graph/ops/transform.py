@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence
+from typing import List, Optional, Tuple, Union, Sequence
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
@@ -449,6 +449,54 @@ class Im2ColTask(Task):
         )
 
 
+class AsStridedTask(Task):
+    def __init__(
+        self,
+        x: TensorNode,
+        size: Union[int, List[int]],
+        stride: Union[int, List[int]],
+        storage_offset: Optional[int] = None,
+    ):
+        def unravel_index(index, shape):
+            out = []
+            for s in reversed(shape):
+                out.append(index % s)
+                index = index // s
+            return list(reversed(out))
+
+        storage_shift = storage_offset if storage_offset is not None else 0
+
+        def fmap(*indices):
+            stride1d = 0
+            for i, s in zip(indices, stride):
+                stride1d += i * s
+            stride1d += storage_shift
+
+            new_indices = unravel_index(stride1d, x.shape)
+            return x[new_indices]
+
+        out = compute(name='out', shape=size, fcompute=fmap)
+
+        super().__init__(
+            name='as_strided',
+            inputs=[x],
+            attributes={'size': size, 'stride': stride, 'storage_offset': storage_offset},
+            outputs=[out],
+        )
+
+
+class FlipTask(Task):
+    def __init__(self, x: Tensor, dims: Union[List[int], Tuple[int]]):
+        def fmap(*indices):
+            idx = []
+            for i in range(len(indices)):
+                idx.append(if_then_else(i in dims, x.shape[i] - indices[i] - 1, indices[i]))
+            return x[idx]
+
+        out = compute(name='out', shape=x.shape, fcompute=fmap)
+        super().__init__(name='flip', inputs=[x], attributes={'dims': dims}, outputs=[out])
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
@@ -642,6 +690,26 @@ class Im2ColOp(Operator):
             attributes={'kernel_size': kernel_size, 'dilation': dilation, 'padding': padding, 'stride': stride},
             task=Im2ColTask(input_like(x, 'x'), kernel_size, dilation, padding, stride),
         )
+
+
+class AsStridedOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        size: Union[int, List[int]],
+        stride: Union[int, List[int]],
+        storage_offset: Optional[int] = None,
+    ):
+        super().__init__(
+            inputs=[x],
+            attributes={'size': size, 'stride': stride, 'storage_offset': storage_offset},
+            task=AsStridedTask(input_like(x, 'x'), size, stride, storage_offset),
+        )
+
+
+class FlipOp(Operator):
+    def __init__(self, x: Tensor, dims: Union[List[int], Tuple[int]]):
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=FlipTask(input_like(x, 'x'), dims))
 
 
 def reshape(x: Tensor, shape) -> Tensor:
@@ -917,3 +985,13 @@ def im2col(
     if nd == 3:
         return x.squeeze(0)
     return x
+
+
+def as_strided(
+    x: Tensor, size: Union[int, List[int]], stride: Union[int, List[int]], storage_offset: Optional[int] = None
+):
+    return AsStridedOp(x, size, stride, storage_offset).outputs[0]
+
+
+def flip(x: Tensor, dims: Union[List[int], Tuple[int]]):
+    return FlipOp(x, dims).outputs[0]

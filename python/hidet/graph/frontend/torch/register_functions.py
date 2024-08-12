@@ -558,6 +558,7 @@ def interpolate(
     )
 
 
+@register_function(operator.itruediv)
 @register_function(operator.truediv)
 @register_function(torch.true_divide)
 @register_method(torch.Tensor.true_divide)
@@ -568,6 +569,8 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     def is_integer(v: Union[Tensor, int, float]) -> bool:
         return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
+    if not isinstance(x, Tensor) and not isinstance(y, Tensor):
+        return x / y
     if is_integer(x) and is_integer(y):
         if isinstance(y, (int, float)):
             y = hidet.asarray(y).to(device=x.device)
@@ -589,8 +592,23 @@ def div(x: Tensor, y: Tensor, *, rounding_mode: Optional[str] = None, out=None):
     elif rounding_mode == 'floor':
         return ops.floor(result)
     else:
-        assert rounding_mode == 'trunc'
-        raise NotImplementedError("torch.div(..., rounding_mode='trunc') is currently not supported by Hidet")
+        assert rounding_mode == 'trunc', 'rounding_mode should be one of "floor" or "trunc"'
+        if isinstance(result, Tensor):
+            dtype = result.dtype
+            result = result.to(dtype='int64')
+            return result.to(dtype=dtype)
+        else:
+            if isinstance(x, float) or isinstance(y, float):
+                return float(int(result))
+            return int(result)
+
+
+@register_function(torch.as_strided)
+@register_method(torch.Tensor.as_strided)
+def torch_as_strided(
+    input: Tensor, size: Union[int, Tuple[int]], stride: Union[int, Tuple[int]], storage_offset: Optional[int] = None
+):
+    return ops.as_strided(input, size, stride, storage_offset)
 
 
 @register_function(operator.sub)
@@ -1771,8 +1789,8 @@ def torch_einsum(equation, *operands):
 
 
 @register_function(torch.triu)
-@register_function(torch.Tensor.triu)
-@register_function(torch.Tensor.triu_)
+@register_method(torch.Tensor.triu)
+@register_method(torch.Tensor.triu_)
 def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.triu(..., out=...)")
@@ -1780,8 +1798,8 @@ def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
 
 
 @register_function(torch.tril)
-@register_function(torch.Tensor.tril)
-@register_function(torch.Tensor.tril_)
+@register_method(torch.Tensor.tril)
+@register_method(torch.Tensor.tril_)
 def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.tril(..., out=...)")
@@ -1857,6 +1875,12 @@ def torch_t(input: Tensor):
 def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) -> Tensor:
     assert 3 <= len(input.shape) <= 4, "torch.nn.functional.unfold accepts 3D or 4D tensor only"
     return ops.im2col(input, kernel_size, dilation, padding, stride)
+
+
+@register_function(torch.flip)
+@register_method(torch.Tensor.flip)
+def torch_unfold(input: Tensor, dims) -> Tensor:
+    return ops.flip(input, dims)
 
 
 @register_function(torch.sign)

@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence
+from typing import List, Sequence, Tuple
 from hidet.graph.ops import permute_dims, reshape
 from .utils import Tensor
 from .matmul import matmul
@@ -346,6 +346,8 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
 
 # Do ad-hoc pattern matching: only support simple cases such as matrix multiply
 def einsum(equation: str, operands: Sequence[Tensor]):
+    if isinstance(operands[0], (Tuple, List)):
+        operands = operands[0]
     if len(operands) != 2:
         raise NotImplementedError('einsum currently only supports 2 operands')
 

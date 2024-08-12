@@ -433,5 +433,29 @@ def test_unfold(shape, kernel_size, dilation, padding, stride):
     )
 
 
+@pytest.mark.parametrize(
+    "shape, size, stride, storage_offset",
+    [
+        ([1, 3, 10, 10], [10, 10], [1, 2], 0),
+        ([3, 44, 41], [20, 3], [1, 1], 5),
+        ([3, 1, 45, 33], [30, 40], [5, 2], 6),
+        ([4, 10, 13], [7, 13, 2], [2, 3, 1], 0),
+    ],
+)
+def test_as_strided(shape, size, stride, storage_offset):
+    check_transform_torch(
+        shape,
+        lambda x: torch.as_strided(x, size, stride, storage_offset),
+        lambda x: ops.as_strided(x, size, stride, storage_offset),
+    )
+
+
+@pytest.mark.parametrize(
+    "shape, dims", [([1, 3, 10, 10], [1, 0]), ([3, 44, 41], [0]), ([3, 1, 45, 33], [0, 1, 2, 3]), ([4, 10, 13], [2, 0])]
+)
+def test_flip(shape, dims):
+    check_transform_torch(shape, lambda x: torch.flip(x, dims), lambda x: ops.flip(x, dims))
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
