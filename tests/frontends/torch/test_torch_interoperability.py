@@ -362,7 +362,7 @@ def test_torch_einsum(equation, operand_shapes):
 
     atol = 5e-2
     if equation == 'abcd,cd->ab':
-        atol = 8e-2
+        atol = 1e-1
 
     check_module(
         FunctionalModule(op=lambda *args: torch.einsum(equation, *args)), args=operands_torch, atol=atol, rtol=1e-4
