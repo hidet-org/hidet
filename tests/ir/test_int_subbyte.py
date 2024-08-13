@@ -11,6 +11,7 @@
 # limitations under the License.
 import pytest
 
+import torch
 import hidet
 
 
@@ -120,6 +121,29 @@ def test_int_2bit():
 
     groundtruth = np.resize(np.arange(-2, 2), (2, 2)).astype(np.float32)
     np.testing.assert_equal(data.cpu().numpy(), groundtruth)
+
+
+def test_write_int4_to_global_memory():
+    from hidet.lang import attrs
+    from hidet.lang.cuda import threadIdx
+    from hidet.ir.dtypes import int4b, uint4b
+
+    with hidet.script_module() as script_module:
+
+        @hidet.script
+        def kernel(d: ~uint4b):
+            attrs.func_kind = 'cuda_kernel'
+            attrs.cuda.grid_dim = 1
+            attrs.cuda.block_dim = 32
+
+            i = threadIdx.x
+            if i < 8:
+                d[i] = uint4b(i % 0xF)
+
+    func = script_module.build()
+    d_int32 = torch.empty([1], dtype=torch.int32, device='cuda')
+    func(d_int32)
+    assert d_int32.item() == 0x76543210
 
 
 if __name__ == "__main__":
