@@ -33,6 +33,7 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
             'acosh': 'acoshf',
             'atanh': 'atanhf',
             'exp': '__expf',  # fast math
+            'exp2': 'exp2f',
             'erf': 'erff',
             'sqrt': 'sqrtf',
             'rsqrt': 'rsqrtf',
@@ -80,6 +81,9 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
 
     def exp(self, a: Expr) -> Expr:
         return self.call('exp', a)
+
+    def exp2(self, a: Expr) -> Expr:
+        return self.call('exp2', a)
 
     def erf(self, a: Expr) -> Expr:
         return self.call('erf', a)
