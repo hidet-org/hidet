@@ -10,14 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=line-too-long
-from typing import Optional
+from typing import Optional, Union
 from hidet.utils import initialize
 from hidet.ir.expr import Constant, Expr
 from hidet.ir.stmt import asm
 from hidet.ir.func import Function
-from hidet.ir.primitives.func import register_primitive_function
+from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.ir.primitives.cuda.funcs import call_cuda
-from hidet.lang import script, i32, u32, u64, attrs
+from hidet.lang import script, i32, u32, u64, int32, attrs
 
 
 @initialize()
@@ -233,6 +233,36 @@ def register_mbarrier():
     register_primitive_function(name=cuda_cp_async_barrier_arrive.name, func_or_type=cuda_cp_async_barrier_arrive)
 
 
+@initialize()
+def register_barrier():
+    for aligned in [False, True]:
+        for mode in ['arrive', 'sync', 'sync_all']:
+            func_name = 'barrier_{}{}'.format(mode, '_aligned' if aligned else '')
+
+            if mode == 'sync_all':
+                template = 'barrier.sync{} %0;'.format('.aligned' if aligned else '')
+
+                @script
+                def barrier_func(barrier: int32):
+                    attrs.func_kind = 'cuda_internal'
+                    attrs.func_name = func_name
+
+                    asm(template, inputs=[barrier], is_volatile=True)
+
+            else:
+                template = 'barrier.sync{} %0, %1;'.format('.aligned' if aligned else '')
+
+                @script
+                def barrier_func(barrier: int32, count: int32):
+                    attrs.func_kind = 'cuda_internal'
+                    attrs.func_name = func_name
+
+                    asm(template, inputs=[barrier, count], is_volatile=True)
+
+            assert isinstance(barrier_func, Function)
+            register_primitive_function(name=barrier_func.name, func_or_type=barrier_func)
+
+
 def mbarrier_init(mbar: Expr, arrive_count: Expr):
     """
     Init a barrier
@@ -346,3 +376,65 @@ def cp_async_barrier_arrive(mbar: Expr):
     cp async barrier arrive
     """
     return call_cuda('cp_async_barrier_arrive', [mbar])
+
+
+def _barrier(barrier: Union[int, Expr], count: Optional[Union[int, Expr]], aligned: bool, mode: str):
+    # resolve function name
+    func_name = 'barrier_{}{}'.format(mode, '_aligned' if aligned else '')
+
+    # call the function
+    args = [barrier]
+    if count is not None:
+        args.append(count)
+    return call_primitive_func(func_name, args=args)
+
+
+def barrier_sync(barrier: Union[int, Expr], count: Optional[Union[int, Expr]] = None, aligned: bool = False):
+    """
+    Performs barrier synchronization and communication within a CTA.
+
+    The threads will synchronize at the named barrier.
+
+    See Also
+    --------
+    The PTX ISA documentation for the `barrier` instruction:
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar-barrier
+
+    Parameters
+    ----------
+    barrier:
+        The named barrier to synchronize on. This must be an integer from 0 to 15.
+
+    count: Optional[int]
+        The number of threads to synchronize. If not provided, all threads in the CTA will synchronize.
+
+    aligned:
+        When specified, it indicates that all threads in CTA will execute the same barrier instruction.
+    """
+    mode = 'sync_all' if count is None else 'sync'
+    return _barrier(barrier, count, aligned, mode=mode)
+
+
+def barrier_arrive(barrier: Union[int, Expr], count: Union[int, Expr], aligned: bool = False):
+    """
+    Performs barrier synchronization and communication within a CTA.
+
+    The threads will mark their arrival at the named barrier but will not be blocked.
+
+    See Also
+    --------
+    The PTX ISA documentation for the `barrier` instruction:
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar-barrier
+
+    Parameters
+    ----------
+    barrier: Union[int, Expr]
+        The named barrier to synchronize on. This must be an integer from 0 to 15.
+
+    count: Union[int, Expr]
+        The number of threads to synchronize.
+
+    aligned: bool
+        When specified, it indicates that all threads in CTA will execute the same barrier instruction.
+    """
+    return _barrier(barrier, count, aligned, mode='arrive')
