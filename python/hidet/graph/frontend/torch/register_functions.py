@@ -1879,6 +1879,11 @@ def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) ->
     return ops.im2col(input, kernel_size, dilation, padding, stride)
 
 
+@register_method(torch.Tensor.scatter_add_)
+def torch_scatter_add_(input: Tensor, dim: int, index: Tensor, src: Tensor):
+    return ops.scatter_add_(input, dim, index, src)
+
+
 @register_function(torch.flip)
 @register_method(torch.Tensor.flip)
 def torch_unfold(input: Tensor, dims) -> Tensor:

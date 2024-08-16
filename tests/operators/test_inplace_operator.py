@@ -1,9 +1,12 @@
+import pytest
+
 import hidet
 from hidet.ir.task import Task
 from hidet.ir import primitives
 from hidet.ir.dtypes import float32
 from hidet.runtime import CompiledGraph
 from hidet.graph.ops.utils import input_like, Operator, Tensor, compute, TensorInput
+import torch
 
 
 class InplaceReLUTask(Task):
@@ -44,5 +47,27 @@ def test_inplace_relu():
     hidet.utils.assert_close(y1, yy)
 
 
+@pytest.mark.parametrize(
+    "input_shape,index_shape,src_shape,dim",
+    [[(22, 33), (11, 11), (11, 11), 0], [(257, 256), (128, 128), (128, 128), 1]],
+)
+def test_inplace_scatter_add(input_shape, index_shape, src_shape, dim):
+    input_tensor = torch.randint(0, 3, input_shape).to(dtype=torch.float32).cuda()
+
+    index_tensor = torch.randint(0, input_shape[dim], index_shape).cuda()
+
+    src = torch.randint(0, 10, src_shape).to(dtype=torch.float32).cuda()
+
+    input_hidet = hidet.from_torch(input_tensor.clone())
+    index_hidet = hidet.from_torch(index_tensor.clone())
+    src_hidet = hidet.from_torch(src.clone())
+
+    output_torch = input_tensor.scatter_add_(dim, index_tensor, src)
+    output_hidet = hidet.ops.scatter_add_(input_hidet, dim, index_hidet, src_hidet)
+
+    hidet.utils.assert_close(output_hidet, output_torch)
+    hidet.utils.assert_close(input_hidet, input_tensor)
+
+
 if __name__ == '__main__':
-    test_inplace_relu()
+    pytest.main([__file__])

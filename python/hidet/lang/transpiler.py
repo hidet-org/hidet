@@ -115,7 +115,7 @@ class PythonAstFunctor:
         if hasattr(self, method):
             visitor = getattr(self, method)
         else:
-            msg = 'The AST node {} does not support in HidetScript.'.format(node.__class__.__name__)
+            msg = 'The AST node {} is not supported in HidetScript.'.format(node.__class__.__name__)
             raise HidetProgramError(self, node, msg)
 
         try:
