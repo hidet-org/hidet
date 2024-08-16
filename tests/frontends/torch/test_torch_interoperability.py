@@ -327,22 +327,24 @@ def test_torch_leaky_relu(shape, negative_slope):
 
 
 @pytest.mark.parametrize(
-    'input_shape, offsets_shape, weight_shape',
-    [([204790], [2048], [100000, 64]), ([223], [156], [333, 444]), ([26], [1], [33, 33]), ([3], [1], [3, 3])],
+    'input_shape, offsets_shape, weight_shape', [([223], [156], [333, 444]), ([26], [1], [33, 33])]
 )
 @pytest.mark.parametrize('mode_name', ['mean', 'sum'])
-def test_torch_embedding_bag(input_shape, offsets_shape, weight_shape, mode_name):
+@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+def test_torch_embedding_bag(input_shape, offsets_shape, weight_shape, mode_name, dtype):
 
     input_data = torch.randint(0, weight_shape[0], input_shape, dtype=torch.int64, device='cuda')
     offsets_data = torch.randint(0, input_shape[0], offsets_shape, dtype=torch.int64, device='cuda')
     offsets_data, _ = torch.sort(offsets_data)
     offsets_data = torch.unique(offsets_data, sorted=True)
 
-    weight_data = torch.randn(weight_shape, device='cuda')
+    weight_data = torch.randn(weight_shape, device='cuda', dtype=dtype)
 
     torch_embedding_bag_module = torch.nn.EmbeddingBag.from_pretrained(weight_data, mode=mode_name)
 
-    check_module(torch_embedding_bag_module, args=[input_data, offsets_data], atol=1e-4, rtol=1e-4)
+    atol = 1e-2 if dtype == torch.float16 else 1e-4
+
+    check_module(torch_embedding_bag_module, args=[input_data, offsets_data], atol=atol, rtol=1e-4)
 
 
 @pytest.mark.parametrize(

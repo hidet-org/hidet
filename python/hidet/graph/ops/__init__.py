@@ -62,5 +62,6 @@ from .special import barrier
 from .distributed import all_reduce, all_gather, reduce_scatter
 from .linear import einsum
 from .embedding_bag import embedding_bag
+from .scatter import scatter_add_
 
 from . import utils

@@ -34,14 +34,14 @@ class EmbeddingBagOp(OpaqueOperator):
             attributes={'mode': mode},
         )
 
-        assert input.dtype == int64, "EmbeddingBag: expected `input` to be LongTensor"
-        assert offsets.dtype == int64, "EmbeddingBag: expected `offsets` to be LongTensor"
-        assert weight.dtype == float32, "EmbeddingBag: expected `weight` to be FloatTensor"
+        assert input.dtype.is_integer(), "EmbeddingBag: expected `input` to be LongTensor"
+        assert offsets.dtype.is_integer(), "EmbeddingBag: expected `offsets` to be LongTensor"
+        assert weight.dtype.is_float(), "EmbeddingBag: expected `weight` to be FloatTensor"
 
         assert len(input.shape) == 1, "EmbeddingBag: Hidet only supports 1D input tensors for the time being."
         assert len(offsets.shape) == 1, "EmbeddingBag: `offsets` shape must be 1D."
-        assert input.dtype == int64, "EmbeddingBag: expected `input` to be LongTensor"
-        assert offsets.dtype == int64, "EmbeddingBag: expected `offsets` to be LongTensor"
+        assert input.dtype.is_integer(), "EmbeddingBag: expected `input` to be LongTensor"
+        assert offsets.dtype.is_integer(), "EmbeddingBag: expected `offsets` to be LongTensor"
 
         if mode == 'sum':
             self.mode = 0
@@ -61,21 +61,26 @@ class EmbeddingBagOp(OpaqueOperator):
     @tune.space(1)
     def schedule_cuda(self) -> IRModule:
 
-        num_indices = self.inputs[0].shape[0]
-        nbags = self.inputs[2].shape[0]
-        weight_nrows, feature_size = self.inputs[1].shape
+        indices, weight, offsets = self.inputs
+        num_indices = indices.shape[0]
+        nbags = offsets.shape[0]
+        weight_nrows, feature_size = weight.shape
         reduction_mode = self.mode
         weight_stride0 = feature_size
         weight_stride1 = 1
+
+        weight_dtype = weight.dtype
+        index_dtype = indices.dtype
+        offset_dtype = offsets.dtype
 
         with hidet.script_module() as script_module:
 
             @hidet.script
             def embedding_bag_kernel_sum_mean(
-                inputs: ~int64,
-                weight: ~float32,
-                offsets: ~int64,
-                output: ~float32,
+                inputs: ~index_dtype,
+                weight: ~weight_dtype,
+                offsets: ~offset_dtype,
+                output: ~weight_dtype,
                 num_indices: int64,
                 num_bags: int64,
                 feature_size: int64,
@@ -131,7 +136,7 @@ class EmbeddingBagOp(OpaqueOperator):
                     chunk += chunk_stride
 
             @hidet.script
-            def launch(input: ~int64, weight: ~float32, offsets: ~int64, output: ~float32):
+            def launch(input: ~index_dtype, weight: ~weight_dtype, offsets: ~offset_dtype, output: ~weight_dtype):
                 attrs.func_kind = 'public'
                 embedding_bag_kernel_sum_mean(
                     input,
