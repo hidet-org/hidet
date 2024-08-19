@@ -113,7 +113,7 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
         latency, hidet_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
         del model
 
-    torch.testing.assert_close(torch_output, hidet_output, rtol=0, atol=0)
+    torch.testing.assert_close(hidet_output, torch_output, rtol=0, atol=0)
     return latency
 
 
@@ -137,10 +137,9 @@ def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode):
     with torch.no_grad(), torch.autocast("cuda"):
         torch_output = model(inputs)
         model = comp_backend.compile(model)
-        latency, output = bench_torch_model(model, [inputs])
+        latency = bench_torch_model(model, [inputs], true_outputs=torch_output)
         del model
 
-    torch.testing.assert_close(torch_output, output, rtol=0.2, atol=0.2)
     return latency
 
 
