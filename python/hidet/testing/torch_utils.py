@@ -105,10 +105,13 @@ class Backend:
 
 
 # Make benchmarking of given torch model
-def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
+def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
     for _ in range(warmup_iters):
-        out = model(*torch_inputs)  # pylint:disable=unused-variable
+        outs = model(*torch_inputs)  # pylint:disable=unused-variable
     torch.cuda.empty_cache()
+
+    if true_outputs is not None:
+        torch.testing.assert_close(outs, true_outputs, rtol=0.2, atol=0.2)
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -120,7 +123,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
 
     start = time.time_ns()
     for _ in range(bench_iters):
-        out = model(*torch_inputs)  # pylint:disable=unused-variable
+        _ = model(*torch_inputs)  # pylint:disable=unused-variable
     torch.cuda.synchronize()
     end = time.time_ns()
 
@@ -130,7 +133,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     torch.cuda.empty_cache()
 
     latency = (end - start) / bench_iters / 10**6
-    return latency, out
+    return latency
 
 
 def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
