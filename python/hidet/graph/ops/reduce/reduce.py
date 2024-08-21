@@ -47,15 +47,23 @@ class ReduceTask(Task):
 
     def allow_epilogue(self) -> bool:
         rank = len(self.inputs[0].shape)
-        if rank - 1 in self.dims:  # pylint: disable=simplifiable-if-statement
+        if rank - 1 in self.dims:
             # use self.cuda_schedule_reduce_by_warp
             return True
         else:
             # use self.cuda_schedule_reduce_by_default
-            return False
+            nbytes = self.inputs[0].type.dtype.nbytes
+            if nbytes == 4:  # pylint: disable=simplifiable-if-statement
+                return True
+            else:
+                return False
 
     def allow_prologue(self) -> bool:
-        return False
+        nbytes = self.inputs[0].type.dtype.nbytes
+        if nbytes == 4:  # pylint: disable=simplifiable-if-statement
+            return True
+        else:
+            return False
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         rank = len(self.inputs[0].shape)
@@ -138,7 +146,10 @@ class ReduceTask(Task):
 
                 smem_staging = dynamic_shared_memory(byte_offset=0, dtype=accumulate_dtype)
                 rv = ro.initial_value(data_type(accumulate_dtype))
-                x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
+                if lanes == 1:
+                    x_vectorized = x
+                else:
+                    x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
 
                 # initialize staging shared memory
                 if perform_atomic_reduce:
@@ -291,8 +302,12 @@ class ReduceTask(Task):
                 attrs.cuda.min_blocks = 1
                 attrs.cuda.dynamic_smem_bytes = smem_needed
 
-                x_vectorized = tensor_pointer(vtype, shape=x_vectorized_shape, init=cast(x, ~vtype))
-                y_vectorized = tensor_pointer(vtype, shape=y_vectorized_shape, init=cast(y, ~vtype))
+                if lanes == 1:
+                    x_vectorized = x
+                    y_vectorized = y
+                else:
+                    x_vectorized = tensor_pointer(vtype, shape=x_vectorized_shape, init=cast(x, ~vtype))
+                    y_vectorized = tensor_pointer(vtype, shape=y_vectorized_shape, init=cast(y, ~vtype))
                 rv = register_tensor(accumulate_dtype, [lanes])
                 for lane_id in grid(lanes, "u+"):
                     rv[lane_id] = ro.initial_value(accumulate_dtype)
