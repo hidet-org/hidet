@@ -81,8 +81,8 @@ def get_full_model_name(model_name):
     return short_to_full_model_name[model_name]
 
 
-def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
-    comp_backend = Backend(backend, mode, dtype)
+def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode, cache):
+    comp_backend = Backend(backend, mode, dtype, cache)
 
     dtype = getattr(torch, dtype)
     model_name = get_full_model_name(model_name)
@@ -103,7 +103,7 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode):
     END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     with torch.no_grad(), torch.autocast("cuda"):
-        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen, bench_iters=1, warmup_iters=0)
+        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
         # Temporary workaround for gpt-j
         # gpt-j initializes tensors during the first forwasd pass
         # which causes recompilation during the second forward pass
@@ -159,9 +159,11 @@ if __name__ == '__main__':
     parser.add_argument('--dtype', type=str, default='float16', help='Specify precision. E.g., float32')
     parser.add_argument('--backend', type=str, default='hidet', help='torch.compile backend')
     parser.add_argument('--mode', type=str, default='max-autotune', help='torch.compile mode')
+    parser.add_argument('--cache', type=str, default='', help='')
+
     args = parser.parse_args()
 
-    model_name, dtype, backend, mode = args.model, args.dtype, args.backend, args.mode
+    model_name, dtype, backend, mode, cache = args.model, args.dtype, args.backend, args.mode, args.cache
 
     seqlen = SEQLEN_DEFAULT
     bs = BS_DEFAULT
@@ -179,6 +181,8 @@ if __name__ == '__main__':
     if model_class[get_full_model_name(model_name)] == 'AutoModelForMaskedLM':
         latency = bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode)
     elif model_class[get_full_model_name(model_name)] == 'AutoModelForCausalLM':
-        latency = bench_causal_lm(model_name, bs=bs, genlen=genlen, dtype=dtype, backend=backend, mode=mode)
+        latency = bench_causal_lm(
+            model_name, bs=bs, genlen=genlen, dtype=dtype, backend=backend, mode=mode, cache=cache
+        )
 
     print(latency)

@@ -215,6 +215,9 @@ class PrologueEpilogueExtractor(IRRewriter):
         # extract epilogues
         epilogues: Dict[Tensor, Epilogue] = {}
         for task_output, tensor in zip(self.anchor_task.outputs, self.anchor_operator.outputs):
+            if self.tensor_map[task_output] in self.graph.outputs:
+                # this output does not have a epilogue, skip
+                continue
             axes = [var('i') for _ in range(len(task_output.shape))]
             value = var('value', task_output.type.dtype)
             bss = BufferStoreStmt(buf=task_output, indices=axes, value=value)
