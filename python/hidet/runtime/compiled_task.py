@@ -154,12 +154,20 @@ class CompiledTask:
             if idx not in self.meta_data.share_map:
                 outputs.append(hidet.empty(shape, sig.dtype, sig.device))
             else:
-                input_tensor = hidet.Tensor(
-                    shape=shape,
-                    dtype=sig.dtype,
-                    device=sig.device,
-                    storage=inputs[self.meta_data.share_map[idx]].storage,
-                )
+                shared_tensor = inputs[self.meta_data.share_map[idx]]
+                if not isinstance(shared_tensor, hidet.Tensor):
+                    import torch
+
+                    assert isinstance(shared_tensor, torch.Tensor), "Unknown tensor type"
+                    tensor_dtype = getattr(torch, sig.dtype)
+
+                    # we need to turn the tensor into a view with the graph output's shape & dtype
+                    input_tensor = shared_tensor.view(*shape).view(tensor_dtype)
+                else:
+                    input_tensor = hidet.Tensor(
+                        shape=shape, dtype=sig.dtype, device=sig.device, storage=shared_tensor.storage
+                    )
+
                 outputs.append(input_tensor)
         return outputs
 
@@ -254,9 +262,27 @@ class CompiledTask:
         latency: List[float]
             The measured latency in milliseconds. The length of the list is equal to `repeat`.
         """
-        num_outputs = len(self.meta_data.outputs)
-        inputs = args[:num_outputs]
-        outputs = args[num_outputs:]
+
+        num_inputs = len(self.meta_data.inputs)
+        inputs = args[:num_inputs]
+        outputs = args[num_inputs:]
+
+        # For operators like scatter_add_, if we run it multiple times on the same input & output tensors,
+        # the input and output tensors will be wrong as they will be wrongly updated multiple times.
+        # to avoid this, make a clone of the output tensors if they share the memory with some input tensors.
+        if len(self.meta_data.share_map) > 0:
+            from hidet import Tensor
+
+            outputs = list(outputs)
+            inputs = list(inputs)
+            for output_idx in self.meta_data.share_map:
+                original_output = outputs[output_idx]
+                if isinstance(original_output, Tensor):
+                    outputs[output_idx] = original_output.copy()
+                else:
+                    outputs[output_idx] = original_output.clone()
+                args = inputs + outputs
+
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         return candidate.profile(*args, warmup=warmup, number=number, repeat=repeat)
 

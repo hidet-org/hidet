@@ -54,7 +54,7 @@ class ScatterBaseOp(OpaqueOperator):
         super().__init__(
             name=f'scatter_{fname}_dim_{dim}{"_inplace" if inplace else ""}',
             inputs={'input': input, 'index': index, 'src': src},
-            attributes={'dim': dim, 'fname': fname},
+            attributes={'dim': dim, 'fname': fname, 'inplace': inplace},
             share_map=share_map,
         )
 
@@ -130,7 +130,7 @@ class ScatterBaseOp(OpaqueOperator):
 
                 linear_idx = work_per_block * blockIdx.x + threadIdx.x
 
-                assert input == out
+                _ = input
 
                 work_i = 0
                 while work_i < work_per_thread:
