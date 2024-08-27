@@ -371,5 +371,26 @@ def test_torch_einsum(equation, operand_shapes):
     )
 
 
+def test_scatter_add_compile():
+    # This operator was already tested in tests/operators/test_inplace_operator.py.
+    # Just to add one more additional test here to ensure the bug mentioned in #429 is gone.
+    input_tensor = torch.zeros((6, 6), dtype=torch.float32, device='cuda')
+
+    index_tensor = torch.tensor([[4, 1, 4, 4, 2], [0, 1, 4, 5, 2], [5, 1, 3, 4, 2]]).to(dtype=torch.int64).cuda()
+
+    input_tensor_clone = input_tensor.clone()
+    src = torch.tensor([[0, 5, 3, 6, 5], [9, 6, 8, 8, 4], [7, 4, 5, 4, 7]]).to(dtype=torch.float32).cuda()
+
+    dim = 1
+
+    check_module(
+        FunctionalModule(op=lambda x, y, z: x.scatter_add_(dim, y, z)),
+        args=[input_tensor_clone, index_tensor, src],
+        atol=0,
+        rtol=0,
+        dynamic=False,
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
