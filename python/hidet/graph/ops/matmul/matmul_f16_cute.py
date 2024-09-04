@@ -189,6 +189,8 @@ class MatmulF16CuteTask(Task):
                 and mma == 'm16n8k16'
             )
             tune.check(schedule_filter)
+            # Don't know how to convert the matmuls with parallel_k opt to batched matmul, so we disable it here.
+            tune.check(k_parts == 1)
             return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type)
 
         # schedule parameters
