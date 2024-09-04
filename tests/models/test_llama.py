@@ -11,8 +11,12 @@
 # limitations under the License.
 # %%
 import pytest
+import torch
+from torch import nn
+from transformers.activations import ACT2FN
 from hidet.testing.models.llama import get_compiled_model, generate, convert_model
 from hidet.runtime.storage import current_memory_pool
+from hidet.testing.torch_utils import Backend
 
 
 # @pytest.mark.parametrize('device,opt', [('cuda', True)])
@@ -125,3 +129,32 @@ def test_model_architecture():
     logits1 = res1.logits
     logits2 = res2.torch()
     assert torch.allclose(logits1, logits2, rtol=1e-3, atol=1e-3)
+
+
+class LlamaMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.hidden_size = 4096
+        self.intermediate_size = 11008
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+
+    def forward(self, x):
+        down_proj = self.down_proj(self.gate_proj(x) * self.up_proj(x))
+        return down_proj
+
+
+def test_llama_issue419():
+    # hidet.option.cache_dir("./llama")
+    # hidet.option.debug_cache_tuning()
+    model = LlamaMLP().cuda().to(torch.float16)
+
+    x = torch.randn(1, 143, 4096, dtype=torch.float16, device='cuda')
+    with torch.inference_mode(True):
+        y_true = model(x)
+        backend = Backend(backend='hidet', mode='max-autotune', dtype='float16')
+        model = backend.compile(model)
+        y_ac = model(x)
+
+    torch.testing.assert_close(y_true, y_ac, rtol=0.001, atol=0.001)
