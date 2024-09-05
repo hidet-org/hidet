@@ -16,6 +16,7 @@ from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.ops.special import BarrierOp
 from hidet.graph.ops.transfer import TransferOp
 from hidet.graph.ops.distributed import AllReduceOp
+from hidet.graph.ops.opaque import OpaqueOperator
 from hidet.graph.graph_utils.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
@@ -25,7 +26,8 @@ from hidet.utils.py import unique
 
 
 # the following operators are not fusible
-NOT_FUSIBLE = {BarrierOp, TransferOp, AllReduceOp}
+# i.e., are not allowed to be fused as prologue/epilogue of other operators.
+NOT_FUSIBLE = (BarrierOp, TransferOp, AllReduceOp, OpaqueOperator)
 
 
 class FusibleGraph:
@@ -79,7 +81,7 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
             # this anchor operator does not allow epilogue fusion, skip
             continue
 
-        if type(anchor) in NOT_FUSIBLE:
+        if isinstance(anchor, NOT_FUSIBLE):
             # for operator are not fusible, skip
             continue
 
@@ -99,7 +101,7 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                     # this tensor is an output of flow graph, skip
                     continue
 
-                if type(user) in NOT_FUSIBLE:
+                if isinstance(user, NOT_FUSIBLE):
                     # for operator are not fusible, skip
                     continue
 
@@ -147,7 +149,7 @@ def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
             # this anchor operator does not allow prologue fusion, skip
             continue
 
-        if type(anchor) in NOT_FUSIBLE:
+        if isinstance(anchor, NOT_FUSIBLE):
             # for operator are not fusible, skip
             continue
 
@@ -171,7 +173,7 @@ def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                     # this tensor has been fused, skip
                     continue
 
-                if type(producer) in NOT_FUSIBLE:
+                if isinstance(producer, NOT_FUSIBLE):
                     # for operator are not fusible, skip
                     continue
 
