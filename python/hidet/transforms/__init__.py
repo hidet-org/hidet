@@ -39,6 +39,7 @@ from .lower_special_cast import lower_special_cast_pass
 from .annotate_header_and_libs import annotate_header_and_libs_pass
 from .lower_integer_subbyte import lower_integer_subbyte_pass
 from .add_hints import add_hints_pass
+from .spatial_simplification import spatial_simplification_pass
 
 from .cute.cuda.lower_cute_dialect import lower_cute_dialect_pass
 from .cute.cuda.update_shared_memory_usage import update_shared_memory_usage_pass
@@ -74,6 +75,7 @@ def lower(ir_module: IRModule) -> IRModule:
         generate_launch_func_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
+        spatial_simplification_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
