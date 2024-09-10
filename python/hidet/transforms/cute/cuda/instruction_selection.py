@@ -12,10 +12,11 @@
 from typing import List, Dict, Union, Optional, Callable
 
 from hidet.ir.type import DataType, PointerType
-from hidet.ir.expr import Var, Expr, var
+from hidet.ir.expr import Var, Expr, var, deref, cast
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.tools import infer_type
 from hidet.ir.functors import IRVisitor, IRRewriter
+from hidet.ir.dtypes import u8, u32
 
 from hidet.ir.cute.expr import CallOp, CConst
 from hidet.ir.cute.type import TiledTensorType
@@ -24,7 +25,24 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.stmt import DeclareStmt
 
-from hidet.ir.primitives import ldg128, ldg64, ldg32, stg128, stg64, stg32, lds128, lds64, lds32, sts128, sts64, sts32
+from hidet.ir.primitives import (
+    ldg128,
+    ldg64,
+    ldg32,
+    ldg16,
+    stg128,
+    stg64,
+    stg32,
+    stg16,
+    lds128,
+    lds64,
+    lds32,
+    lds16,
+    sts128,
+    sts64,
+    sts32,
+    sts16,
+)
 from hidet.ir.primitives.cuda.mma import ldmatrix
 from hidet.ir.primitives.cuda.cp_async import cp_async
 
@@ -257,11 +275,15 @@ class UniversalCopyInstruction(CopyInstruction):
         from hidet.ir.stmt import IfStmt, AssignStmt
 
         # fallback case
-        if self.bytes_per_inst < 4:
-            if self.require_mask:
-                return IfStmt(mask, AssignStmt(dst[0], src[0]))
+        if self.apply is None:
+            if self.bytes_per_inst == 1:
+                access_dtype = u8
             else:
-                return AssignStmt(dst[0], src[0])
+                raise NotImplementedError()
+            if self.require_mask:
+                return IfStmt(mask, AssignStmt(deref(cast(dst, ~access_dtype)), deref(cast(src, ~access_dtype))))
+            else:
+                return AssignStmt(deref(cast(dst, ~access_dtype)), deref(cast(src, ~access_dtype)))
         operands: List[Expr] = []
         if self.src_scope == DeclareScope.Register:
             operands.extend(self._get_register_pointers(src))
@@ -326,8 +348,6 @@ class LdMatrix(CopyInstruction):
     def __call__(self, src: Expr, dst: Expr, mask: Optional[Expr] = None):
         assert mask is None
         assert self.src_scope == DeclareScope.Shared and self.dst_scope == DeclareScope.Register
-        from hidet.ir.dtypes import u32
-        from hidet.ir.expr import deref, cast
 
         reg_ptrs = self._get_register_pointers(dst)
         regs = [deref(cast(ptr, ~u32)) for ptr in reg_ptrs]
@@ -342,7 +362,7 @@ def register_universal_copy_instruction():
     # remove ldg256 because instructions wider than 16-bytes do not boost
     # performnce
     # insts = [(256, ldg256), (128, ldg128), (64, ldg64), (32, ldg32), (16, None)]
-    insts = [(128, ldg128), (64, ldg64), (32, ldg32), (16, None)]
+    insts = [(128, ldg128), (64, ldg64), (32, ldg32), (16, ldg16), (8, None)]
     for load_bits, inst in insts:
         shape = (1, load_bits)
         src_layout = TensorLayout(((1), (1, load_bits)), ((1), (1, 1)))
@@ -356,7 +376,7 @@ def register_universal_copy_instruction():
         src_layout = TensorLayout(((1), (1, load_bits)), ((1), (1, 1)))
         memory_instructions.append(AsyncCopyInstruction(inst, shape, "global", "shared", src_layout))
 
-    insts = [(128, lds128), (64, lds64), (32, lds32), (16, None)]
+    insts = [(128, lds128), (64, lds64), (32, lds32), (16, lds16), (8, None)]
     for load_bits, inst in insts:
         shape = (1, load_bits)
         src_layout = TensorLayout(((1), (1, load_bits)), ((1), (1, 1)))
@@ -365,7 +385,7 @@ def register_universal_copy_instruction():
     # remove stg512, stg256 because instructions wider than 16-bytes do not boost
     # performnce
     # insts = [(512, stg512), (256, stg256), (128, stg128), (64, stg64), (32, stg32), (16, None)]
-    insts = [(128, stg128), (64, stg64), (32, stg32), (16, None)]
+    insts = [(128, stg128), (64, stg64), (32, stg32), (16, stg16), (8, None)]
     for store_bits, inst in insts:
         shape = (1, store_bits)
         src_layout = TensorLayout(((1), (1, store_bits)), ((1), (1, 1)))
@@ -373,7 +393,7 @@ def register_universal_copy_instruction():
             UniversalCopyInstruction(inst, shape, "register", "global", src_layout, require_mask=True)
         )
 
-    insts = [(128, sts128), (64, sts64), (32, sts32), (16, None)]
+    insts = [(128, sts128), (64, sts64), (32, sts32), (16, sts16), (8, None)]
     for store_bits, inst in insts:
         shape = (1, store_bits)
         src_layout = TensorLayout(((1), (1, store_bits)), ((1), (1, 1)))
