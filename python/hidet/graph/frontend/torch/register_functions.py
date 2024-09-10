@@ -304,11 +304,11 @@ def batch_norm(
     x: Tensor,
     running_mean: Optional[Tensor],
     running_var: Optional[Tensor],
-    weight: Optional[Tensor],
-    bias: Optional[Tensor],
-    training: bool,
-    momentum: float,
-    eps: float,
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    training: bool = False,
+    momentum: float = 0.1,
+    eps: float = 1e-05,
 ):
     if training:
         warnings.warn_once(
@@ -585,12 +585,28 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
 @register_method(torch.Tensor.div_)
 @register_method(torch.Tensor.divide)
 @register_method(torch.Tensor.divide_)
-def div(x: Tensor, y: Tensor, *, rounding_mode: Optional[str] = None, out=None):
+def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Optional[str] = None, out=None):
     result = truediv(x, y)
     if rounding_mode is None:
         return result
     elif rounding_mode == 'floor':
-        return ops.floor(result)
+        # Turns out the `floor` rounding mode will follow a slightly different type promotion rule,
+        # and this subtle difference is the cause of issue #264.
+        from hidet import int32, float32
+
+        primitive_type_map = {int: int32, float: float32, bool: int32}
+
+        x_dtype = x.dtype if isinstance(x, Tensor) else primitive_type_map[type(x)]
+        y_dtype = y.dtype if isinstance(y, Tensor) else primitive_type_map[type(y)]
+
+        result = ops.floor(result)
+
+        # `rounding_mode = 'flooar'` retains the integer type if both inputs are integers
+        if x_dtype.is_integer() and y_dtype.is_integer():
+            return result.to(dtype=promote_type(x_dtype, y_dtype))
+        else:
+            return result
+
     else:
         assert rounding_mode == 'trunc', 'rounding_mode should be one of "floor" or "trunc"'
         if isinstance(result, Tensor):
