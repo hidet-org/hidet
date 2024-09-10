@@ -32,22 +32,21 @@ def test_torch_reshape_tuple_arg():
 
 
 @pytest.mark.parametrize(
-    'shape1,shape2', [([2, 2], [2, 2]), ([2, 3, 4], [2, 3, 4]), ([2, 3, 4], [2, 3, 1]), ([2, 3, 4], [2, 1, 1])]
+    'input1, input2',
+    [
+        [torch.tensor([7, -7, 8], dtype=torch.int16), torch.tensor([2, 3, -2], dtype=torch.int32)],
+        [torch.tensor([71, -72], dtype=torch.int32), torch.tensor([2.5, -2.0], dtype=torch.float32)],
+        [torch.tensor([101, 103], dtype=torch.int64), 55],
+        [torch.randn([3, 3, 4]) * 100, torch.randn([3, 1, 1]) * 75],
+    ],
 )
-def test_torch_div(shape1, shape2):
-    check_module(
-        FunctionalModule(op=lambda x, y: torch.div(x, y)),
-        args=[torch.randn(shape1), torch.randn(shape2)],
-        atol=1e-5,
-        rtol=1e-5,
-    )
-
-    check_module(
-        FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor')),
-        args=[torch.randn(shape1), torch.randn(shape2)],
-        atol=1e-5,
-        rtol=1e-5,
-    )
+def test_torch_div(input1, input2):
+    input1 = input1.cuda() if isinstance(input1, torch.Tensor) else input1
+    input2 = input2.cuda() if isinstance(input2, torch.Tensor) else input2
+    func = FunctionalModule(op=lambda x, y: torch.div(x, y))
+    func_floor = FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor'))
+    check_module(func, args=[input1, input2], atol=1e-5, rtol=1e-5)
+    check_module(func_floor, args=[input1, input2], atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize('shape,expanded_shape', [([2, 1], [2, 11]), ([2, 3, 4], [2, 3, 4]), ([1], [6])])

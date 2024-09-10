@@ -362,7 +362,6 @@ class CompiledGraph:
         # run the kernels
         kernel_array = self.dispatch_table[symbol_dims]
         self._launch(*inputs, *outputs, kernel_array)
-
         return outputs
 
     def _run_slow_path(self, inputs, symbol_dims: Tuple[int, ...]):
