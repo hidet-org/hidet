@@ -204,10 +204,10 @@ class HidetBatchNorm2d(HidetModule):
         assert isinstance(self.mod, (torch.nn.BatchNorm2d, torch.nn.BatchNorm3d))
         return reg_funcs.batch_norm(
             x=x,
-            running_mean=self.param('running_mean'),
-            running_var=self.param('running_var'),
-            weight=self.param('weight'),
-            bias=self.param('bias'),
+            running_mean=self.param('running_mean', optional=True),
+            running_var=self.param('running_var', optional=True),
+            weight=self.param('weight', optional=True),
+            bias=self.param('bias', optional=True),
             training=self.mod.training,
             momentum=self.mod.momentum,
             eps=self.mod.eps,

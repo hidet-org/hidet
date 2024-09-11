@@ -601,7 +601,7 @@ def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Op
 
         result = ops.floor(result)
 
-        # `rounding_mode = 'flooar'` retains the integer type if both inputs are integers
+        # `rounding_mode = 'floor'` retains the integer type if both inputs are integers
         if x_dtype.is_integer() and y_dtype.is_integer():
             return result.to(dtype=promote_type(x_dtype, y_dtype))
         else:

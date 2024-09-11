@@ -37,7 +37,9 @@ def test_torch_reshape_tuple_arg():
         [torch.tensor([7, -7, 8], dtype=torch.int16), torch.tensor([2, 3, -2], dtype=torch.int32)],
         [torch.tensor([71, -72], dtype=torch.int32), torch.tensor([2.5, -2.0], dtype=torch.float32)],
         [torch.tensor([101, 103], dtype=torch.int64), 55],
+        [torch.tensor([101, 103], dtype=torch.int64), 55.0],
         [torch.randn([3, 3, 4]) * 100, torch.randn([3, 1, 1]) * 75],
+        [torch.tensor([101, 103], dtype=torch.float32), 66],
     ],
 )
 def test_torch_div(input1, input2):
