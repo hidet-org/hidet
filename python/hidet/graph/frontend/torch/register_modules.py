@@ -143,6 +143,13 @@ class HidetLeakyReLU(HidetModule):
         return reg_funcs.leaky_relu(x, self.mod.negative_slope, self.mod.inplace)
 
 
+@register_module(torch.nn.GLU)
+class HidetGLU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GLU)
+        return reg_funcs.glu(x, self.mod.dim)
+
+
 @register_module(torch.nn.MaxPool2d)
 class HidetMaxPool2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
