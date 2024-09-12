@@ -619,6 +619,13 @@ def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Op
             return int(result)
 
 
+@register_function(torch.floor_divide)
+@register_method(torch.Tensor.floor_divide)
+@register_method(torch.Tensor.floor_divide_)
+def floor_divide(x: Union[Tensor, Number], y: Union[Tensor, Number]):
+    return div(x, y, rounding_mode='floor')
+
+
 @register_function(torch.as_strided)
 @register_method(torch.Tensor.as_strided)
 def torch_as_strided(
@@ -1159,6 +1166,14 @@ def silu(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: silu with inplace=True is not supported. Treat as inplace=False.')
     return ops.silu(x)
+
+
+@register_function(torch.nn.functional.glu)
+def glu(x: Tensor, dim: int = -1):
+
+    # split the tensor into two halves along the specified dim
+    x1, x2 = ops.split(x, 2, axis=dim)
+    return x1 * ops.sigmoid(x2)
 
 
 @register_function(torch.nn.functional.hardswish)

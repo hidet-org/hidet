@@ -121,5 +121,11 @@ def test_mish(shape, dtype):
     check_module(torch.nn.Mish(), [torch.randn(shape, dtype=dtype)])
 
 
+@pytest.mark.parametrize("shape", [(10, 20)])
+@pytest.mark.parametrize("dim", [0, 1, -1])
+def test_glu(shape, dim):
+    check_module(torch.nn.GLU(dim), [torch.randn(shape)])
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
