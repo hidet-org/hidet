@@ -127,8 +127,17 @@ class Interpreter:
     def _lookup_hidet_function(self, torch_func) -> Optional[OverloadedFunction]:
         if torch_func not in Registry.registered_functions:
             name = self._get_callable_name(torch_func)
+            from hidet.graph.ops import cast
+
             pattern2func = {
-                '_dynamo_get_item_lambda': OverloadedFunction.from_lambda(lambda target, index: target[index])
+                '_dynamo_get_item_lambda': OverloadedFunction.from_lambda(lambda target, index: target[index]),
+                # Turns out the wrapped ops in issue #358 are some `numpy_method_wrapper` and `numpy_operator_wrapper`.
+                # According to the class definition in pytorch/torch/_dynamo/utils.py(line 2461-2497),
+                # they're just functionally equivalent to the original numpy functions.
+                '<Wrapped operator <original wrapped_ge>>': OverloadedFunction.from_lambda(lambda x, y: x >= y),
+                '<Wrapped method <original astype>>': OverloadedFunction.from_lambda(
+                    lambda x, dtype: cast(x, data_type(dtype))
+                ),
             }
             for pattern, func in pattern2func.items():
                 if pattern in name:
