@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import subprocess
 import pathlib
@@ -11,13 +12,16 @@ external_models = ['llama-7b', 'gpt2']
 def run_command(cmd):
     cmd = " ".join(cmd)
     print("Running command: " + cmd)
+    sys.stdout.flush()
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+
+    for line in iter(process.stderr.readline, ''):
+        sys.stderr.write(line)
+        sys.stderr.flush()
+
     stdout, stderr = process.communicate()
     ret = process.returncode
     if ret:
-        print('STDERR:')
-        for line in stderr:
-            print(line, end='')
         raise RuntimeError(f'Command {cmd} failed with return code {ret}.')
     return stdout
 
