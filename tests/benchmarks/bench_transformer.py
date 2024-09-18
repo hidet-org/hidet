@@ -117,8 +117,8 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode, cache):
     return latency
 
 
-def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode, cache):
-    comp_backend = Backend(backend, mode, dtype, cache)
+def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode):
+    comp_backend = Backend(backend, mode, dtype)
     dtype = getattr(torch, dtype)
     model_name = get_full_model_name(model_name)
 
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             genlen = int(value)
 
     if model_class[get_full_model_name(model_name)] == 'AutoModelForMaskedLM':
-        latency = bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode, cache)
+        latency = bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode)
     elif model_class[get_full_model_name(model_name)] == 'AutoModelForCausalLM':
         latency = bench_causal_lm(
             model_name, bs=bs, genlen=genlen, dtype=dtype, backend=backend, mode=mode, cache=cache

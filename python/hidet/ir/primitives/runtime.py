@@ -56,11 +56,6 @@ def register_functions():
     register_primitive_function(
         name='get_nccl_comm', func_or_type=FuncType([int32], void_p), codegen_name='get_nccl_comm'
     )
-    register_primitive_function(
-        name='calculate_magic_numbers',
-        func_or_type=FuncType([int32, int32, int32, int32], void_p),
-        codegen_name='calculate_magic_numbers',
-    )
 
 
 def get_cuda_stream() -> void_p:
@@ -101,7 +96,3 @@ def memory_planner_used(idx: Union[int, Expr]):
 
 def get_nccl_comm(idx: int) -> void_p:
     return call_primitive_func('get_nccl_comm', [idx])
-
-
-def calculate_magic_numbers(divisor: int, m: int, s: int, ads: int):
-    return call_primitive_func('calculate_magic_numbers', [divisor, m, s, ads])
