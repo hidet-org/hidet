@@ -712,7 +712,7 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
-        doc += Text('#include <hidet/runtime/int_fastdiv.h>') + NewLine()
+
         for header in self.ir_module.include_headers:
             doc += Text('#include <{}>').format(header) + NewLine()
 
@@ -801,7 +801,6 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float32.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
-        doc += Text('#include <hidet/runtime/int_fastdiv.h>') + NewLine()
 
         if self.require_complex:
             doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
