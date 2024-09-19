@@ -158,7 +158,7 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
         # print(text_output)
         return (i + 1) * bs, inputs
 
-    torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
+    # torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
     for _ in range(warmup_iters):
         num_tokens, output_text = one_iter(inputs)
     torch.cuda.empty_cache()

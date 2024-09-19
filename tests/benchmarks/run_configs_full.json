@@ -11,6 +11,176 @@
     },
     {
         "type": "model",
+        "id": 16,
+        "name": "llama-2-7b",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 18,
+        "name": "mistral",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 21,
+        "name": "codellama-7b",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 41,
+        "name": "layoutlm",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,seqlen=256",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 42,
+        "name": "mobilebert-uncased",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,seqlen=256",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 43,
+        "name": "plt-bast",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 45,
+        "name": "conv-bert",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,seqlen=256",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 20,
+        "name": "mpt-7b",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 17,
+        "name": "gemma-2b",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 22,
+        "name": "mixtral-7b-8",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 35,
+        "name": "albert-base-v2",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,seqlen=256",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 36,
+        "name": "camembert",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 47,
+        "name": "distillgpt2",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 40,
+        "name": "gpt-neo",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 48,
+        "name": "opt",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 44,
+        "name": "roberta",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 50,
+        "name": "xglm",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
         "id": 4,
         "name": "resnet50",
         "runfile": "bench_vision.py",
