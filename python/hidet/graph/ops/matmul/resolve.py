@@ -133,6 +133,15 @@ class MatmulResolveRule(ResolveRule):
         if a.dtype.nbytes > 4 or b.dtype.nbytes > 4:
             return None
 
+        # If either a or b is a tensor with actual storage(i.e., not symbolic),
+        # the operator `flatten` calls in the code below will
+        # require additional memory and somehow these allocated spaces are not released during the model compilation.
+        # This causes the error described in issue #326.
+
+        can_imperative = hidet.option.get_imperative()
+        if a.is_symbolic() or b.is_symbolic():
+            hidet.option.imperative(False)
+
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
             if len(b.shape) == 2:  # shape: [a, b]
@@ -170,6 +179,8 @@ class MatmulResolveRule(ResolveRule):
             b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
+
+        hidet.option.imperative(can_imperative)
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
