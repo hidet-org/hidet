@@ -44,7 +44,7 @@ print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2**20)))
 # The :func:`benchmark_func() <hidet.utils.benchmark_func>` function runs the given function multiple times to
 # get the median latency.
 
-from hidet.utils import benchmark_func
+from hidet.utils.benchmark import benchmark_func
 
 print('PyTorch: {:.3f} ms'.format(benchmark_func(lambda: torch_model(torch_data))))
 

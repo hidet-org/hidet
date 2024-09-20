@@ -124,6 +124,8 @@ def matmul_simt_kernel():
 
 
 def main():
+    from hidet.utils.benchmark import benchmark_func
+
     func = matmul_simt_kernel()
 
     for m, n, k in [(1024, 1024, 1024), (333, 444, 555), (1, 12, 13)]:
@@ -135,7 +137,7 @@ def main():
             actual=c.cpu().numpy(), desired=a.cpu().numpy() @ b.cpu().numpy(), rtol=1e-4, atol=1e-4
         )
 
-        hidet_latency = hidet.utils.benchmark_func(lambda: func(a, b, c, m, n, k), repeat=50)
+        hidet_latency = benchmark_func(lambda: func(a, b, c, m, n, k), repeat=50)
         print(f'{m}x{k}x{n}: hidet takes {hidet_latency:.2f} ms')
 
 
