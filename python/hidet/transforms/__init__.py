@@ -76,11 +76,11 @@ def lower(ir_module: IRModule) -> IRModule:
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         spatial_simplification_pass(),
+        flatten_tensor_index_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
-        flatten_tensor_index_pass(),
         lower_integer_subbyte_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),

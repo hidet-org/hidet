@@ -11,11 +11,13 @@
 # limitations under the License.
 from typing import List, Dict, Sequence, Union, Optional
 from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt
+from hidet.ir.dtypes import int32
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
+from hidet.ir.tools.rewriter import PolinomialExpr2ExprRewriter
 from hidet.transforms.base import Pass, FunctionPass
 from hidet.utils import prod
 
@@ -36,7 +38,19 @@ class TaskMappingExpander:
         self.loop_nests: List[ForStmt] = []
 
     def expand(self, mapping: TaskMapping, worker: Expr, loop_vars: List[Var], body: Stmt) -> Stmt:
-        tasks: List[TaskIndex] = self.visit(mapping, worker)
+        # Here we try to find expression that represent the flatten index and
+        # change it on worker (because worker is a same as a flatten index).
+        # Just default expand - when we represent every loop var as worker expression is
+        # compilcated. In many cases either hidet's passes or nvcc cannot optimise it.
+        if isinstance(mapping, SpatialTaskMapping):
+            flatten = int32.zero
+            for loop_var, stride in zip(loop_vars, mapping.strides):
+                flatten += loop_var * stride
+
+            rewriter = PolinomialExpr2ExprRewriter(flatten, worker)
+            body = rewriter.rewrite(body)
+
+        tasks = self.visit(mapping, worker)
         seq = []
         for task in tasks:
             remap: Dict[Var, Expr] = {a: b for a, b in zip(loop_vars, task)}
