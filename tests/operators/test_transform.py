@@ -112,6 +112,22 @@ def test_concat(shapes, dtype, axis):
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, rtol=0, atol=0)
 
 
+@pytest.mark.parametrize(
+    "shapes, dtype, axis",
+    [
+        [[[0], [0], [33, 44, 55], [0], [1, 44, 55], [0], [32, 44, 55], [0]], 'float32', 0],
+        [[[0], [0], [33, 1, 55], [0], [33, 8, 55], [0], [33, 111, 55], [0]], 'float32', 1],
+        [[[0], [0], [33, 1, 55], [0], [33, 8, 55], [0], [33, 111, 55], [0]], 'float32', -2],
+        [[[0], [0], [0]], 'float32', 0],
+    ],
+)
+def test_concat_empty(shapes, dtype, axis):
+    data_list = [np.random.randn(*shape).astype(dtype) for shape in shapes]
+    torch_result = torch.cat([torch.asarray(d) for d in data_list], dim=axis)
+    hidet_result = ops.concat([hi.asarray(data).cuda() for data in data_list], axis).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=torch_result.cpu().numpy(), atol=0, rtol=0)
+
+
 @pytest.mark.parametrize("shape, src_type, dst_type", [[[33, 44, 55], "int64", "float32"]])
 def test_cast(shape, src_type, dst_type):
     check_transform(shape, lambda x: x.astype(dst_type), lambda x: ops.cast(x, dst_type), dtype=src_type)

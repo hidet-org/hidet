@@ -577,6 +577,7 @@ class ConcatOp(Operator):
         tensors = list(tensors)
         if len(tensors) == 0:
             raise ValueError('Concat requires at least one tensor, 0 given.')
+        tensors = [tensor for tensor in tensors if tensor.shape != (0,)] or [tensors[0]]
         axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
