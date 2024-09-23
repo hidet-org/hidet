@@ -44,7 +44,9 @@ class Conv2dTransposeGemmImageTask(Task):
             return if_then_else(
                 cond=logical_and(xx >= 0, xx < p * sx, xx % sx == 0, yy >= 0, yy < q * sy, yy % sy == 0),
                 then_expr=data[ni, gi * og + ogi, xx // sx, yy // sy],
-                else_expr=0.0,
+                # If we simply pass `else_expr=0.0`, it will be interpreted as float32, which causes error when the
+                # input data tensor is of dtype e.g., float16.
+                else_expr=data.type.dtype.zero,
             )
 
         output = compute(name='gemm_x', shape=[groups, n * h * w, og * kx * ky], fcompute=fcompute)
