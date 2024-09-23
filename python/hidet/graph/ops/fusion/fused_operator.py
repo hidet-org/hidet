@@ -130,6 +130,9 @@ class FusedTask(Task):
             if hasattr(anchor_module, '_tuning_kwargs'):
                 setattr(fused_module, '_tuning_kwargs', getattr(anchor_module, '_tuning_kwargs'))
 
+        for fused_module in fused_modules:
+            fused_module.task = self
+
         return fused_modules
 
 

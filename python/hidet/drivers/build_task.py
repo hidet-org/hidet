@@ -14,7 +14,6 @@ import re
 import os
 import json
 import shutil
-from hashlib import sha256
 from typing import List, Optional, Tuple
 from tqdm import tqdm
 
@@ -145,6 +144,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module.add_function(get_output_shape.name, get_output_shape)
         ir_module.object_files.extend([os.path.join(object_path, 'lib.o') for object_path in objects_path_list])
         task_ir_module = ir_module
+        task_ir_module.task = task
 
     # add assertions to the launch function
     if len(task.assertions) > 0:
@@ -243,7 +243,7 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
     else:
         # check on-disk cache
         config_str = f'{target}_space_{space_level}'
-        task_hash = sha256(task_string.encode()).hexdigest()[:16]
+        task_hash = task.calculate_hash()
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
         lib_path = os.path.join(task_dir, 'lib.so')
         version_path = os.path.join(task_dir, 'version.txt')

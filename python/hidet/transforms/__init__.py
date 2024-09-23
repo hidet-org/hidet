@@ -15,6 +15,7 @@ from hidet.ir.module import IRModule
 from .base import Pass, FunctionPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
+from .attach_hash_to_signature import attach_hash_to_signature
 from .unify_global_objects import unify_global_objects_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
@@ -71,6 +72,7 @@ def lower(ir_module: IRModule) -> IRModule:
 
     transforms = [
         # necessary passes
+        attach_hash_to_signature(),
         unify_global_objects_pass(),
         generate_launch_func_pass(),
         flatten_tensor_slice_pass(),

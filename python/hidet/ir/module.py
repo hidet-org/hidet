@@ -35,6 +35,7 @@ class IRModule(Node):
         linking_dirs: List[str] = None,
         linking_libs: List[str] = None,
         object_files: List[str] = None,
+        task: 'Task' = None,
     ):
         # the functions defined in this module
         self.functions: Dict[str, Function] = functions if functions else {}
@@ -51,6 +52,7 @@ class IRModule(Node):
         self.linking_dirs: List[str] = linking_dirs if linking_dirs else []  # -I flags
         self.linking_libs: List[str] = linking_libs if linking_libs else []  # -l flags
         self.object_files: List[str] = object_files if object_files else []  # .o files
+        self.task = task
 
         assert all(isinstance(func, Function) for func in self.functions.values()) and all(
             isinstance(var, Var) for var in self.global_vars.values()
@@ -84,6 +86,7 @@ class IRModule(Node):
             linking_dirs=self.linking_dirs.copy(),
             linking_libs=self.linking_libs.copy(),
             object_files=self.object_files.copy(),
+            task=self.task,
         )
 
     def reset_funcs(self, functions: Dict[str, Function] = None, global_vars: Dict[str, Var] = None):

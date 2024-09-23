@@ -13,6 +13,7 @@
 import pytest
 from hidet.ir.tools.ir_dumper import astext2, parse
 from hidet.ir.expr import symbol_var
+from hidet.transforms.attach_hash_to_signature import attach_hash_to_signature
 from hidet.transforms.unify_global_objects import unify_global_objects_pass
 from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
 from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
@@ -87,6 +88,7 @@ def get_attn_task():
 def generate_ir_modules():
     transforms = [
         lambda x: x,
+        attach_hash_to_signature(),
         unify_global_objects_pass(),
         generate_launch_func_pass(),
         flatten_tensor_slice_pass(),

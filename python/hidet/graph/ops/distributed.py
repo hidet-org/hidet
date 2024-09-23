@@ -47,7 +47,10 @@ class AllReduceTask(Task):
                 attrs.func_kind = 'public'
                 _all_reduce(x, y, size, dtype, str_to_nccl_op(self.op), self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class AllReduceOp(Operator):
@@ -87,7 +90,10 @@ class AllGatherTask(Task):
                 attrs.func_kind = 'public'
                 _all_gather(x, y, size, dtype, self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class AllGatherOp(Operator):
@@ -132,7 +138,10 @@ class ReduceScatterTask(Task):
                 attrs.func_kind = 'public'
                 _reduce_scatter(x, y, size, dtype, str_to_nccl_op(self.op), self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class ReduceScatterOp(Operator):
