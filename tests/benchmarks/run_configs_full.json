@@ -81,16 +81,6 @@
     },
     {
         "type": "model",
-        "id": 20,
-        "name": "mpt-7b",
-        "runfile": "bench_transformer.py",
-        "param_id": 14,
-        "param_name": "bs=16,genlen=1",
-        "dtype_id": 1,
-        "dtype_name": "float16"
-    },
-    {
-        "type": "model",
         "id": 17,
         "name": "gemma-2b",
         "runfile": "bench_transformer.py",
