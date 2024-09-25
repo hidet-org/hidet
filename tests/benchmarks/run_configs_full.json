@@ -11,6 +11,16 @@
     },
     {
         "type": "model",
+        "id": 19,
+        "name": "gpt2-xl",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
         "id": 16,
         "name": "llama-2-7b",
         "runfile": "bench_transformer.py",

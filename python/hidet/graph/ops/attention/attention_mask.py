@@ -14,6 +14,7 @@ import hidet
 from hidet import ir
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
+from hidet.ir.expr import cast
 from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
@@ -149,7 +150,10 @@ class AttnMaskAddTask(Task):
         warp_elems_m=[16, 32, 64, 128],
         warp_elems_n=[16, 32, 64, 128],
         warp_elems_k=[8, 16, 32, 64],
-        mma_config=[MmaConfig.m16n8k8_f16_f16(), MmaConfig.m16n8k16_f16_f16()],
+        mma_config=[
+            (MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16()),
+            (MmaConfig.m16n8k16_f16_f32(), MmaConfig.m16n8k16_f16_f16()),
+        ],
     )
     @tune.space(
         1,
@@ -159,7 +163,7 @@ class AttnMaskAddTask(Task):
         warp_elems_m=[16],
         warp_elems_n=[128],
         warp_elems_k=[32],
-        mma_config=[MmaConfig.m16n8k8_f16_f16()],
+        mma_config=[(MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16())],
     )
     def cuda_schedule_attn(
         self,
@@ -169,8 +173,10 @@ class AttnMaskAddTask(Task):
         warp_elems_m=32,
         warp_elems_n=64,
         warp_elems_k=16,
-        mma_config=MmaConfig.m16n8k8_f16_f16(),
+        mma_config=(MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16()),
     ) -> IRModule:
+        mma_config_f32, mma_config = mma_config
+
         def calc_swizzle_size(d):
             powers_of_two = [128, 64, 32, 16, 8]
             for n in powers_of_two:
@@ -215,7 +221,7 @@ class AttnMaskAddTask(Task):
         tune.check(d_size % 8 == 0)
         tune.check(d_size <= 160)
 
-        acc_dtype = f16
+        acc_dtype = f32
         sm_dtype = f32
         mma_m = mma_config.m
         mma_n = mma_config.n
@@ -342,7 +348,7 @@ class AttnMaskAddTask(Task):
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
         smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major(2) + smem_v_layout)
-        regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
+        regs_o_type = tensor_type(dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size)
         lm_layout = repeat(n_size_per_thread) * spatial(min(i_rows_per_tb, block_size))
@@ -665,10 +671,18 @@ class AttnMaskAddTask(Task):
                         syncthreads()
 
             @hidet.script
-            def warp_mma(
+            def warp_mma_fp32(
+                regs_a: f16[mma_config_f32.a_elements],
+                regs_b: f16[mma_config_f32.b_elements],
+                regs_c: acc_dtype[mma_config_f32.c_elements],
+            ):
+                mma_sync(mma_config_f32, regs_a, regs_b, regs_c)
+
+            @hidet.script
+            def warp_mma_fp16(
                 regs_a: f16[mma_config.a_elements],
                 regs_b: f16[mma_config.b_elements],
-                regs_c: acc_dtype[mma_config.c_elements],
+                regs_c: dtype[mma_config.c_elements],
             ):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
 
@@ -714,9 +728,9 @@ class AttnMaskAddTask(Task):
                 regs_qk = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
                 regs_v = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
                 regs_acc_o = register_tensor(
-                    dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
+                    dtype=dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
                 )
-                regs_o = register_tensor(dtype=acc_dtype, shape=regs_o_type.shape)
+                regs_o = register_tensor(dtype=dtype, shape=regs_o_type.shape)
                 regs_li_new = register_tensor(dtype=smem_l_type.dtype, layout=regs_li_new_layout)
                 regs_mi_new = register_tensor(dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
                 regs_exp_mij = register_tensor(dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
@@ -726,8 +740,8 @@ class AttnMaskAddTask(Task):
                 copy_q_g2s(q, smem_q, offset_i)
 
                 for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
-                    regs_acc_o[a, b, c] = acc_dtype.zero
-                    regs_o[a, b, c] = acc_dtype.zero
+                    regs_acc_o[a, b, c] = dtype.zero
+                    regs_o[a, b, c] = dtype.zero
 
                 for j in range(j_tiles):
                     offset_j = block_j * j  # 256j
@@ -761,7 +775,7 @@ class AttnMaskAddTask(Task):
                                         mma_i, mma_k + 1, k0 * block_k, ~regs_q[(mma_k + 1) % 2, mma_i, 0], smem_q
                                     )
                             for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
-                                warp_mma(
+                                warp_mma_fp32(
                                     ~regs_q[mma_k % 2, mma_i, 0],
                                     ~regs_k[mma_k % 2, mma_j, 0],
                                     ~regs_acc[mma_i, mma_j, 0],
@@ -781,11 +795,12 @@ class AttnMaskAddTask(Task):
                         for ti, tj in mma_config.c_store_map.on(lane_id):
                             delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
                             delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
-                            regs_acc[mma_i, mma_j, p] += mask[
-                                broadcast_indices(
-                                    qk_head_index + [delta_m, delta_n], mask_shape, qk_head + [n_size, n_kv_size]
-                                )
-                            ]
+                            mask_indices = (
+                                qk_head_index + [delta_m, delta_n],
+                                mask_shape,
+                                qk_head + [n_size, n_kv_size],
+                            )
+                            regs_acc[mma_i, mma_j, p] += cast(mask[broadcast_indices(*mask_indices)], acc_dtype)
                             p += 1
 
                     # Iterative softmax, and write result matrix into shared memory
@@ -795,7 +810,7 @@ class AttnMaskAddTask(Task):
                     # ----------------------------
                     # Compute O = QK * V
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
-                        regs_acc_o[a, b, c] = acc_dtype.zero
+                        regs_acc_o[a, b, c] = dtype.zero
 
                     cp_async_sync()
                     syncthreads()
@@ -817,7 +832,7 @@ class AttnMaskAddTask(Task):
                                         mma_i, mma_k + 1, k1 * block_k_o, ~regs_qk[(mma_k + 1) % 2, mma_i, 0], smem_qk
                                     )
                             for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
-                                warp_mma(
+                                warp_mma_fp16(
                                     ~regs_qk[mma_k % 2, mma_i, 0],
                                     ~regs_v[mma_k % 2, mma_j, 0],
                                     ~regs_acc_o[mma_i, mma_j, 0],
