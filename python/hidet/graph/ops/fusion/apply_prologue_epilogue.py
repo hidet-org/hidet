@@ -1891,8 +1891,9 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, target: 
     ]
     instruments = []
     if hidet.option.get_save_lower_ir():
-        instruments.append(SaveIRInstrument(out_dir=os.path.join(working_dir, './fuse_ir')))
-        instruments.append(ProfileInstrument(log_file=os.path.join(working_dir, './fuse_ir/profile.txt')))
+        fused_candidate_dir = os.path.join(working_dir, './fuse_ir', ir_module.namespace)
+        instruments.append(SaveIRInstrument(out_dir=fused_candidate_dir))
+        instruments.append(ProfileInstrument(log_file=os.path.join(fused_candidate_dir, 'profile.txt')))
 
     with PassContext(instruments=instruments):
         ir_module = lower_with(ir_module, transforms)
@@ -1908,6 +1909,10 @@ def apply_prologue_epilogue_batch(
 
     def _apply_prologue_epilogue_batch(args):
         return apply_prologue_epilogue(*args)
+
+    if len(anchor_modules) > 1:
+        for i, module in enumerate(anchor_modules):
+            module.namespace = f'candidate_{i}'
 
     jobs = [(m, fused_task, target, working_dir) for m in anchor_modules]
     max_num_worker, _, _ = hidet.option.get_parallel_tune()

@@ -44,6 +44,29 @@ def can_remote_build(ir_module: IRModule) -> bool:
         return all(can_remote_single_build(m) for m in ir_module)
 
 
+def create_instruments(output_dir: str, ir_module: IRModule):
+    instruments = []
+    if hidet.option.get_save_lower_ir():
+        ir_candidate_dir = os.path.join(output_dir, 'ir', ir_module.namespace)
+        instruments.extend(
+            [
+                SaveIRInstrument(out_dir=ir_candidate_dir),
+                ProfileInstrument(log_file=os.path.join(ir_candidate_dir, 'lower_time.txt')),
+            ]
+        )
+    return instruments
+
+
+def configure_target(target):
+    if target.name == 'cuda':
+        if 'arch' in target.attrs:
+            hidet.option.cuda.arch(target.attrs['arch'])
+        if 'cpu_arch' in target.attrs:
+            hidet.option.cpu.arch(target.attrs['cpu_arch'])
+    elif target.name == 'cpu' and 'arch' in target.attrs:
+        hidet.option.cpu.arch(target.attrs['arch'])
+
+
 def build_ir_module(
     ir_module: Union[IRModule, Sequence[IRModule]], output_dir: str, target: str, output_kind: str = '.so', force=False
 ):
@@ -115,22 +138,16 @@ def build_ir_module(
     set_stack_limit()
 
     # lower ir module
-    instruments = []
-    if hidet.option.get_save_lower_ir():
-        instruments.append(SaveIRInstrument(out_dir=os.path.join(output_dir, './ir')))
-        instruments.append(ProfileInstrument(log_file=os.path.join(output_dir, './lower_time.txt')))
     with hidet.option.context():
-        if target.name == 'cuda' and 'arch' in target.attrs:
-            hidet.option.cuda.arch(target.attrs['arch'])
-        if target.name == 'cuda' and 'cpu_arch' in target.attrs:
-            hidet.option.cpu.arch(target.attrs['cpu_arch'])
-        if target.name == 'cpu' and 'arch' in target.attrs:
-            hidet.option.cpu.arch(target.attrs['arch'])
-        with PassContext(instruments=instruments):
-            if isinstance(ir_module, Sequence):
-                for i in range(len(ir_module)):
+        configure_target(target)
+        if isinstance(ir_module, Sequence):
+            for i in range(len(ir_module)):
+                instruments = create_instruments(output_dir, ir_module[i])
+                with PassContext(instruments=instruments):
                     ir_module[i] = lower(ir_module[i])
-            else:
+        else:
+            instruments = create_instruments(output_dir, ir_module)
+            with PassContext(instruments=instruments):
                 ir_module = lower(ir_module)
 
     # code generation
