@@ -71,12 +71,13 @@ class Poli(Node):
         return res
 
     @staticmethod
-    def _binary_mul(poli, const: int):
+    def _binary_mul(poli, const):
         if poli is None or const is None:
             return None
         # Only linear polinomials with int coefs are supported now
-        if not isinstance(const, int):
+        if not const.is_constant():
             return None
+        const = const.get_bias()
         res_monos = {}
         for key in poli.monos.keys():
             res_monos[key] = poli.monos[key] * const
