@@ -355,3 +355,27 @@ def predicated_auto_map(
         return convert(worker_idx < used_workers, dtype='bool')
 
     return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks), predicate
+
+
+# Several mappings are represented in TaskMapping as a reqursive sequence of mappings
+# Turn it to the list.
+def mapping_2_list(mapping: TaskMapping) -> List[TaskMapping]:
+    if not isinstance(mapping, ComposedTaskMapping):
+        return [mapping]
+    res = []
+    while isinstance(mapping, ComposedTaskMapping):
+        outer, inner = mapping.outer, mapping.inner
+        res.append(inner)
+        mapping = outer
+    res.append(mapping)
+    return res
+
+
+# Convert the list of task mappings to `TaskMapping`(`ComposedTaskMapping`).
+# `ComposedTaskMapping` is reqursive representation of sequence of mappings
+def list_2_mapping(mapping_list: List[TaskMapping]) -> TaskMapping:
+    assert len(mapping_list) != 0
+    outer = mapping_list[-1]
+    for mapp in reversed(mapping_list[:-1]):
+        outer = ComposedTaskMapping(outer, mapp)
+    return outer

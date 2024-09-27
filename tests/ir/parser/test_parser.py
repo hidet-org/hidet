@@ -37,6 +37,7 @@ from hidet.transforms.check_launch_configuration import check_launch_configurati
 from hidet.transforms.lower_special_cast import lower_special_cast_pass
 from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
 from hidet.transforms.spatial_simplification import spatial_simplification_pass
+from hidet.transforms.expand_repeat import expand_repeat_mapping_pass
 
 
 # from hidet.graph.ops.softmax import SoftmaxTask
@@ -95,6 +96,7 @@ def generate_ir_modules():
         lower_protect_access_pass(),
         spatial_simplification_pass(),
         flatten_tensor_index_pass(),
+        expand_repeat_mapping_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
