@@ -17,6 +17,7 @@ from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
 from .attach_hash_to_signature import attach_hash_to_signature
 from .unify_global_objects import unify_global_objects_pass
+from .convert_div_to_fastintdiv import convert_div_to_fastintdiv_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
 from .generate_launch_func import generate_launch_func_pass
@@ -97,6 +98,8 @@ def lower(ir_module: IRModule) -> IRModule:
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),
+        convert_div_to_fastintdiv_pass(),
+        import_primitive_functions_pass(),
         check_launch_configuration_pass(),
         # simplification
         expand_let_expr_pass(),
