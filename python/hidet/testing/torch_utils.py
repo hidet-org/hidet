@@ -84,6 +84,7 @@ class Backend:
         # hidet.option.debug_cache_tuning(True)
         # hidet.option.save_lower_ir(True)
         # hidet.option.debug_show_verbose_flow_graph(True)
+        # hidet.torch.dynamo_config.dump_graph_ir("./graph_ir")
 
         # Initialise compiler server
         if os.environ.get('CI_CS_HOSTNAME'):
