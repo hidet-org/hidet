@@ -16,48 +16,65 @@ from hidet.ir.functors import IRRewriter
 from hidet.ir.node import Node
 from hidet.ir.stmt import ForMappingStmt, DeclareStmt, ForStmt
 from hidet.ir.stmt import LetStmt, BufferStoreStmt
-from hidet.ir.polinomial import Poli, from_expr_to_poli
 
-# Rewriter that search for given polinomial `old: Expr` and change it on another `new: Expr`
+from hidet.ir.polinomial import Poli, from_expr_to_poli, POLINOMIAL_BIAS_VAR
+
+# Rewriter that search for given polinomial `old: Expr` and change it on another `new: Expr`.
+# It's supposed `new` is simpler than `old`
 # Search only throught indeces of tensors.
-# We calculate d = indeces - old.
-# If d is const than we change indeces = new + d
+# Let `cur` is Expr where we are looking for.
+# We calculate
+# diff = cur - old  (diff is polinomial)
+# if diff doesn't contain any variable(monomial) from `old` then
+# diff + old == diff + new == cur is simpler and we change old -> new
+#
+# Note. Right now this Rewriter use only during task mapping lowering and some names
+# of variables represent meaning from the point of view of the lowering.
 class PolinomialExpr2ExprRewriter(IRRewriter):
     def __init__(self, old: Expr, new: Expr):
         super().__init__()
         self.old: Poli = from_expr_to_poli(old)
+        if self.old is not None:
+            self.old.remove_zeros()
         self.new = new
 
     def visit_TensorElement(self, te: TensorElement):
         assert len(te.indices) == 1
-        indices = from_expr_to_poli(te.indices[0])
+        new_indices = te.indices
+        indices_poli = from_expr_to_poli(te.indices[0])
         # TODO indices is None mean fail of conversion. unsqeeze produce i % 40
-        if indices is None or self.old is None:
+        if indices_poli is not None and self.old is not None:
+            diff = indices_poli - self.old
+            if not self.is_contain_loop_vars(diff):
+                new_indices = (self.new + diff.to_expr(),)
+        if new_indices[0] is te.indices[0]:
             return te
-        diff = indices - self.old
-        if isinstance(diff, int):
-            return TensorElement(te.base, (self.new + diff,), te.protected)
-        elif diff.is_constant():
-            return TensorElement(te.base, (self.new + diff.get_bias(),), te.protected)
         else:
-            return te
+            return TensorElement(te.base, new_indices, te.protected)
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         assert len(stmt.indices) == 1
-        indices = stmt.indices
-        indices_poli = from_expr_to_poli(indices[0])
-        if indices_poli is None or self.old is None:
-            return stmt
-        diff = indices_poli - self.old
-        if isinstance(diff, int):
-            indices = (self.new + diff,)
-        elif diff.is_constant():
-            indices = (self.new + diff.get_bias(),)
-        value = self.visit(stmt.value)
-        if indices[0] is stmt.indices[0] and value is stmt.value:
+        new_indices = stmt.indices
+        indices_poli = from_expr_to_poli(stmt.indices[0])
+        if indices_poli is not None and self.old is not None:
+            diff = indices_poli - self.old
+            if not self.is_contain_loop_vars(diff):
+                new_indices = (self.new + diff.to_expr(),)
+        new_value = self.visit(stmt.value)
+        if new_indices[0] is stmt.indices[0] and new_value is stmt.value:
             return stmt
         else:
-            return BufferStoreStmt(stmt.buf, indices, value, stmt.protected)
+            return BufferStoreStmt(stmt.buf, new_indices, new_value, stmt.protected)
+
+    def is_contain_loop_vars(self, diff: Poli):
+        # self.old.remove_zeros() is called in __init__()
+        diff.remove_zeros()
+        for loop_var in self.old.monos.keys():
+            if loop_var is not POLINOMIAL_BIAS_VAR:
+                if loop_var in diff.monos.keys():
+                    return True
+
+        return False
 
 
 class MapBasedRewriter(IRRewriter):

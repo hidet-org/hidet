@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Dict, Sequence, Union, Optional
-from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt
+from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt, IRModule
+
 from hidet.ir.dtypes import int32
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
@@ -18,8 +19,9 @@ from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
 from hidet.ir.tools.rewriter import PolinomialExpr2ExprRewriter
-from hidet.transforms.base import Pass, FunctionPass
+from hidet.transforms.base import Pass
 from hidet.utils import prod
+
 
 Int = Union[Expr, int]
 TaskIndex = List[Int]
@@ -38,16 +40,12 @@ class TaskMappingExpander:
         self.loop_nests: List[ForStmt] = []
 
     def expand(self, mapping: TaskMapping, worker: Expr, loop_vars: List[Var], body: Stmt) -> Stmt:
-        # Here we try to find expression that represent the flatten index and
-        # change it on worker (because worker is a same as a flatten index).
-        # Just default expand - when we represent every loop var as worker expression is
-        # compilcated. In many cases either hidet's passes or nvcc cannot optimise it.
-        if isinstance(mapping, SpatialTaskMapping):
+        if isinstance(mapping, SpatialTaskMapping) and len(loop_vars) != 0:
             flatten = int32.zero
             for loop_var, stride in zip(loop_vars, mapping.strides):
                 flatten += loop_var * stride
-
-            rewriter = PolinomialExpr2ExprRewriter(flatten, worker)
+            size = prod(mapping.task_shape)
+            rewriter = PolinomialExpr2ExprRewriter(flatten, worker % size)
             body = rewriter.rewrite(body)
 
         tasks = self.visit(mapping, worker)
@@ -109,12 +107,23 @@ class TaskMappingExpander:
 
 class LowerTaskMappingRewriter(IRRewriter):
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        body = self.visit(stmt.body)
+        new_body = self.visit(stmt.body)
         expander = TaskMappingExpander()
-        return expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=body)
+        new_stmt = expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=new_body)
+        return new_stmt
 
 
-class LowerTaskMappingPass(FunctionPass):
+class LowerTaskMappingPass(Pass):
+    def __init__(self, name=None):
+        self.block_dim = None
+        super().__init__(name)
+
+    def process_module(self, ir_module: IRModule) -> IRModule:
+        for func in ir_module.functions.values():
+            if func.kind == 'cuda_kernel':
+                self.block_dim = func.attrs['cuda.block_dim']
+        return super().process_module(ir_module)
+
     def process_func(self, func: Function) -> Function:
         rewriter = LowerTaskMappingRewriter()
         return rewriter.rewrite(func)
