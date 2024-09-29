@@ -30,7 +30,7 @@ def setup_hidet_flags(dtype):
     hidet.torch.dynamo_config.use_cuda_graph(True)
     hidet.torch.dynamo_config.dump_graph_ir("./graph_ir")
 
-def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
+def bench_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     for _ in range(warmup_iters):
         torch_out = model(*torch_inputs)
     torch.cuda.empty_cache()
@@ -61,7 +61,7 @@ def bench_hf_transformers(model_name, seqlen, dtype):
     torch_inputs = tuple(i.clone().cuda() for i in inputs.values())
     with torch.no_grad(), torch.autocast("cuda"):
         model = torch.compile(model, backend='hidet', mode='max-autotune')
-        latency = bench_torch_model(model, torch_inputs)
+        latency = bench_model(model, torch_inputs)
         del model
     return latency
 
@@ -73,7 +73,7 @@ def bench_torchvision(model_cls, shape, dtype):
     torch_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
     with torch.no_grad(), torch.autocast("cuda"):
         model = torch.compile(model, backend='hidet', mode='max-autotune')
-        latency = bench_torch_model(model, torch_inputs)
+        latency = bench_model(model, torch_inputs)
         del model
     return latency
 
@@ -85,7 +85,7 @@ def bench_torchhub(repo_name, model_name, shape, dtype):
     torch_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
     with torch.no_grad(), torch.autocast("cuda"):
         model = torch.compile(model, backend='hidet', mode='max-autotune')
-        latency = bench_torch_model(model, torch_inputs)
+        latency = bench_model(model, torch_inputs)
         del model
     return latency
 

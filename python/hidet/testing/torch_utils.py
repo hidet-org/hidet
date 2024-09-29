@@ -106,9 +106,9 @@ class Backend:
 
 
 # Make benchmarking of given torch model
-def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
+def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
     for _ in range(warmup_iters):
-        outs = model(*torch_inputs)  # pylint:disable=unused-variable
+        outs = model(*inputs)  # pylint:disable=unused-variable
     torch.cuda.empty_cache()
 
     if true_outputs is not None:
@@ -124,7 +124,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10, tru
 
     start = time.time_ns()
     for _ in range(bench_iters):
-        _ = model(*torch_inputs)  # pylint:disable=unused-variable
+        _ = model(*inputs)  # pylint:disable=unused-variable
     torch.cuda.synchronize()
     end = time.time_ns()
 

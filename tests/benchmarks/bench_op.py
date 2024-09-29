@@ -1,29 +1,8 @@
 import argparse
 import hidet
 
-from hidet.testing.torch_utils import bench_torch_model, Backend
-
-
-def init_hidet():
-    import hidet
-    import os
-
-    hidet.option.search_space(2)
-
-    # hidet.option.cache_dir(hidet.option.get_cache_dir() + '')
-    # hidet.option.parallel_tune(max_parallel_jobs=1)
-    # hidet.option.debug_cache_tuning(True)
-    # hidet.option.save_lower_ir(True)
-    # hidet.option.debug_show_verbose_flow_graph(True)
-
-    # Initialise compiler server
-    if os.environ.get('CI_CS_HOSTNAME'):
-        hidet.option.compile_server.addr(os.environ.get('CI_CS_HOSTNAME'))
-        hidet.option.compile_server.port(int(os.environ.get('CI_CS_PORT')))
-        hidet.option.compile_server.username(os.environ.get('CI_CS_USERNAME'))
-        hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
-        hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
-        hidet.option.compile_server.enable(flag=True)
+from hidet.testing.torch_utils import bench_model
+from hidet.testing.utils import init_hidet
 
 
 def bench_matmul_f16(params: str, *args, **kwargs) -> float:
@@ -36,7 +15,7 @@ def bench_matmul_f16(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(c, inputs=[a, b])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_batch_matmul(params: str, *args, **kwargs) -> float:
@@ -50,7 +29,7 @@ def bench_batch_matmul(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(c, inputs=[a, b])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_conv2d(params: str, *args, **kwargs) -> float:
@@ -63,7 +42,7 @@ def bench_conv2d(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[x, w])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_transpose2d(params: str, *args, **kwargs) -> float:
@@ -75,7 +54,7 @@ def bench_transpose2d(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[x])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_conv2d_gemm_f16(params: str, *args, **kwargs) -> float:
@@ -88,7 +67,7 @@ def bench_conv2d_gemm_f16(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[x, w])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_attn(params: str, *args, **kwargs) -> float:
@@ -103,7 +82,7 @@ def bench_attn(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[q, k, v])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_attn_mask_add(params: str, *args, **kwargs) -> float:
@@ -120,7 +99,7 @@ def bench_attn_mask_add(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[q, k, v, mask])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 def bench_reduce(params: str, *args, **kwargs) -> float:
@@ -134,7 +113,7 @@ def bench_reduce(params: str, *args, **kwargs) -> float:
     g = hidet.trace_from(o, inputs=[x])
     g = hidet.graph.optimize(g)
     g = g.cuda_graph()
-    return bench_torch_model(lambda: g.run_async(), [])
+    return bench_model(lambda: g.run_async(), [])
 
 
 bench_func_map = {

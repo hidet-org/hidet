@@ -11,7 +11,7 @@
 # limitations under the License.
 import pytest
 import hidet
-from hidet.testing.torch_utils import bench_torch_model
+from hidet.testing.torch_utils import bench_model
 import os
 
 

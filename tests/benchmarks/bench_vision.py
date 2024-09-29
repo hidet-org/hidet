@@ -1,7 +1,7 @@
 import argparse
 import torch
 import torchvision
-from hidet.testing.torch_utils import bench_torch_model, Backend
+from hidet.testing.torch_utils import bench_model, Backend
 from numpy.testing import assert_allclose
 
 
@@ -28,7 +28,7 @@ def bench_torchvision(model_name, shape, dtype, backend, mode, cache):
     with torch.no_grad(), torch.autocast("cuda"):
         model = comp_backend.compile(model)
 
-        latency = bench_torch_model(model, model_inputs)
+        latency = bench_model(model, model_inputs)
 
         compiled_outputs = model(*model_inputs)
         assert len(eager_outputs) == len(compiled_outputs)

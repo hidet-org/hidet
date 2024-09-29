@@ -249,3 +249,26 @@ def check_torch_ternary(
     np.testing.assert_allclose(
         actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
     )
+
+
+def init_hidet(cache=''):
+    import hidet
+    import os
+
+    hidet.option.search_space(2)
+    hidet.option.cache_dir(hidet.option.get_cache_dir() + cache)
+
+    # hidet.option.cache_dir(hidet.option.get_cache_dir() + '')
+    # hidet.option.parallel_tune(max_parallel_jobs=1)
+    # hidet.option.debug_cache_tuning(True)
+    # hidet.option.save_lower_ir(True)
+    # hidet.option.debug_show_verbose_flow_graph(True)
+
+    # Initialise compiler server
+    if os.environ.get('CI_CS_HOSTNAME'):
+        hidet.option.compile_server.addr(os.environ.get('CI_CS_HOSTNAME'))
+        hidet.option.compile_server.port(int(os.environ.get('CI_CS_PORT')))
+        hidet.option.compile_server.username(os.environ.get('CI_CS_USERNAME'))
+        hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
+        hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
+        hidet.option.compile_server.enable(flag=True)
