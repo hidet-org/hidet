@@ -1,6 +1,6 @@
 import argparse
 import torch
-from hidet.testing.torch_utils import Backend, bench_torch_model
+from hidet.testing.torch_utils import Backend, bench_model
 
 
 def bench_reduce(backend, mode, dtype, cache):
@@ -59,7 +59,7 @@ def bench_conv(backend, mode, dtype, cache):
     example_inputs = torch.randn((N, C, H, W), device='cuda', dtype=torch.float16)
     torch._dynamo.mark_dynamic(example_inputs, 0)
     model_op = comp_backend.compile(model)
-    bench_torch_model(model_op, [example_inputs])
+    bench_model(model_op, [example_inputs])
 
 
 if __name__ == '__main__':
