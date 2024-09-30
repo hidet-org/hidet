@@ -504,7 +504,7 @@ class IRPrinter(IRFunctor):
 
     def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         if e.required_type:
-            type_doc = self(e.required_type) + '_'
+            type_doc = str(self(e.required_type) + '_')
         else:
             type_doc = ''
 
