@@ -41,11 +41,11 @@ class TaskMappingExpander:
 
     def expand(self, mapping: TaskMapping, worker: Expr, loop_vars: List[Var], body: Stmt) -> Stmt:
         if isinstance(mapping, SpatialTaskMapping) and len(loop_vars) != 0:
+            strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
             flatten = int32.zero
-            for loop_var, stride in zip(loop_vars, mapping.strides):
+            for loop_var, stride in zip(loop_vars, strides):
                 flatten += loop_var * stride
-            size = prod(mapping.task_shape)
-            rewriter = PolinomialExpr2ExprRewriter(flatten, worker % size)
+            rewriter = PolinomialExpr2ExprRewriter(flatten, worker)
             body = rewriter.rewrite(body)
 
         tasks = self.visit(mapping, worker)
@@ -74,8 +74,14 @@ class TaskMappingExpander:
     def visit_Spatial(self, mapping: SpatialTaskMapping, worker: Expr) -> List[TaskIndex]:
         strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
         task = []
-        for extent, stride in zip(mapping.task_shape, strides):
-            task.append(worker // stride % extent)
+        if len(strides) != 0:
+            for i, (extent, stride) in enumerate(zip(mapping.task_shape, strides)):
+                # For first index we don't need to do `% extent` because `taks_size == num_workers`
+                # It's guarantee by `task_mapping_bound_check_pass()`
+                if mapping.ranks[i] == 0:
+                    task.append(worker // stride)
+                else:
+                    task.append(worker // stride % extent)
         return [task]
 
     def visit_Repeat(self, mapping: RepeatTaskMapping, worker: Expr) -> List[TaskIndex]:

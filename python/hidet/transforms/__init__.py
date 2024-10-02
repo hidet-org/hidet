@@ -43,7 +43,7 @@ from .lower_integer_subbyte import lower_integer_subbyte_pass
 from .add_hints import add_hints_pass
 from .spatial_simplification import spatial_simplification_pass
 from .expand_repeat import expand_repeat_mapping_pass
-
+from .task_mapping_bound_check import task_mapping_bound_check
 
 from .cute.cuda.lower_cute_dialect import lower_cute_dialect_pass
 from .cute.cuda.update_shared_memory_usage import update_shared_memory_usage_pass
@@ -78,10 +78,12 @@ def lower(ir_module: IRModule) -> IRModule:
         attach_hash_to_signature(),
         unify_global_objects_pass(),
         generate_launch_func_pass(),
+        propagate_launch_bound_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         spatial_simplification_pass(),
         flatten_tensor_index_pass(),
+        task_mapping_bound_check(),  # this pass assume that propagate_launch_bound_pass() will be run before
         expand_repeat_mapping_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
@@ -94,7 +96,6 @@ def lower(ir_module: IRModule) -> IRModule:
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),

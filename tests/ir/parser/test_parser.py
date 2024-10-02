@@ -38,7 +38,7 @@ from hidet.transforms.lower_special_cast import lower_special_cast_pass
 from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
 from hidet.transforms.spatial_simplification import spatial_simplification_pass
 from hidet.transforms.expand_repeat import expand_repeat_mapping_pass
-
+from hidet.transforms.task_mapping_bound_check import task_mapping_bound_check
 
 # from hidet.graph.ops.softmax import SoftmaxTask
 from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
@@ -92,10 +92,12 @@ def generate_ir_modules():
         attach_hash_to_signature(),
         unify_global_objects_pass(),
         generate_launch_func_pass(),
+        propagate_launch_bound_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         spatial_simplification_pass(),
         flatten_tensor_index_pass(),
+        task_mapping_bound_check(),
         expand_repeat_mapping_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
@@ -107,7 +109,6 @@ def generate_ir_modules():
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),
