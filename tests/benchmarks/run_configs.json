@@ -11,6 +11,26 @@
     },
     {
         "type": "model",
+        "id": 16,
+        "name": "llama-2-7b",
+        "runfile": "bench_transformer.py",
+        "param_id": 15,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
+        "id": 17,
+        "name": "gemma-2b",
+        "runfile": "bench_transformer.py",
+        "param_id": 14,
+        "param_name": "bs=16,genlen=1",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "model",
         "id": 4,
         "name": "resnet50",
         "runfile": "bench_vision.py",
@@ -23,16 +43,6 @@
         "type": "model",
         "id": 5,
         "name": "efficientnet_b0",
-        "runfile": "bench_vision.py",
-        "param_id": 13,
-        "param_name": "128x3x224x224",
-        "dtype_id": 1,
-        "dtype_name": "float16"
-    },
-    {
-        "type": "model",
-        "id": 6,
-        "name": "densenet121",
         "runfile": "bench_vision.py",
         "param_id": 13,
         "param_name": "128x3x224x224",
