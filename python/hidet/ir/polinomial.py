@@ -12,7 +12,7 @@
 # pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
 # pylint: disable=useless-super-delegation, protected-access
 
-from typing import Union
+from typing import Union, List, Dict
 from hidet.ir.functors import ExprVisitor
 from .node import Node
 from .expr import Expr, Var, Constant, var
@@ -47,12 +47,17 @@ class Poli(Node):
     def get_bias(self):
         return self.monos.get(POLINOMIAL_BIAS_VAR, 0)
 
-    def to_expr(self) -> Expr:
+    # Convert to `Expr`.
+    # terms_map is correspondence Var -> Expr
+    # All vars from terms_map is changed to corresponding expresion. See also from_expr_to_poli
+    def to_expr(self, terms_map: Dict[Var, Expr]) -> Expr:
         self.remove_zeros()
         expr = 0
         for var, coef in self.monos.items():
             if var is POLINOMIAL_BIAS_VAR:
                 expr += coef
+            elif var in terms_map:
+                expr += terms_map[var] * coef
             else:
                 expr += var * coef
 
@@ -71,12 +76,14 @@ class Poli(Node):
         return res
 
     @staticmethod
-    def _binary_mul(poli, const: int):
+    def _binary_mul(poli, const):
         if poli is None or const is None:
             return None
+        assert isinstance(const, Poli)
         # Only linear polinomials with int coefs are supported now
-        if not isinstance(const, int):
+        if not const.is_constant():
             return None
+        const = const.get_bias()
         res_monos = {}
         for key in poli.monos.keys():
             res_monos[key] = poli.monos[key] * const
@@ -132,15 +139,23 @@ def _convert(obj: Union[int, str, Var]) -> Poli:
     return None
 
 
-def from_expr_to_poli(expr: Expr) -> Poli:
+# Convert Expr to Poli.
+# `attn_vars` is a list of Var in relation to which we constract polinomial.
+# If we see sub expresion that is not polinomial and not contain attn_vars we changed it on
+# virtual variable(term) and count it as a variable in polinomial.
+# In terms_map we return correspondence between terms and expresions.
+def from_expr_to_poli(expr: Expr, attn_vars: List[Var] = None) -> Poli:
     assert isinstance(expr, Expr)
-    visitor = _Expr2PoliConverter()
+    visitor = _Expr2PoliConverter(attn_vars)
     poli = visitor.visit(expr)
-    return poli
+    terms_map = visitor.terms_map
+    return poli, terms_map
 
 
 class _Expr2PoliConverter(ExprVisitor):
-    def __init__(self):
+    def __init__(self, attn_vars: List[Var]):
+        self.terms_map: Dict[Var, Expr] = {}
+        self.attn_vars = attn_vars
         super().__init__(use_memo=True)
 
     def visit_Constant(self, c: Constant):
@@ -164,3 +179,24 @@ class _Expr2PoliConverter(ExprVisitor):
 
     def visit_Multiply(self, e):
         return self._visit_binary(e, lambda x, y: x * y)
+
+    def visit_others(self, e):
+        from hidet.ir.tools import collect_free_vars
+
+        if self.attn_vars is None:
+            return None
+
+        vars = collect_free_vars(e)
+        intersection = set(vars) & set(self.attn_vars)
+        if len(intersection) == 0:
+            term_var = var('term')
+            self.terms_map[term_var] = e
+            return Poli(var=term_var, coef=1)
+        else:
+            return None
+
+    def visit_Mod(self, e):
+        return self.visit_others(e)
+
+    def visit_Div(self, e):
+        return self.visit_others(e)
