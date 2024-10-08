@@ -33,20 +33,23 @@ from hidet.ir.polinomial import Poli, from_expr_to_poli, POLINOMIAL_BIAS_VAR
 class PolinomialExpr2ExprRewriter(IRRewriter):
     def __init__(self, old: Expr, new: Expr):
         super().__init__()
-        self.old: Poli = from_expr_to_poli(old)
+        self.attn_vars = None
+        self.old, _ = from_expr_to_poli(old)
         if self.old is not None:
             self.old.remove_zeros()
+            self.attn_vars = list(self.old.monos.keys())
+            self.attn_vars.remove(POLINOMIAL_BIAS_VAR)
         self.new = new
 
     def visit_TensorElement(self, te: TensorElement):
         assert len(te.indices) == 1
         new_indices = te.indices
-        indices_poli = from_expr_to_poli(te.indices[0])
+        indices_poli, terms_map = from_expr_to_poli(te.indices[0], self.attn_vars)
         # TODO indices is None mean fail of conversion. unsqeeze produce i % 40
         if indices_poli is not None and self.old is not None:
             diff = indices_poli - self.old
             if not self.is_contain_loop_vars(diff):
-                new_indices = (self.new + diff.to_expr(),)
+                new_indices = (self.new + diff.to_expr(terms_map),)
         if new_indices[0] is te.indices[0]:
             return te
         else:
@@ -55,11 +58,11 @@ class PolinomialExpr2ExprRewriter(IRRewriter):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         assert len(stmt.indices) == 1
         new_indices = stmt.indices
-        indices_poli = from_expr_to_poli(stmt.indices[0])
+        indices_poli, terms_map = from_expr_to_poli(stmt.indices[0], self.attn_vars)
         if indices_poli is not None and self.old is not None:
             diff = indices_poli - self.old
             if not self.is_contain_loop_vars(diff):
-                new_indices = (self.new + diff.to_expr(),)
+                new_indices = (self.new + diff.to_expr(terms_map),)
         new_value = self.visit(stmt.value)
         if new_indices[0] is stmt.indices[0] and new_value is stmt.value:
             return stmt
@@ -69,10 +72,9 @@ class PolinomialExpr2ExprRewriter(IRRewriter):
     def is_contain_loop_vars(self, diff: Poli):
         # self.old.remove_zeros() is called in __init__()
         diff.remove_zeros()
-        for loop_var in self.old.monos.keys():
-            if loop_var is not POLINOMIAL_BIAS_VAR:
-                if loop_var in diff.monos.keys():
-                    return True
+        for loop_var in self.attn_vars:
+            if loop_var in diff.monos.keys():
+                return True
 
         return False
 
