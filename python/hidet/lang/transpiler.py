@@ -944,9 +944,16 @@ class PythonToHidetTranslator(PythonAstFunctor):
             from hidet.lang.script import ScriptModuleContext
 
             ctx = ScriptModuleContext.current_context()
+            if func.name not in ctx.name2var:
+                # the function is not defined in the current script module, we import it
+                ctx.append_function(func)
+            else:
+                # check whether the function we called is identical to the one we defined in script module
+                funcs = [ctx_func for ctx_func in ctx.functions if ctx_func.name == func.name]
+                if len(funcs) != 1 or funcs[0] is not func:
+                    raise HidetProgramError(self, expr, 'Function "{}" is ambiguous'.format(func.name))
+
             func_var = ctx.lookup(func.name)
-            if func_var is None:
-                raise HidetProgramError(self, expr, 'Call undefined function.')
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
             assert isinstance(func_var.type, ir.FuncType)

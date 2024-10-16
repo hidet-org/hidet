@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import LaunchKernelStmt
@@ -32,7 +31,8 @@ class AttachHashToSignatureRewriter(IRRewriter):
 class AttachHashToSignature(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
         if ir_module.task is None:
-            logging.warning("A IRModule without task is detected. Designated function hash cannot be append")
+            # disable the warning since it is also a normal use case to directly use hidet script to define kernels.
+            # logging.warning("A IRModule without task is detected. Designated function hash cannot be append")
             return ir_module
 
         modify_name = {}
