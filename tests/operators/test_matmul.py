@@ -176,5 +176,30 @@ def test_matmul_cublas(a_shape, b_shape, dtype, tol):
     )
 
 
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 128, 128], [128, 128]],
+        [[1, 128, 128 + 4], [128, 128 + 4]],
+        [[1, 128, 128 + 2], [128, 128 + 2]],
+        [[1, 128, 128 + 2], [128 - 2, 128 + 2]],
+        [[1, 128, 128], [128 - 4, 128]],
+    ],
+)
+def test_matmul_nt(a_shape, b_shape):
+    a = torch.randn(*a_shape, dtype=torch.float16, device='cuda')
+    b = torch.randn(*b_shape, dtype=torch.float16, device='cuda')
+    c_correct = torch.matmul(a, torch.transpose(b, 0, 1))
+    ahi = hidet.from_torch(a)
+    bhi = hidet.from_torch(b)
+    ahi_symbol = hidet.symbol_like(ahi)
+    bhi_symbol = hidet.symbol_like(bhi)
+    cc = ops.matmul_nt(ahi_symbol, bhi_symbol)
+    graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
+    graph_opt = hidet.graph.optimize(graph)
+    c_hi = graph_opt(ahi, bhi)
+    np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-2, rtol=1e-2)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

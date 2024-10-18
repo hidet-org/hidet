@@ -32,14 +32,26 @@ class TwoMatmulFusionPattern(SubgraphRewriteRule):
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
         x, c1, c2 = [matched[t] for t in [self.x, self.c1, self.c2]]
-        if 2 <= len(c1.shape) == len(c2.shape) and same_list(c1.shape[:-1], c2.shape[:-1]):
+        y1, y2 = [matched[t] for t in [self.y1, self.y2]]
+
+        # Previously, resolving `nn.Linear` to `matmul_nt` will break the CI test
+        # because this fusion does not consider whether the second matrix is transposed.
+        tr1, tr2 = [op.attrs['transpose_b'] for op in [y1.op, y2.op]]
+        if tr1 != tr2:
+            return None
+
+        if not tr1 and 2 <= len(c1.shape) == len(c2.shape) and same_list(c1.shape[:-1], c2.shape[:-1]):
             c = ops.concat([c1, c2], axis=-1)
             y = ops.matmul(x, c)
             # pylint: disable=unbalanced-tuple-unpacking
             new_y1, new_y2 = ops.split(y, axis=-1, parts_or_sections=[c1.shape[-1], c2.shape[-1]])
             return [new_y1, new_y2]
-        else:
-            return None
+        elif tr1 and 2 <= len(c1.shape) == len(c2.shape) and same_list(c1.shape[1:], c2.shape[1:]):
+            c = ops.concat([c1, c2], axis=-2)
+            y = ops.matmul_nt(x, c)
+            new_y1, new_y2 = ops.split(y, axis=-1, parts_or_sections=[c1.shape[-2], c2.shape[-2]])
+            return [new_y1, new_y2]
+        return None
 
 
 class ThreeMatmulFusionPattern(SubgraphRewriteRule):

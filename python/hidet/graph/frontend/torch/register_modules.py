@@ -191,17 +191,27 @@ class HidetZeroPad2d(HidetModule):
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):
         super().__init__(torch_module)
+        self.can_use_nt_matmul = torch_module.weight.dtype == torch.float16
         steal = dynamo_config['steal_weights']
-        self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
-        self.torch_params['weight'] = None
-        self.hidet_params['weight'] = None
+        if not self.can_use_nt_matmul:
+            self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
+            self.torch_params['weight'] = None
+            self.hidet_params['weight'] = None
+        else:
+            self.transposed_weight = None
         torch.cuda.empty_cache()
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return reg_funcs.linear(
-            x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True), weight_is_transposed=True
-        )
+        if self.can_use_nt_matmul:
+            return reg_funcs.linear(
+                x=x, weight=self.param('weight'), bias=self.param('bias', optional=True), weight_is_transposed=False
+            )
+        else:
+            assert self.transposed_weight is not None
+            return reg_funcs.linear(
+                x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True), weight_is_transposed=True
+            )
 
 
 @register_module(torch.nn.BatchNorm2d)

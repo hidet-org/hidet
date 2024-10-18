@@ -16,6 +16,7 @@ import math
 import operator
 import functools
 import torch
+
 from hidet.graph.tensor import Tensor, from_torch, ones_like, randn
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -159,9 +160,16 @@ def max_pool3d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=
 
 @register_function(torch.nn.functional.linear)
 def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor], weight_is_transposed=False):
+    from hidet import float16
+
     if len(weight.shape) > 1 and not weight_is_transposed:
-        weight = ops.transpose(weight, [1, 0])
-    y = ops.matmul(x, weight)
+        if weight.dtype == float16:
+            y = ops.matmul_nt(x, weight)
+        else:
+            weight = ops.transpose(weight, [1, 0])
+            y = ops.matmul(x, weight)
+    else:
+        y = ops.matmul(x, weight)
     if bias is not None:
         y = y + bias
     return y
