@@ -13,8 +13,33 @@ concurrency:
 
 jobs:
 
+  build-wheel:
+    outputs:
+      wheel_name: ${{ steps.build_step.outputs.wheel_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=0.0.1.dev${{ github.run_id }}" >> $GITHUB_OUTPUT
+
+      - name: Build Hidet Wheel
+        id: build_step
+        uses: ./.github/actions/build-wheel
+        with:
+          version: ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_step.outputs.wheel_name }}
+          path: ${{ steps.build_step.outputs.wheel_path }}
+          retention-days: 1
+          if-no-files-found: "error"
+
   build-docs:
-    if: github.repository == 'CentML/hidet' || github.repository == 'hidet-org/hidet'
     runs-on: arc-runner-set
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
@@ -52,7 +77,6 @@ jobs:
           cd docs; make clean; make html
 
   list-test-dirs:
-    if: github.repository == 'CentML/hidet' || github.repository == 'hidet-org/hidet'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -71,7 +95,7 @@ jobs:
           python .github/scripts/set_test_matrix.py
           
   run-test:
-    needs: list-test-dirs
+    needs: [list-test-dirs, build-wheel]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -90,19 +114,20 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v2
+      - name: Download wheel
+        uses: actions/download-artifact@v4
         with:
-          cmake-version: '3.19.x'
+          name: ${{ needs.build-wheel.outputs.wheel_name }}
 
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
+      - name: Setup Hidet from Wheel
+        run: |
+          pip install -r requirements-dev.txt
+          pip install ${{ needs.build-wheel.outputs.wheel_name }}
   
       - name: List installed packages
         run: |
           pip list
 
-      # Run tests
       - name: Run tests
         run: |
           rm -rf ~/.config/hidet

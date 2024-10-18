@@ -6,8 +6,33 @@ on:
 
 jobs:
 
+  build-wheel:
+    outputs:
+      wheel_name: ${{ steps.build_step.outputs.wheel_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build Hidet Wheel
+        id: build_step
+        uses: ./.github/actions/build-wheel
+        with:
+          version: ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_step.outputs.wheel_name }}
+          path: ${{ steps.build_step.outputs.wheel_path }}
+          retention-days: 1
+          if-no-files-found: "error"
+
   list-test-dirs:
-    if: github.repository == 'hidet-org/hidet'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -25,10 +50,9 @@ jobs:
         run: |
           python .github/scripts/set_test_matrix.py
 
-  publish-tests:
+  run-tests:
     name: Release Tests
-    needs: list-test-dirs
-    if: github.repository == 'hidet-org/hidet'
+    needs: [list-test-dirs, build-wheel]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -47,26 +71,26 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v2
+      - name: Download wheel
+        uses: actions/download-artifact@v4
         with:
-          cmake-version: '3.19.x'
+          name: ${{ needs.build-wheel.outputs.wheel_name }}
 
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
+      - name: Setup Hidet from Wheel
+        run: |
+          pip install -r requirements-dev.txt
+          pip install ${{ needs.build-wheel.outputs.wheel_name }}
   
       - name: List installed packages
         run: |
           pip list
 
-      # Run tests
       - name: Run tests
         run: |
           rm -rf ~/.config/hidet
           python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
   build-docs:
-    if: github.repository == 'hidet-org/hidet'
     runs-on: arc-runner-set
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
@@ -104,25 +128,23 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [publish-tests, build-docs] # require tests to pass before deploy runs
+    needs: [run-tests, build-docs, build-wheel]
     if: github.event_name == 'release' && github.event.action == 'published' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v3
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - name: Build package
-        uses: ./.github/actions/
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
         with:
-          version: ${{ steps.get_version.outputs.VERSION }}
+          name: ${{ needs.build-wheel.outputs.wheel_name }}
+
       - name: Show the wheel
         run: |
-          ls scripts/wheel/built_wheel
+          ls -l
+      
       - name: Publish
         uses: pypa/gh-action-pypi-publish@v1.5.0
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
-          packages_dir: scripts/wheel/built_wheel
+          packages_dir: ./

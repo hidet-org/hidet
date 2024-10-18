@@ -7,9 +7,11 @@ inputs:
 outputs:
   wheel_path:
     description: 'the path to the generated wheel'
+  wheel_name:
+    description: 'the full name of the wheel file'
 runs:
   using: 'docker'
-  image: '../../scripts/wheel/dockerfiles/manylinux_2_28_x86_64/Dockerfile'
+  image: '../../../scripts/wheel/dockerfiles/manylinux_2_28_x86_64/Dockerfile'
   args:
     - "bash"
     - "./scripts/wheel/build_wheel.sh"
