@@ -395,5 +395,20 @@ def test_scatter_add_compile():
     )
 
 
+def test_linear_odd_dims():
+    # As mentioned in #509, the we cannot use `matmul_nt` when the n or k dimension is odd.
+    # This test is to ensure those corner cases are handled correctly.
+    x = torch.randn(10, 20, device='cuda', dtype=torch.half)
+    w = torch.randn(1, 20, device='cuda', dtype=torch.half)
+
+    check_module(
+        FunctionalModule(op=lambda x, w: torch.nn.functional.linear(x, w)),
+        args=[x, w],
+        atol=1e-2,
+        rtol=1e-2,
+        dynamic=False,
+    )
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
