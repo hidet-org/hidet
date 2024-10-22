@@ -159,7 +159,7 @@ def max_pool3d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=
 
 
 @register_function(torch.nn.functional.linear)
-def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor], weight_is_transposed=False):
+def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor] = None, weight_is_transposed=False):
     from hidet import float16
 
     if len(weight.shape) > 1 and not weight_is_transposed:

@@ -124,8 +124,6 @@ class MatmulResolveRule(ResolveRule):
         return c
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
-        if op.attrs['transpose_b']:
-            return None
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -141,6 +139,9 @@ class MatmulResolveRule(ResolveRule):
         can_imperative = hidet.option.get_imperative()
         if a.is_symbolic() or b.is_symbolic():
             hidet.option.imperative(False)
+
+        if op.attrs['transpose_b']:
+            b = b.transpose(-2, -1)
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
