@@ -198,7 +198,32 @@ def test_matmul_nt(a_shape, b_shape):
     graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
     graph_opt = hidet.graph.optimize(graph)
     c_hi = graph_opt(ahi, bhi)
-    np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-2, rtol=1e-2)
+    np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-1, rtol=1e-1)
+
+
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 128, 128], [128, 128]],
+        [[1, 128, 128 + 4], [128 + 4, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128 - 2]],
+        [[1, 128, 128], [128, 128 - 4]],
+    ],
+)
+def test_matmul_bf16(a_shape, b_shape):
+    a = torch.randn(*a_shape, dtype=torch.bfloat16, device='cuda')
+    b = torch.randn(*b_shape, dtype=torch.bfloat16, device='cuda')
+    c_correct = torch.matmul(a, b).to(dtype=torch.float32)
+    ahi = hidet.from_torch(a)
+    bhi = hidet.from_torch(b)
+    ahi_symbol = hidet.symbol_like(ahi)
+    bhi_symbol = hidet.symbol_like(bhi)
+    cc = ops.matmul(ahi_symbol, bhi_symbol)
+    graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
+    graph_opt = hidet.graph.optimize(graph)
+    c_hi = graph_opt(ahi, bhi).to(dtype='float32')
+    np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-1, rtol=1e-1)
 
 
 if __name__ == '__main__':

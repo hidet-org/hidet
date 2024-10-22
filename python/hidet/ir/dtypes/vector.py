@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Any, Sequence
 from hidet.ir.type import DataType
-from .floats import float32, float16
+from .floats import float32, float16, bfloat16
 from .integer import int8, uint8
 from .integer_subbyte import int4b, uint4b
 from .boolean import boolean
@@ -109,6 +109,8 @@ i4x8 = int4bx8
 uint4bx8 = VectorType(uint4b, 8)
 u4x8 = uint4bx8
 
+bfloat16x2 = VectorType(bfloat16, 2)
+
 
 def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
     table = {
@@ -118,6 +120,7 @@ def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
         (int8, 4): int8x4,
         (uint8, 4): uint8x4,
         (boolean, 4): int8x4,
+        (bfloat16, 2): bfloat16x2,
     }
     if (base_dtype, num_lanes) in table:
         return table[(base_dtype, num_lanes)]
