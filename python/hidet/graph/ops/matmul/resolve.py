@@ -195,17 +195,19 @@ class MatmulResolveRule(ResolveRule):
 
         transpose_b = op.attrs['transpose_b']
 
+        valid_dtypes = [dtypes.float16, dtypes.bfloat16]
+
         if not transpose_b and not (
-            a.dtype == dtypes.float16
-            and b.dtype == dtypes.float16
+            a.dtype in valid_dtypes
+            and b.dtype in valid_dtypes
             and is_constant(a.shape[-1], b.shape[-1])
             and (a.shape[-1] % 2 == b.shape[-1] % 2 == 0)
         ):
             return None
 
         elif transpose_b and not (
-            a.dtype == dtypes.float16
-            and b.dtype == dtypes.float16
+            a.dtype in valid_dtypes
+            and b.dtype in valid_dtypes
             and is_constant(a.shape[-1], b.shape[-2])
             and (a.shape[-1] % 2 == b.shape[-2] % 2 == 0)
         ):
