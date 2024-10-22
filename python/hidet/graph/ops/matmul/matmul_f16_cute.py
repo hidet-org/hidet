@@ -55,8 +55,13 @@ class MatmulF16CuteTask(Task):
         if not a.type.dtype == b.type.dtype:
             raise ValueError(f'Both inputs must have the same dtype, but got {a.type.dtype} and {b.type.dtype}')
 
-        if a.type.dtype.is_any_float16():
-            target_float_type = a.type.dtype
+        both_f16 = a.type.dtype == float16
+        both_bf16 = a.type.dtype == bfloat16
+
+        if both_f16:
+            target_float_type = float16
+        elif both_bf16:
+            target_float_type = bfloat16
         else:
             raise ValueError(
                 f'Both inputs must be float16 or bfloat tensors, but got {a.type.dtype} and {b.type.dtype}'
@@ -704,7 +709,8 @@ def matmul_f16_cute(
     if a.dtype != b.dtype:
         raise ValueError('a and b must have the same dtype, got {} and {}'.format(a.dtype, b.dtype))
 
-    if not a.dtype.is_any_float16() or not b.dtype.is_any_float16():
+    valid_dtypes = [dtypes.float16, dtypes.bfloat16]
+    if a.dtype not in valid_dtypes or b.dtype not in valid_dtypes:
         raise ValueError('matmul_f16_cute only supports float16 or bfloat16, got {} and {}'.format(a.dtype, b.dtype))
 
     acc_dtype = data_type(acc_dtype)

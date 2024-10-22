@@ -31,7 +31,6 @@ def register_functions():
         'int32',
         'float16',
         'float32',
-        'tfloat32',
         'bfloat16',
         'bool',
         'int4b',
