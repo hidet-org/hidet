@@ -19,10 +19,9 @@ from itertools import product
 from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
 from hidet.ir.type import PointerType, data_type
-from hidet.ir.expr import Var, Expr, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt, asm, DeclareStmt
+from hidet.ir.expr import Expr, cast
+from hidet.ir.stmt import asm
 from hidet.ir.func import Function
-from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
 from hidet.lang import uint64
@@ -113,6 +112,8 @@ def register_wgmma_configs():
 
 @initialize()
 def register_wgmma_instructions():
+    from hidet.lang import attrs, script
+
     for config in wgmma_configs.values():
         inst_name = config.inst_name()
         a_store_types = ["shared", "regs"]
@@ -148,78 +149,70 @@ def register_wgmma_instructions():
                 )
 
                 if a_store_type == "regs":
-                    with FunctionBuilder(name=func_name, kind="cuda_internal") as fb:
-                        # parameters: a, b, c
-                        a = Var("a", PointerType(config.a_input_dtype))
-                        c = Var("c", PointerType(config.output_dtype))
-                        b_desc = Var("b_desc", uint64)
+                    template_sub_strings = [
+                        inst_name,
+                        "{{{}}},".format(", ".join([f"%{i}" for i in range(config.c_regs)])),
+                        "{{{}}},".format(
+                            ", ".join([f"%{i}" for i in range(config.c_regs, config.c_regs + config.a_regs)])
+                        ),
+                        "%{},".format(config.c_regs + config.a_regs),
+                        "{},".format(scale_d),
+                        "{},".format(scale_a),
+                        "{},".format(scale_b),
+                        "{};".format(trans_b),
+                    ]
+                    template_string = " ".join(template_sub_strings)
 
-                        fb.extend_params([a, c, b_desc])
+                    @script
+                    def cuda_wgmma(
+                        a: ~data_type(config.a_input_dtype), c: ~data_type(config.output_dtype), b_desc: uint64
+                    ):
+                        attrs.func_kind = 'cuda_internal'
+                        attrs.func_name = func_name
 
-                        # local variables
-                        ra = Var("ra", PointerType("uint32"))
-                        rc = Var("rc", PointerType("uint32"))
-                        fb += DeclareStmt(ra)
-                        fb += DeclareStmt(rc)
+                        ra = cast(a, PointerType("uint32"))
+                        rc = cast(c, PointerType("uint32"))
 
-                        # body
-                        a_regs, c_regs = config.a_regs, config.c_regs
-                        template_sub_strings = [
-                            inst_name,
-                            "{{{}}},".format(", ".join([f"%{i}" for i in range(c_regs)])),
-                            "{{{}}},".format(", ".join([f"%{i}" for i in range(c_regs, c_regs + a_regs)])),
-                            "%{},".format(c_regs + a_regs),
-                            "{},".format(scale_d),
-                            "{},".format(scale_a),
-                            "{},".format(scale_b),
-                            "{};".format(trans_b),
-                        ]
-                        template_string = " ".join(template_sub_strings)
-                        fb += AssignStmt(ra, cast(a, ra.type))
-                        fb += AssignStmt(rc, cast(c, rc.type))
-                        fb += AsmStmt(
-                            template_string=template_string,
-                            outputs=[("+r", rc[i]) for i in range(c_regs)],
-                            inputs=[("r", ra[i]) for i in range(a_regs)] + [("l", b_desc)],
+                        asm(
+                            template=template_string,
+                            output_inputs=[rc[i] for i in range(config.c_regs)],
+                            inputs=[ra[i] for i in range(config.a_regs)] + [b_desc],
                             is_volatile=True,
                         )
-                    register_primitive_function(name=func_name, func_or_type=fb.func)
+
+                    assert isinstance(cuda_wgmma, Function)
+                    register_primitive_function(name=cuda_wgmma.name, func_or_type=cuda_wgmma)
 
                 elif a_store_type == "shared":
-                    with FunctionBuilder(name=func_name, kind="cuda_internal") as fb:
-                        # parameters: a, b, c
-                        a_desc = Var("a_desc", uint64)
-                        c = Var("c", PointerType(config.output_dtype))
-                        b_desc = Var("b_desc", uint64)
+                    template_sub_strings = [
+                        inst_name,
+                        "{{{}}},".format(", ".join([f"%{i}" for i in range(config.c_regs)])),
+                        "%{},".format(config.c_regs),
+                        "%{},".format(config.c_regs + 1),
+                        "{},".format(scale_d),
+                        "{},".format(scale_a),
+                        "{},".format(scale_b),
+                        "{},".format(trans_a),
+                        "{};".format(trans_b),
+                    ]
+                    template_string = " ".join(template_sub_strings)
 
-                        fb.extend_params([a_desc, c, b_desc])
+                    @script
+                    def cuda_wgmma(a_desc: uint64, c: ~data_type(config.output_dtype), b_desc: uint64):
+                        attrs.func_kind = 'cuda_internal'
+                        attrs.func_name = func_name
 
-                        # local variables
-                        rc = Var("rc", PointerType("uint32"))
-                        fb += DeclareStmt(rc)
+                        rc = cast(c, PointerType("uint32"))
 
-                        # body
-                        c_regs = config.c_regs
-                        template_sub_strings = [
-                            inst_name,
-                            "{{{}}},".format(", ".join([f"%{i}" for i in range(c_regs)])),
-                            "%{},".format(c_regs),
-                            "%{},".format(c_regs + 1),
-                            "{},".format(scale_d),
-                            "{},".format(scale_a),
-                            "{},".format(scale_b),
-                            "{},".format(trans_a),
-                            "{};".format(trans_b),
-                        ]
-                        template_string = " ".join(template_sub_strings)
-                        fb += AssignStmt(rc, cast(c, rc.type))
-                        fb += AsmStmt(
-                            template_string=template_string,
-                            outputs=[("+r", rc[i]) for i in range(c_regs)],
-                            inputs=[("l", a_desc)] + [("l", b_desc)],
+                        asm(
+                            template=template_string,
+                            output_inputs=[rc[i] for i in range(config.c_regs)],
+                            inputs=[a_desc, b_desc],
                             is_volatile=True,
                         )
-                    register_primitive_function(name=func_name, func_or_type=fb.func)
+
+                    assert isinstance(cuda_wgmma, Function)
+                    register_primitive_function(name=cuda_wgmma.name, func_or_type=cuda_wgmma)
 
 
 def wgmma_async(
