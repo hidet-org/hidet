@@ -95,7 +95,7 @@ def test_hardswish_torch(shape, dtype):
     check_torch_unary(shape, lambda x: F.hardswish(x), lambda x: ops.hardswish(x), dtype=dtype, rtol=1e-5, atol=1e-5)
 
 
-@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("shape", [[33, 44], [30, 256000]])
 @pytest.mark.parametrize("axis", [1])
 @pytest.mark.parametrize("dtype", ["float32"])
 def test_softmax_torch(shape, axis, dtype):
