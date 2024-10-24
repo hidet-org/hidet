@@ -675,6 +675,15 @@ def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     return ops.softmax(x, dim)
 
 
+@register_function(torch.nn.functional.log_softmax)
+@register_method(torch.Tensor.log_softmax)
+@register_function(torch.log_softmax)
+def logsoftmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
+    if dtype is not None:
+        x = ops.cast(x, dtype_from_torch(dtype))
+    return ops.logsoftmax(x, dim)
+
+
 @register_function(operator.matmul)
 @register_function(torch.matmul)
 @register_method(torch.Tensor.matmul)

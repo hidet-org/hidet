@@ -396,6 +396,13 @@ class HidetSoftmin(HidetModule):
         return reg_funcs.softmin(x, self.mod.dim)
 
 
+@register_module(torch.nn.LogSoftmax)
+class HidetLogSoftmax(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.LogSoftmax)
+        return reg_funcs.logsoftmax(x, self.mod.dim)
+
+
 @register_module(torch.nn.Softplus)
 class HidetSoftplus(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
