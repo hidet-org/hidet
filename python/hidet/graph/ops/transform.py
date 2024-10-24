@@ -502,10 +502,43 @@ class ReshapeOp(Operator):
         task = ReshapeTask(input_like(x, 'x'), shape)
         super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
+    def run_torch(self):
+        from hidet import from_torch
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        shape = self.attrs['shape']
+        return [from_torch(torch.reshape(x_torch, tuple(shape)).contiguous())]
+
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
         super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
+
+    def run_torch(self):
+        from hidet import from_torch
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        plan = self.attrs['plan']
+        shape = []
+
+        for dims in plan:
+            if len(dims) == 0:
+                shape.append(1)
+            elif len(dims) == 1:
+                shape.append(x_torch.size(dims[0]))
+            else:
+                size = 1
+                for dim in dims:
+                    size *= x_torch.size(dim)
+                shape.append(size)
+
+        flat_plan = [dim for dims in plan for dim in dims]
+
+        x_torch = torch.permute(x_torch, tuple(flat_plan))
+
+        return [from_torch(x_torch.reshape(shape).contiguous())]
 
 
 class SqueezeOp(Operator):
@@ -532,6 +565,16 @@ class UnsqueezeOp(Operator):
             raise ValueError('Invalid unsqueeze dims: {} for shape: {}'.format(dims, x.shape))
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
+    def run_torch(self):
+        from hidet import from_torch
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        dims = self.attrs['dims']
+        for dim in dims:
+            x_torch = torch.unsqueeze(x_torch, dim)
+        return [from_torch(x_torch.contiguous())]
+
 
 class FlattenOp(Operator):
     def __init__(self, x: Tensor, start_dim: int, end_dim: int):
@@ -547,6 +590,15 @@ class FlattenOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
 
+    def run_torch(self):
+        from hidet import from_torch
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        start_dim = self.attrs['start_dim']
+        end_dim = self.attrs['end_dim']
+        return [from_torch(torch.flatten(x_torch, start_dim, end_dim).contiguous())]
+
 
 class PermuteDimsOp(Operator):
     def __init__(self, x: Tensor, axes: Optional[List[int]] = None):
@@ -559,6 +611,16 @@ class PermuteDimsOp(Operator):
             axes = list(reversed(range(len(x.shape))))
         plan = [[v] for v in axes]
         super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
+
+    def run_torch(self):
+        from hidet import from_torch
+        import torch
+
+        x = self.inputs[0]
+        x_torch = x.torch()
+        axes = self.attrs['axes']
+        result = [from_torch(torch.permute(x_torch, axes).contiguous())]
+        return result
 
 
 class CastOp(Operator):

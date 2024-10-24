@@ -291,10 +291,11 @@ def register_hidet_options():
         description='The CPU architecture to compile the kernels for (e.g., "x86-64"). "auto" for auto-detect.',
     )
     register_option(
-        name='imperative',
-        type_hint='bool',
-        default_value=True,
-        description='Whether to enable imperative execution when op arguments allows',
+        name='execution_mode',
+        type_hint='str',
+        default_value='interpreter',
+        description="Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed",
+        choices=['symbolic', 'interpreter', 'compilaion'],
     )
     register_option(
         name='auth_tokens.for_huggingface',
@@ -840,28 +841,28 @@ def get_runtime_check() -> bool:
     return OptionContext.current().get_option('runtime_check')
 
 
-def imperative(enable: bool = True):
+def execution_mode(kind: str = 'compilaion'):
     """
-    Whether to enable imperative execution when op arguments allows.
+    Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
 
     Parameters
     ----------
-    enable: bool
-        Whether to enable imperative execution when op arguments allows.
+    kind: str
+        Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
     """
-    OptionContext.current().set_option('imperative', enable)
+    OptionContext.current().set_option('execution_mode', kind)
 
 
-def get_imperative() -> bool:
+def get_execution_mode() -> str:
     """
-    Get whether to enable imperative execution when op arguments allows.
+    Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
 
     Returns
     -------
-    ret: bool
-        Get whether to enable imperative execution when op arguments allows.
+    ret: str
+        Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
     """
-    return OptionContext.current().get_option('imperative')
+    return OptionContext.current().get_option('execution_mode')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):

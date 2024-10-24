@@ -96,9 +96,11 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
         else:
             logger.info('hidet:   %s', arg)
 
-    output = interpreter(*inputs)
-    output_format, output_tensors = serialize_output(output)
-    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
+    with hidet.option.context():
+        hidet.option.execution_mode('symbolic')
+        output = interpreter(*inputs)
+        output_format, output_tensors = serialize_output(output)
+        input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
 
     return hidet.trace_from(output_tensors, inputs=input_tensors), inputs, output_format
 
