@@ -295,3 +295,15 @@ def softmax(x: Tensor, axis=1) -> Tensor:
 
 def softmin(x: Tensor, axis: int) -> Tensor:
     return softmax(-x, axis)
+
+
+def logsoftmax(x: Tensor, axis=1) -> Tensor:
+    from hidet.graph.ops import max, exp, sum, log
+
+    max_x = max(x, axis, keep_dim=True)
+    normalized_x = x - max_x
+    x_exp = exp(normalized_x)
+    sum_exp_x = sum(x_exp, axis, keep_dim=True)
+    log_sum_exp_x = log(sum_exp_x)
+    log_soft_max = x - max_x - log_sum_exp_x
+    return log_soft_max
