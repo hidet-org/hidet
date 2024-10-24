@@ -1085,7 +1085,7 @@ class EpilogueVisitorRewriter(GraphVisitor):
 
     @staticmethod
     def where_scalar_tensor(y: Expr, cond: Expr, x: Expr):
-        return if_then_else(cond, x, y)
+        return if_then_else(cond, y, x)
 
     @staticmethod
     def where_scalar_scalar(x: Expr, y: Expr, cond: Expr):
