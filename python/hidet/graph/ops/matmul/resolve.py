@@ -136,9 +136,9 @@ class MatmulResolveRule(ResolveRule):
         # require additional memory and somehow these allocated spaces are not released during the model compilation.
         # This causes the error described in issue #326.
 
-        can_imperative = hidet.option.get_imperative()
+        exection_mode = hidet.option.get_execution_mode()
         if a.is_symbolic() or b.is_symbolic():
-            hidet.option.imperative(False)
+            hidet.option.execution_mode('symbolic')
 
         if op.attrs['transpose_b']:
             b = b.transpose(-2, -1)
@@ -181,7 +181,7 @@ class MatmulResolveRule(ResolveRule):
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
 
-        hidet.option.imperative(can_imperative)
+        hidet.option.execution_mode(exection_mode)
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:

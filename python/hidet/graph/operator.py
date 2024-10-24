@@ -150,20 +150,31 @@ class Operator:
     def run(self) -> List[Tensor]:
         from hidet.ir.tools import collect
 
-        # We imperatively run the operator if
-        # 1. all inputs are concrete tensors (i.e., t.storage is not None)
-        # 2. there is no symbol variable in the task
-        # 3. configuration option "imperative" is True
-        could_imperative_run = (
-            all(t.storage is not None for t in self.inputs)
-            and len(collect(self.task, SymbolVar)) == 0
-            and hidet.option.get_option('imperative')
+        # We symbolicly run the operator if
+        # 1. any input is not concrete tensors (i.e., t.storage is None)
+        # 2. there is symbol variable in the task
+        # 3. configuration option "execution_mode" is symbolic
+        use_symbolic = (
+            any(t.storage is None for t in self.inputs)
+            or len(collect(self.task, SymbolVar)) != 0
+            or hidet.option.get_execution_mode() == 'symbolic'
         )
 
-        if could_imperative_run:
-            return self.compiled_task.run_async(self.inputs)
-        else:
+        if use_symbolic:
             return self.symbolic_run()
+
+        # Attempt to execute the task using the PyTorch runtime implementation (run_torch).
+        # If the method is not implemented (raises NotImplementedError),
+        # fall back to executing the task via the compiled task in async mode.
+        # This approach helps improve compilation time for optimize.
+        # Removing run_torch should not impact the functionality of the compiler.
+        if hidet.option.get_execution_mode() == 'interpreter':
+            try:
+                return self.run_torch()
+            except (NotImplementedError, ValueError):
+                return self.compiled_task.run_async(self.inputs)
+        else:
+            return self.compiled_task.run_async(self.inputs)
 
     def symbolic_run(self) -> List[Tensor]:
         from hidet.ir.tools import simplify
@@ -183,3 +194,6 @@ class Operator:
         if update_attributes is not None:
             attributes.update(update_attributes)
         return cls(*inputs, **attributes).outputs
+
+    def run_torch(self):
+        raise NotImplementedError

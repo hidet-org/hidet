@@ -506,7 +506,7 @@ class CompiledGraph:
 
         def f_create_inputs() -> List[Tensor]:
             with hidet.option.context():
-                hidet.option.imperative(True)
+                hidet.option.execution_mode('compilaion')
                 dummy_inputs = []
                 for meta_input in self.meta.inputs:
                     dtype = hidet.ir.data_type(meta_input.dtype)
