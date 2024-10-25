@@ -16,11 +16,11 @@ from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
-from hidet.ir.expr import is_false
+from hidet.ir.expr import cast, is_false
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.library import tune
 from hidet.ir.layout import row_major, local_layout
-from hidet.lang import f16, f32, i32, u32, spatial, repeat
+from hidet.lang import f16, bf16, f32, i32, u32, spatial, repeat
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
@@ -42,6 +42,8 @@ class AttnTask(Task):
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
+
+        self.target_float_type = q.type.dtype
 
         self._assert(
             ir.logical_and(k.shape[-1] == v.shape[-2], q.shape[-1] == k.shape[-2] == v.shape[-1]),
@@ -129,10 +131,7 @@ class AttnTask(Task):
         warp_elems_m=[16, 32, 64, 128],
         warp_elems_n=[16, 32, 64, 128],
         warp_elems_k=[8, 16, 32, 64],
-        mma_config=[
-            (MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16()),
-            (MmaConfig.m16n8k16_f16_f32(), MmaConfig.m16n8k16_f16_f16()),
-        ],
+        mma_config=['m16n8k8', 'm16n8k16'],
     )
     @tune.space(
         1,
@@ -142,7 +141,7 @@ class AttnTask(Task):
         warp_elems_m=[16],
         warp_elems_n=[128],
         warp_elems_k=[32],
-        mma_config=[(MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16())],
+        mma_config=['m16n8k8'],
     )
     def cuda_schedule_attn(
         self,
@@ -152,9 +151,24 @@ class AttnTask(Task):
         warp_elems_m=32,
         warp_elems_n=64,
         warp_elems_k=16,
-        mma_config=(MmaConfig.m16n8k8_f16_f32(), MmaConfig.m16n8k8_f16_f16()),
+        mma_config='m16n8k8',
     ) -> IRModule:
-        mma_config_fp32, mma_config = mma_config
+
+        target_float_type = self.target_float_type
+        mma_configs_fp32 = (
+            {'m16n8k8': MmaConfig.m16n8k8_f16_f32(), 'm16n8k16': MmaConfig.m16n8k16_f16_f32()}
+            if target_float_type == f16
+            else {'m16n8k8': MmaConfig.m16n8k8_bf16_f32(), 'm16n8k16': MmaConfig.m16n8k16_bf16_f32()}
+        )
+
+        mma_configs_fp16 = (
+            {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
+            if target_float_type == f16
+            else mma_configs_fp32
+        )
+
+        mma_config_fp32 = mma_configs_fp32[mma_config]
+        mma_config = mma_configs_fp16[mma_config]
 
         def calc_swizzle_size(d):
             powers_of_two = [128, 64, 32, 16, 8]
@@ -314,12 +328,16 @@ class AttnTask(Task):
                 row_major(1, swizzle_repeat) * row_major(block_k_o, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
             )
 
-        smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
-        smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
-        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major(2) + smem_k_layout)
-        smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
-        smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
-        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major(2) + smem_v_layout)
+        smem_q_type = tensor_type(target_float_type.name, shape=[block_i, dpad_size], layout=smem_q_layout)
+        smem_k_type = tensor_type(target_float_type.name, shape=[block_k, block_j], layout=smem_k_layout)
+        smem_k_db_type = tensor_type(
+            target_float_type.name, shape=[2, block_k, block_j], layout=row_major(2) + smem_k_layout
+        )
+        smem_qk_type = tensor_type(target_float_type.name, shape=[block_i, block_j], layout=smem_qk_layout)
+        smem_v_type = tensor_type(target_float_type.name, shape=[block_k_o, block_j_o], layout=smem_v_layout)
+        smem_v_db_type = tensor_type(
+            target_float_type.name, shape=[2, block_k_o, block_j_o], layout=row_major(2) + smem_v_layout
+        )
         regs_o_type = tensor_type(dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size)
@@ -364,7 +382,7 @@ class AttnTask(Task):
         with hidet.script_module() as module:
             # --------------- helper functions ---------------------------------------------------------------------
             @hidet.script
-            def resolve_ldmatrix(regs: ~f16, smem_addr: ~f16, is_A: hidet.lang.boolean):
+            def resolve_ldmatrix(regs: ~target_float_type, smem_addr: ~target_float_type, is_A: hidet.lang.boolean):
                 if mma_k == 16:
                     if is_A:
                         b32_regs = view(regs, u32[4])
@@ -401,7 +419,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_k_g2s_sm80(
-                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+                k: target_float_type[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
             ):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
@@ -416,7 +434,7 @@ class AttnTask(Task):
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_v_g2s_sm80(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm80(v: target_float_type[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j_seg in v_g2s_layout.on(threadIdx.x):
@@ -426,7 +444,7 @@ class AttnTask(Task):
                         cp_async(~smem_v[i, j], ~gmem_v[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_q_g2s_sm80(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+            def copy_q_g2s_sm80(q: target_float_type[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
                 for i, j_seg in q_g2s_layout.on(threadIdx.x):
@@ -437,7 +455,7 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_k_g2s_sm75(
-                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+                k: target_float_type[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
             ):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
@@ -449,7 +467,7 @@ class AttnTask(Task):
                             smem_k[i, j] = f16.zero
 
             @hidet.script
-            def copy_v_g2s_sm75(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm75(v: target_float_type[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j in v_g2s_layout_sm75.on(threadIdx.x):
@@ -457,10 +475,10 @@ class AttnTask(Task):
                         if offset_j + i < n_kv_size and j < d_size:
                             smem_v[i, j] = gmem_v.read([i, j], protected=False)
                         else:
-                            smem_v[i, j] = f16.zero
+                            smem_v[i, j] = target_float_type.zero
 
             @hidet.script
-            def copy_q_g2s_sm75(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+            def copy_q_g2s_sm75(q: target_float_type[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
                 for i, j in q_g2s_layout_sm75.on(threadIdx.x):
@@ -468,31 +486,33 @@ class AttnTask(Task):
                         if offset_i + i < n_size and j < d_size:
                             smem_q[i, j] = gmem_q.read([i, j], protected=False)
                         else:
-                            smem_q[i, j] = f16.zero
+                            smem_q[i, j] = target_float_type.zero
 
             @hidet.script
-            def copy_k_g2s(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s(
+                k: target_float_type[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+            ):
                 if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
                 else:
                     copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
 
             @hidet.script
-            def copy_v_g2s(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s(v: target_float_type[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_v_g2s_sm80(v, smem_v, offset_j)
                 else:
                     copy_v_g2s_sm75(v, smem_v, offset_j)
 
             @hidet.script
-            def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+            def copy_q_g2s(q: target_float_type[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
                 if compute_capability >= 80 and n_size % 8 == 0:
                     copy_q_g2s_sm80(q, smem_q, offset_i)
                 else:
                     copy_q_g2s_sm75(q, smem_q, offset_i)
 
             @hidet.script
-            def copy_o_r2g(o: f16[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):
+            def copy_o_r2g(o: target_float_type[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 o_head_index = spatial(*o_head).map(blockIdx.x // i_split)
                 gmem_o = o[o_head_index][offset_i:, :]
@@ -505,12 +525,16 @@ class AttnTask(Task):
                                     delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
                                     delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
                                     if delta_m + offset_i < n_size and delta_n < d_size:
-                                        gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
+                                        gmem_o[delta_m, delta_n] = cast(regs_o[mma_i, mma_j, p], dtype)
                                     p += 1
 
             @hidet.script
             def copy_q_s2r(
-                mma_i: int, mma_k0: int, offset_k: int, regs_q: f16[mma_config.a_elements], smem_q: smem_q_type
+                mma_i: int,
+                mma_k0: int,
+                offset_k: int,
+                regs_q: target_float_type[mma_config.a_elements],
+                smem_q: smem_q_type,
             ):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, _, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
@@ -521,7 +545,7 @@ class AttnTask(Task):
                     resolve_ldmatrix(regs_q, row_addr, True)
 
             @hidet.script
-            def copy_k_s2r(mma_j: int, k1: int, regs_k: f16[mma_config.b_elements], smem_k: smem_k_type):
+            def copy_k_s2r(mma_j: int, k1: int, regs_k: target_float_type[mma_config.b_elements], smem_k: smem_k_type):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for _, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     p = col_spatial(16, 2).map(lane_id)[0]
@@ -530,7 +554,11 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_qk_s2r(
-                mma_i: int, mma_k0: int, offset_k: int, regs_qk: f16[mma_config.a_elements], smem_qk: smem_qk_type
+                mma_i: int,
+                mma_k0: int,
+                offset_k: int,
+                regs_qk: target_float_type[mma_config.a_elements],
+                smem_qk: smem_qk_type,
             ):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, _, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
@@ -543,7 +571,7 @@ class AttnTask(Task):
                         resolve_ldmatrix(regs_qk, row_addr, True)
 
             @hidet.script
-            def copy_v_s2r(mma_j: int, k1: int, regs_v: f16[mma_config.b_elements], smem_v: smem_v_type):
+            def copy_v_s2r(mma_j: int, k1: int, regs_v: target_float_type[mma_config.b_elements], smem_v: smem_v_type):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for _, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
                     if not warp_id >= spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).num_workers:
@@ -644,8 +672,8 @@ class AttnTask(Task):
 
             @hidet.script
             def warp_mma_fp32(
-                regs_a: f16[mma_config_fp32.a_elements],
-                regs_b: f16[mma_config_fp32.b_elements],
+                regs_a: target_float_type[mma_config_fp32.a_elements],
+                regs_b: target_float_type[mma_config_fp32.b_elements],
                 regs_c: acc_dtype[mma_config_fp32.c_elements],
             ):
                 mma_sync(mma_config_fp32, regs_a, regs_b, regs_c)
@@ -661,10 +689,10 @@ class AttnTask(Task):
             # -------------- main function ---------------------------------------------------------------
             @hidet.script
             def attn_kernel(
-                q: f16[q_head + [n_size, d_size]],
-                k: f16[k_head + [d_size, n_kv_size]],
-                v: f16[v_head + [n_kv_size, d_size]],
-                o: f16[o_head + [n_size, d_size]],
+                q: target_float_type[q_head + [n_size, d_size]],
+                k: target_float_type[k_head + [d_size, n_kv_size]],
+                v: target_float_type[v_head + [n_kv_size, d_size]],
+                o: target_float_type[o_head + [n_size, d_size]],
             ):
                 attrs.cuda.grid_dim = i_split * bs
                 attrs.cuda.block_dim = block_size
@@ -673,35 +701,47 @@ class AttnTask(Task):
 
                 offset_i = (blockIdx.x % i_split) * i_rows_per_tb
 
-                smem_q = tensor_pointer('float16', shape=smem_q_type.shape, layout=smem_q_type.layout)
-                smem_k = tensor_pointer('float16', shape=smem_k_db_type.shape, layout=smem_k_db_type.layout)
-                smem_qk = tensor_pointer('float16', shape=smem_qk_type.shape, layout=smem_qk_type.layout)
-                smem_v = tensor_pointer('float16', shape=smem_v_db_type.shape, layout=smem_v_db_type.layout)
+                smem_q = tensor_pointer(target_float_type.name, shape=smem_q_type.shape, layout=smem_q_type.layout)
+                smem_k = tensor_pointer(
+                    target_float_type.name, shape=smem_k_db_type.shape, layout=smem_k_db_type.layout
+                )
+                smem_qk = tensor_pointer(target_float_type.name, shape=smem_qk_type.shape, layout=smem_qk_type.layout)
+                smem_v = tensor_pointer(
+                    target_float_type.name, shape=smem_v_db_type.shape, layout=smem_v_db_type.layout
+                )
                 smem_l = tensor_pointer(smem_l_type.dtype, shape=smem_l_type.shape)
                 smem_m = tensor_pointer(smem_m_type.dtype, shape=smem_m_type.shape)
                 smem_lij = tensor_pointer(smem_lij_type.dtype, shape=smem_lij_type.shape)
                 smem_mij = tensor_pointer(smem_mij_type.dtype, shape=smem_mij_type.shape)
 
-                smem_q = dynamic_shared_memory(byte_offset=smem_bytes_offsets['q'], dtype=f16)
-                smem_k = dynamic_shared_memory(byte_offset=smem_bytes_offsets['k'], dtype=f16)
-                smem_qk = dynamic_shared_memory(byte_offset=smem_bytes_offsets['qk'], dtype=f16)
-                smem_v = dynamic_shared_memory(byte_offset=smem_bytes_offsets['v'], dtype=f16)
+                smem_q = dynamic_shared_memory(byte_offset=smem_bytes_offsets['q'], dtype=target_float_type)
+                smem_k = dynamic_shared_memory(byte_offset=smem_bytes_offsets['k'], dtype=target_float_type)
+                smem_qk = dynamic_shared_memory(byte_offset=smem_bytes_offsets['qk'], dtype=target_float_type)
+                smem_v = dynamic_shared_memory(byte_offset=smem_bytes_offsets['v'], dtype=target_float_type)
                 smem_l = dynamic_shared_memory(byte_offset=smem_bytes_offsets['l'], dtype=smem_l_type.dtype)
                 smem_m = dynamic_shared_memory(byte_offset=smem_bytes_offsets['m'], dtype=smem_m_type.dtype)
                 smem_lij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['lij'], dtype=smem_lij_type.dtype)
                 smem_mij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['mij'], dtype=smem_mij_type.dtype)
 
-                regs_q = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
-                regs_k = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
+                regs_q = register_tensor(
+                    dtype=target_float_type.name, shape=[2, mmas_per_warp_m, mma_config.a_elements]
+                )
+                regs_k = register_tensor(
+                    dtype=target_float_type.name, shape=[2, mmas_per_warp_n, mma_config.b_elements]
+                )
                 regs_acc = register_tensor(
                     dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
                 )
-                regs_qk = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
-                regs_v = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
-                regs_acc_o = register_tensor(
-                    dtype=dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
+                regs_qk = register_tensor(
+                    dtype=target_float_type.name, shape=[2, mmas_per_warp_m_o, mma_config.a_elements]
                 )
-                regs_o = register_tensor(dtype=dtype, shape=regs_o_type.shape)
+                regs_v = register_tensor(
+                    dtype=target_float_type.name, shape=[2, mmas_per_warp_n_o, mma_config.b_elements]
+                )
+                regs_acc_o = register_tensor(
+                    dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
+                )
+                regs_o = register_tensor(dtype=acc_dtype, shape=regs_o_type.shape)
                 regs_li_new = register_tensor(dtype=smem_l_type.dtype, layout=regs_li_new_layout)
                 regs_mi_new = register_tensor(dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
                 regs_exp_mij = register_tensor(dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
@@ -711,8 +751,8 @@ class AttnTask(Task):
                 copy_q_g2s(q, smem_q, offset_i)
 
                 for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
-                    regs_acc_o[a, b, c] = dtype.zero
-                    regs_o[a, b, c] = dtype.zero
+                    regs_acc_o[a, b, c] = acc_dtype.zero
+                    regs_o[a, b, c] = acc_dtype.zero
 
                 j_tiles = cdiv(n_kv_size, block_j)
                 if is_causal:
@@ -780,7 +820,7 @@ class AttnTask(Task):
                     # ----------------------------
                     # Compute O = QK * V
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
-                        regs_acc_o[a, b, c] = dtype.zero
+                        regs_acc_o[a, b, c] = acc_dtype.zero
 
                     cp_async_sync()
                     syncthreads()
@@ -802,7 +842,7 @@ class AttnTask(Task):
                                         mma_i, mma_k + 1, k1 * block_k_o, ~regs_qk[(mma_k + 1) % 2, mma_i, 0], smem_qk
                                     )
                             for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
-                                warp_mma_fp16(
+                                warp_mma_fp32(
                                     ~regs_qk[mma_k % 2, mma_i, 0],
                                     ~regs_v[mma_k % 2, mma_j, 0],
                                     ~regs_acc_o[mma_i, mma_j, 0],
@@ -879,8 +919,11 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
     if mask is not None and is_causal is True:
         raise ValueError("mask and is_causal cannot be set at the same time")
 
-    if not q.dtype == k.dtype == v.dtype == f16:
-        raise ValueError("Attention only supports float16 inputs")
+    if not q.dtype == k.dtype == v.dtype:
+        raise ValueError("Attention only supports inputs of the same dtype")
+
+    if q.dtype not in (f16, bf16):
+        raise ValueError("Attention only supports float16 or bfloat16 inputs")
 
     if not len(q.shape) == len(k.shape) == len(v.shape):
         raise ValueError(
