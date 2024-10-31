@@ -10,12 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Tuple, Union, Sequence
+import torch
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
+from hidet.ir import dtypes
 from hidet.utils import prod
+from hidet.graph.tensor import from_torch
+from hidet.graph.frontend.torch.utils import dtype_to_torch
 from hidet.ir.cute import TensorLayout, compact_row_major, coalesce
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput, normalize_slice
@@ -503,9 +507,6 @@ class ReshapeOp(Operator):
         super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
     def run_torch(self):
-        from hidet import from_torch
-        import torch
-
         x_torch = self.inputs[0].torch()
         shape = self.attrs['shape']
         return [from_torch(torch.reshape(x_torch, tuple(shape)).contiguous())]
@@ -516,9 +517,6 @@ class RearrangeOp(Operator):
         super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def run_torch(self):
-        from hidet import from_torch
-        import torch
-
         x_torch = self.inputs[0].torch()
         plan = self.attrs['plan']
         shape = []
@@ -566,9 +564,6 @@ class UnsqueezeOp(Operator):
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def run_torch(self):
-        from hidet import from_torch
-        import torch
-
         x_torch = self.inputs[0].torch()
         dims = self.attrs['dims']
         for dim in dims:
@@ -591,9 +586,6 @@ class FlattenOp(Operator):
         )
 
     def run_torch(self):
-        from hidet import from_torch
-        import torch
-
         x_torch = self.inputs[0].torch()
         start_dim = self.attrs['start_dim']
         end_dim = self.attrs['end_dim']
@@ -613,9 +605,6 @@ class PermuteDimsOp(Operator):
         super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
 
     def run_torch(self):
-        from hidet import from_torch
-        import torch
-
         x = self.inputs[0]
         x_torch = x.torch()
         axes = self.attrs['axes']
@@ -633,6 +622,19 @@ class CastOp(Operator):
             task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: ir_cast(v, dtype)),
         )
 
+    def run_torch(self):
+        x = self.inputs[0]
+        dtype: DataType = self.attrs['dtype']
+
+        unsupported_types = [dtypes.boolean, dtypes.tfloat32]
+
+        if x.dtype in unsupported_types or dtype in unsupported_types:
+            raise NotImplementedError
+
+        x_torch = x.torch()
+        new_tensor = x_torch.to(dtype_to_torch(dtype))
+        return [from_torch(new_tensor)]
+
 
 class ConcatOp(Operator):
     def __init__(self, *tensors: Tensor, axis: int):
@@ -646,6 +648,15 @@ class ConcatOp(Operator):
             attributes={'axis': axis},
             task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
         )
+
+    def run_torch(self):
+        if len(self.inputs) == 1 and self.inputs[0].shape == (0,):
+            return self.inputs
+
+        inputs_torch = [x.torch() for x in self.inputs]
+        axis = self.attrs['axis']
+
+        return [from_torch(torch.cat(inputs_torch, axis))]
 
 
 class TakeOp(Operator):
@@ -707,6 +718,11 @@ class BroadcastOp(Operator):
             inputs=[data], attributes={'shape': shape}, task=BroadcastTask(input_like(data, 'data'), shape)
         )
 
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        shape = self.attrs['shape']
+        return [from_torch(torch.broadcast_to(x_torch, shape))]
+
 
 class PadOp(Operator):
     def __init__(self, data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0):
@@ -722,6 +738,20 @@ class PadOp(Operator):
             attributes={'pads': pads, 'mode': mode, 'value': value},
             task=PadTask(input_like(data, 'data'), pads, value),
         )
+
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        pads = self.attrs['pads']
+        mode = self.attrs['mode']
+        value = self.attrs['value']
+
+        half = len(pads) // 2
+        pads_torch = [None] * len(pads)
+        pads_torch[1::2] = pads[:half]
+        pads_torch[::2] = pads[half:]
+        pads_torch.reverse()
+
+        return [from_torch(torch.nn.functional.pad(x_torch, pads_torch, mode, value))]
 
 
 class TileOp(Operator):
