@@ -198,5 +198,63 @@
         "param_name": "1x224x224x3,axis=[1,2]",
         "dtype_id": 1,
         "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 16,
+        "param_name": "3x16x256x2304,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 17,
+        "param_name": "3x16x256x3072,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 18,
+        "param_name": "9x16x256x768,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 19,
+        "param_name": "7x16x47x4096,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 20,
+        "param_name": "3x16x47x12288,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 7,
+        "name": "reduce",
+        "runfile": "bench_op.py",
+        "param_id": 21,
+        "param_name": "2x16x47x22016,axis=[0]",
+        "dtype_id": 1,
+        "dtype_name": "float16"
     }
 ]
