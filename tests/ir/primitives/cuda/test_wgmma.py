@@ -169,6 +169,7 @@ def matmul_wgmma_tensor_core(
             b_desc: u64 = b_desc_template
             b_matrix_start_addr = (smem_b_addr & 0x3FFFF) >> 4  # 14 bits
             b_desc = b_desc | (b_matrix_start_addr) << 0
+            b_desc = b_desc | ((smem_b_addr >> 0x7) & 0x7) << 49
 
             if not is_a_shared:
                 regs_a = register_tensor(data_type(config.a_input_dtype), [config.a_elements])
@@ -190,6 +191,7 @@ def matmul_wgmma_tensor_core(
                 a_desc: u64 = a_desc_template
                 a_matrix_start_addr = (smem_a_addr & 0x3FFFF) >> 4
                 a_desc = a_desc | (a_matrix_start_addr) << 0
+                a_desc = a_desc | ((smem_a_addr >> 0x7) & 0x7) << 49
 
                 for i in range(a_size):
                     smem_a[i] = a[i]
@@ -355,32 +357,43 @@ def test_wgmma(
 
     m, n, k = config.m, config.n, config.k
     print(f"m: {m}, n: {n}, k: {k}")
-    a_cpu = torch.randint(3, (1, m, k), dtype=torch.float16)
-    b_cpu = torch.randint(3, (1, k, n), dtype=torch.float16)
+
+    dtype_dict = {"f32": torch.float32, "f16": torch.float16, "bf16": torch.bfloat16}
+
+    a_cpu = torch.randint(3, (1, m, k), dtype=dtype_dict[config.a_input_dtype])
+    b_cpu = torch.randint(3, (1, k, n), dtype=dtype_dict[config.b_input_dtype])
 
     a_layout_dict = {}
     b_layout_dict = {}
 
     a_layout_dict["NOSW"] = row_major(8, 2) * row_major(8, 8)
-    a_layout_dict["SW32"] = row_major(8, 1) * test_layout(row_major(8, 256), "f16", 1, 7, 3)
-    a_layout_dict["SW64"] = row_major(8, 1) * test_layout(row_major(8, 512), "f16", 2, 7, 3)
-    a_layout_dict["SW128"] = row_major(8, 1) * test_layout(row_major(8, 1024), "f16", 3, 7, 3)
+    a_layout_dict["SW32"] = row_major(8, 1) * test_layout(row_major(8, 256), config.a_input_dtype, 1, 7, 3)
+    a_layout_dict["SW64"] = row_major(8, 1) * test_layout(row_major(8, 512), config.a_input_dtype, 2, 7, 3)
+    a_layout_dict["SW128"] = row_major(8, 1) * test_layout(row_major(8, 1024), config.a_input_dtype, 3, 7, 3)
     a_layout_dict["NOSW_tp"] = row_major(8, 2) * column_major(8, 8)  # tp means transpose
-    a_layout_dict["SW32_tp"] = row_major(m // 16, 2) * test_layout(column_major(256, 8), "f16", 1, 7, 3)
-    a_layout_dict["SW64_tp"] = row_major(m // 32, 2) * test_layout(column_major(512, 8), "f16", 2, 7, 3)
-    a_layout_dict["SW128_tp"] = row_major(m // 64, 2) * test_layout(column_major(1024, 8), "f16", 3, 7, 3)
+    a_layout_dict["SW32_tp"] = row_major(m // 16, 2) * test_layout(column_major(256, 8), config.a_input_dtype, 1, 7, 3)
+    a_layout_dict["SW64_tp"] = row_major(m // 32, 2) * test_layout(column_major(512, 8), config.a_input_dtype, 2, 7, 3)
+    a_layout_dict["SW128_tp"] = row_major(m // 64, 2) * test_layout(
+        column_major(1024, 8), config.a_input_dtype, 3, 7, 3
+    )
 
     b_layout_dict["NOSW"] = column_major(2, n // 8) * column_major(8, 8)
-    b_layout_dict["SW32"] = column_major(1, n // 8) * test_layout(column_major(256, 8), "f16", 1, 7, 3)
-    b_layout_dict["SW64"] = column_major(1, n // 8) * test_layout(column_major(512, 8), "f16", 2, 7, 3)
-    b_layout_dict["SW128"] = column_major(1, n // 8) * test_layout(column_major(1024, 8), "f16", 3, 7, 3)
+    b_layout_dict["SW32"] = column_major(1, n // 8) * test_layout(column_major(256, 8), config.b_input_dtype, 1, 7, 3)
+    b_layout_dict["SW64"] = column_major(1, n // 8) * test_layout(column_major(512, 8), config.b_input_dtype, 2, 7, 3)
+    b_layout_dict["SW128"] = column_major(1, n // 8) * test_layout(column_major(1024, 8), config.b_input_dtype, 3, 7, 3)
     b_layout_dict["NOSW_tp"] = column_major(2, n // 8) * row_major(8, 8)  # tp means transpose
-    b_layout_dict["SW32_tp"] = column_major(2, (n + 16 - 1) // 16) * test_layout(row_major(8, 256), "f16", 1, 7, 3)
-    b_layout_dict["SW64_tp"] = column_major(2, (n + 32 - 1) // 32) * test_layout(row_major(8, 512), "f16", 2, 7, 3)
-    b_layout_dict["SW128_tp"] = column_major(2, (n + 64 - 1) // 64) * test_layout(row_major(8, 1024), "f16", 3, 7, 3)
+    b_layout_dict["SW32_tp"] = column_major(2, (n + 16 - 1) // 16) * test_layout(
+        row_major(8, 256), config.b_input_dtype, 1, 7, 3
+    )
+    b_layout_dict["SW64_tp"] = column_major(2, (n + 32 - 1) // 32) * test_layout(
+        row_major(8, 512), config.b_input_dtype, 2, 7, 3
+    )
+    b_layout_dict["SW128_tp"] = column_major(2, (n + 64 - 1) // 64) * test_layout(
+        row_major(8, 1024), config.b_input_dtype, 3, 7, 3
+    )
 
-    a_torch_1d = torch.zeros(a_layout_dict[a_mode].size, dtype=torch.float16)
-    b_torch_1d = torch.zeros(b_layout_dict[b_mode].size, dtype=torch.float16)
+    a_torch_1d = torch.zeros(a_layout_dict[a_mode].size, dtype=dtype_dict[config.a_input_dtype])
+    b_torch_1d = torch.zeros(b_layout_dict[b_mode].size, dtype=dtype_dict[config.b_input_dtype])
 
     # prepare memory layout for a and b
     for i in range(m * k):
@@ -415,7 +428,6 @@ def test_wgmma(
     )
 
     func = ir_module.build()
-
     c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b)
 
     input_a = a_1d if is_a_shared else a

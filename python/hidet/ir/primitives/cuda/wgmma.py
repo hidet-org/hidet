@@ -82,7 +82,9 @@ wgmma_configs: Dict[str, WgmmaConfig] = {}
 
 @initialize()
 def register_wgmma_configs():
-
+    # nameing convention: m{m}n{n}k{k}_{output_dtype}_{a_input_dtype}_{b_input_dtype}
+    # a_input_dtype, b_input_dtype can be different with fp8.
+    # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions-wgmma-mma
     # input_dtype = f16
     for output_dtype in ["f16", "f32"]:
         for n_values in range(8, 257, 8):  # n values from 8 to 256 in steps of 8
@@ -108,6 +110,31 @@ def register_wgmma_configs():
                     )
                 }
             )
+
+    # input_dtype = bf16
+    for n_values in range(8, 257, 8):  # n values from 8 to 256 in steps of 8
+        wgmma_configs.update(
+            {
+                "m64n{}k16_{}_bf16_bf16".format(n_values, output_dtype): WgmmaConfig(
+                    m=64,
+                    n=n_values,
+                    k=16,
+                    a_input_dtype="bf16",
+                    b_input_dtype="bf16",
+                    output_dtype="f32",
+                    a_load_map=row_spatial(4, 1)
+                    * col_repeat(2, 2, attrs="u+u+")
+                    * row_spatial(8, 4)
+                    * row_repeat(1, 2, attrs="u+u+"),  # Calculation specified by the PTX doc
+                    c_store_map=row_spatial(4, 1)
+                    * col_repeat(2, n_values // 8, attrs="u+u+")
+                    * row_spatial(8, 4)
+                    * row_repeat(1, 2, attrs="u+u+"),  # Calculation specified by the PTX doc
+                    required_arch=(9, 0, 'a'),  # The arch should be sm_90a only. Currently, get_arch returns sm_90,
+                    # and in the build process, it converts to sm_90a.
+                )
+            }
+        )
 
 
 @initialize()
