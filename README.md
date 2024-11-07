@@ -1,8 +1,8 @@
 # Hidet: An Open-Source Deep Learning Compiler
-[**Documentation**](http://docs.hidet.org/)  |
+[**Documentation**](http://hidet.org/docs)  |
 [**Research Paper**](https://dl.acm.org/doi/10.1145/3575693.3575702)  |
 [**Releases**](https://github.com/hidet-org/hidet/releases) |
-[**Contributing**](https://docs.hidet.org/stable/developer-guides/contributing.html)
+[**Contributing**](https://hidet.org/docs/stable/developer-guides/contributing.html)
 
 ![GitHub](https://img.shields.io/github/license/hidet-org/hidet)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/hidet-org/hidet/tests.yaml)
@@ -23,7 +23,7 @@ Currently, hidet focuses on optimizing the inference workloads on NVIDIA GPUs, a
 ```bash
 pip install hidet
 ```
-You can also try the [nightly build version](https://docs.hidet.org/stable/getting-started/install.html) or [build from source](https://docs.hidet.org/stable/getting-started/build-from-source.html#).
+You can also try the [nightly build version](https://hidet.org/docs/stable/getting-started/install.html) or [build from source](https://hidet.org/docs/stable/getting-started/build-from-source.html#).
 
 ### Usage
 
@@ -45,9 +45,9 @@ model_opt = torch.compile(model, backend='hidet')
 y = model_opt(x)
 ```
 See the following tutorials to learn other usages:
-- [Quick Start](http://docs.hidet.org/stable/gallery/getting-started/quick-start.html)
-- [Optimize PyTorch models](http://docs.hidet.org/stable/gallery/tutorials/optimize-pytorch-model.html)
-- [Optimize ONNX models](http://docs.hidet.org/stable/gallery/tutorials/optimize-onnx-model.html)
+- [Quick Start](http://hidet.org/docs/stable/gallery/getting-started/quick-start.html)
+- [Optimize PyTorch models](http://hidet.org/docs/stable/gallery/tutorials/optimize-pytorch-model.html)
+- [Optimize ONNX models](http://hidet.org/docs/stable/gallery/tutorials/optimize-onnx-model.html)
 
 ## Publication
 Hidet originates from the following research work:
@@ -64,7 +64,7 @@ Hidet is currently under active development by a team at [CentML Inc](https://ce
 
 ## Contributing
 We welcome contributions from the community. Please see 
-[contribution guide](https://docs.hidet.org/stable/developer-guides/contributing.html)
+[contribution guide](https://hidet.org/docs/stable/developer-guides/contributing.html)
 for more details.
 
 ## License
