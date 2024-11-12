@@ -53,7 +53,6 @@ def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_parallel_k()
-        ctx.set_mma('mma')
         graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
 
     def hidet_opt(inp_a, inp_b, inp_bias):

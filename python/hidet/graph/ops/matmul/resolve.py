@@ -96,7 +96,7 @@ class MatmulResolveRule(ResolveRule):
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
-        mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
+        mma = self.get_config('mma', default='mma')  # 'simt', 'mma'
 
         if any(not isinstance(v, int) for v in a.shape + b.shape):
             nparts = 1

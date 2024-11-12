@@ -151,6 +151,5 @@ if __name__ == '__main__':
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision(dtype)
-        ctx.set_mma('mma')
         latency = bench_func(params, dtype)
     print(latency)
