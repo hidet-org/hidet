@@ -15,8 +15,8 @@ pylint==2.13.9
 torch>=2.3.0
 torchvision
 datasets
-diffusers==0.27.1
-transformers==4.37
+diffusers
+transformers
 sentencepiece
 sacremoses
 

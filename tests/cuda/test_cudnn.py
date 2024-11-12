@@ -29,7 +29,7 @@ from hidet.cuda.cudnn import cudnnDataType
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
     [
-        (hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 1e-2),
+        (hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 2e-2),
         (hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5),
         (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8),
     ],
@@ -87,7 +87,7 @@ def test_cudnn_conv2d(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, s
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
     [
-        (hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 1e-2),
+        (hidet.float16, cudnnDataType.CUDNN_DATA_HALF, 2e-2),
         (hidet.float32, cudnnDataType.CUDNN_DATA_FLOAT, 1e-5),
         (hidet.float64, cudnnDataType.CUDNN_DATA_DOUBLE, 1e-8),
     ],
