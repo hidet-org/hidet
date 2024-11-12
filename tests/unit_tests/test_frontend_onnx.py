@@ -53,7 +53,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     hidet_outputs = [tensor.cpu().numpy() for tensor in hidet_outputs]
 
     assert len(onnx_outputs) == len(hidet_outputs)
-    tol = {'float32': 1e-4, 'float16': 5e-2}[dtype]
+    tol = {'float32': 5e-2, 'float16': 5e-2}[dtype]
     for onnx_output, hidet_output in zip(onnx_outputs, hidet_outputs):
         np.testing.assert_allclose(actual=hidet_output, desired=onnx_output, rtol=tol, atol=tol)
 

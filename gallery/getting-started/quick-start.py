@@ -45,7 +45,7 @@ y1 = model_opt(x)
 y2 = model(x)
 
 # check the correctness
-torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-2, atol=1e-2)
+torch.testing.assert_close(actual=y1, expected=y2, rtol=2e-2, atol=2e-2)
 
 
 # benchmark the performance

@@ -79,7 +79,7 @@ class PassContext:
             'reduce_precision': None,
             # mma primitive:
             # ['simt', 'mma']
-            'mma': 'simt',
+            'mma': 'mma',
             # parallel k
             # ['default', 'disabled', 'search', 2, 4, ...]
             'parallel_k': 'default',

@@ -57,7 +57,6 @@ def test_save_lower_ir():
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision('float16')
-        ctx.set_mma('mma')
 
         run_hidet_benchmark()
 

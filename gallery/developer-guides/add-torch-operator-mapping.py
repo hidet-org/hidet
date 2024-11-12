@@ -96,7 +96,7 @@ def run_model():
     x = torch.randn(10, 10, device='cuda')
     y1 = model_opt(x)
     y2 = model(x)
-    torch.testing.assert_close(actual=y1, expected=y2)
+    torch.testing.assert_close(actual=y1, expected=y2, atol=3e-3, rtol=3e-3)
     print('success!')
 
 

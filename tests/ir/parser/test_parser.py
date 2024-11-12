@@ -58,7 +58,7 @@ def get_matmul_task():
     return mod
 
 
-def get_bmatmul_task(mma_str='simt'):
+def get_bmatmul_task(mma_str='mma'):
     s = symbol_var('s')
     a = tensor_input('a', 'float16', [1, s, 256])
     b = tensor_input('b', 'float16', [1, 256, 256])
