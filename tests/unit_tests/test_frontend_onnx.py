@@ -64,7 +64,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         'resnet50',
         # 'inception_v3',
         # 'mobilenet_v2',
-        'bert',
+        # 'bert',   # disable bert since the aten::scaled_dot_product_attention operator is used but not registered in our op set.
         # 'gpt2'
     ],
 )
