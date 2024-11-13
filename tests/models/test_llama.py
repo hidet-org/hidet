@@ -74,7 +74,6 @@ def test_llama2(device, opt):
     'The current llama model definition is not compatible huggingface thus disable the test.'
 )
 def test_model_architecture():
-
     import torch
     import hidet
     from transformers.models.llama import LlamaForCausalLM as hfLm, LlamaConfig
