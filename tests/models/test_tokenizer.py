@@ -28,6 +28,10 @@ def get_test_texts() -> List[str]:
     ]
 
 
+@pytest.mark.skip(
+    'The tokenizer implemented inside hidet is not maintained since '
+    'we do not plan to support everything with CompiledApp anymore.'
+)
 @pytest.mark.parametrize("model", ["huggyllama/llama-7b", "openai-community/gpt2", "facebook/opt-350m"])
 @pytest.mark.parametrize("text", get_test_texts())
 def test_tokenizer_encode_decode(model: str, text: str):
