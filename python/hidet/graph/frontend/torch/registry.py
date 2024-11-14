@@ -150,8 +150,23 @@ class HidetModule:
                 if steal:
                     del self.torch_params[name]
                     setattr(self.mod, name, None)
-                if torch_param.is_contiguous():
-                    self.hidet_params[name] = tensor_from_torch(torch_param)
+
+                # Force the memory of the parameter to be managed by hidet.
+                # The graph optimization may create new parameters during the
+                # graph transformation. If the storage of the parameter is managed
+                # by other libraries, the memory won't be freed after the graph
+                # optimization, which will cause OOM error.
+                def tensor_clone_from_torch(tensor: torch.Tensor):
+                    hidet_tensor = tensor_from_torch(tensor)
+                    from hidet.graph import empty_like
+
+                    hidet_param = empty_like(hidet_tensor)
+                    hidet_param.copy_(hidet_tensor)
+                    del hidet_tensor
+                    return hidet_param
+
+                if steal:
+                    self.hidet_params[name] = tensor_clone_from_torch(torch_param.contiguous())
                 else:
                     self.hidet_params[name] = tensor_from_torch(torch_param.contiguous())
                 del torch_param

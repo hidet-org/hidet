@@ -195,17 +195,15 @@ class HidetLinear(HidetModule):
         steal = dynamo_config['steal_weights']
         if not self.can_use_nt_matmul:
             self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
-            self.torch_params['weight'] = None
-            self.hidet_params['weight'] = None
         else:
-            self.transposed_weight = None
+            self.weight = self.param('weight', steal=steal)
         torch.cuda.empty_cache()
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
         if self.can_use_nt_matmul:
             return reg_funcs.linear(
-                x=x, weight=self.param('weight'), bias=self.param('bias', optional=True), weight_is_transposed=False
+                x=x, weight=self.weight, bias=self.param('bias', optional=True), weight_is_transposed=False
             )
         else:
             assert self.transposed_weight is not None
