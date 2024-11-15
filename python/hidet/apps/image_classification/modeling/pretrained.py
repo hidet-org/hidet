@@ -17,8 +17,6 @@ from transformers import PreTrainedModel as TransformersPretrainedModel
 from hidet.apps.modeling_outputs import ImageClassifierOutput
 from hidet.apps.pretrained import PretrainedModel
 
-import hidet
-
 
 class PretrainedModelForImageClassification(PretrainedModel):
     @classmethod
@@ -30,12 +28,8 @@ class PretrainedModelForImageClassification(PretrainedModel):
 
         # load the pretrained huggingface model into cpu
         with torch.device("cuda"):  # reduce the time to load the model
-            huggingface_token = hidet.option.get_option("auth_tokens.for_huggingface")
             torch_model: TransformersPretrainedModel = AutoModelForImageClassification.from_pretrained(
-                pretrained_model_name_or_path=config.name_or_path,
-                torch_dtype=torch.float32,
-                revision=revision,
-                token=huggingface_token,
+                pretrained_model_name_or_path=config.name_or_path, torch_dtype=torch.float32, revision=revision
             )
 
         torch_model = torch_model.cpu()

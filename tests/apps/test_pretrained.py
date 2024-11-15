@@ -33,10 +33,9 @@ def test_copy_weights():
 
     with torch.device("cuda"):
         config: ResNetConfig = hf.load_pretrained_config("microsoft/resnet-50")
-        huggingface_token = get_option("auth_tokens.for_huggingface")
 
         torch_model = AutoModelForImageClassification.from_pretrained(
-            pretrained_model_name_or_path=config.name_or_path, torch_dtype=torch.float32, token=huggingface_token
+            pretrained_model_name_or_path=config.name_or_path, torch_dtype=torch.float32
         )
         hidet_model = ResNetForImageClassification(config)
         hidet_model.to(dtype="float32", device="cuda")

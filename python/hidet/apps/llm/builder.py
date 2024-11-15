@@ -3,7 +3,6 @@ Builds a LLM app.
 """
 from typing import Optional, Type, List
 from transformers import PretrainedConfig, AutoConfig
-import hidet.option
 from hidet.ir.dtypes import int32, int64, DataType
 from hidet.graph import FlowGraph
 from hidet.apps.llm.app import LLM
@@ -17,8 +16,7 @@ from hidet.utils.py import release_unused_resources
 
 def _load_pretrained_config(model: str, revision: Optional[str]) -> PretrainedConfig:
     try:
-        huggingface_token = hidet.option.get_option('auth_tokens.for_huggingface')
-        return AutoConfig.from_pretrained(model, revision=revision, token=huggingface_token)
+        return AutoConfig.from_pretrained(model, revision=revision)
     except ValueError as e:
         raise e
 
