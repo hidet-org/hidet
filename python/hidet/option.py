@@ -297,12 +297,6 @@ def register_hidet_options():
         description="Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed",
         choices=['symbolic', 'interpreter', 'compilaion'],
     )
-    register_option(
-        name='auth_tokens.for_huggingface',
-        type_hint='str',
-        default_value='',
-        description='The auth token to use for accessing private huggingface models.',
-    )
 
     # Load hidet config
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet', 'hidet.toml')
@@ -1081,20 +1075,6 @@ class compile_server:
         """
         OptionContext.current().set_option('compile_server.repo_url', repo_url)
         OptionContext.current().set_option('compile_server.repo_version', version)
-
-
-class auth_tokens:
-    @staticmethod
-    def for_huggingface(token: str):
-        """
-        Set the token for accessing to huggingface.
-
-        Parameters
-        ----------
-        token: str
-            The token for huggingface.
-        """
-        OptionContext.current().set_option('auth_tokens.for_huggingface', token)
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

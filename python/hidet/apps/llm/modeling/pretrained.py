@@ -1,7 +1,6 @@
 from typing import Optional, Set, List, Type
 from transformers import AutoModelForCausalLM
 import torch
-import hidet.option
 from hidet.ir.type import DataType
 from hidet.graph.tensor import Tensor
 from hidet.apps.llm import nn
@@ -105,10 +104,7 @@ class PretrainedModelForCausalLM(nn.Module):
 
         # load the pretrained huggingface model into cpu
         with torch.device("cuda"):  # reduce the time to load the model
-            huggingface_token = hidet.option.get_option('auth_tokens.for_huggingface')
-            torch_model = AutoModelForCausalLM.from_pretrained(
-                name, torch_dtype=torch.float16, revision=revision, token=huggingface_token
-            )
+            torch_model = AutoModelForCausalLM.from_pretrained(name, torch_dtype=torch.float16, revision=revision)
 
         torch_model = torch_model.cpu()
         torch.cuda.empty_cache()
