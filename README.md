@@ -15,7 +15,7 @@ A series of graph-level and operator-level optimizations are applied to optimize
 Currently, hidet focuses on optimizing the inference workloads on NVIDIA GPUs, and requires
 - Linux OS
 - CUDA Toolkit 11.6+
-- Python 3.8+
+- Python 3.9+
 
 ## Getting Started
 

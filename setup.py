@@ -18,7 +18,7 @@ setup(
     description="Hidet: a compilation-based DNN inference framework.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    python_requires='>=3.8',
+    python_requires='>=3.9',
     packages=find_packages(where='python'),
     package_dir={"": "python"},
     include_package_data=True,
