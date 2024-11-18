@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Tuple, Union, Sequence
-import torch
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
@@ -507,6 +506,8 @@ class ReshapeOp(Operator):
         super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         shape = self.attrs['shape']
         return [from_torch(torch.reshape(x_torch, tuple(shape)).contiguous())]
@@ -517,6 +518,8 @@ class RearrangeOp(Operator):
         super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         plan = self.attrs['plan']
         shape = []
@@ -564,6 +567,8 @@ class UnsqueezeOp(Operator):
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         dims = self.attrs['dims']
         for dim in dims:
@@ -586,6 +591,8 @@ class FlattenOp(Operator):
         )
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         start_dim = self.attrs['start_dim']
         end_dim = self.attrs['end_dim']
@@ -605,6 +612,8 @@ class PermuteDimsOp(Operator):
         super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
 
     def run_torch(self):
+        import torch
+
         x = self.inputs[0]
         x_torch = x.torch()
         axes = self.attrs['axes']
@@ -650,6 +659,8 @@ class ConcatOp(Operator):
         )
 
     def run_torch(self):
+        import torch
+
         if len(self.inputs) == 1 and self.inputs[0].shape == (0,):
             return self.inputs
 
@@ -719,6 +730,8 @@ class BroadcastOp(Operator):
         )
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         shape = self.attrs['shape']
         return [from_torch(torch.broadcast_to(x_torch, shape))]
@@ -740,6 +753,8 @@ class PadOp(Operator):
         )
 
     def run_torch(self):
+        import torch
+
         x_torch = self.inputs[0].torch()
         pads = self.attrs['pads']
         mode = self.attrs['mode']
