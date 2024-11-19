@@ -190,8 +190,10 @@ class HidetZeroPad2d(HidetModule):
 @register_module(torch.nn.Linear)
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):
+        from hidet.graph.frontend.torch.utils import is_any_torch_float16
+
         super().__init__(torch_module)
-        self.can_use_nt_matmul = torch_module.weight.dtype == torch.float16
+        self.can_use_nt_matmul = is_any_torch_float16(self.mod.weight.dtype)
         steal = dynamo_config['steal_weights']
         if not self.can_use_nt_matmul:
             self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
