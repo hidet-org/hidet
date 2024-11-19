@@ -434,13 +434,13 @@ def test_wgmma(
 
     if scale_d == 1:
         # test if c is accumulated correctly
-        c = hidet.ones([1, m, n], dtype=data_type(config.output_dtype).name)
+        c = hidet.ones([1, m, n], dtype=data_type(config.output_dtype).name).cuda()
         func(input_a, b_1d, c)
         np.testing.assert_allclose(
             actual=c.cpu().numpy(),
             desired=c_desire.cpu().numpy() + np.ones((1, m, n), dtype=data_type(config.output_dtype).name),
         )
     else:
-        c = hidet.zeros([1, m, n], dtype=data_type(config.output_dtype).name)
+        c = hidet.zeros([1, m, n], dtype=data_type(config.output_dtype).name).cuda()
         func(input_a, b_1d, c)
         np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c_desire.cpu().numpy())
