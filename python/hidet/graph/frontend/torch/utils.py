@@ -87,6 +87,12 @@ def dtype_to_torch(dtype: DataType):
     return mapping[dtype]
 
 
+def is_any_torch_float16(torch_dtype) -> bool:
+    import torch
+
+    return torch_dtype in (torch.float16, torch.bfloat16)
+
+
 def device_from_torch(torch_device) -> Device:
     """
     Convert a device provided by torch to a hidet device.
