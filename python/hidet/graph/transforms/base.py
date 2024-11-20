@@ -80,9 +80,6 @@ class PassContext:
             # mma primitive:
             # ['simt', 'mma']
             'mma': 'mma',
-            # parallel k
-            # ['default', 'disabled', 'search', 2, 4, ...]
-            'parallel_k': 'default',
             # print lower details
             'verbose': False,
             # Allow source graph removal.
@@ -212,37 +209,6 @@ class PassContext:
         """
         self.configs['mma'] = mma
         return self
-
-    def set_parallel_k(self, disabled=False, default=False, search=False, nparts: Optional[int] = None):
-        """
-        Set the strategy to parallel on reduction dimension for matrix multiplication and convolution.
-
-        Only one of the three parameters should be specified.
-
-        Parameters
-        ----------
-        disabled: bool
-            Disable the parallelization on reduction dimension.
-
-        default: bool
-            Allow hidet to figure our the parallel factor.
-
-        search: bool
-            Whether to search the k.
-
-        nparts: Optional[int]
-            Use a fixed factor.
-        """
-        if sum([disabled, default, search, nparts is not None]) > 1:
-            raise ValueError('Only one of parameters should be set.')
-        if disabled:
-            self.configs['parallel_k'] = 'disabled'
-        if default:
-            self.configs['parallel_k'] = 'default'
-        if search:
-            self.configs['parallel_k'] = 'search'
-        if nparts is not None:
-            self.configs['parallel_k'] = nparts
 
     def save_graph_instrument(self, out_dir) -> PassContext:
         """

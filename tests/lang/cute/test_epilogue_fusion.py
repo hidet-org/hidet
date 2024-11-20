@@ -25,6 +25,7 @@ from hidet.ir.cute.layout import (
     logical_divide,
     left_inverse,
 )
+from hidet.option import OptionContext
 from hidet.ir.cute.int_tuple import compact_col_major
 from hidet.utils import initialize
 
@@ -96,18 +97,19 @@ def test_epilogue_fusion(dim0, dim3, dims, args):
     torch_mean, torch_min, torch_max = bench(graph_opt, (A, B))
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
 
-    hidet.option.cache_dir("./graph")
-    hidet.option.search_space(2)
-    hidet.option.debug_cache_tuning()
-    # commented out because parallel build failed when dumping lower ir
-    # hidet.option.save_lower_ir(True)
-    hidet.torch.dynamo_config.reset()
-    hidet.torch.dynamo_config.parallel_k(strategy="disabled")
+    with hidet.option.context():
+        hidet.option.cache_dir("./graph")
+        hidet.option.search_space(2)
+        hidet.option.debug_cache_tuning()
+        # commented out because parallel build failed when dumping lower ir
+        # hidet.option.save_lower_ir(True)
+        hidet.option.parallel_k(strategy='disabled')
 
-    C = graph(A, B)
-    dynamo.reset()
-    graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
-    C_hidet = graph_hidet(A, B)
+        C = graph(A, B)
+        dynamo.reset()
+        graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
+        C_hidet = graph_hidet(A, B)
+
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
     np.testing.assert_allclose(actual=C_hidet.cpu().numpy(), desired=C.cpu().numpy(), rtol=1e-2)
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, (A, B))

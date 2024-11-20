@@ -24,6 +24,7 @@ from hidet.ir.cute.layout import (
     logical_divide,
     left_inverse,
 )
+from hidet.option import OptionContext
 from hidet.ir.cute.int_tuple import compact_col_major
 from hidet.utils import initialize
 
@@ -113,18 +114,19 @@ def test_problem(M, N, K, L):
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
 
-    # hidet.option.cache_dir("./matmul_standalone")
-    hidet.option.search_space(2)
-    # hidet.option.debug_cache_tuning()
-    # hidet.option.save_lower_ir(True)
-    hidet.torch.dynamo_config.reset()
-    hidet.torch.dynamo_config.parallel_k(strategy="disabled")
+    with hidet.option.context():
+        # hidet.option.cache_dir("./matmul_standalone")
+        hidet.option.search_space(2)
+        # hidet.option.debug_cache_tuning()
+        # hidet.option.save_lower_ir(True)
+        hidet.option.parallel_k(strategy='disabled')
 
-    D = graph(*graph_args)
-    dynamo.reset()
-    graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
-    D_hidet = graph_hidet(*graph_args)
-    np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+        D = graph(*graph_args)
+        dynamo.reset()
+        graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
+        D_hidet = graph_hidet(*graph_args)
+        np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+
     # change the tolarence because we use fp16 as accumulators
     np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=5e-2)
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
