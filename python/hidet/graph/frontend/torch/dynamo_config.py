@@ -22,7 +22,6 @@ def dynamo_config_warning():
 
 class DynamoConfig:
     def __init__(self):
-        self._parallel_k: str = 'default'
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
@@ -38,7 +37,6 @@ class DynamoConfig:
         """
         Reset the configuration to the default values
         """
-        self._parallel_k: str = 'default'
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
@@ -71,26 +69,6 @@ class DynamoConfig:
         """
         self._use_tensor_core = flag
         return self
-
-    def parallel_k(self, strategy="default"):
-        """
-        Parallelization on k dimension of the matrix multiplication
-        Candidates are: ``default``, ``disabled``, ``search``
-
-        - ``default``:
-            Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k
-            dimension and the size of split factor
-        - ``disabled``:
-            Disable parallelization on k dimension
-        - ``search``:
-            Search for the best parallelization strategy. Takes more time but usually achieves the best performance.
-
-        Parameters
-        ----------
-        strategy: str
-            The parallelization strategy.
-        """
-        self._parallel_k = strategy
 
     def use_fp16(self, flag=True):
         """

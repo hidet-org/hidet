@@ -51,9 +51,7 @@ def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype
     hidet.option.debug_cache_tuning()
     # hidet.option.save_lower_ir(True)
 
-    with hidet.graph.PassContext() as ctx:
-        ctx.set_parallel_k()
-        graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
+    graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
 
     def hidet_opt(inp_a, inp_b, inp_bias):
         return graph_opt(inp_a, inp_b, inp_bias)

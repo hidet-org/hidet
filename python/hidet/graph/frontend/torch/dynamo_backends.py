@@ -106,13 +106,11 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
 
 
 def get_compiled_graph(flow_graph: FlowGraph):
-    parallel_k = dynamo_config['parallel_k']
     save_dir = dynamo_config['dump_graph_ir']
     with PassContext() as ctx:
         if save_dir:
             graph_dir = resolve_save_dir_multigraph(save_dir)
             ctx.save_graph_instrument(graph_dir)
-        ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
         ctx.allow_source_graph_removal(True)
         logger.info('start to optimize the flow graph')
         graph_opt: FlowGraph = optimize(flow_graph)

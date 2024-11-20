@@ -95,7 +95,7 @@ class MatmulResolveRule(ResolveRule):
     """
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
-        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        parallel_k = hidet.option.get_parallel_k()
         mma = self.get_config('mma', default='mma')  # 'simt', 'mma'
 
         if any(not isinstance(v, int) for v in a.shape + b.shape):
@@ -217,7 +217,7 @@ class MatmulResolveRule(ResolveRule):
         if hidet.option.cuda.get_arch_pair() < (8, 0):
             return None
 
-        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        parallel_k = hidet.option.get_parallel_k()
 
         if op.task.has_symbolic_shape():
             k_parts = 1

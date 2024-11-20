@@ -34,7 +34,7 @@ class QuantSymmetricResolveRule(ResolveRule):
         if hidet.option.cuda.get_arch_pair() < (8, 0):
             return None
 
-        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        parallel_k = hidet.option.get_parallel_k()
 
         if not (is_constant(a.shape[-1]) and is_constant(b.shape[-2])):
             k_parts = 1

@@ -297,6 +297,12 @@ def register_hidet_options():
         description="Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed",
         choices=['symbolic', 'interpreter', 'compilaion'],
     )
+    register_option(
+        name='parallel_k',
+        type_hint='Union[str, int]',
+        default_value='default',
+        description='Parallelization on k dimension of the matrix multiplication.',
+    )
 
     # Load hidet config
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet', 'hidet.toml')
@@ -857,6 +863,39 @@ def get_execution_mode() -> str:
         Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
     """
     return OptionContext.current().get_option('execution_mode')
+
+
+def parallel_k(strategy: Union[str, int] = "default"):
+    """
+    Parallelization on k dimension of the matrix multiplication
+    Candidates are: ``default``, ``disabled``, ``search``, 2, 3, 4...
+
+    - ``default``:
+        Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k
+        dimension and the size of split factor
+    - ``disabled``:
+        Disable parallelization on k dimension
+    - ``search``:
+        Search for the best parallelization strategy. Takes more time but usually achieves the best performance.
+
+    Parameters
+    ----------
+    strategy: str
+        The parallelization strategy.
+    """
+    OptionContext.current().set_option('parallel_k', strategy)
+
+
+def get_parallel_k() -> Union[str, int]:
+    """
+    Get parallelization on k dimension of the matrix multiplication
+
+    Returns
+    -------
+    ret: Union[str, int]
+        Get parallelization strategy.
+    """
+    return OptionContext.current().get_option('parallel_k')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):
