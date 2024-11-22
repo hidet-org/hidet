@@ -56,6 +56,10 @@ class UniqueWarnings:
 warnings = UniqueWarnings()
 
 
+def is_torch_method_inplace(name: str):
+    return name[-1] == '_'
+
+
 class Interpreter:
     def __init__(self, graph_module: torch.fx.GraphModule):
         super().__init__()
@@ -247,14 +251,21 @@ class Interpreter:
             elif node.op == "call_method":
                 args = load_arg(node.args, hidet_env)
                 kwargs = load_arg(node.kwargs, hidet_env)
+                self_arg_name = node.args[0].name
 
                 if isinstance(args[0], Tensor):
                     torch_method = getattr(torch.Tensor, node.target)
                 else:
+                    # hidet expect only `torch.Tensor` methods here.
+                    # If something else appear we should consider a support if it.
+                    assert False
                     torch_method = getattr(type(args[0]), node.target)
                 hidet_method = self._lookup_hidet_method(torch_method)
                 try:
-                    hidet_env[node.name] = hidet_method(*args, **kwargs)
+                    res = hidet_method(*args, **kwargs)
+                    hidet_env[node.name] = res
+                    if is_torch_method_inplace(node.target):
+                        hidet_env[self_arg_name] = res
                 except Exception as e:
                     self._raise_exception(e, node.target, hidet_method, args, kwargs)
             elif node.op == "call_module":
