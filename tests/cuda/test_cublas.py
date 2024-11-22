@@ -19,7 +19,8 @@ from hidet.cuda.cublas import cublasComputeType
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
     [
-        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_16F, 1e-2),
+        (hidet.bfloat16, cublasComputeType.CUBLAS_COMPUTE_32F, 2e-2),
+        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-2),
         (hidet.float32, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-5),
         (hidet.float64, cublasComputeType.CUBLAS_COMPUTE_64F, 1e-8),
     ],
@@ -36,7 +37,8 @@ def test_cublas_gemm(m, n, k, dtype, compute_type, tol):
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
     [
-        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_16F, 1e-2),
+        (hidet.bfloat16, cublasComputeType.CUBLAS_COMPUTE_32F, 2e-2),
+        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-2),
         (hidet.float32, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-5),
         (hidet.float64, cublasComputeType.CUBLAS_COMPUTE_64F, 1e-8),
     ],
@@ -55,7 +57,8 @@ def test_cublas_strided_gemm(bs, m, n, k, dtype, compute_type, tol):
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
     [
-        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_16F, 1e-2),
+        (hidet.bfloat16, cublasComputeType.CUBLAS_COMPUTE_32F, 2e-2),
+        (hidet.float16, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-2),
         (hidet.float32, cublasComputeType.CUBLAS_COMPUTE_32F, 1e-5),
         (hidet.float64, cublasComputeType.CUBLAS_COMPUTE_64F, 1e-8),
     ],
