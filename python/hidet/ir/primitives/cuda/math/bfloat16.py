@@ -11,22 +11,9 @@
 # limitations under the License.
 from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType
-from hidet.ir.func import Function
+from hidet.ir.dtypes import bfloat16, float32
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
-
-
-def cuda_bf16_tanh_func() -> Function:
-    from hidet.lang import script, bf16, asm
-
-    @script
-    def cuda_bf16_tanh(x: bf16) -> bf16:
-        ret: bf16 = bf16(0.0)
-        asm(template='tanh.approx.bf16 %0, %1;', outputs=[ret], inputs=[x])
-        return ret
-
-    assert isinstance(cuda_bf16_tanh, Function)
-    return cuda_bf16_tanh
 
 
 class CUDABFloat16MathFunctionSet(MathFunctionSet):
@@ -54,8 +41,6 @@ class CUDABFloat16MathFunctionSet(MathFunctionSet):
                 func_or_type=FuncType(param_types=['bfloat16'] * num_args, ret_type='bfloat16'),
             )
 
-        register_primitive_function(name='cuda_bf16_tanh', func_or_type=cuda_bf16_tanh_func())
-
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
         return entry.var(*args)
@@ -67,13 +52,20 @@ class CUDABFloat16MathFunctionSet(MathFunctionSet):
         return self.call('cuda_bf16_cos', a)
 
     def tanh(self, a: Expr) -> Expr:
-        return self.call('cuda_bf16_tanh', a)
+        from hidet.ir.expr import cast
+        from hidet.ir.primitives.math import tanh
+
+        return cast(tanh(cast(a, float32)), bfloat16)
 
     def exp(self, a: Expr) -> Expr:
         return self.call('cuda_bf16_exp', a)
 
     def erf(self, a: Expr) -> Expr:
-        raise ValueError('erf is not supported for bfloat16 in cuda')
+        # use float32 erf to delegate the bfloat16 erf
+        from hidet.ir.expr import cast
+        from hidet.ir.primitives.math import erf
+
+        return cast(erf(cast(a, float32)), bfloat16)
 
     def sqrt(self, a: Expr) -> Expr:
         return self.call('cuda_bf16_sqrt', a)
@@ -100,7 +92,13 @@ class CUDABFloat16MathFunctionSet(MathFunctionSet):
         return self.call('cuda_bf16_max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        raise ValueError('pow is not supported for bfloat16 in cuda')
+        # use float32 pow to delegate the bfloat16 pow
+        from hidet.ir.expr import cast
+        from hidet.ir.primitives.math import pow
+
+        a = cast(a, float32)
+        b = cast(b, float32)
+        return cast(pow(a, b), bfloat16)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
         return self.call('cuda_bf16_fma', a, b, c)

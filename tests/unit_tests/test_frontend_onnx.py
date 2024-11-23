@@ -53,7 +53,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     hidet_outputs = [tensor.cpu().numpy() for tensor in hidet_outputs]
 
     assert len(onnx_outputs) == len(hidet_outputs)
-    tol = {'float32': 5e-2, 'float16': 5e-2}[dtype]
+    tol = {'float32': 5e-2, 'float16': 5e-2, 'bfloat16': 1e-1}[dtype]
     for onnx_output, hidet_output in zip(onnx_outputs, hidet_outputs):
         np.testing.assert_allclose(actual=hidet_output, desired=onnx_output, rtol=tol, atol=tol)
 
@@ -69,7 +69,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     ],
 )
 @pytest.mark.parametrize("batch_size", [1])
-@pytest.mark.parametrize("dtype", ['float32', 'float16'])
+@pytest.mark.parametrize("dtype", ['float32', 'float16', 'bfloat16'])
 @pytest.mark.parametrize("mode", ['traced', 'imperative', 'opt'])
 def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
     if hidet.option.cuda.get_arch_pair() < (8, 0) and dtype == 'float16':
@@ -79,6 +79,9 @@ def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
         )
     assert model_name in ['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'bart', 'gpt2']
     assert mode in ['imperative', 'traced', 'opt']
+
+    if model_name in ['resnet50', 'inception_v3', 'mobilenet_v2'] and dtype == 'bfloat16':
+        pytest.skip('Not testing bfloat16 in vision model')
 
     print('checking model {} in {} mode with dtype {}'.format(model_name, mode, dtype))
     model_path, input_names, input_tensors = get_onnx_model(model_name, batch_size=batch_size)
