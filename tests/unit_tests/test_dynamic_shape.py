@@ -21,6 +21,11 @@ from hidet import ops
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_attention(device):
+    if device == 'cuda':
+        pytest.skip(
+            'This test has unstable numerical error.'
+            'Issue https://github.com/CentML/hidet/issues/605 to investigate it.'
+        )
     wte = hidet.randn([50257, 768], device=device)
     wpe = hidet.randn([1024, 768], device=device)
     w1 = hidet.randn([768, 768 * 3], device=device)
