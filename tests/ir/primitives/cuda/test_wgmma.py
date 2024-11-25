@@ -23,11 +23,13 @@ from hidet.ir.primitives.cuda.wgmma import WgmmaConfig, wgmma_async, wgmma_fence
 from hidet.ir.primitives.cuda.sync import syncthreads
 from hidet.ir.type import data_type
 from hidet.ir.dtypes import u64
-from hidet.lang import attrs
+from hidet.lang import attrs, printf
 from hidet.lang import register_tensor, as_tensor_pointer, shared_tensor, grid, tensor_pointer
 from hidet.graph.tensor import from_numpy, from_torch
 from hidet.lang.layout import row_major, column_major, DataLayout
 from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
+from hidet.ir.primitives.cuda.barrier import fence_view_async_shared
+from hidet.ir.primitives.cuda.wgmma import make_wgmma_desc
 
 # layout use to prepare smem data for swizzling case
 # use the global2local to prepare the data in main then copy over to smem
@@ -105,21 +107,6 @@ class test_layout(DataLayout):
         return self.base.global2cond(*args)
 
 
-# https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-descriptor-format
-def encode_matrix_descriptor(x: u64) -> u64:
-    return (x & 0x3FFFF) >> 0x4
-
-
-# build smem matrix descriptor without smem address
-# https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-descriptor-format
-def make_wgmma_desc(lead_dim_offset: u64, stride_dim_offset: u64, layout_type: u64) -> int:
-    desc: u64 = 0
-    desc |= encode_matrix_descriptor(lead_dim_offset) << 16
-    desc |= encode_matrix_descriptor(stride_dim_offset) << 32
-    desc |= layout_type << 62
-    return desc
-
-
 def matmul_wgmma_tensor_core(
     config: WgmmaConfig,
     is_a_shared: bool,
@@ -160,8 +147,11 @@ def matmul_wgmma_tensor_core(
 
             smem_b = tensor_pointer(dtype=config.b_input_dtype, shape=[b_size])
 
-            smem_b = dynamic_shared_memory(byte_offset=0, dtype=config.b_input_dtype)
-
+            if config.b_input_dtype == "tf32":
+                smem_b = dynamic_shared_memory(byte_offset=0, dtype="f32")
+            else:
+                smem_b = dynamic_shared_memory(byte_offset=0, dtype=config.b_input_dtype)
+            # smem_b = dynamic_shared_memory(byte_offset=0, dtype=config.b_input_dtype)
             smem_b_addr = cvta_generic_to_shared(smem_b)
 
             # build smem matrix descriptor
@@ -173,7 +163,6 @@ def matmul_wgmma_tensor_core(
 
             if not is_a_shared:
                 regs_a = register_tensor(data_type(config.a_input_dtype), [config.a_elements])
-
                 # load reg_a
                 p = 0
                 for i, k in config.a_load_map.on(threadIdx.x):
@@ -186,7 +175,6 @@ def matmul_wgmma_tensor_core(
                 smem_a = tensor_pointer(dtype=config.a_input_dtype, shape=[a_size])
 
                 smem_a = dynamic_shared_memory(byte_offset=b_size * b_sizeof_input, dtype=config.a_input_dtype)
-
                 smem_a_addr = cvta_generic_to_shared(smem_a)
                 a_desc: u64 = a_desc_template
                 a_matrix_start_addr = (smem_a_addr & 0x3FFFF) >> 4
@@ -195,6 +183,7 @@ def matmul_wgmma_tensor_core(
 
                 for i in range(a_size):
                     smem_a[i] = a[i]
+                syncthreads()
 
             for i in range(config.c_elements):
                 regs_c[i] = 0.0
@@ -210,6 +199,7 @@ def matmul_wgmma_tensor_core(
 
             syncthreads()
             wgmma_fence()
+            fence_view_async_shared()
             if not is_a_shared:
                 wgmma_async(
                     config,
@@ -256,49 +246,68 @@ trans_a_values = [1, 0]
 trans_b_values = [1, 0]
 swizzle_modes = ["SW128", "SW64", "SW32", "NOSW"]
 trans_required_types = ["f16", "bf16"]  # wgmma.async transpose option only support f16 and bf16
+non_fp_list = ["i8", "u8"]
 
-test_configs = []
+# Generate test configurations
+# default to generate shorter test configurations
+# pytest with --full-wgmma-test option to enable the full tests
+def pytest_generate_tests(metafunc):
+    if 'config' in metafunc.fixturenames:
+        full_tests = metafunc.config.getoption('full_wgmma_test')
+        test_configs = []
 
-# full test
-# for config, is_a_shared, scale_d, scale_a, scale_b, trans_b, swizzle_mode in product(
-#     configs, is_a_smem, scale_d_values, scale_a_values, scale_b_values, trans_b_values, swizzle_modes
-# ):
-#     if config.a_input_dtype in trans_required_types:
-#         if is_a_shared:
-#             # Include `trans_a` when `is_a_shared` is True
-#             for trans_a in trans_a_values:
-#                 test_configs.append((config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode))
-#         else:
-#             # Set `trans_a` to None when `is_a_shared` is False
-#             test_configs.append((config, is_a_shared, scale_d, scale_a, scale_b, None, trans_b, swizzle_mode))
-#     else:
-#         # If `config.type` is not in `trans_required_types`, set `trans_a` and `trans_b` to 0
-#         test_configs.append((config, is_a_shared, scale_d, scale_a, scale_b, 0, 0, swizzle_mode))
+        if full_tests:
+            # Generate full test configurations
+            for config, is_a_shared, scale_d, scale_a, scale_b, trans_b, swizzle_mode in product(
+                configs, is_a_smem, scale_d_values, scale_a_values, scale_b_values, trans_b_values, swizzle_modes
+            ):
+                if config.a_input_dtype in non_fp_list:
+                    scale_a = 1
+                    scale_b = 1
 
-# shorter tests with random config
-for config in configs:
-    # Randomly decide if `is_a_shared` is True or False
-    is_a_shared = random.choice(is_a_smem)
+                if config.a_input_dtype in trans_required_types:
+                    if is_a_shared:
+                        for trans_a in trans_a_values:
+                            test_configs.append(
+                                (config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode)
+                            )
+                    else:
+                        trans_a = None
+                        test_configs.append(
+                            (config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode)
+                        )
+                else:
+                    trans_a = None
+                    trans_b = 0
+                    test_configs.append(
+                        (config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode)
+                    )
+        else:
+            # Generate shorter test configurations with random selection
+            for config in configs:
+                is_a_shared = random.choice(is_a_smem)
+                scale_d = random.choice(scale_d_values)
+                scale_a = random.choice(scale_a_values)
+                scale_b = random.choice(scale_b_values)
+                swizzle_mode = random.choice(swizzle_modes)
 
-    # Randomly choose other configurations
-    scale_d = random.choice(scale_d_values)
-    scale_a = random.choice(scale_a_values)
-    scale_b = random.choice(scale_b_values)
-    swizzle_mode = random.choice(swizzle_modes)
+                if config.a_input_dtype in trans_required_types:
+                    trans_a = random.choice(trans_a_values) if is_a_shared else None
+                    trans_b = random.choice(trans_b_values)
+                else:
+                    trans_a = None
+                    trans_b = 0
 
-    # Check if `trans_a` and `trans_b` are needed based on `config.type`
-    if config.a_input_dtype in trans_required_types:
-        trans_a = random.choice(trans_a_values) if is_a_shared else None
-        trans_b = random.choice(trans_b_values)
-    else:
-        trans_a = 0
-        trans_b = 0
+                if config.a_input_dtype in ["i8", "u8"]:
+                    scale_a = 1
+                    scale_b = 1
 
-    # Append the generated configuration
-    test_configs.append((config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode))
+                test_configs.append((config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode))
 
+        # Parameterize the test function with the generated configurations
+        argnames = ['config', 'is_a_shared', 'scale_d', 'scale_a', 'scale_b', 'trans_a', 'trans_b', 'swizzle_mode']
+        metafunc.parametrize(argnames, test_configs)
 
-@pytest.mark.parametrize("config, is_a_shared, scale_d, scale_a, scale_b, trans_a, trans_b, swizzle_mode", test_configs)
 
 # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-multiply-and-accumulate-instruction-wgmma-mma-async
 def test_wgmma(
@@ -316,9 +325,8 @@ def test_wgmma(
 
     print(f"\n{swizzle_mode}, is_a_shared: {is_a_shared}")
 
-    a_mode = swizzle_mode if trans_a == 0 else f"{swizzle_mode}_tp"
+    a_mode = swizzle_mode if trans_a in [0, None] else f"{swizzle_mode}_tp"
     b_mode = swizzle_mode if trans_b == 0 else f"{swizzle_mode}_tp"
-
     # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-shared-memory-layout
     # take f16 matrix A as example
     # matrix is 64 * 16(M * K)
@@ -358,7 +366,15 @@ def test_wgmma(
     m, n, k = config.m, config.n, config.k
     print(f"m: {m}, n: {n}, k: {k}")
 
-    dtype_dict = {"f32": torch.float32, "f16": torch.float16, "bf16": torch.bfloat16}
+    dtype_dict = {
+        "f32": torch.float32,
+        "f16": torch.float16,
+        "bf16": torch.bfloat16,
+        "tf32": torch.float32,
+        "i8": torch.int8,
+        "u8": torch.uint8,
+        "i32": torch.int32,
+    }
 
     a_cpu = torch.randint(3, (1, m, k), dtype=dtype_dict[config.a_input_dtype])
     b_cpu = torch.randint(3, (1, k, n), dtype=dtype_dict[config.b_input_dtype])
@@ -366,7 +382,10 @@ def test_wgmma(
     a_layout_dict = {}
     b_layout_dict = {}
 
-    a_layout_dict["NOSW"] = row_major(8, 2) * row_major(8, 8)
+    a_numbytes = data_type(config.a_input_dtype).nbytes
+    b_numbytes = data_type(config.b_input_dtype).nbytes
+
+    a_layout_dict["NOSW"] = row_major(8, 2) * row_major(8, 16 // a_numbytes)
     a_layout_dict["SW32"] = row_major(8, 1) * test_layout(row_major(8, 256), config.a_input_dtype, 1, 7, 3)
     a_layout_dict["SW64"] = row_major(8, 1) * test_layout(row_major(8, 512), config.a_input_dtype, 2, 7, 3)
     a_layout_dict["SW128"] = row_major(8, 1) * test_layout(row_major(8, 1024), config.a_input_dtype, 3, 7, 3)
@@ -377,7 +396,7 @@ def test_wgmma(
         column_major(1024, 8), config.a_input_dtype, 3, 7, 3
     )
 
-    b_layout_dict["NOSW"] = column_major(2, n // 8) * column_major(8, 8)
+    b_layout_dict["NOSW"] = column_major(2, n // 8) * column_major(16 // b_numbytes, 8)
     b_layout_dict["SW32"] = column_major(1, n // 8) * test_layout(column_major(256, 8), config.b_input_dtype, 1, 7, 3)
     b_layout_dict["SW64"] = column_major(1, n // 8) * test_layout(column_major(512, 8), config.b_input_dtype, 2, 7, 3)
     b_layout_dict["SW128"] = column_major(1, n // 8) * test_layout(column_major(1024, 8), config.b_input_dtype, 3, 7, 3)
@@ -428,7 +447,10 @@ def test_wgmma(
     )
 
     func = ir_module.build()
-    c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b)
+    if config.a_input_dtype in ["tf32"]:
+        c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="mma")
+    else:
+        c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="simt")
 
     input_a = a_1d if is_a_shared else a
 
