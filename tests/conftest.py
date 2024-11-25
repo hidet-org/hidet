@@ -21,6 +21,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--release", action="store_true", help="Run the test only when we are going to release the next version"
     )
+    parser.addoption("--full-wgmma-test", action="store_true", default=False, help="Run full test suite")
 
 
 def pytest_configure(config):
