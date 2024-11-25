@@ -586,7 +586,7 @@ class MatmulF16CuteTask(Task):
                     collective_store(tiled_copy, t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
                 else:
                     collective_store(
-                        tiled_copy, arithmetic(t_regs_c, op=cast_fp16), c, c_head_index + [offset_m, offset_n], extents
+                        tiled_copy, arithmetic(t_regs_c, op=cast_func), c, c_head_index + [offset_m, offset_n], extents
                     )
 
             @hidet.script
