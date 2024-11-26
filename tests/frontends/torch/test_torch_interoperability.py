@@ -141,7 +141,7 @@ def test_torch_var(shape, dim):
 @pytest.mark.parametrize('target_len, src_len', [[77, 77]])
 @pytest.mark.parametrize('have_mask', [True])
 @pytest.mark.parametrize('is_causal', [False])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
 def test_torch_multihead_attention(
     embed_dim, num_heads, batch_first, batch_size, target_len, src_len, have_mask, is_causal, dtype
 ):
@@ -181,7 +181,7 @@ def test_torch_multihead_attention(
 @pytest.mark.parametrize('need_mask', [True])
 @pytest.mark.parametrize('mask_shape', [[77, 77]])
 @pytest.mark.parametrize('is_causal', [True])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
 def test_torch_transformer_encoder(
     d_model,
     nhead,
@@ -333,7 +333,7 @@ def test_torch_leaky_relu(shape, negative_slope):
     'input_shape, offsets_shape, weight_shape', [([223], [156], [333, 444]), ([26], [1], [33, 33])]
 )
 @pytest.mark.parametrize('mode_name', ['mean', 'sum'])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
 def test_torch_embedding_bag(input_shape, offsets_shape, weight_shape, mode_name, dtype):
 
     input_data = torch.randint(0, weight_shape[0], input_shape, dtype=torch.int64, device='cuda')
@@ -345,7 +345,7 @@ def test_torch_embedding_bag(input_shape, offsets_shape, weight_shape, mode_name
 
     torch_embedding_bag_module = torch.nn.EmbeddingBag.from_pretrained(weight_data, mode=mode_name)
 
-    atol = 1e-2 if dtype == torch.float16 else 1e-4
+    atol = 1e-4 if dtype == torch.float32 else 1e-2
 
     check_module(torch_embedding_bag_module, args=[input_data, offsets_data], atol=atol, rtol=1e-4)
 
