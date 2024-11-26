@@ -1,3 +1,5 @@
+import pytest
+
 import hidet
 from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
 from hidet.ir.cute.layout import ThrValAtom, Level
@@ -7,7 +9,8 @@ from hidet.ir.cute.collective import collective_store
 from hidet.lang.mapping import auto_map
 
 
-def test_ldgstg():
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_ldgstg(dtype):
     # hidet.option.cache_dir("./demo_collective_store")
     # hidet.option.search_space(2)
     # hidet.option.debug_cache_tuning()
@@ -49,7 +52,7 @@ def test_ldgstg():
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 1
 
-            regs = register_tensor("float16", shape=[nr_regs])
+            regs = register_tensor(dtype, shape=[nr_regs])
             t_regs = tiled_tensor_view(regs, tiled_tensor_layout, "register")
             t_g_in = tiled_tensor_view(in_ptr, memory_layout, "global")
 
@@ -60,6 +63,6 @@ def test_ldgstg():
             collective_store(stg_tiled_copy, t_regs, out_ptr, [0, 0])
 
     func = script_module.build()
-    in_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
-    out_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
+    in_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
+    out_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
     func(in_mem, out_mem)

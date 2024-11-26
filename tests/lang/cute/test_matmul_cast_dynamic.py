@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
+import pytest
 
 import hidet
 import torch
@@ -17,7 +18,8 @@ from hidet import ops
 from hidet.graph.tensor import asarray
 
 
-def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype="float16", device="cuda"):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype="bfloat16", device="cuda"):
     lo = -3
     hi = 3
     dtype = getattr(torch, dtype)
@@ -59,7 +61,9 @@ def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype
     torch_result = torch_op(a, b, bias)
     hidet_result = hidet_opt(a_hidet, b_hidet, bias_hidet).cpu()
 
-    np.testing.assert_allclose(actual=torch_result.cpu().numpy(), desired=hidet_result.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=torch_result.to(torch.float32).cpu().numpy(), desired=hidet_result.to('float32').cpu().numpy(), rtol=1e-2
+    )
 
 
 def test_matmul_dynamic_fallback():

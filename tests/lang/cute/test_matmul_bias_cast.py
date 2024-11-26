@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
+import pytest
 
 import hidet
 import torch
@@ -40,7 +41,8 @@ def data(M, N, K, L, dtype="float16", device="cuda"):
     return a, b, bias
 
 
-def test_pattern():
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_pattern(dtype):
     args = [256, 30522, 768, 1]
 
     def graph(a, b, bias):
@@ -49,7 +51,7 @@ def test_pattern():
         return c.type(torch.float32)
 
     M, N, K, L = args
-    graph_args = data(*args)
+    graph_args = data(*args, dtype=dtype)
 
     import torch._dynamo as dynamo
 
@@ -58,7 +60,9 @@ def test_pattern():
     graph_opt = torch.compile(graph, options=options)
     D_opt = graph_opt(*graph_args)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_opt.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
@@ -75,7 +79,9 @@ def test_pattern():
         D_hidet = graph_hidet(*graph_args)
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_hidet.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")
 
@@ -98,7 +104,9 @@ def test_longformer_issue404():
     graph_opt = torch.compile(graph, options=options)
     D_opt = graph_opt(*graph_args)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_opt.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
@@ -112,6 +120,8 @@ def test_longformer_issue404():
         D_hidet = graph_hidet(*graph_args)
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_hidet.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")

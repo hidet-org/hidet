@@ -14,6 +14,7 @@ from typing import Callable, List, Any
 import sys
 import csv
 import numpy as np
+import pytest
 
 import hidet
 import torch
@@ -33,7 +34,7 @@ from hidet.ir.cute.int_tuple import compact_col_major
 from fusion_bench_utils import bench
 
 
-def data(M, N, K, L, dtype="float16", device="cuda"):
+def data(M, N, K, L, dtype="bfloat16", device="cuda"):
     dtype = getattr(torch, dtype)
     lo = -3
     hi = 3
@@ -48,7 +49,8 @@ def data(M, N, K, L, dtype="float16", device="cuda"):
     return a, b, c, bx1xn, bxmx1, mx1, x1xn
 
 
-def test_pattern():
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_pattern(dtype):
     args = [10000, 12, 320, 1]
 
     def graph(a, b, d, bx1xn, bxmx1, mx1, x1xn):
@@ -57,7 +59,7 @@ def test_pattern():
         return c
 
     M, N, K, L = args
-    graph_args = data(*args)
+    graph_args = data(*args, dtype=dtype)
 
     import torch._dynamo as dynamo
 
@@ -66,7 +68,9 @@ def test_pattern():
     graph_opt = torch.compile(graph, options=options)
     D_opt = graph_opt(*graph_args)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_opt.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
@@ -83,6 +87,8 @@ def test_pattern():
         D_hidet = graph_hidet(*graph_args)
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_hidet.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")

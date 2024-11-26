@@ -72,9 +72,10 @@ def data(M, N, K, dtype="float16", device="cuda"):
 
 
 @pytest.mark.parametrize("dim0,dim3,dims,args", pattern_tests)
-def test_epilogue_fusion(dim0, dim3, dims, args):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_epilogue_fusion(dim0, dim3, dims, args, dtype):
     M, N, K = args
-    A, B = data(*args)
+    A, B = data(*args, dtype=dtype)
 
     import torch._dynamo as dynamo
 
@@ -92,7 +93,9 @@ def test_epilogue_fusion(dim0, dim3, dims, args):
     graph_opt = torch.compile(graph, options=options)
     C_opt = graph_opt(A, B)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=C_opt.cpu().numpy(), desired=C.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=C_opt.to(torch.float32).cpu().numpy(), desired=C.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, (A, B))
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
@@ -111,7 +114,9 @@ def test_epilogue_fusion(dim0, dim3, dims, args):
         C_hidet = graph_hidet(A, B)
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=C_hidet.cpu().numpy(), desired=C.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=C_hidet.to(torch.float32).cpu().numpy(), desired=C.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, (A, B))
     print(f"hidet(torch.compile): {hidet_mean} ms")
 

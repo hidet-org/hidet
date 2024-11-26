@@ -105,7 +105,8 @@ def initialize_tests():
 
 
 @pytest.mark.parametrize("src,dst", rearrange_tests)
-def test_rearrange(src: TiledTensorLayout, dst: TiledTensorLayout):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_rearrange(src: TiledTensorLayout, dst: TiledTensorLayout, dtype):
     from hidet.lang.types import u32, i32, f16
     from hidet.lang import attrs
     from hidet.lang import register_tensor
@@ -121,7 +122,7 @@ def test_rearrange(src: TiledTensorLayout, dst: TiledTensorLayout):
             attrs.cuda.block_dim = nr_threads
             attrs.cuda.grid_dim = 1
 
-            regs = register_tensor("float16", shape=[nr_regs])
+            regs = register_tensor(dtype, shape=[nr_regs])
             ts = tiled_tensor_view(regs, src, "register")
             td = rearrange(ts, dst, "register")
 
