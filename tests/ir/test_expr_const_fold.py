@@ -12,7 +12,7 @@
 import pytest
 import operator
 import hidet
-from hidet import int32, boolean, float16, float32, int8, uint16
+from hidet import int32, boolean, float16, bfloat16, float32, int8, uint16
 from hidet.ir.expr import Constant
 
 
@@ -63,17 +63,22 @@ def test_arithmetic_unary_op(op, result):
 def test_expr_const_fold():
     a = int32(1)
     b = float32(2.0)
-    c = float16(3.0)
+    c = bfloat16(3.0)
     d = int8(4)
     e = uint16(5)
+    f = float16(6.0)
 
     check(a + b, float32(3.0))
-    check(a + c, float16(4.0))
+    check(a + c, bfloat16(4.0))
+    check(a + f, float16(7.0))
     check(a + d, int32(5))
     check(a + e, int32(6))
     check(b + c, float32(5.0))
+    check(b + f, float32(8.0))
     check(b + d, float32(6.0))
     check(b + e, float32(7.0))
-    check(c + d, float16(7.0))
-    check(c + e, float16(8.0))
+    check(c + d, bfloat16(7.0))
+    check(c + e, bfloat16(8.0))
     check(d + e, int32(9))
+    check(f + d, float16(10.0))
+    check(f + e, float16(11.0))

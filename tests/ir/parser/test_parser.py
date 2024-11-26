@@ -60,8 +60,8 @@ def get_matmul_task():
 
 def get_bmatmul_task(mma_str='mma'):
     s = symbol_var('s')
-    a = tensor_input('a', 'float16', [1, s, 256])
-    b = tensor_input('b', 'float16', [1, 256, 256])
+    a = tensor_input('a', 'bfloat16', [1, s, 256])
+    b = tensor_input('b', 'bfloat16', [1, 256, 256])
     task = BatchMatmulTask(a, b, mma_str)
     mods = task.implement_cuda('.')
     mod = mods[0]
@@ -69,7 +69,7 @@ def get_bmatmul_task(mma_str='mma'):
 
 
 def get_softmax_task():
-    a = tensor_input('a', 'float16', [1, 256])
+    a = tensor_input('a', 'bfloat16', [1, 256])
     task = SoftmaxTask(a, 1)
     mod = task.implement_cuda('.')
     return mod
@@ -78,9 +78,9 @@ def get_softmax_task():
 def get_attn_task():
     s = symbol_var('s')
     h = symbol_var('h')
-    q = tensor_input('q', 'float16', [1, h, s, 64])
-    k = tensor_input('k', 'float16', [1, h, s, 64])
-    v = tensor_input('v', 'float16', [1, h, s, 64])
+    q = tensor_input('q', 'bfloat16', [1, h, s, 64])
+    k = tensor_input('k', 'bfloat16', [1, h, s, 64])
+    v = tensor_input('v', 'bfloat16', [1, h, s, 64])
     task = AttnTask('attn', q, k, v, False)
     mod = task.implement_cuda('.')
     return mod[0]
