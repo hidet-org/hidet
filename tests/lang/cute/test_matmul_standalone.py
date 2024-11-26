@@ -84,7 +84,7 @@ def initialize_tests():
         raise NotImplementedError()
 
 
-def data(M, N, K, L, dtype="float16", device="cuda"):
+def data(M, N, K, L, dtype="bfloat16", device="cuda"):
     dtype = getattr(torch, dtype)
     lo = -3
     hi = 3
@@ -95,12 +95,13 @@ def data(M, N, K, L, dtype="float16", device="cuda"):
 
 
 @pytest.mark.parametrize("M,N,K,L", matmul_tests)
-def test_problem(M, N, K, L):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_problem(M, N, K, L, dtype):
     def graph(a, b):
         c = a @ b
         return c
 
-    graph_args = data(M, N, K, L)
+    graph_args = data(M, N, K, L, dtype=dtype)
 
     import torch._dynamo as dynamo
 
@@ -109,7 +110,9 @@ def test_problem(M, N, K, L):
     graph_opt = torch.compile(graph, options=options)
     D_opt = graph_opt(*graph_args)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    np.testing.assert_allclose(actual=D_opt.cpu().numpy(), desired=D.cpu().numpy(), rtol=1e-2)
+    np.testing.assert_allclose(
+        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+    )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
@@ -128,7 +131,9 @@ def test_problem(M, N, K, L):
         np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
 
     # change the tolarence because we use fp16 as accumulators
-    np.testing.assert_allclose(actual=D_hidet.cpu().numpy(), desired=D.cpu().numpy(), rtol=5e-2)
+    np.testing.assert_allclose(
+        actual=D_hidet.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=5e-2
+    )
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")
     return torch_mean, hidet_mean

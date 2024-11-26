@@ -111,7 +111,8 @@ def initialize_tests():
 
 
 @pytest.mark.parametrize("memory_layout,ldgsts_tiled_copy,lds_tiled_copy", ldsm_tests)
-def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy, dtype):
     from hidet.lang.types import u32, i32, f16
     from hidet.lang import attrs
     from hidet.lang import shared_tensor, register_tensor
@@ -139,7 +140,7 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy):
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 1
 
-            smem = shared_tensor("float16", shape=[block_m, block_n])
+            smem = shared_tensor(dtype, shape=[block_m, block_n])
             t_g_in = tiled_tensor_view(in_ptr, gmem_layout_in, "global")
             t_smem = tiled_tensor_view(smem, smem_layout, "shared")
 
@@ -149,7 +150,7 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy):
             cp_async_wait_all()
             syncthreads()
 
-            regs = register_tensor("float16", shape=[nr_regs])
+            regs = register_tensor(dtype, shape=[nr_regs])
             t_regs = tiled_tensor_view(regs, tiled_tensor_layout, "register")
             # txsx_o = partition_src(t_smem, lds_tiled_copy)
             txrx = partition_dst(t_regs, lds_tiled_copy)
@@ -161,6 +162,6 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy):
             # copy(stg_tiled_copy, txrx, txgx_o)
 
     func = script_module.build()
-    in_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
-    out_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
+    in_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
+    out_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
     func(in_mem, out_mem)

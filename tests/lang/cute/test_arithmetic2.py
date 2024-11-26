@@ -61,7 +61,8 @@ def initialize_tests():
 
 
 @pytest.mark.parametrize("memory_layout,tiled_copy,tiled_copy_r", arithmetic_tests)
-def test_mxn_1xn(memory_layout, tiled_copy, tiled_copy_r):
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_mxn_1xn(memory_layout, tiled_copy, tiled_copy_r, dtype):
     from hidet.lang.types import u32, i32, f16
     from hidet.lang import attrs
     from hidet.lang import shared_tensor, register_tensor
@@ -93,14 +94,14 @@ def test_mxn_1xn(memory_layout, tiled_copy, tiled_copy_r):
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 1
 
-            regs_r = register_tensor("float16", shape=[nr_regs_r])
+            regs_r = register_tensor(dtype, shape=[nr_regs_r])
             t_g_r = tiled_tensor_view(r_ptr, gmem_layout_r, "global")
             t_regs_r = tiled_tensor_view(regs_r, tiled_tensor_layout_r, "register")
             txgx_r = partition_src(t_g_r, tiled_copy_r)
             txrx_r = partition_dst(t_regs_r, tiled_copy_r)
             copy(tiled_copy_r, txgx_r, txrx_r)
 
-            regs_i = register_tensor("float16", shape=[nr_regs_i])
+            regs_i = register_tensor(dtype, shape=[nr_regs_i])
             t_g_in = tiled_tensor_view(in_ptr, gmem_layout_in, "global")
             t_regs = tiled_tensor_view(regs_i, tiled_tensor_layout, "register")
             txgx_i = partition_src(t_g_in, tiled_copy)
@@ -114,7 +115,7 @@ def test_mxn_1xn(memory_layout, tiled_copy, tiled_copy_r):
             copy(tiled_copy, txrx_o, txgx_o)
 
     func = script_module.build()
-    in_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
-    r_mem = hidet.empty([block_n], dtype="float16", device="cuda")
-    out_mem = hidet.empty([block_m, block_n], dtype="float16", device="cuda")
+    in_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
+    r_mem = hidet.empty([block_n], dtype=dtype, device="cuda")
+    out_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")
     func(in_mem, r_mem, out_mem)

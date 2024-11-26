@@ -15,10 +15,10 @@ import torch
 
 
 def test_gpt2xl_issue436():
-    backend = Backend('hidet', 'max-autotune', 'float16', '/gpt2.cache')
+    backend = Backend('hidet', 'max-autotune', 'bfloat16', '/gpt2.cache')
 
     causal_mask = torch.tril(torch.zeros((50, 50), dtype=torch.bool, device='cuda')).view(1, 1, 50, 50)
-    mask_value = torch.full([], 10, dtype=torch.float16, device='cuda')
+    mask_value = torch.full([], 10, dtype=torch.bfloat16, device='cuda')
 
     def attn(query, key):
         attn_weights = torch.matmul(query, key)
@@ -29,8 +29,8 @@ def test_gpt2xl_issue436():
     # hidet.option.debug_cache_tuning()
     # hidet.option.save_lower_ir(True)
 
-    q = torch.randn(1, 25, 50, 64, dtype=torch.float16, device='cuda')
-    k = torch.randn(1, 25, 64, 50, dtype=torch.float16, device='cuda')
+    q = torch.randn(1, 25, 50, 64, dtype=torch.bfloat16, device='cuda')
+    k = torch.randn(1, 25, 64, 50, dtype=torch.bfloat16, device='cuda')
     model = attn
 
     with torch.inference_mode(True):
@@ -41,7 +41,9 @@ def test_gpt2xl_issue436():
         import numpy as np
 
         np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-        np.testing.assert_allclose(actual=t.cpu().numpy(), desired=h.cpu().numpy(), rtol=1e-2)
+        np.testing.assert_allclose(
+            actual=t.to(torch.float32).cpu().numpy(), desired=h.to(torch.float32).cpu().numpy(), rtol=1e-2
+        )
 
 
 if __name__ == "__main__":
