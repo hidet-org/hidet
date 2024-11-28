@@ -239,51 +239,56 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
                 AssignStmt(cuda_workspace, space)
 
         def launch_impl(inputs: List[Var], outputs: List[Var], p_kernels: Var):
-            sb = hidet.ir.builders.StmtBuilder()
-            usage_count = graph.usage_count
-            tensor_ptr: Dict[Tensor, Var] = {x: var(x.op.name.lower(), int64) for x in graph_intermediates}
+            intermediate_vars = [var(x.op.name.lower(), int64) for x in graph_intermediates]
+            # Here we store all correspondence between tensors and variables
+            # that store address allocated for these Tensors
+            t_mapping = Tensor2VarMap(
+                graph.inputs,
+                inputs,
+                graph.outputs,
+                outputs,
+                graph_weights,
+                weights,
+                graph_intermediates,
+                intermediate_vars,
+                graph.usage_count,
+                cpu_workspace,
+                cuda_workspace,
+            )
 
+            sb = hidet.ir.builders.StmtBuilder()
             sb += memory_planner_init(0)
             sb += memory_planner_init(1)
             d2i = {'cpu': 0, 'cuda': 1}
-            d2w = {'cpu': cpu_workspace, 'cuda': cuda_workspace}
+
+            # Apply share_map optimization
+            t_mapping.process_share_map(graph_nodes)
+
+            # For every node in graph generate a call of kernel
             for idx, node in enumerate(graph_nodes):
+                # 1. Prepare input and output arguments
                 node_params = []
                 for x in node.inputs:
-                    if x in graph.inputs:
-                        node_params.append(inputs[graph.inputs.index(x)])
-                    elif x in graph_weights:
-                        node_params.append(weights[graph_weights.index(x)])
-                    elif x in graph.outputs:
-                        node_params.append(outputs[graph.outputs.index(x)])
-                    elif x in graph_intermediates:
-                        node_params.append(d2w[x.device.kind] + tensor_ptr[x])
-                    else:
-                        raise RuntimeError("Unknown tensor {}".format(x))
-                for output_idx, y in enumerate(node.outputs):
-                    if y in graph_intermediates:
-                        if node.share_map and y in node.share_map:
-                            # share the memory with input tensor
-                            input_idx: int = node.share_map[output_idx]
-                            init_addr = tensor_ptr[node.inputs[input_idx]]
-                        else:
-                            init_addr = memory_planner_allocate(d2i[y.device.kind], tensor_size[y])
-                        sb += DeclareStmt(tensor_ptr[y], init=init_addr)
-                        node_params.append(d2w[y.device.kind] + tensor_ptr[y])
-                    elif y in graph.outputs:
-                        node_params.append(outputs[graph.outputs.index(y)])
-                    else:
-                        raise RuntimeError("Unknown tensor {}".format(y))
-
+                    node_params.append(t_mapping.get_full_addr(x))
+                for y in node.outputs:
+                    if not t_mapping.is_allocated(y) and t_mapping.is_local(y):
+                        init_addr = memory_planner_allocate(d2i[y.device.kind], tensor_size[y])
+                        sb += DeclareStmt(t_mapping.get_var(y), init=init_addr)
+                        t_mapping.set_allocated(y, True)
+                    node_params.append(t_mapping.get_full_addr(y))
+                # 2. Call a kernel
                 kernel_type = FuncType([void_p for _ in node_params], void)
                 kernel_var = var("k{}_{}".format(idx, graph_nodes[idx].name), kernel_type)
                 with sb.let(kernel_var, cast(p_kernels[node2kernel[idx]], kernel_type)):
                     sb += kernel_var(*node_params)
 
+                # Free memory if reached last usage of Tensor
                 for x in node.inputs:
-                    usage_count[x] -= 1
-                    if usage_count[x] == 0 and x in graph_intermediates:
-                        sb += memory_planner_free(d2i[x.device.kind], tensor_ptr[x])
+                    t_mapping.dec_usage_count(x)
+                    if t_mapping.get_usage_count(x) == 0 and t_mapping.is_local(x):
+                        sb += memory_planner_free(d2i[x.device.kind], t_mapping.get_var(x))
+                        t_mapping.set_allocated(x, False)
+
             return sb.finish()
 
         @hidet.script
@@ -367,3 +372,131 @@ def build_flow_graph(graph, *, space=0) -> CompiledGraph:
     save_to_graph_cache(compiled_graph)
 
     return compiled_graph
+
+
+# Supporting storage for Tensor2VarMap
+class Tensor2VarMapUnit:
+    def __init__(self, v: Var, local: bool, usage_count=0):
+        self.var = v
+        self.local = local
+        self.usage_count = usage_count
+
+
+# This class provide info about correspondence between all Tensors in graph
+# and variables allocated to store these Tensors.
+# Also it stores info about liveness of Tensers.
+# Also store info allocated variable or not.
+# Used for implementation of launch function in the compiled graph.
+class Tensor2VarMap:
+    def __init__(
+        self,
+        in_tensors: List[Tensor],
+        in_vars: List[Var],
+        out_tensors: List[Tensor],
+        out_vars: List[Var],
+        w_tensors: List[Tensor],
+        w_vars: List[Var],
+        v_tensors: List[Tensor],
+        v_vars: List[Var],
+        usage_count: Dict[Tensor, int],
+        cpu_base: Var,
+        cuda_base: Var,
+    ):
+
+        in_map: Dict[Tensor, Tensor2VarMapUnit] = {
+            x: Tensor2VarMapUnit(in_vars[i], False) for i, x in enumerate(in_tensors)
+        }
+        out_map: Dict[Tensor, Tensor2VarMapUnit] = {
+            x: Tensor2VarMapUnit(out_vars[i], False) for i, x in enumerate(out_tensors)
+        }
+        w_map: Dict[Tensor, Tensor2VarMapUnit] = {
+            x: Tensor2VarMapUnit(w_vars[i], False) for i, x in enumerate(w_tensors)
+        }
+        v_map: Dict[Tensor, Tensor2VarMapUnit] = {
+            x: Tensor2VarMapUnit(v_vars[i], True) for i, x in enumerate(v_tensors)
+        }
+        self.map: Dict[Tensor, Var] = {**in_map, **out_map, **w_map, **v_map}
+        # Init usage count
+        for x in usage_count:
+            self.map[x].usage_count = usage_count[x]
+        self.cpu_base = cpu_base
+        self.cuda_base = cuda_base
+        # Here we store a info about whether variable is allocated or not
+        self.is_var_allocated: Dict[Var, bool] = {self.map[i].var: False for i in self.map}
+
+    def dec_usage_count(self, x: Tensor):
+        self.map[x].usage_count -= 1
+
+    def inc_usage_count(self, x: Tensor):
+        self.map[x].usage_count += 1
+
+    def get_usage_count(self, x: Tensor) -> int:
+        return self.map[x].usage_count
+
+    def is_local(self, x: Tensor) -> bool:
+        return self.map[x].local
+
+    def is_global(self, x: Tensor) -> bool:
+        return not self.map[x].local
+
+    def get_var(self, x: Tensor) -> Var:
+        return self.map[x].var
+
+    def get_full_addr(self, x: Tensor):
+        d2b = {'cpu': self.cpu_base, 'cuda': self.cuda_base}
+        if self.is_local(x):
+            return d2b[x.device.kind] + self.get_var(x)
+        else:
+            return self.get_var(x)
+
+    def is_allocated(self, x: Tensor):
+        v = self.get_var(x)
+        return self.is_var_allocated[v]
+
+    def set_allocated(self, x: Tensor, value):
+        v = self.get_var(x)
+        self.is_var_allocated[v] = value
+
+    # Implement share map optimisation. Share map means that input and output tensors should be the same.
+    # In below description: input - graph input tensor; output - graph output tensor; xi - graph intermediate tensor
+    # 1. if op is intput -> x1, then change it on input -> input
+    # 2. if op is x1 -> output, then change it on output -> output
+    # 3. if op is x1 -> x2, then change it on x1 -> x1
+    # Need "while change" loop to pop up output as high as possible.
+    # Note: "while change" algorithms might be changed on two passes algoithm.
+    # The first top-down, the second down-top. Does not a lot of sense here -
+    # it is not critical code from time of work point of view.
+    def process_share_map(self, graph_nodes: List[Operator]):
+        change = True
+        while change:
+            change = False
+            for node in graph_nodes:
+                if node.share_map:
+                    for i in node.share_map:
+                        in_tensor = node.inputs[i]
+                        out_tensor = node.outputs[node.share_map[i]]
+                        if self.is_global(in_tensor) and self.is_global(out_tensor):
+                            # Nothing can do. memory for input and output of graph is allocated on
+                            # higher level. Theoreticaly it's possible to process that on higher
+                            # level, but this case should be rare
+                            continue
+                        if self.is_global(in_tensor):
+                            if self.map[out_tensor].var is not self.map[in_tensor].var:
+                                self.map[out_tensor].var = self.map[in_tensor].var
+                                self.dec_usage_count(out_tensor)
+                                self.inc_usage_count(in_tensor)
+                                self.map[out_tensor].local = False
+                                change = True
+                        elif self.is_global(out_tensor):
+                            if self.map[in_tensor].var is not self.map[out_tensor].var:
+                                self.map[in_tensor].var = self.map[out_tensor].var
+                                self.dec_usage_count(in_tensor)
+                                self.inc_usage_count(out_tensor)
+                                self.map[in_tensor].local = False
+                                change = True
+                        else:
+                            if self.map[out_tensor].var is not self.map[in_tensor].var:
+                                self.map[out_tensor].var = self.map[in_tensor].var
+                                self.dec_usage_count(out_tensor)
+                                self.inc_usage_count(in_tensor)
+                                change = True
