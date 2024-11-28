@@ -98,7 +98,7 @@ def test_epilogue_fusion(dim0, dim3, dims, args, dtype):
     )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, (A, B))
-    print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
+    print(f"baseline(torch.compile): {torch_mean} ms")
 
     with hidet.option.context():
         hidet.option.cache_dir("./graph")
@@ -110,7 +110,7 @@ def test_epilogue_fusion(dim0, dim3, dims, args, dtype):
 
         C = graph(A, B)
         dynamo.reset()
-        graph_hidet = torch.compile(graph, backend="hidet", mode="max-autotune-no-cudagraphs")
+        graph_hidet = torch.compile(graph, backend="hidet")
         C_hidet = graph_hidet(A, B)
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
