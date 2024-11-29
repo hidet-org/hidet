@@ -164,8 +164,11 @@ class HidetCompiledModel:
             else:
                 # ignore constant
                 pass
-
+        # Inherited cuda stream from torch
+        runtime_api.set_current_stream(torch.cuda.current_stream().cuda_stream)
+        # Prepare inputs
         tensor_args = preprocess_inputs(tensor_args)
+        # Run graph/model
         outputs = self.cgraph.run_async(tensor_args, output_to_torch_tensor=True)
         outputs: Sequence[torch.Tensor] = [
             tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in outputs
