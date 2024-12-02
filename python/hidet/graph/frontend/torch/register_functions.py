@@ -1954,6 +1954,32 @@ def torch_ceil(input: Tensor, *, out=None):
     return ops.ceil(input)
 
 
+@register_function(torch.cuda.nccl.all_reduce)
+@register_function(torch._C._nccl_all_reduce)
+@register_function(torch.distributed.all_reduce)
+@register_function(torch.ops._c10d_functional.all_reduce)
+def torch_all_reduce(tensor: Tensor, op_name, group_name):
+    from hidet.distributed import is_initialized, init_process_group, set_nccl_comms
+    from hidet.cuda.nccl.ffi import load_nccl_library
+
+    if not is_initialized():
+        load_nccl_library()
+        init_process_group(
+            backend='nccl',
+            init_method='file:///tmp/hidet-nccl-init-group',
+            world_size=torch.distributed.get_world_size(),
+            rank=torch.distributed.get_rank(),
+        )
+        set_nccl_comms()
+    res = ops.all_reduce(tensor, op_name)
+    return res
+
+
+@register_function(torch.ops._c10d_functional.wait_tensor)
+def torch_wait_tensor(x: Tensor):
+    return ops.wait_tensor(x)
+
+
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
 # Hidet never should see them.
 @register_function(torch._C._has_torch_function)
@@ -1967,6 +1993,7 @@ def torch_ceil(input: Tensor, *, out=None):
 @register_function(torch._dynamo.external_utils.is_compiling)
 @register_function(torch._utils.is_compiling)
 @register_function(torch.compiler.is_compiling)
+@register_function(torch.compiler.is_dynamo_compiling)
 @register_function(torch._assert)
 @register_function(torch._assert_scalar)
 @register_function(torch._assert_tensor_metadata)

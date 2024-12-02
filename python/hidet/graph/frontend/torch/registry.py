@@ -219,6 +219,7 @@ def allow_in_graph_registered_funcs_only():
             if obj in Registry.registered_functions:
                 continue
             disallow_in_graph(obj)
+            # print(f"{obj.__module__}.{obj.__qualname__}")
 
     new_func_ids = set()
     for registered_func in Registry.registered_functions:

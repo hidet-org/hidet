@@ -24,6 +24,7 @@ from .distributed import (
     barrier,
     send,
     recv,
+    is_initialized,
 )
 from .group import set_nccl_comms
 from .store import FileStore
