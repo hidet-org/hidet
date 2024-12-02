@@ -14,6 +14,24 @@ import numpy as np
 import torch
 from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
+from hidet.ir.dtypes import bfloat16
+
+
+def assert_allclose(hidet_result, numpy_result, atol=0, rtol=0):
+    if hidet_result.dtype == bfloat16:
+        hidet_result = hidet_result.to('float32')
+        numpy_result = numpy_result.astype('float32')
+    hidet_result = hidet_result.numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def assert_torch_allclose(hidet_result, torch_result, atol=0, rtol=0):
+    if hidet_result.dtype == bfloat16:
+        hidet_result = hidet_result.to('float32')
+        torch_result = torch_result.to(torch.float32)
+    hidet_result = hidet_result.numpy()
+    torch_result = torch_result.numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=torch_result, atol=atol, rtol=rtol)
 
 
 def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype=np.float32, atol=0, rtol=0):
@@ -74,8 +92,8 @@ def check_binary(
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     numpy_result = numpy_op(a, b)
-    hidet_result = hidet_op(asarray(a).to(device=device), asarray(b).to(device=device)).cpu().numpy()
-    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+    hidet_result = hidet_op(asarray(a).to(device=device), asarray(b).to(device=device)).cpu()
+    assert_allclose(hidet_result=hidet_result, numpy_result=numpy_result, atol=atol, rtol=rtol)
 
 
 def check_binary_dynamic(
@@ -113,7 +131,6 @@ def check_binary_dynamic(
 def check_ternary(
     a_shape, b_shape, c_shape, numpy_op, hidet_op, dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0
 ):
-    np.random.seed(1)
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     c = np.array(np.random.randn(*c_shape)).astype(dtype)
@@ -166,11 +183,9 @@ def check_torch_binary(
     torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=device)
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
-    torch_result: torch.Tensor = torch_func(torch_a, torch_b)
-    hidet_result: hidet.Tensor = hidet_func(hidet_a, hidet_b)
-    np.testing.assert_allclose(
-        actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
-    )
+    torch_result: torch.Tensor = torch_func(torch_a, torch_b).cpu()
+    hidet_result: hidet.Tensor = hidet_func(hidet_a, hidet_b).cpu()
+    assert_torch_allclose(hidet_result=hidet_result, torch_result=torch_result, atol=atol, rtol=rtol)
 
 
 def check_torch_binary_with_inputs(

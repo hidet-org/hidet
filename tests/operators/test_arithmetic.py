@@ -279,16 +279,26 @@ def test_cast_from_fp16(a_shape):
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 @pytest.mark.parametrize(
-    "a_dtype, b_dtype", [['float16', 'float32'], ['int32', 'float32'], ['int8', 'int32'], ['int32', 'float16']]
+    "a_dtype, b_dtype",
+    [
+        ['float16', 'float32'],
+        ['int32', 'float32'],
+        ['int8', 'int32'],
+        ['int32', 'float16'],
+        ['bfloat16', 'float32'],
+        ['int32', 'bfloat16'],
+    ],
 )
 def test_where(a_shape, a_dtype, b_dtype):
+    from hidet.testing import assert_torch_allclose
+
     a = hidet.randn(a_shape, dtype=a_dtype)
     b = hidet.randn(a_shape, dtype=b_dtype)
     c = hidet.ops.where(a > 0.5, a, b)
 
     c_torch = torch.where(a.torch() > 0.5, a.torch(), b.torch())
     assert str(c.dtype).split('.')[1] == str(c_torch.dtype).split('.')[1]
-    np.testing.assert_allclose(c.torch(), c_torch)
+    assert_torch_allclose(c, c_torch)
 
 
 if __name__ == '__main__':

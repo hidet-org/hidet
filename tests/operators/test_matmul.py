@@ -162,7 +162,7 @@ def test_matmul_fp16_dynamic(a_shape, b_shape):
 
 
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, 128], [128, 128]]])
-@pytest.mark.parametrize("dtype, tol", [("float32", 1e-5), ("float16", 1e-1)])
+@pytest.mark.parametrize("dtype, tol", [("float32", 1e-5), ("float16", 1e-1), ("bfloat16", 5e-1)])
 def test_matmul_cublas(a_shape, b_shape, dtype, tol):
     check_torch_binary(
         a_shape,
@@ -186,9 +186,12 @@ def test_matmul_cublas(a_shape, b_shape, dtype, tol):
         [[1, 128, 128], [128 - 4, 128]],
     ],
 )
-def test_matmul_nt(a_shape, b_shape):
-    a = torch.randn(*a_shape, dtype=torch.float16, device='cuda')
-    b = torch.randn(*b_shape, dtype=torch.float16, device='cuda')
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
+def test_matmul_nt(a_shape, b_shape, dtype):
+    from hidet.testing import assert_torch_allclose
+
+    a = torch.randn(*a_shape, dtype=dtype, device='cuda')
+    b = torch.randn(*b_shape, dtype=dtype, device='cuda')
     c_correct = torch.matmul(a, torch.transpose(b, 0, 1))
     ahi = hidet.from_torch(a)
     bhi = hidet.from_torch(b)
@@ -198,7 +201,7 @@ def test_matmul_nt(a_shape, b_shape):
     graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
     graph_opt = hidet.graph.optimize(graph)
     c_hi = graph_opt(ahi, bhi)
-    np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-1, rtol=1e-1)
+    assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=1e-1, rtol=1e-1)
 
 
 @pytest.mark.parametrize(
