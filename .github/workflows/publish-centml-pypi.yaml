@@ -118,12 +118,20 @@ jobs:
     name: Publish to PyPI
     needs: [run-tests, build-wheel]
     runs-on: ubuntu-latest
+    if: ${{ always() }}
     steps:
+
+      - name: Handle test failure
+        if: ${{ needs.run-tests.result == 'failure' }}
+        run: |
+          echo "Job run-tests failed, skipping push to pypi."
+          exit 1
 
       - name: Download wheel
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build-wheel.outputs.wheel_name }}
+          path: dist
 
       - name: Show the wheel
         run: |
@@ -161,10 +169,11 @@ jobs:
         run: |-
           gcloud config set artifacts/repository ${{ env.PYTHON_REPO }}
           gcloud config set artifacts/location ${{ env.REGION }}
-          source ./ci_venv/bin/activate
           pip3 install twine keyring keyrings.google-artifactregistry-auth
           gcloud artifacts print-settings python --project=${{ env.PROJECT_ID }} \
             --repository=${{ env.PYTHON_REPO }} \
             --location=${{ env.REGION }} > ~/.pypirc
+          ls dist/*
+          cat ~/.pypirc
           python3 -m twine upload --repository-url https://${{ env.REGION }}-python.pkg.dev/${{ env.PROJECT_ID }}/${{ env.PYTHON_REPO }}/ dist/*
   
