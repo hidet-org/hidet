@@ -42,4 +42,3 @@ tomlkit
 
 # for performance measurements
 scipy
-
