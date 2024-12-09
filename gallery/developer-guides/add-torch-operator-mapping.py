@@ -60,6 +60,10 @@ import hidet.graph.frontend.torch.register_functions
 import hidet.graph.frontend.torch.register_modules
 import hidet.graph.frontend.torch.register_methods
 
+# Before removing registered functions, make sure to
+# call allow_in_graph_registered_funcs_only() by importing dynamo_backends 
+import hidet.graph.frontend.torch.dynamo_backends
+
 # we remove the rules for the following operators for demonstration purpose
 # we will add them back later
 del Registry.registered_functions[torch.nn.functional.relu]

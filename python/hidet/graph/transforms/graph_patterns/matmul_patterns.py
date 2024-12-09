@@ -15,6 +15,8 @@ from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
 from hidet.utils import same_list, initialize
+
+# pylint: disable=unused-import
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
 
@@ -164,6 +166,7 @@ class ThreeMatmulBiasFusionPattern(SubgraphRewriteRule):
 
 @initialize()
 def matmul_patterns():
-    register_rewrite_rule(ThreeMatmulBiasFusionPattern())
-    register_rewrite_rule(ThreeMatmulFusionPattern())
-    register_rewrite_rule(TwoMatmulFusionPattern())
+    pass
+    # register_rewrite_rule(ThreeMatmulBiasFusionPattern())
+    # register_rewrite_rule(ThreeMatmulFusionPattern())
+    # register_rewrite_rule(TwoMatmulFusionPattern())
