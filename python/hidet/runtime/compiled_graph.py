@@ -14,10 +14,12 @@ import zipfile
 import os
 import json
 from dataclasses import dataclass
+import warnings
 import tempfile
 
 from tabulate import tabulate
 import numpy
+
 import hidet
 from hidet.ffi.utils import ctypes_func_pointer
 from hidet.ffi.array import Array
@@ -483,14 +485,9 @@ class CompiledGraph:
                 res = [tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in res]
             return res
 
-    def cuda_graph(self, *args):
+    def cuda_graph(self):
         """
         Create a CUDA graph for this compiled graph.
-
-        Parameters
-        ----------
-        args: Sequence[hidet.Tensor]
-            The input tensors. Weight tensors are excluded from args.
 
         Returns
         -------
@@ -498,7 +495,7 @@ class CompiledGraph:
             The CUDA graph.
         """
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
-        from hidet.graph.tensor import Tensor
+        from hidet.graph.tensor import Tensor, randn, zeros, empty
 
         for x in self.meta.inputs + self.meta.outputs:
             if x.device == 'cpu':
@@ -513,15 +510,21 @@ class CompiledGraph:
                 raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
-            import torch
-
             with hidet.option.context():
                 hidet.option.execution_mode('compilaion')
-                inputs = []
-                for arg in args:
-                    arg = hidet.from_torch(arg) if isinstance(arg, torch.Tensor) else arg
-                    inputs.append(hidet.randn_like(arg))
-                return inputs
+                dummy_inputs = []
+                for meta_input in self.meta.inputs:
+                    dtype = hidet.ir.data_type(meta_input.dtype)
+                    if dtype.is_float():
+                        inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    elif dtype.is_integer():
+                        inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    else:
+                        warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                        inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    dummy_inputs.append(inp)
+
+                return dummy_inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
