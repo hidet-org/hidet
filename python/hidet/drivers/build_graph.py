@@ -12,7 +12,6 @@
 from typing import List, Dict
 import os
 import json
-import shutil
 from hashlib import sha256
 
 import hidet
@@ -27,6 +26,7 @@ from hidet.runtime.compiled_task import CompiledTask, TensorSignature
 from hidet.graph.operator import Operator
 from hidet.ir import primitives
 from hidet.utils.dataclass import asdict
+from hidet.utils import copy_tree_ignore_existing
 
 
 def get_graph_weights(graph):
@@ -311,12 +311,13 @@ def save_to_graph_cache(cgraph: CompiledGraph):
     with open(os.path.join(cache_dir, 'meta.json'), 'w') as f:
         json.dump(asdict(cgraph.meta), f, indent=4)
 
-    # save graph module
-    shutil.copytree(cgraph.graph_module.module_dir, os.path.join(cache_dir, 'graph_module/'), dirs_exist_ok=True)
-
     # save kernels
-    for i, compiled_task in enumerate(cgraph.compiled_tasks):
-        shutil.copytree(compiled_task.task_dir, os.path.join(cache_dir, 'kernels/{}'.format(i)), dirs_exist_ok=True)
+    src_list = [compiled_task.task_dir for compiled_task in cgraph.compiled_tasks]
+    dst_list = [os.path.join(cache_dir, 'kernels/{}'.format(i)) for i, _ in enumerate(cgraph.compiled_tasks)]
+    # save graph module
+    src_list.append(cgraph.graph_module.module_dir)
+    dst_list.append(os.path.join(cache_dir, 'graph_module/'))
+    copy_tree_ignore_existing(src_list, dst_list)
 
     # save graph execution
     with open(os.path.join(cache_dir, 'graph_execution.json'), 'w') as f:
