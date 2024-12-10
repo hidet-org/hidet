@@ -116,7 +116,7 @@ class PretrainedModelForCausalLM(nn.Module):
                 assert isinstance(config.torch_dtype, torch.dtype)
                 dtype = str(config.torch_dtype).rsplit('.', maxsplit=1)[-1]
             else:
-                dtype = 'float16'
+                dtype = 'bfloat16'
         hidet_model = cls(config)  # pylint: disable=too-many-function-args
         hidet_model.to(device=device, dtype=dtype)
 

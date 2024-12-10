@@ -443,7 +443,7 @@ class LlamaForCausalLM(nn.Module):
         return OrderedDict(new_ids=new_ids, logits=logits, past_key_values=outputs["past_key_values"])
 
 
-def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda'):
+def convert_model(hf_model: torch.nn.Module, dtype=hidet.bfloat16, device='cuda'):
     config = hf_model.config
 
     hidet_model = LlamaForCausalLM(config)
@@ -454,7 +454,7 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
     return hidet_model
 
 
-def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
+def build_flow_graph(model, batch_size=1, device='cuda', dtype='bfloat16'):
     config = model.config
     input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
     position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
@@ -480,7 +480,7 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     return hidet.trace_from(outputs, inputs)
 
 
-def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='float16'):
+def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='bfloat16'):
     input_ids = tokenizer.encode(text)
     input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int32, device=device)
 
@@ -501,7 +501,7 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
     return tokenizer.decode(outputs)
 
 
-def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='cuda', dtype=torch.float16):
+def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='cuda', dtype=torch.bfloat16):
     torch_model = torch_model.to(device=device, dtype=dtype)
     input_ids = tokenizer.encode(input_ids)
     input_ids = torch.tensor(input_ids).to(device=device).unsqueeze(0)
@@ -538,7 +538,7 @@ def get_compiled_model(name='meta-llama/Llama-2-7b-chat-hf', device='cuda', opt=
     tok = LlamaTokenizer.from_pretrained(name)
 
     with torch.device("cuda"):  # reduce the time to load the model
-        model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+        model = hfLm.from_pretrained(name, torch_dtype=torch.bfloat16)
 
     model.cpu()
     torch.cuda.empty_cache()

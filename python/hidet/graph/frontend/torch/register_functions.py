@@ -1255,10 +1255,10 @@ def mish(x: Tensor, inplace: bool = False):
 def scaled_dot_product_attention(
     q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
 ):
-    from hidet import boolean, float16, float32
+    from hidet import boolean, float32
 
     if attn_mask is not None and attn_mask.dtype == float32:
-        attn_mask = attn_mask.to(float16)
+        attn_mask = attn_mask.to(q.dtype)
 
     if not math.isclose(dropout_p, 0.0):
         warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
@@ -1270,14 +1270,15 @@ def scaled_dot_product_attention(
     )
 
     type_match = (
-        q.dtype == k.dtype == v.dtype == float16
+        q.dtype == k.dtype == v.dtype
+        and q.dtype.is_any_float16()
         and len(q.shape) == len(k_transpose_scaled.shape) == len(v.shape)
         and k_transpose_scaled.shape[-1] == v.shape[-2]
         and q.shape[-1] == k_transpose_scaled.shape[-2] == v.shape[-1]
         and q.shape[-1] <= 160
     )
     fmha_requirements = q.shape[-1] <= 160 and (
-        attn_mask is None or attn_mask is not None and attn_mask.dtype == float16
+        attn_mask is None or attn_mask is not None and attn_mask.dtype.is_any_float16()
     )
     if type_match and fmha_requirements:
         return ops.attention(q, k_transpose_scaled, v, attn_mask, is_causal)

@@ -302,6 +302,8 @@ class IRPrinter(IRFunctor):
                 ret = '{}f'.format(float(e.value))
             elif dtype == 'float16':
                 ret = 'half({})'.format(float(e.value))
+            elif dtype == 'bfloat16':
+                ret = 'bfloat16({})'.format(float(e.value))
             elif dtype == 'int32':
                 ret = '{}'.format(int(e.value))
             elif dtype == 'bool':

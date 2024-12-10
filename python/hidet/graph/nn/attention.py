@@ -67,7 +67,7 @@ class CrossAttention(Module):
         other_dims = bs * inner_dim
         assert (prod(q.shape) % other_dims) == 0
 
-        q, k, v = tuple(t.reshape((bs, -1, self.heads, head_dim)).transpose(1, 2).to("float16") for t in (q, k, v))
+        q, k, v = tuple(t.reshape((bs, -1, self.heads, head_dim)).transpose(1, 2).to('bfloat16') for t in (q, k, v))
         q = q * (1 / math.sqrt(head_dim))
         k = k.transpose(-1, -2)
 
