@@ -116,6 +116,7 @@ class Task(Node):
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
         self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
         self.share_map: Dict[int, int] = share_map
+        self.str = None
 
         from hidet.ir.tools import collect
 
@@ -340,6 +341,11 @@ class Task(Node):
 
     def calculate_hash(self, len: int = 16) -> str:
         return sha256(str(self).encode()).hexdigest()[:len]
+
+    def __str__(self):
+        if self.str is None:
+            self.str = super().__str__()
+        return self.str
 
 
 def save_task(task: Task, fname: str):
