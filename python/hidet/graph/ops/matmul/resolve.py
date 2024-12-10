@@ -13,7 +13,6 @@ from typing import List, Optional, Callable, Any
 from functools import lru_cache
 
 import hidet.cuda
-from hidet.ir import dtypes
 from hidet.ir.expr import is_constant
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
@@ -196,19 +195,17 @@ class MatmulResolveRule(ResolveRule):
 
         transpose_b = op.attrs['transpose_b']
 
-        valid_dtypes = [dtypes.float16, dtypes.bfloat16]
-
         if not transpose_b and not (
-            a.dtype in valid_dtypes
-            and b.dtype in valid_dtypes
+            a.dtype.is_any_float16()
+            and b.dtype.is_any_float16()
             and is_constant(a.shape[-1], b.shape[-1])
             and (a.shape[-1] % 2 == b.shape[-1] % 2 == 0)
         ):
             return None
 
         elif transpose_b and not (
-            a.dtype in valid_dtypes
-            and b.dtype in valid_dtypes
+            a.dtype.is_any_float16()
+            and b.dtype.is_any_float16()
             and is_constant(a.shape[-1], b.shape[-2])
             and (a.shape[-1] % 2 == b.shape[-2] % 2 == 0)
         ):

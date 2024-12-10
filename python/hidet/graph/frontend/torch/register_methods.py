@@ -52,6 +52,11 @@ def tensor_half(self: Tensor) -> Tensor:
     return ops.cast(self, "float16")
 
 
+@register_method(torch.Tensor.bfloat16)
+def tensor_bfloat16(self: Tensor) -> Tensor:
+    return ops.cast(self, "bfloat16")
+
+
 @register_method(torch.Tensor.bool)
 def tensor_bool(self: Tensor) -> Tensor:
     return ops.cast(self, "bool")

@@ -20,7 +20,7 @@ from hidet.ir.expr import cast, is_false
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.library import tune
 from hidet.ir.layout import row_major, local_layout
-from hidet.lang import f16, bf16, f32, i32, u32, spatial, repeat
+from hidet.lang import f16, f32, i32, u32, spatial, repeat
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
@@ -922,7 +922,7 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
     if not q.dtype == k.dtype == v.dtype:
         raise ValueError("Attention only supports inputs of the same dtype")
 
-    if q.dtype not in (f16, bf16):
+    if not q.dtype.is_any_float16():
         raise ValueError("Attention only supports float16 or bfloat16 inputs")
 
     if not len(q.shape) == len(k.shape) == len(v.shape):
