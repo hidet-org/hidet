@@ -26,6 +26,7 @@ from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.utils.multiprocess import parallel_imap, get_parallel_num_workers
 from hidet.utils.stack_limit import set_stack_limit
+from hidet.utils.folder_lock import FolderLock
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -68,17 +69,24 @@ def configure_target(target):
 
 
 def build_ir_module(
-    ir_module: Union[IRModule, Sequence[IRModule]], output_dir: str, target: str, output_kind: str = '.so', force=False
+    ir_module: Union[IRModule, Sequence[IRModule]],
+    output_dir: str,
+    target: str,
+    output_kind: str = '.so',
+    force: bool = False,
 ):
     """
     Build an IR module to a shared library or object file.
 
     This driver function performs the following steps to build an IR module:
-
     1. Lower and optimize the IR module with a sequence of pre-defined passes.
     2. Generate source code from the lowered IR module.
-    3. Call the underlying compiler (e.g., gcc or nvcc) to compile the generated source code to a shared library (when
-       `output_kind == '.so'`) or an object file (when `output_kind == '.o'`).
+    3. Call the underlying compiler (e.g., gcc or nvcc) to compile the generated source code into a shared library
+       (when `output_kind == '.so'`) or an object file (when `output_kind == '.o'`).
+
+    To ensure safe parallel execution in a multiprocessing environment, a file-based lock (`.lock` file in the
+    `output_dir`) is used. This guarantees that only one process can build the IR module for a given `output_dir`
+    at any given time.
 
     Parameters
     ----------
@@ -89,74 +97,212 @@ def build_ir_module(
         The directory to save the generated source code and the compiled library.
 
     target: str
-        The target to build the IR module. Currently, we support two targets: `cpu` and `cuda`. The target can also
-        specify attributes (e.g., 'cuda --arch=sm_70').
+        The target to build the IR module. Supported targets are `cpu` and `cuda`. Attributes
+        (e.g., 'cuda --arch=sm_70') can also be specified.
 
     output_kind: str
-        The output kind. Currently, we support two kinds: `'.so'` and `'.o'`. The former means that the IR module will
-        be compiled to a shared library, while the latter means that the IR module will be compiled to an object file.
+        The output kind. Supported kinds are `'.so'` and `'.o'`.
+        - `'.so'`: Compile the IR module to a shared library.
+        - `'.o'`: Compile the IR module to an object file.
 
     force: bool
-        Whether to force re-build the IR module. By default, we will not re-build the IR module if the library has been
-        built at the specified output directory.
+        Whether to force re-build the IR module. By default, the IR module will not be re-built if the library
+        already exists in the specified output directory.
+
+    Notes
+    -----
+    - **File Locking:** A `.lock` file is created in the `output_dir` to synchronize access. If another process
+      tries to build the same IR module concurrently, it will wait until the lock is released.
+
+    - **Parallel Safety:** The file lock ensures that only one process builds the IR module for a specific
+      `output_dir`.
     """
-    if output_kind == '.so':
-        lib_name = 'lib.so'
-    elif output_kind == '.o':
-        lib_name = 'lib.o'
-    else:
-        raise ValueError(f'Invalid output kind: {output_kind}')
+    lib_name = get_library_name(output_kind)
     lib_path = os.path.join(output_dir, lib_name)
 
-    if (
+    # Acquire file lock for this output directory
+    with FolderLock(output_dir):  # Locks on .lock file in the output directory
+        if should_skip_build(lib_path, output_kind, output_dir, force):
+            return
+
+        if hidet.option.compile_server.enabled() and can_remote_build(ir_module):
+            from hidet.apps.compile_server import remote_build
+
+            remote_build(ir_module, output_dir, target=target, output_kind=output_kind)
+            return
+
+        target = Target.from_string(target) if isinstance(target, str) else target
+        src_path = get_source_path(output_dir, target)
+
+        # Set the recursion limit for lowering
+        set_stack_limit()
+
+        # Lower the IR module
+        ir_module = lower_ir_module(ir_module, output_dir, target)
+
+        # Generate source code
+        codegen(ir_module, src_out_path=src_path, target=target)
+
+        # Collect dependencies for compilation
+        include_dir, linking_dir, linking_lib, object_file = collect_dependencies(ir_module)
+
+        # Compile source code
+        compile_source(
+            src_path,
+            output_library_file=lib_path,
+            target=target,
+            include_dirs=include_dir,
+            linking_dirs=linking_dir,
+            linking_libraries=linking_lib,
+            object_files=object_file,
+        )
+
+        # Write function types for shared libraries
+        if output_kind == '.so':
+            write_function_types(ir_module, output_dir)
+
+
+def build_ir_module_batch(
+    ir_modules: Sequence[IRModule], output_dirs: Sequence[str], output_kind: str, target: str, force: bool = False
+):
+    """
+    Build a batch of IR modules.
+
+    Parameters
+    ----------
+    ir_modules: Sequence[IRModule]
+        A sequence of IR modules to build.
+    output_dirs: Sequence[str]
+        Directories for compilation artifacts.
+    output_kind: str
+        The output kind of the compiled library. Can be `'.so'` or `'.o'`.
+    target: str
+        The target of the compilation. Can be 'cuda' or 'cpu'.
+    force: bool
+        Whether to force re-build the IR module. By default, the IR module will not be re-built if the library already
+        exists in the specified output directory.
+    """
+
+    def build_job(args):
+        ir_module, output_dir = args
+        build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
+
+    def regroup_modules(modules, num_workers):
+        """
+        Regroup IR modules for parallel processing.
+        """
+        from hidet.utils import cdiv
+
+        max_candidates_per_job = option.get_parallel_tune()[2]
+        len_modules = len(modules)
+
+        if len_modules <= num_workers:
+            return modules
+
+        num_new_jobs = cdiv(len_modules, num_workers * max_candidates_per_job) * num_workers
+        job_per_worker = len_modules // num_new_jobs
+        num_modules_for_1st_pass = job_per_worker * num_new_jobs
+
+        grouped_modules = [modules[i : i + job_per_worker] for i in range(0, num_modules_for_1st_pass, job_per_worker)]
+        remainder = modules[num_modules_for_1st_pass:]
+
+        for i, module in enumerate(remainder):
+            grouped_modules[i % len(grouped_modules)].append(module)
+
+        assert sum(len(group) for group in grouped_modules) == len(modules)
+        return grouped_modules
+
+    def check_function_singular(module_list):
+        """
+        Ensure no duplicate function names exist after regrouping.
+        """
+        if not module_list or isinstance(module_list[0], IRModule):
+            return True
+        name_set = set()
+        for modules in module_list:
+            for module in modules:
+                namespace = module.namespace
+                for func_name in module.extern_functions.keys() | module.functions.keys():
+                    func_str = f"{namespace}::{func_name}"
+                    if func_str in name_set:
+                        return False
+                    name_set.add(func_str)
+        return True
+
+    # Determine number of workers
+    max_num_worker, mem_for_worker, _ = option.get_parallel_tune()
+    if hidet.option.compile_server.enabled():
+        num_workers = min(len(ir_modules), 128)
+    else:
+        num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
+
+    # Shuffle modules for balanced workloads
+    random.seed(42)
+    random.shuffle(ir_modules)
+    random.seed()
+
+    if num_workers > 1 and len(ir_modules) > 1:
+        lazy_initialize_cuda()
+        ir_modules_list = regroup_modules(ir_modules, num_workers)
+        assert check_function_singular(ir_modules_list), "Duplicate function names detected in regrouped modules."
+
+        jobs = [(group, output_dir) for group, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])]
+
+        for _ in tqdm(
+            parallel_imap(build_job, jobs, num_workers, mem_for_worker), desc="Compiling", total=len(jobs), ncols=80
+        ):
+            pass
+
+        return output_dirs[: len(ir_modules_list)]
+    else:
+        build_ir_module(ir_modules, output_dir=output_dirs[0], output_kind=output_kind, target=target, force=force)
+        return [output_dirs[0]]
+
+
+def get_library_name(output_kind):
+    if output_kind == '.so':
+        return 'lib.so'
+    elif output_kind == '.o':
+        return 'lib.o'
+    else:
+        raise ValueError(f"Invalid output kind: {output_kind}")
+
+
+def should_skip_build(lib_path, output_kind, output_dir, force):
+    '''lib_path always contains .lock file'''
+    return (
         os.path.exists(lib_path)
-        and os.path.getsize(lib_path) > 0
+        and os.path.getsize(lib_path) > 1
         and (output_kind != '.so' or os.path.exists(os.path.join(output_dir, 'func_types.pickle')))
         and not force
-    ):
-        # the library has been built
-        return
+    )
 
-    if hidet.option.compile_server.enabled() and can_remote_build(ir_module):
-        from hidet.apps.compile_server import remote_build
 
-        remote_build(ir_module, output_dir, target=target, output_kind=output_kind)
-        return
-
-    if isinstance(target, str):
-        target = Target.from_string(target)
-
+def get_source_path(output_dir, target):
     if target.name == 'cuda':
-        src_path = os.path.join(output_dir, 'source.cu')
+        return os.path.join(output_dir, 'source.cu')
     elif target.name == 'cpu':
-        src_path = os.path.join(output_dir, 'source.cc')
+        return os.path.join(output_dir, 'source.cc')
     else:
-        raise ValueError(f'Invalid target: {target}')
+        raise ValueError(f"Invalid target: {target}")
 
-    # set the recursion limit before every lowering, because some other packages might change this value to a lower
-    # value that we need
-    set_stack_limit()
 
-    # lower ir module
-    with hidet.option.context():
-        configure_target(target)
-        if isinstance(ir_module, Sequence):
-            for i in range(len(ir_module)):
-                instruments = create_instruments(output_dir, ir_module[i])
-                with PassContext(instruments=instruments):
-                    ir_module[i] = lower(ir_module[i])
-        else:
-            instruments = create_instruments(output_dir, ir_module)
+def lower_ir_module(ir_module, output_dir, target):
+    configure_target(target)
+    if isinstance(ir_module, Sequence):
+        for i in range(len(ir_module)):
+            instruments = create_instruments(output_dir, ir_module[i])
             with PassContext(instruments=instruments):
-                ir_module = lower(ir_module)
+                ir_module[i] = lower(ir_module[i])
+    else:
+        instruments = create_instruments(output_dir, ir_module)
+        with PassContext(instruments=instruments):
+            ir_module = lower(ir_module)
+    return ir_module
 
-    # code generation
-    codegen(ir_module, src_out_path=src_path, target=target)
 
-    include_dir = []
-    linking_dir = []
-    linking_lib = []
-    object_file = []
+def collect_dependencies(ir_module):
+    include_dir, linking_dir, linking_lib, object_file = [], [], [], []
     if isinstance(ir_module, Sequence):
         for im in ir_module:
             include_dir.extend(im.include_dirs)
@@ -168,122 +314,15 @@ def build_ir_module(
         linking_dir.extend(ir_module.linking_dirs)
         linking_lib.extend(ir_module.linking_libs)
         object_file.extend(ir_module.object_files)
-    # compile source code
-    compile_source(
-        src_path,
-        output_library_file=lib_path,
-        target=target,
-        include_dirs=include_dir,
-        linking_dirs=linking_dir,
-        linking_libraries=linking_lib,
-        object_files=object_file,
-    )
-
-    # write the function types
-    if output_kind == '.so':
-        func_types: Dict[str, FuncType] = {
-            func.name: FuncType.from_func(func) for func in ir_module.functions.values() if func.kind == 'public'
-        }
-        with open(os.path.join(output_dir, 'func_types.pickle'), 'wb') as f:
-            pickle.dump(func_types, f)
+    return include_dir, linking_dir, linking_lib, object_file
 
 
-def build_ir_module_batch(
-    ir_modules: Sequence[IRModule], output_dirs: Sequence[str], output_kind: str, target: str, force: bool = False
-):
+def write_function_types(ir_module, output_dir):
     """
-    Build a batch of ir modules.
-
-    Parameters
-    ----------
-    ir_modules: Sequence[IRModule]
-        A sequence of ir modules to build.
-
-    output_dirs: Squence[str]
-        Directories for compilation artifacts
-
-    output_kind: str
-        The output kind of the compiled library. Can be '.so' or '.o'.
-
-    target: str
-        The target of the compilation. Can be 'cuda' or 'cpu'.
-
-    force: bool
-        Whether to force re-build the IR module. By default, we will not re-build the IR module if the library has been
-        built at the specified output directory.
+    Write function types for public functions in the IR module.
     """
-
-    def build_job(args):
-        ir_module, output_dir = args
-        build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
-
-    def regroup_modules(modules, num_workers):
-        from hidet.utils import cdiv
-
-        _, _, max_candidates_per_job = option.get_parallel_tune()
-        len_modules = len(modules)
-        if len_modules <= num_workers:
-            return modules
-
-        num_new_jobs = cdiv(len_modules, num_workers * max_candidates_per_job) * num_workers
-        job_per_worker = len_modules // num_new_jobs
-        num_modules_for_1st_pass = job_per_worker * num_new_jobs
-        # first assign equal amount of the jobs to every worker
-        list = [modules[i : i + job_per_worker] for i in range(0, num_modules_for_1st_pass, job_per_worker)]
-        # take the remaining jobs and assign them each to a worker, adding at most one job to each worker
-        reminder_len = len(modules) - job_per_worker * num_new_jobs
-        for i, j in zip(range(num_modules_for_1st_pass, len(modules)), range(reminder_len)):
-            list[j].append(modules[i])
-
-        assert sum(len(i) for i in list) == len(modules)
-        return list
-
-    # check if regrouped IRModules have unique function names
-    def check_function_singular(module_list: Union[Sequence[IRModule], Sequence[Sequence[IRModule]]]) -> bool:
-        if len(module_list) == 0 or isinstance(module_list[0], IRModule):
-            return True
-        name_set = set()
-        for modules in module_list:
-            for module in modules:
-                namespace_str = module.namespace
-                function_name_list = list(module.extern_functions.keys()) + list(module.functions.keys())
-                for func_name in function_name_list:
-                    func_str = namespace_str + '::' + func_name
-                    if func_str in name_set:
-                        return False
-                    else:
-                        name_set.add(func_str)
-        return True
-
-    # calculate the number of workers
-    max_num_worker, mem_for_worker, _ = option.get_parallel_tune()
-    if hidet.option.compile_server.enabled():
-        num_workers = min(len(ir_modules), 128)
-    else:
-        num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
-    # Shuffle the candidates to avoid grouping long-compilation time candidates together
-    # Make compilation deterministic
-    random.seed(42)
-    # Shuffle
-    random.shuffle(ir_modules)
-    # Make random number a random again
-    random.seed()
-    if num_workers > 1 and len(ir_modules) > 1:
-        lazy_initialize_cuda()
-        ir_modules_list = regroup_modules(ir_modules, num_workers)
-        assert check_function_singular(
-            ir_modules_list
-        ), 'duplicate function names detected after regrouping candidates for batch compilation'
-        jobs = [
-            (ir_modules, output_dir)
-            for ir_modules, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])
-        ]
-
-        for _ in tqdm(
-            parallel_imap(build_job, jobs, num_workers, mem_for_worker), desc='Compiling', total=len(jobs), ncols=80
-        ):
-            pass
-        return output_dirs[: len(ir_modules_list)]
-    else:
-        build_ir_module(ir_modules, output_dir=output_dirs[0], output_kind=output_kind, target=target, force=force)
-        return [output_dirs[0]]
+    func_types: Dict[str, FuncType] = {
+        func.name: FuncType.from_func(func) for func in ir_module.functions.values() if func.kind == 'public'
+    }
+    with open(os.path.join(output_dir, 'func_types.pickle'), 'wb') as f:
+        pickle.dump(func_types, f)

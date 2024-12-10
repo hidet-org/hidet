@@ -221,78 +221,104 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
     load: bool
         Whether to load the compiled function. If False, the compiled function will not be loaded, and None is returned.
         Otherwise, the compiled function is loaded and returned.
+
     Returns
     -------
     ret: CompiledTask
         When load is True, the compiled function is returned. Otherwise, None is returned.
     """
-    task_string: str = str(task)
-    compiled_task: Optional[CompiledTask] = None
-
-    if isinstance(target, Device):
-        target = target.kind
-
+    target = target.kind if isinstance(target, Device) else target
+    task_string = str(task)
     space_level = option.get_option('search_space')
     op_cache_dir = os.path.join(option.get_option('cache_dir'), './ops')
     use_cache = option.get_option('cache_operator')
 
-    # check in-memory cache
+    # Check in-memory cache
+    compiled_task = check_in_memory_cache(target, space_level, task_string, load)
+    if compiled_task:
+        return compiled_task
+
+    # Prepare cache paths and versioning
+    config_str = f'{target}_space_{space_level}'
+    task_dir, version_path = prepare_cache_paths(op_cache_dir, config_str, task)
+
+    # Check disk cache
+    if use_cache and verify_disk_cache(version_path, task_dir):
+        return load_task_from_disk(task.name, task_dir, target, space_level, task_string, load)
+
+    # Compile the task from scratch
+    return compile_task_from_scratch(task, target, task_string, task_dir, space_level, load)
+
+
+def check_in_memory_cache(target, space_level, task_string, load):
+    """Check if the task exists in the in-memory cache."""
     if compiled_task_cache.contains(target, space_level, task_string):
-        if load:
-            compiled_task = compiled_task_cache.get(target, space_level, task_string)
-    else:
-        # check on-disk cache
-        config_str = f'{target}_space_{space_level}'
-        task_hash = task.calculate_hash()
-        task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        lib_path = os.path.join(task_dir, 'lib.so')
-        version_path = os.path.join(task_dir, 'version.txt')
+        return compiled_task_cache.get(target, space_level, task_string) if load else None
+    return None
 
-        version_matched = False
-        if os.path.exists(version_path):
-            with open(version_path, 'r') as f:
-                version = f.read()
-                if version.strip() == hidet.__version__:
-                    version_matched = True
 
-        # use previously generated library when available
-        if use_cache and version_matched and compiled_module_exists(task_dir):
-            logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
-            if load:
-                compiled_task = load_compiled_task(task_dir)
-                compiled_task_cache.add(target, space_level, task_string, compiled_task)
-        else:
-            logger.info(f"Compiling {target} task {green(task.signature())}...")
+def prepare_cache_paths(op_cache_dir, config_str, task):
+    """Prepare paths for the task cache."""
+    task_hash = task.calculate_hash()
+    task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
+    version_path = os.path.join(task_dir, 'version.txt')
+    return task_dir, version_path
 
-            # build from scratch
-            os.makedirs(task_dir, exist_ok=True)
 
-            # write task
-            with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
-                f.write(task_string)
-            try:
-                hidet.save_task(task, os.path.join(task_dir, 'task.pickle'))
-            except Exception as e:  # pylint: disable=broad-except, unused-variable
-                # Some object can not be serialized with pickle. Just ignore them.
-                pass
-            # write version
-            with open(version_path, 'w') as f:
-                f.write(hidet.__version__)
-            # implement task to IRModule, each task may produce multiple IRModules (candidates)
-            # they have the same functionality but different performance
-            candidates = task.implement(target=target, working_dir=task_dir)
+def verify_disk_cache(version_path, task_dir):
+    """Verify if the disk cache is valid and the version matches."""
+    version_matched = False
+    if os.path.exists(version_path):
+        with open(version_path, 'r') as f:
+            version = f.read().strip()
+            version_matched = version == hidet.__version__
+    return version_matched and compiled_module_exists(task_dir)
 
-            # generate meta data
-            generate_meta_data(task, task_dir, target, len(candidates))
 
-            # construct the ir module for the task
-            build_task_module(task, candidates, task_dir, target)
+def load_task_from_disk(task_name, task_dir, target, space_level, task_string, load):
+    """Load a task from the disk cache."""
+    logger.debug(f"Load cached task binary {green(task_name)} from path: \n{cyan(os.path.join(task_dir, 'lib.so'))}")
+    if load:
+        compiled_task = load_compiled_task(task_dir)
+        compiled_task_cache.add(target, space_level, task_string, compiled_task)
+        return compiled_task
+    return None
 
-            if load:
-                compiled_task = load_compiled_task(task_dir)
-                compiled_task_cache.add(target, space_level, task_string, compiled_task)
 
-    return compiled_task
+def compile_task_from_scratch(task, target, task_string, task_dir, space_level, load):
+    """Compile the task from scratch."""
+    logger.info(f"Compiling {target} task {green(task.signature())}...")
+
+    # Prepare task directory
+    os.makedirs(task_dir, exist_ok=True)
+    write_task_files(task, task_string, task_dir)
+
+    # Implement task to IRModule candidates
+    candidates = task.implement(target=target, working_dir=task_dir)
+
+    # Generate metadata and build modules
+    generate_meta_data(task, task_dir, target, len(candidates))
+    build_task_module(task, candidates, task_dir, target)
+
+    # Load and cache the compiled task
+    if load:
+        compiled_task = load_compiled_task(task_dir)
+        compiled_task_cache.add(target, space_level, task_string, compiled_task)
+        return compiled_task
+    return None
+
+
+def write_task_files(task, task_string, task_dir):
+    """Write task information and version files."""
+    with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
+        f.write(task_string)
+    try:
+        hidet.save_task(task, os.path.join(task_dir, 'task.pickle'))
+    except Exception:  # pylint: disable=broad-except, unused-variable
+        # Some objects may not be serializable; ignore them
+        pass
+    with open(os.path.join(task_dir, 'version.txt'), 'w') as f:
+        f.write(hidet.__version__)
 
 
 def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
