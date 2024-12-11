@@ -14,18 +14,30 @@ from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.transforms import Pass
+from hidet.ir.tools import TypeInfer
+from hidet.ir.expr import Call, Var
 
 
 class AttachHashToSignatureRewriter(IRRewriter):
     def __init__(self, old_name: str, new_name: str, use_memo=True):
         self.old_name = old_name
         self.new_name = new_name
+        self.infer_type = TypeInfer()
         super().__init__(use_memo)
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         if stmt.func_var.name == self.old_name:
             stmt.func_var.name = self.new_name
         return super().visit_LaunchKernelStmt(stmt)
+
+    def visit_Call(self, call: Call):
+        func_var = call.func_var
+        if func_var.name == self.old_name:
+            new_args = tuple(arg for arg in call.args)
+            func_ty = self.infer_type(func_var)
+            new_func = Var('', func_ty, name=self.new_name)
+            return Call(new_func, new_args)
+        return super().visit_Call(call)
 
 
 class AttachHashToSignature(Pass):
