@@ -263,6 +263,24 @@ def register_barrier():
             register_primitive_function(name=barrier_func.name, func_or_type=barrier_func)
 
 
+@initialize()
+def register_fence():
+    for scope in ["cta", "cluster", "gpu", "sys"]:
+        for sem in [".sc", ".acq_rel"]:
+
+            func_name = f'fence_{sem.removeprefix(".")}_{scope}'
+            template = f"fence{sem}.{scope};"
+
+            @script
+            def func():
+                attrs.func_kind = "cuda_internal"
+                attrs.func_name = func_name
+
+                asm(template, inputs=[], is_volatile=True)
+
+            register_primitive_function(name=func.name, func_or_type=func)
+
+
 def mbarrier_init(mbar: Expr, arrive_count: Expr):
     """
     Init a barrier
@@ -438,3 +456,34 @@ def barrier_arrive(barrier: Union[int, Expr], count: Union[int, Expr], aligned: 
         When specified, it indicates that all threads in CTA will execute the same barrier instruction.
     """
     return _barrier(barrier, count, aligned, mode='arrive')
+
+
+def fence(sem: str = "acq_rel", scope: str = "gpu"):
+    """
+    Perform a fence operation.
+
+    The fence instruction establishes an ordering between memory accesses requested by this thread (ld, st, atom and red instructions)
+    as described in the Memory Consistency Model. The scope qualifier specifies the set of threads that may observe the ordering
+    effect of this operation.
+
+    See Alos
+    --------
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=fence#parallel-synchronization-and-communication-instructions-membar-fence
+
+    Parameters
+    ----------
+    sem: str
+        The sem qualifier of the fence operation. Can be either "sc" (sequential) or "acq_rel" (acquire-release).
+
+        "acq_rel" is a light-weight fence that is sufficient for memory synchronization in most programs. Instances of fence.acq_rel
+        synchronize when combined with additional memory operations as described in acquire and release patterns in the Memory Consistency
+        Model. If the optional .sem qualifier is absent, .acq_rel is assumed by default.
+
+        "sc" is a slower fence that can restore sequential consistency when used in sufficient places, at the cost of performance.
+        Instances of fence.sc with sufficient scope always synchronize by forming a total order per scope, determined at runtime.
+        This total order can be constrained further by other synchronization in the program.
+
+    scope: str
+        The scope of the fence operation. Can be either "cta", "cluster", "gpu", or "sys".
+    """
+    return call_primitive_func(f"fence_{sem}_{scope}", [])

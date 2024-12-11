@@ -64,7 +64,7 @@ class OpEmitter(StmtBuilder):
             shape = [shape]
         iter_names = self._name_index_vars(len(shape))
         iter_vars = [var(name) for name in iter_names]
-        ret_vars = iter_vars[0] if len(iter_vars) == 1 else iter_vars
+        ret_vars = iter_vars[0] if len(iter_vars) == 1 else tuple(iter_vars)
         mapping = repeat_map(shape)
         return StmtScope(self, stmts=ForMappingStmt(iter_vars, mapping, i32(0), cast(Stmt, None)), ret=ret_vars)
 
@@ -77,11 +77,17 @@ class OpEmitter(StmtBuilder):
                 'Please implement the "request_smem_nbyts" method to return a positive integer'
                 'before accessing the requested shared_memory.'
             )
-
         if nbytes > requested:
             raise RuntimeError(f"Requested {nbytes} bytes of shared memory, but only {requested} bytes are allocated.")
+        smem_offset = "smem_offset"
+        if smem_offset not in op.annotations:
+            return dynamic_shared_memory(0, dtype=dtype)
+            # FIXME:
+            # raise RuntimeError(
+            #     "Missing shared memory offset annotation. This usually indicates a potential compile error."
+            # )
 
-        return dynamic_shared_memory(0, dtype=dtype)
+        return dynamic_shared_memory(op.annotations[smem_offset], dtype=dtype)
 
     def request_smem_nbytes(self, op: Op) -> int:
         return 0

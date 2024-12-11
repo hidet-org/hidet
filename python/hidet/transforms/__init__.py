@@ -45,9 +45,16 @@ from .spatial_simplification import spatial_simplification_pass
 from .expand_repeat import expand_repeat_mapping_pass
 from .task_mapping_bound_check import task_mapping_bound_check
 
+from .cute.generic.canonicalize import canonicalize_pass
+from .cute.generic.canonicalize_arithmetic_expression import canonicalize_arithmetic_expression_pass
+from .cute.generic.deadcode_elimination import deadcode_elimination_pass
+
 from .cute.cuda.lower_cute_dialect import lower_cute_dialect_pass
-from .cute.cuda.update_shared_memory_usage import update_shared_memory_usage_pass
 from .cute.cuda.instruction_selection import instruction_selection_pass
+from .cute.cuda.instantiate_auto_annotation import instantiate_auto_annotation_pass
+from .cute.cuda.resolve_bank_conflict import resolve_bank_conflict_pass
+from .cute.cuda.vectorize_elementwise import vectorize_elementwise_pass
+from .cute.cuda.shared_memory_allocation import shared_memory_allocation_pass
 
 
 def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
@@ -64,12 +71,22 @@ def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
 
 def lower(ir_module: IRModule) -> IRModule:
 
+    cute_generic_transforms = [
+        canonicalize_arithmetic_expression_pass(),
+        canonicalize_pass(),
+        deadcode_elimination_pass(),
+    ]
+
     from hidet.ir.cute.collective import CollectiveStore
 
     cute_cuda_transforms = [
         lower_cute_dialect_pass((CollectiveStore,)),
+        instantiate_auto_annotation_pass(),
+        vectorize_elementwise_pass(),
         instruction_selection_pass(),
-        update_shared_memory_usage_pass(),
+        resolve_bank_conflict_pass(),
+        instruction_selection_pass(),
+        shared_memory_allocation_pass(),
         lower_cute_dialect_pass(),
     ]
 
@@ -89,13 +106,14 @@ def lower(ir_module: IRModule) -> IRModule:
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
-        lower_integer_subbyte_pass(),
+        flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
+        lower_integer_subbyte_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),
@@ -112,5 +130,5 @@ def lower(ir_module: IRModule) -> IRModule:
         simplify_stmt_pass(),
         annotate_header_and_libs_pass(),
     ]
-    ir_module = lower_with(ir_module, cute_cuda_transforms + transforms)
+    ir_module = lower_with(ir_module, cute_generic_transforms + cute_cuda_transforms + transforms)
     return ir_module

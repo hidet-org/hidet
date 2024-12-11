@@ -50,8 +50,26 @@ from hidet.ir.cute.type import TiledTensorType
 from hidet.ir.cute.expr import CallOp
 from hidet.ir.cute.expr import Op as CuteOp
 from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout
-from hidet.ir.cute.algorithm import TiledCopy
-from hidet.ir.cute.ops import TiledTensorView, PartitionSrc, PartitionDst, Copy, Mask, Rearrange
+from hidet.ir.cute.algorithm import TiledCopy, TiledMma
+from hidet.ir.cute.ops import (
+    Tensor,
+    TensorView,
+    PartitionSrc,
+    PartitionDst,
+    PartitionA,
+    PartitionB,
+    Copy,
+    Mask,
+    Rearrange,
+    Mma,
+    SubTensor,
+    Arithmetic,
+    Fill,
+    Reduce,
+    Broadcast,
+    Transpose,
+    Atomic,
+)
 from hidet.ir.cute.collective import CollectiveStore
 
 
@@ -649,12 +667,21 @@ class IRPrinter(IRFunctor):
     def visit_TiledCopy(self, tiled_copy: TiledCopy):
         return self.get_attr_abbr(hint="tiled_copy", attr_string=tiled_copy.str_indented(1))
 
+    def visit_TiledMma(self, tiled_mma: TiledMma):
+        return self.get_attr_abbr(hint="tiled_mma", attr_string=tiled_mma.str_indented(1))
+
     def visit_CuteOp(self, op: CuteOp):
-        args_doc = [self(v) for v in op.args]
+        import types
+        from functools import partial
+
+        args_doc = []
+        for v in op.args:
+            if isinstance(v, (list, tuple)):
+                args_doc.append('(' + self(v) + ')')
+            else:
+                args_doc.append(self(v))
         attrs_doc = []
         for k, v in op.attrs.items():
-            if v is None:
-                continue
             if isinstance(v, (list, tuple)):
                 attrs_doc.append(self(k) + '=' + '[' + self(v) + ']')
             elif isinstance(v, dict):
@@ -667,6 +694,12 @@ class IRPrinter(IRFunctor):
                 attrs_doc.append(self(k) + '=' + str(v))
             elif isinstance(v, TiledCopy):
                 attrs_doc.append(self(k) + '=' + self.visit_TiledCopy(v))
+            elif isinstance(v, TiledMma):
+                attrs_doc.append(self(k) + '=' + self.visit_TiledMma(v))
+            elif isinstance(v, types.FunctionType):
+                attrs_doc.append(self(k) + '=' + v.__name__)
+            elif isinstance(v, partial):
+                attrs_doc.append(self(k) + '=' + f'functools.partial({v.func.__name__}, {v.args})')
             elif not isinstance(v, Node):
                 attrs_doc.append(self(k) + '=' + str(v))
             else:
@@ -685,13 +718,22 @@ class IRPrinter(IRFunctor):
         attrs_doc.append('scope=' + str(t.scope))
         return self(t.dtype) + '[' + doc_join(attrs_doc, ', ') + ']'
 
-    def visit_TiledTensorView(self, op: TiledTensorView):
+    def visit_Tensor(self, op: Tensor):
+        return self.visit_CuteOp(op)
+
+    def visit_TensorView(self, op: TensorView):
         return self.visit_CuteOp(op)
 
     def visit_PartitionSrc(self, op: PartitionSrc):
         return self.visit_CuteOp(op)
 
     def visit_PartitionDst(self, op: PartitionDst):
+        return self.visit_CuteOp(op)
+
+    def visit_PartitionA(self, op: PartitionA):
+        return self.visit_CuteOp(op)
+
+    def visit_PartitionB(self, op: PartitionB):
         return self.visit_CuteOp(op)
 
     def visit_Copy(self, op: Copy):
@@ -704,6 +746,30 @@ class IRPrinter(IRFunctor):
         return self.visit_CuteOp(op)
 
     def visit_CollectiveStore(self, op: CollectiveStore):
+        return self.visit_CuteOp(op)
+
+    def visit_Mma(self, op: Mma):
+        return self.visit_CuteOp(op)
+
+    def visit_SubTensor(self, op: SubTensor):
+        return self.visit_CuteOp(op)
+
+    def visit_Arithmetic(self, op: Arithmetic):
+        return self.visit_CuteOp(op)
+
+    def visit_Fill(self, op: Fill):
+        return self.visit_CuteOp(op)
+
+    def visit_Reduce(self, op: Reduce):
+        return self.visit_CuteOp(op)
+
+    def visit_Broadcast(self, op: Broadcast):
+        return self.visit_CuteOp(op)
+
+    def visit_Transpose(self, op: Transpose):
+        return self.visit_CuteOp(op)
+
+    def visit_Atomic(self, op: Atomic):
         return self.visit_CuteOp(op)
 
 

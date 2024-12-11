@@ -96,7 +96,7 @@ class MetricCollectContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.current = None
+        MetricCollectContext.current = None
 
 
 def space(level: int, /, **subspaces: Sequence[Choice]):

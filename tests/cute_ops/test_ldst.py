@@ -15,7 +15,7 @@ import hidet
 from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
 from hidet.ir.cute.layout import ThrValAtom, Level
 from hidet.ir.cute.algorithm import CopyAtom, TiledCopy
-from hidet.ir.cute.ops import tiled_tensor_view, partition_src, partition_dst, mask, copy
+from hidet.ir.cute.ops import tensor_view, partition_src, partition_dst, mask, copy, sub_tensor
 from hidet.lang.mapping import auto_map
 from hidet.utils import initialize
 
@@ -121,16 +121,26 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy, dtype):
     block_m = memory_layout.shape[0]
     block_n = memory_layout.shape[1]
 
-    gmem_layout_in = memory_layout
+    gmem_layout_in = TensorLayout((block_m, block_n, 2), (block_n, 1, block_m * block_n))
     gmem_layout_out = memory_layout
     smem_layout = memory_layout
 
     atom = ThrValAtom("warp", lds_tiled_copy.copy_atom.shape, lds_tiled_copy.copy_atom.dst_thrval_layout)
-    tiled_tensor_layout = TiledTensorLayout(atom, lds_tiled_copy.levels)
+
+    levels = lds_tiled_copy.levels
+    tp = levels[-1].repeat_shape
+    levels[-1].repeat_shape = (tp[0], tp[1] * 2)
+    levels[-1].repeat_layout = TensorLayout(levels[-1].repeat_shape)
+    tiled_tensor_layout = TiledTensorLayout(atom, levels)
     nr_regs = tiled_tensor_layout.val_layout().size()
 
+    levels[-1].repeat_shape = tp
+    levels[-1].repeat_layout = TensorLayout(levels[-1].repeat_shape)
+    print(lds_tiled_copy.str_indented())
+    print(levels[-1].str_indented())
+
     copy_atom = CopyAtom("warp", tiled_tensor_layout.atom.shape, tiled_tensor_layout.atom.layout)
-    stg_tiled_copy = TiledCopy(copy_atom, tiled_tensor_layout.levels)
+    stg_tiled_copy = TiledCopy(copy_atom, lds_tiled_copy.levels)
 
     with hidet.script_module() as script_module:
 
@@ -141,25 +151,25 @@ def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy, dtype):
             attrs.cuda.grid_dim = 1
 
             smem = shared_tensor(dtype, shape=[block_m, block_n])
-            t_g_in = tiled_tensor_view(in_ptr, gmem_layout_in, "global")
-            t_smem = tiled_tensor_view(smem, smem_layout, "shared")
+            t_g_in = tensor_view(in_ptr, gmem_layout_in, "global")
+            t_smem = tensor_view(smem, smem_layout, "shared")
 
             txgx_i = partition_src(t_g_in, ldgsts_tiled_copy)
             txsx_i = partition_dst(t_smem, ldgsts_tiled_copy)
-            copy(ldgsts_tiled_copy, txgx_i, txsx_i)
+            ccc = t_g_in[:, :, 0]
+            aaa = txgx_i[:, :, 3]
+            copy(ldgsts_tiled_copy, partition_src(ccc, ldgsts_tiled_copy), txsx_i)
             cp_async_wait_all()
             syncthreads()
 
             regs = register_tensor(dtype, shape=[nr_regs])
-            t_regs = tiled_tensor_view(regs, tiled_tensor_layout, "register")
+            t_regs = tensor_view(regs, tiled_tensor_layout, "register")
             # txsx_o = partition_src(t_smem, lds_tiled_copy)
             txrx = partition_dst(t_regs, lds_tiled_copy)
-            copy(lds_tiled_copy, partition_src(t_smem, lds_tiled_copy), txrx)
+            copy(lds_tiled_copy, partition_src(t_smem, lds_tiled_copy), txrx[:, :, 0])
 
-            # we comment out the last copy operation because we don't have
-            # stg instrcutions to support it. I will fix this in some later PRs.
-            txgx_o = partition_dst(tiled_tensor_view(out_ptr, gmem_layout_out, "global"), stg_tiled_copy)
-            # copy(stg_tiled_copy, txrx, txgx_o)
+            txgx_o = partition_dst(tensor_view(out_ptr, gmem_layout_out, "global"), stg_tiled_copy)
+            copy(stg_tiled_copy, txrx[:, :, 0], txgx_o)
 
     func = script_module.build()
     in_mem = hidet.empty([block_m, block_n], dtype=dtype, device="cuda")

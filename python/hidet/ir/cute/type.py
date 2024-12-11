@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
-from typing import Union
+from typing import Union, Tuple
 from hidet.ir.cute import TensorLayout, TiledTensorLayout, ComposedTensorLayout
 
 from hidet.ir.type import BaseType, DataType
@@ -43,3 +43,13 @@ def tiled_tensor(
 ):
     assert isinstance(dtype, DataType)
     return TiledTensorType(dtype, layout, scope)
+
+
+class LogicalEncoding:
+    def __init__(self, shape: Tuple[int, ...], layout: TensorLayout):
+        self.shape = shape
+        self.layout = layout
+
+
+def logical_encoding(shape: Tuple[int, ...], layout: TensorLayout):
+    return LogicalEncoding(shape, layout)

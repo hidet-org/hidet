@@ -17,7 +17,7 @@ from hidet.ir.tools import infer_type
 from hidet.ir.cute.layout import TensorLayout
 from hidet.ir.cute.int_tuple import compact_row_major
 from hidet.ir.cute.collective import CollectiveStore
-from hidet.ir.cute.ops import copy, partition_src, partition_dst, tiled_tensor_view, mask
+from hidet.ir.cute.ops import copy, partition_src, partition_dst, tensor_view, mask
 from .registry import OpEmitter, Buffer, register_impl
 
 
@@ -38,11 +38,12 @@ class CollectiveStoreEmitter(OpEmitter):
         else:
             ttype = dst_ty.tensor_type
         shape = ttype.shape if ttype.shape else ttype.layout.shape
-        tile_shape, _ = op.tiled_copy.src_tv_layout()
+        tile_shape = op.tiled_copy.shape
+        assert tile_shape is not None, "tile shape not specified"
         stride = compact_row_major(tuple(shape))
         tile_rank = len(tile_shape)
         mem_layout = TensorLayout(tile_shape, stride[-tile_rank:])
-        t_mem = self.auto_var(hint="t_mem", e=tiled_tensor_view(~dst[offsets], mem_layout, "global"))
+        t_mem = self.auto_var(hint="t_mem", e=tensor_view(~dst[offsets], mem_layout, "global"))
         src_expr, dst_expr = [partition_src(src, op.tiled_copy), partition_dst(t_mem, op.tiled_copy)]
         src_ty, dst_ty = [infer_type(src_expr), infer_type(dst_expr)]
         src_var, dst_var = [var("src", src_ty), var("dst", dst_ty)]

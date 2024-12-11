@@ -145,6 +145,40 @@ def test_matmul_fp16_fp32():
         )
 
 
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 4096, 4096], [4096, 4096]],
+        [[1, 4096, 4096], [4096, 4096 + 2]],
+        [[1, 120000, 320], [320, 768]],
+        [[1, 120000, 768], [768, 320]],
+        [[1, 192, 256], [256, 128]],
+        [[1, 128, 128 + 4], [128 + 4, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128 - 2]],
+        [[1, 128, 128], [128, 128 - 4]],
+    ],
+)
+def test_matmul_fp16_cute(a_shape, b_shape):
+    from hidet.graph.ops.matmul.matmul_f16_cute_experimental import matmul_f16_cute as matmul_f16
+
+    # hidet.option.cache_dir("./debug_matmul")
+    # hidet.option.search_space(2)
+    # hidet.option.debug_cache_tuning()
+    # hidet.option.save_lower_ir(True)
+
+    check_torch_binary(
+        a_shape,
+        b_shape,
+        torch_func=lambda x, y: torch.matmul(x, y),
+        hidet_func=lambda x, y: ops.squeeze(matmul_f16(x, y), 0),
+        device='cuda',
+        dtype='float16',
+        atol=1e-2,
+        rtol=1e-2,
+    )
+
+
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, ("s", 128)], [("s", 128), 128]]])
 def test_matmul_fp16_dynamic(a_shape, b_shape):
     from hidet.graph.ops.matmul.matmul_f16 import matmul_f16

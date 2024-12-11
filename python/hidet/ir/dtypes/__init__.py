@@ -17,8 +17,19 @@ from .integer_subbyte import i4, i3, i2, i1, u4, u3, u2, u1
 from .floats import float16, float32, float64, bfloat16, tfloat32
 from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
-from .vector import float16x2, float32x4, float32x8, int8x4, uint8x4, int4bx8, uint4bx8, vectorize, bfloat16x2
-from .vector import f16x2, f32x4, f32x8, i4x8, u4x8
+from .vector import (
+    float16x2,
+    float32x2,
+    float32x4,
+    float32x8,
+    int8x4,
+    uint8x4,
+    int4bx8,
+    uint4bx8,
+    vectorize,
+    bfloat16x2,
+)
+from .vector import f16x2, f32x2, f32x4, f32x8, i4x8, u4x8
 from .complex import complex64, complex128
 from .integer import IntegerType
 from .promotion import promote_type
@@ -41,6 +52,7 @@ name2dtype = {
     'bool': boolean,
     'complex64': complex64,
     'complex128': complex128,
+    'float32x2': float32x2,
     'float32x4': float32x4,
     'float32x8': float32x8,
     'float16x2': float16x2,
@@ -76,6 +88,7 @@ sname2dtype = {
     'bool': boolean,
     'c64': complex64,
     'c128': complex128,
+    'f32x2': f32x2,
     'f32x4': f32x4,
     'f32x8': f32x8,
     'f16x2': f16x2,

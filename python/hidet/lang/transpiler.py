@@ -870,7 +870,34 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_Subscript(self, expr: Subscript):
         base = self.visit(expr.value)
         indices = self.visit(expr.slice)
-        return base[indices]
+        from hidet.ir.tools import infer_type
+        from hidet.ir.cute.type import TiledTensorType
+        from hidet.ir.cute.ops import sub_tensor
+
+        if not isinstance(base, ir.Expr):
+            return base[indices]
+
+        base_ty = infer_type(base)
+        if isinstance(base_ty, TiledTensorType):
+            if not isinstance(indices, (tuple, list)):
+                indices = [indices]
+
+            def slice_(items):
+                coord = []
+                for item in items:
+                    if isinstance(item, slice):
+                        if any(x is not None for x in [item.start, item.stop, item.step]):
+                            raise HidetProgramError(self, expr, 'Slicing a tensor not supported')
+                        coord.append(None)
+                    elif isinstance(item, (tuple, list)):
+                        coord.append(slice_(item))
+                    else:
+                        coord.append(item)
+                return tuple(coord)
+
+            return sub_tensor(base, slice_(indices))
+        else:
+            return base[indices]
 
     def visit_Attribute(self, expr: Attribute):
         base = self.visit(expr.value)

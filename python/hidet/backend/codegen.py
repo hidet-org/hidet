@@ -630,6 +630,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
             'float16x2': 'half2',
+            'float32x2': 'float2',
             'float32x4': '__m128',
             'float32x8': '__m256',
             'int8x4': 'char4',

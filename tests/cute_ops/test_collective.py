@@ -4,7 +4,7 @@ import hidet
 from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
 from hidet.ir.cute.layout import ThrValAtom, Level
 from hidet.ir.cute.algorithm import CopyAtom, TiledCopy
-from hidet.ir.cute.ops import tiled_tensor_view, partition_src, partition_dst, copy
+from hidet.ir.cute.ops import tensor_view, partition_src, partition_dst, copy, make_tensor
 from hidet.ir.cute.collective import collective_store
 from hidet.lang.mapping import auto_map
 
@@ -42,7 +42,6 @@ def test_ldgstg(dtype):
         stg_tiled_copy.copy_atom.level, stg_tiled_copy.copy_atom.shape, stg_tiled_copy.copy_atom.src_thrval_layout
     )
     tiled_tensor_layout = TiledTensorLayout(atom, stg_tiled_copy.levels)
-    nr_regs = tiled_tensor_layout.val_layout().size()
 
     with hidet.script_module() as script_module:
 
@@ -52,9 +51,8 @@ def test_ldgstg(dtype):
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 1
 
-            regs = register_tensor(dtype, shape=[nr_regs])
-            t_regs = tiled_tensor_view(regs, tiled_tensor_layout, "register")
-            t_g_in = tiled_tensor_view(in_ptr, memory_layout, "global")
+            t_regs = make_tensor(dtype, tiled_tensor_layout, "register")
+            t_g_in = tensor_view(in_ptr, memory_layout, "global")
 
             txgx = partition_src(t_g_in, stg_tiled_copy)
             txrx = partition_dst(t_regs, stg_tiled_copy)
