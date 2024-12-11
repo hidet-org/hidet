@@ -489,7 +489,7 @@ class MatmulF16CuteTask(Task):
 
             tune.check(mma in ("m16n8k8", "m16n8k16"))
             from hidet.ir.cute import TensorLayout, ThrValAtom, Level, TiledTensorLayout
-            from hidet.ir.cute.ops import tiled_tensor_view, rearrange, partition_src, partition_dst, copy, arithmetic
+            from hidet.ir.cute.ops import tensor_view, rearrange, partition_src, partition_dst, copy, arithmetic
             from hidet.ir.cute.collective import collective_store
 
             atom_shape = (mma_m, mma_n)
@@ -533,7 +533,7 @@ class MatmulF16CuteTask(Task):
                 regs_c: acc_dtype[mma_count_m, mma_count_n, mma_config.c_elements],
                 c: target_float_type[c_head + [m_size, n_size]],
             ):
-                t_regs_c = tiled_tensor_view(regs_c, mma_layout, "register")
+                t_regs_c = tensor_view(regs_c, mma_layout, "register")
                 if fp16_acc:
                     cvt_t_regs_c = rearrange(t_regs_c, store_c_layout, "register")
                 else:
@@ -567,8 +567,8 @@ class MatmulF16CuteTask(Task):
             @hidet.script
             def store_c_smem2gmem(smem_c: acc_dtype[block_m, block_n], c: target_float_type[c_head + [m_size, n_size]]):
                 regs_c = register_tensor(acc_dtype, [store_c_layout.val_layout().size()])
-                t_regs_c = tiled_tensor_view(regs_c, store_c_layout, "register")
-                t_smem_c = tiled_tensor_view(smem_c, smem_layout, "shared")
+                t_regs_c = tensor_view(regs_c, store_c_layout, "register")
+                t_smem_c = tensor_view(smem_c, smem_layout, "shared", volatile=True)
                 tcsc = partition_src(t_smem_c, tiled_copy)
                 tcrc = partition_dst(t_regs_c, tiled_copy)
                 copy(tiled_copy, tcsc, tcrc)

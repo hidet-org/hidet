@@ -23,6 +23,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
+          # To install flash-attention in host without nvcc/cuda available
+          # https://github.com/Dao-AILab/flash-attention/issues/509
+          export FLASH_ATTENTION_SKIP_CUDA_BUILD=TRUE
           python -m pip install --upgrade pip
           pip install torch torchvision torchaudio
           pip install -r requirements.txt

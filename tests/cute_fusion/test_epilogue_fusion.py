@@ -56,8 +56,6 @@ def initialize_tests():
     for dims in itertools.permutations([0, 1, 2, 3]):
         assert isinstance(dims, tuple)
         problem = [dim, 768, 320]
-        if dims[3] == 0:
-            continue
         pattern_tests.append((dim0, dim3, dims, problem))
 
 
@@ -87,6 +85,8 @@ def test_epilogue_fusion(dim0, dim3, dims, args, dtype):
         c = c.contiguous()
         return c
 
+    dynamo.reset()
+    hidet.torch.dynamo_config.reset()
     options = {"triton.cudagraphs": False, "epilogue_fusion": True, "max_autotune": True}
     C = graph(A, B)
     dynamo.reset()
@@ -101,9 +101,8 @@ def test_epilogue_fusion(dim0, dim3, dims, args, dtype):
     print(f"baseline(torch.compile): {torch_mean} ms")
 
     with hidet.option.context():
-        hidet.option.cache_dir("./graph")
-        hidet.option.search_space(2)
-        hidet.option.debug_cache_tuning()
+        # hidet.option.cache_dir("./graph")
+        # hidet.option.debug_cache_tuning()
         # commented out because parallel build failed when dumping lower ir
         # hidet.option.save_lower_ir(True)
         hidet.option.parallel_k(strategy='disabled')
@@ -130,18 +129,18 @@ def main():
 
     records = []
     headers = ["problem(m,n,k)", "dim0", "dim1", "dims", "max-autotune", "hidet", "speedup"]
-    for dims in itertools.permutations([0, 1, 2, 3]):
-        assert isinstance(dims, tuple)
-        problem = [dim, 768, 320]
-        torch_time, hidet_time = test_epilogue_fusion(dim0, dim3, dims, problem)
-        records.append([problem, dim0, dim3, dims, torch_time, hidet_time, (torch_time / hidet_time - 1.0) * 100.0])
+    # for dims in itertools.permutations([0, 1, 2, 3]):
+    #    assert isinstance(dims, tuple)
+    #    problem = [dim, 768, 320]
+    #    torch_time, hidet_time = test_epilogue_fusion(dim0, dim3, dims, problem)
+    #    records.append([problem, dim0, dim3, dims, torch_time, hidet_time, (torch_time / hidet_time - 1.0) * 100.0])
 
     dim0 = 8
     dim3 = 32
     for dims in itertools.permutations([0, 1, 2, 3]):
         assert isinstance(dims, tuple)
         problem = [dim, 768, 320]
-        if dims[3] == 0:
+        if dims != (0, 2, 1, 3):
             continue
         torch_time, hidet_time = test_epilogue_fusion(dim0, dim3, dims, problem)
         records.append([problem, dim0, dim3, dims, torch_time, hidet_time, (torch_time / hidet_time - 1.0) * 100.0])

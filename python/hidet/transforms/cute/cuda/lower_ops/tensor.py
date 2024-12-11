@@ -10,21 +10,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union
-from hidet.ir.expr import Expr, Var
+from hidet.ir.expr import Expr
 from hidet.ir.type import PointerType, TensorPointerType, TensorType
 from hidet.ir.tools import infer_type
 
-from hidet.ir.cute.ops.tiled_tensor_view import TiledTensorView
-from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout, ComposedTensorLayout
+from hidet.ir.cute.ops.tensor import Tensor, TensorView
+from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout, ComposedTensorLayout, is_auto_layout, filter
 
 from .registry import OpEmitter, Buffer, register_impl
 
 
-@register_impl(TiledTensorView)
-class TiledTensorViewEmitter(OpEmitter):
-    def emit(self, op: TiledTensorView, args: List[Union[Buffer, Expr]], output: Buffer):
+@register_impl(Tensor)
+class TensorEmitter(OpEmitter):
+    def request_smem_nbytes(self, op: Tensor):
+        if op.scope.is_shared():
+            assert not is_auto_layout(op.layout)
+            return filter(op.layout).size() * op.dtype.nbits // 8
+        else:
+            return 0
+
+    def emit(self, op: Tensor, args: List[Union[Buffer, Expr]], output: Buffer):
+        if op.scope.is_shared():
+            output.buffer = self.auto_var(hint=op.name, e=self.get_smem_ptr(op, op.dtype, 0))
+        elif op.scope.is_register():
+            assert output.buffer is not None
+        else:
+            assert False, "unreachable"
+
+
+@register_impl(TensorView)
+class TensorViewEmitter(OpEmitter):
+    def emit(self, op: TensorView, args: List[Union[Buffer, Expr]], output: Buffer):
         src: Union[Buffer, Expr] = args[0] if isinstance(args[0], Expr) else args[0].buffer
-        dst: Var = output.buffer
         src_ty = infer_type(src)
         assert isinstance(src_ty, (TensorType, TensorPointerType, PointerType))
         import math
@@ -45,10 +62,6 @@ class TiledTensorViewEmitter(OpEmitter):
             assert isinstance(op.layout, (TensorLayout, ComposedTensorLayout))
             assert tensor_size is None or tensor_size == op.layout.size()
         if isinstance(src_ty, (TensorType, TensorPointerType)):
-            self.assign(dst, ~src[indices])
+            output.buffer = self.auto_var(hint=op.name, e=~src[indices])
         else:
-            self.assign(dst, src)
-        from hidet.ir.dtypes import i32
-
-        if output.buffer is not None:
-            output.offset = i32(0)
+            output.buffer = self.auto_var(hint=op.name, e=src)

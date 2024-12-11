@@ -24,6 +24,10 @@ from ..instruction_selection import memory_instructions
 from .registry import OpEmitter, Buffer, register_impl
 
 
+def is_surjective(strides: List[int]):
+    return all(0 not in stride for stride in strides)
+
+
 @register_impl(Rearrange)
 class RearrangeEmitter(OpEmitter):
     def __init__(self):
@@ -55,7 +59,7 @@ class RearrangeEmitter(OpEmitter):
         assert (
             smem_size == lds_layout.cosize()
         ), f"Schedule failed due to shared memory size mismatch. (got:sts({smem_size}), lds({lds_layout.cosize()}))"
-        return smem_size * src_ty.dtype.nbytes
+        return smem_size * src_ty.dtype.nbits // 8
 
     def _instruction_selection(self, src: Buffer, dst: Buffer):
         candidates = []
@@ -106,6 +110,8 @@ class RearrangeEmitter(OpEmitter):
         return coalesce(composition(TensorLayout(shp, strd), row_major))
 
     def _schedule(self, shape, src: TensorLayout, dst: TensorLayout):
+        assert len(shape) == 2, "only 2-d tiles are supported now"
+
         src_thr_layout = src[0]
         src_val_layout = src[1]
         dst_thr_layout = dst[0]
@@ -119,90 +125,105 @@ class RearrangeEmitter(OpEmitter):
         dt_shape = dst_thr_layout.shape_tuple
         dt_stride = dst_thr_layout.stride_tuple
 
-        dst_inner = []
-        dst_outer = []
-        src_inner = []
-        src_outer = []
-        data = []
-        src_readers = {}
-        dst_readers = {}
-        for i, (s, d) in enumerate(zip(dv_shape, dv_stride)):
-            si = 1
-            for ss, ds in zip(st_shape, st_stride):
-                if (d % ds == 0 and d // ds >= ss) or (s * d <= ds):
-                    continue
-                si = max(si, min(s, ss * ds // d))
-            dst_inner.append(si)
-            dst_outer.append(s // si)
-            deps: List[Tuple[int, int]] = []
-            for j, (ss, ds) in enumerate(zip(sv_shape, sv_stride)):
-                if (d % ds == 0 and d // ds >= ss) or (s * d <= ds):
-                    continue
-                deps.append((j, ds))
-                if j in src_readers:
-                    src_readers[j].append(i)
-                else:
-                    src_readers[j] = [i]
-            data.append((d, s, i, False, deps))
+        # The following algorithm is trying to find the minimal shared memory
+        # that allows the threads exchange their data.
+        # The algorith is not going to work if there are zeros in the strides,
+        # which means the mapping from data to workers is not surjective
+        # and some of the threads are not going to participate in the
+        # communication.
+        if not is_surjective([st_stride, dt_stride, sv_stride, dv_stride]):
+            src_inner = list(sv_shape)
+            dst_inner = list(dv_shape)
+            src_outer = [1 for _ in src_inner]
+            dst_outer = [1 for _ in dst_inner]
+            # we directly write the data into the shared memory and exchange it
+            # so the smem layout should be the row major layout
+            sts_smem_layout = lds_smem_layout = TensorLayout(shape, (shape[1], 1))
+        else:
+            dst_inner = []
+            dst_outer = []
+            src_inner = []
+            src_outer = []
+            data = []
+            src_readers = {}
+            dst_readers = {}
+            for i, (s, d) in enumerate(zip(dv_shape, dv_stride)):
+                si = 1
+                for ss, ds in zip(st_shape, st_stride):
+                    if (d % ds == 0 and d // ds >= ss) or (s * d <= ds):
+                        continue
+                    si = max(si, min(s, ss * ds // d))
+                dst_inner.append(si)
+                dst_outer.append(s // si)
+                deps: List[Tuple[int, int]] = []
+                for j, (ss, ds) in enumerate(zip(sv_shape, sv_stride)):
+                    if (d % ds == 0 and d // ds >= ss) or (s * d <= ds):
+                        continue
+                    deps.append((j, ds))
+                    if j in src_readers:
+                        src_readers[j].append(i)
+                    else:
+                        src_readers[j] = [i]
+                data.append((d, s, i, False, deps))
 
-        for i, (s, d) in enumerate(zip(sv_shape, sv_stride)):
-            si = 1
-            for sd, dd in zip(dt_shape, dt_stride):
-                if (d % dd == 0 and d // dd >= sd) or (s * d <= dd):
-                    continue
-                si = max(si, min(s, sd * dd // d))
-            src_inner.append(si)
-            src_outer.append(s // si)
-            deps: List[Tuple[int, int]] = []
-            for j, (sd, dd) in enumerate(zip(dv_shape, dv_stride)):
-                if (d % dd == 0 and d // dd >= sd) or (s * d <= dd):
-                    continue
-                deps.append((j, dd))
-                if j in dst_readers:
-                    dst_readers[j].append(i)
-                else:
-                    dst_readers[j] = [i]
-            data.append((d, s, i, True, deps))
-        sorted_data = sorted(data, key=lambda x: -x[0])
+            for i, (s, d) in enumerate(zip(sv_shape, sv_stride)):
+                si = 1
+                for sd, dd in zip(dt_shape, dt_stride):
+                    if (d % dd == 0 and d // dd >= sd) or (s * d <= dd):
+                        continue
+                    si = max(si, min(s, sd * dd // d))
+                src_inner.append(si)
+                src_outer.append(s // si)
+                deps: List[Tuple[int, int]] = []
+                for j, (sd, dd) in enumerate(zip(dv_shape, dv_stride)):
+                    if (d % dd == 0 and d // dd >= sd) or (s * d <= dd):
+                        continue
+                    deps.append((j, dd))
+                    if j in dst_readers:
+                        dst_readers[j].append(i)
+                    else:
+                        dst_readers[j] = [i]
+                data.append((d, s, i, True, deps))
+            sorted_data = sorted(data, key=lambda x: -x[0])
 
-        def update(d, s, i, olist_outer, olist_inner, ilist, deps):
-            for j, di in deps:
-                si = ilist[j]
-                if si > 1:
-                    olist_inner[i] = max(olist_inner[i], min(s, si * di // d))
-                    olist_outer[i] = s // olist_inner[i]
-
-        for d, s, i, is_src, deps in sorted_data:
-            if is_src:
-                update(d, s, i, src_outer, src_inner, dst_inner, deps)
-                if i not in src_readers:
-                    continue
-                for j in src_readers[i]:
-                    s = dv_shape[j]
-                    d = dv_stride[j]
-                    si = src_inner[i]
-                    di = sv_stride[i]
+            def update(d, s, i, olist_outer, olist_inner, ilist, deps):
+                for j, di in deps:
+                    si = ilist[j]
                     if si > 1:
-                        dst_inner[j] = max(dst_inner[j], min(s, si * di // d))
-                        dst_outer[j] = s // dst_inner[j]
-            else:
-                update(d, s, i, dst_outer, dst_inner, src_inner, deps)
-                if i not in dst_readers:
-                    continue
-                for j in dst_readers[i]:
-                    s = sv_shape[j]
-                    d = sv_stride[j]
-                    si = dst_inner[i]
-                    di = dv_stride[i]
-                    if si > 1:
-                        src_inner[j] = max(src_inner[j], min(s, si * di // d))
-                        src_outer[j] = s // src_inner[j]
+                        olist_inner[i] = max(olist_inner[i], min(s, si * di // d))
+                        olist_outer[i] = s // olist_inner[i]
+
+            for d, s, i, is_src, deps in sorted_data:
+                if is_src:
+                    update(d, s, i, src_outer, src_inner, dst_inner, deps)
+                    if i not in src_readers:
+                        continue
+                    for j in src_readers[i]:
+                        s = dv_shape[j]
+                        d = dv_stride[j]
+                        si = src_inner[i]
+                        di = sv_stride[i]
+                        if si > 1:
+                            dst_inner[j] = max(dst_inner[j], min(s, si * di // d))
+                            dst_outer[j] = s // dst_inner[j]
+                else:
+                    update(d, s, i, dst_outer, dst_inner, src_inner, deps)
+                    if i not in dst_readers:
+                        continue
+                    for j in dst_readers[i]:
+                        s = sv_shape[j]
+                        d = sv_stride[j]
+                        si = dst_inner[i]
+                        di = dv_stride[i]
+                        if si > 1:
+                            src_inner[j] = max(src_inner[j], min(s, si * di // d))
+                            src_outer[j] = s // src_inner[j]
+            sts_smem_layout = self._calc_smem_layout(shape, src, src_inner)
+            lds_smem_layout = self._calc_smem_layout(shape, dst, dst_inner)
 
         src_inner_layout, src_outer_layout = self._calc_inner_outer_layout(src_outer, src_inner, sv_stride)
         dst_inner_layout, dst_outer_layout = self._calc_inner_outer_layout(dst_outer, dst_inner, dv_stride)
 
-        sts_smem_layout = self._calc_smem_layout(shape, src, src_inner)
-        lds_smem_layout = self._calc_smem_layout(shape, dst, dst_inner)
         sts_logical_layout = TensorLayout(tuple(src_inner), sv_stride)
         sts_layout = coalesce(composition(sts_smem_layout, sts_logical_layout))
         lds_logical_layout = TensorLayout(tuple(dst_inner), dv_stride)
@@ -262,7 +283,7 @@ class RearrangeEmitter(OpEmitter):
             raise TypeError(f"Type mismatch. (got:src({src_dtype}), dst({dst_ty.base_type}))")
 
         smem_addr = var("smem", dst_ty)
-        self.declare(smem_addr, self.get_smem_ptr(op, src_dtype, smem_size * src_dtype.nbytes))
+        self.declare(smem_addr, self.get_smem_ptr(op, src_dtype, smem_size * src_dtype.nbits // 8))
 
         sts, sts_src_layout, sts_dst_layout = self._instruction_selection(
             Buffer(src_buf, None, src.dtype, src_inner, "register"),

@@ -11,8 +11,6 @@
 # limitations under the License.
 from typing import Callable, List, Any
 
-import sys
-import csv
 import numpy as np
 import pytest
 

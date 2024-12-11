@@ -15,7 +15,7 @@ import hidet
 from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout
 from hidet.ir.cute.layout import ThrValAtom, Level
 from hidet.ir.cute.algorithm import CopyAtom, TiledCopy
-from hidet.ir.cute.ops import tiled_tensor_view, rearrange
+from hidet.ir.cute.ops import tensor_view, rearrange
 from hidet.lang.mapping import auto_map
 from hidet.utils import initialize
 
@@ -123,7 +123,7 @@ def test_rearrange(src: TiledTensorLayout, dst: TiledTensorLayout, dtype):
             attrs.cuda.grid_dim = 1
 
             regs = register_tensor(dtype, shape=[nr_regs])
-            ts = tiled_tensor_view(regs, src, "register")
+            ts = tensor_view(regs, src, "register")
             td = rearrange(ts, dst, "register")
 
     func = script_module.build()

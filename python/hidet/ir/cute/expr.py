@@ -50,6 +50,12 @@ class Op(Node):
         ret.annotations = annotations
         return ret
 
+    def resolve_logical_encoding(self):
+        """
+        Return the TV layouts of all input and output tensors.
+        """
+        return NotImplementedError()
+
     def make_call(self):
         return CallOp(self)
 

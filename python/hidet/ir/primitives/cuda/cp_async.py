@@ -20,13 +20,19 @@ from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
 
 
-def resolve_name_cp_async(cp_size: int, cache_level: str = 'always', prefetch_bytes: int = 0) -> str:
+def resolve_name_cp_async(
+    cp_size: int, cache_level: str = 'always', prefetch_bytes: int = 0, evict_policy: str = 'evict_normal'
+) -> str:
+    if evict_policy == 'evict_normal':
+        evict_policy_part = ''
+    else:
+        evict_policy_part = '_{}'.format(evict_policy)
     if prefetch_bytes:
         prefetch_part = '_l2_{}B'.format(prefetch_bytes)
     else:
         prefetch_part = ''
     cache_part = 'c' + cache_level[0]  # 'ca' or 'cg'
-    return 'cp_async_size_{}_{}{}'.format(cp_size, cache_part, prefetch_part)
+    return 'cp_async_size_{}_{}{}{}'.format(cp_size, cache_part, prefetch_part, evict_policy_part)
 
 
 def resolve_name_async_wait_group() -> str:
@@ -41,24 +47,32 @@ def register_cp_async():
     for cp_size in [4, 8, 16]:
         for prefetch_bytes in [0, 64, 128, 256]:
             for cache_level in ['always', 'global']:
-                if cache_level == 'global' and cp_size != 16:
-                    # cache level 'global' only support copy size of 16 bytes.
-                    continue
-                func_name = 'cuda_' + resolve_name_cp_async(cp_size, cache_level, prefetch_bytes)
-                template_string = 'cp.async.{cache_level}.shared.global{prefetch} [%0], [%1], %2, %3;'.format(
-                    cache_level={'always': 'ca', 'global': 'cg'}[cache_level],
-                    prefetch='.L2::{}B'.format(prefetch_bytes) if prefetch_bytes != 0 else '',
-                )
+                for evict_policy in ['evict_normal', 'evict_first', 'evict_last']:
+                    if cache_level == 'global' and cp_size != 16:
+                        # cache level 'global' only support copy size of 16 bytes.
+                        continue
+                    func_name = 'cuda_' + resolve_name_cp_async(cp_size, cache_level, prefetch_bytes, evict_policy)
+                    if evict_policy == 'evict_normal':
+                        template_string = 'cp.async.{cache_level}.shared.global{prefetch} [%0], [%1], %2, %3;'.format(
+                            cache_level={'always': 'ca', 'global': 'cg'}[cache_level],
+                            prefetch='.L2::{}B'.format(prefetch_bytes) if prefetch_bytes != 0 else '',
+                        )
+                    else:
+                        template_string = '{{ .reg .b64 p; createpolicy.fractional.L2::{evict_policy}.b64 p, 1.0; cp.async.{cache_level}.shared.global{prefetch}.L2::cache_hint [%0], [%1], %2, p; }}'.format(
+                            evict_policy=evict_policy,
+                            cache_level={'always': 'ca', 'global': 'cg'}[cache_level],
+                            prefetch='.L2::{}B'.format(prefetch_bytes) if prefetch_bytes != 0 else '',
+                        )
 
-                @script
-                def cuda_cp_async(dst: PointerType(VoidType()), src: PointerType(VoidType()), src_size: i32):
-                    attrs.func_name = func_name
-                    attrs.func_kind = 'cuda_internal'
-                    dst_smem_ptr = cvta_generic_to_shared(dst)
-                    asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
+                    @script
+                    def cuda_cp_async(dst: PointerType(VoidType()), src: PointerType(VoidType()), src_size: i32):
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_internal'
+                        dst_smem_ptr = cvta_generic_to_shared(dst)
+                        asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
 
-                assert isinstance(cuda_cp_async, Function)
-                register_primitive_function(name=cuda_cp_async.name, func_or_type=cuda_cp_async)
+                    assert isinstance(cuda_cp_async, Function)
+                    register_primitive_function(name=cuda_cp_async.name, func_or_type=cuda_cp_async)
 
 
 @initialize()
@@ -106,7 +120,15 @@ def register_cp_async_wait_all():
     register_primitive_function(cuda_cp_async_wait_all.name, cuda_cp_async_wait_all)
 
 
-def cp_async(dst: Expr, src: Expr, cp_size: int, src_size=None, cache_level='always', prefetch_bytes=0) -> Call:
+def cp_async(
+    dst: Expr,
+    src: Expr,
+    cp_size: int,
+    src_size=None,
+    cache_level='always',
+    prefetch_bytes=0,
+    evict_policy='evict_normal',
+) -> Call:
     """
     Copy data from global memory to shared memory asynchronously.
 
@@ -144,7 +166,7 @@ def cp_async(dst: Expr, src: Expr, cp_size: int, src_size=None, cache_level='alw
             raise ValueError('When cache_level is global, the cp_size must be 16.')
     if src_size is None:
         src_size = cp_size
-    func_name = resolve_name_cp_async(cp_size, cache_level, prefetch_bytes)
+    func_name = resolve_name_cp_async(cp_size, cache_level, prefetch_bytes, evict_policy)
     return call_cuda(func_name, [dst, src, src_size])
 
 

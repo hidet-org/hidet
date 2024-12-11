@@ -34,9 +34,13 @@ from .int_tuple import (
     filter_zeros,
     is_integer,
     is_static,
+    slice_,
+    has_none,
+    is_tuple,
 )
 from .layout import (
     TiledTensorLayout,
+    LayoutBase,
     ComposedTensorLayout,
     TensorLayout,
     filter,
@@ -49,6 +53,14 @@ from .layout import (
     logical_divide,
     make_layout,
     canonicalize,
+    auto_layout,
+    layout_auto,
+    is_auto_layout,
+    max_common_vector,
+    slice_and_offset,
+    group,
+    codomain_from_shape_and_tv_layout,
 )
-from .layout import ThrValAtom, Level
-from .algorithm import CopyAtom, TiledCopy
+from .layout import CopyAtom, ThrValAtom, MmaAtom, Level
+from .swizzle import Swizzle, make_swizzle
+from .algorithm import TiledCopy, auto_copy, TiledMma, auto_mma

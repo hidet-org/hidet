@@ -34,7 +34,7 @@ from .cuda import threadIdx, blockIdx
 from .cuda import syncthreads, syncwarp, lds128, sts128, shfl_sync, shfl_up_sync, shfl_down_sync, shfl_xor_sync
 from .cuda import ldg256, ldg128, ldg64, ldg32, ldg256_lu, ldg128_lu, ldg64_lu, ldg32_lu, ldg16
 from .cuda import stg512, stg256, stg128, stg64, stg32, stg16
-from .cuda import lds64, lds32, lds16
-from .cuda import sts64, sts32, sts16
+from .cuda import lds64, lds32, lds16, lds8
+from .cuda import sts64, sts32, sts16, sts8
 from .cuda import active_mask, set_kernel_max_dynamic_smem_bytes
-from .cuda import cvt
+from .cuda import cvt, cvtv

@@ -48,9 +48,9 @@ def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype
 
     graph: hidet.FlowGraph = hidet.trace_from(sym_output, inputs=[sym_a, sym_b, sym_bias])
 
-    hidet.option.cache_dir("dynamic")
+    # hidet.option.cache_dir("dynamic")
     hidet.option.search_space(2)
-    hidet.option.debug_cache_tuning()
+    # hidet.option.debug_cache_tuning()
     # hidet.option.save_lower_ir(True)
 
     graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
