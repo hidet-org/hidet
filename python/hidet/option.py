@@ -300,7 +300,7 @@ def register_hidet_options():
     register_option(
         name='parallel_k',
         type_hint='Union[str, int]',
-        default_value='default',
+        default_value='disabled',
         description='Parallelization on k dimension of the matrix multiplication.',
     )
 

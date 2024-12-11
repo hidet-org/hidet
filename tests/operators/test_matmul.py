@@ -187,21 +187,24 @@ def test_matmul_cublas(a_shape, b_shape, dtype, tol):
     ],
 )
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
-def test_matmul_nt(a_shape, b_shape, dtype):
+@pytest.mark.parametrize('parallel_k', ['disabled', 'default', 2, 3])
+def test_matmul_nt(a_shape, b_shape, dtype, parallel_k):
     from hidet.testing import assert_torch_allclose
 
-    a = torch.randn(*a_shape, dtype=dtype, device='cuda')
-    b = torch.randn(*b_shape, dtype=dtype, device='cuda')
-    c_correct = torch.matmul(a, torch.transpose(b, 0, 1))
-    ahi = hidet.from_torch(a)
-    bhi = hidet.from_torch(b)
-    ahi_symbol = hidet.symbol_like(ahi)
-    bhi_symbol = hidet.symbol_like(bhi)
-    cc = ops.matmul_nt(ahi_symbol, bhi_symbol)
-    graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
-    graph_opt = hidet.graph.optimize(graph)
-    c_hi = graph_opt(ahi, bhi)
-    assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=1e-1, rtol=1e-1)
+    with hidet.option.context():
+        hidet.option.parallel_k(parallel_k)
+        a = torch.randn(*a_shape, dtype=dtype, device='cuda')
+        b = torch.randn(*b_shape, dtype=dtype, device='cuda')
+        c_correct = torch.matmul(a, torch.transpose(b, 0, 1))
+        ahi = hidet.from_torch(a)
+        bhi = hidet.from_torch(b)
+        ahi_symbol = hidet.symbol_like(ahi)
+        bhi_symbol = hidet.symbol_like(bhi)
+        cc = ops.matmul_nt(ahi_symbol, bhi_symbol)
+        graph = hidet.graph.trace_from(cc, inputs=[ahi_symbol, bhi_symbol])
+        graph_opt = hidet.graph.optimize(graph)
+        c_hi = graph_opt(ahi, bhi)
+        assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=1e-1, rtol=1e-1)
 
 
 @pytest.mark.parametrize(
