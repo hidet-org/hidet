@@ -78,14 +78,18 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
     for idx, (fxgraph_node, example_input) in enumerate(zip(interpreter.graph.nodes, example_inputs)):
         if isinstance(example_input, torch.Tensor):
             tensor_dict = fxgraph_node.meta.get('tensor_dict', {})
-            if len(tensor_dict) == 0:
+            # pylint: disable=protected-access
+            if tensor_dict.get('_dynamo_static_input_type', None) == 'unguarded' and not isinstance(
+                example_input, torch._subclasses.fake_tensor.FakeTensor
+            ):
+                # Usually, such tensors are weight tensors passed as inputs
+                inputs.append(tensor_from_torch(example_input))
+            else:
                 traceable_input_ids.append(idx)
                 fake_input = fxgraph_node.meta['example_value']
                 symbolic_input = symbol_like_torch(fake_input)
                 inputs.append(symbolic_input)
-            elif tensor_dict.get('_dynamo_static_input_type', None) == 'unguarded':
-                # Usually, such tensors are weight tensors passed as inputs
-                inputs.append(tensor_from_torch(example_input))
+
         elif isinstance(example_input, int):
             inputs.append(example_input)
         elif isinstance(example_input, torch.SymInt):
