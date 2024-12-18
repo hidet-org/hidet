@@ -303,7 +303,12 @@ def logical_xor(x: Tensor, y: Tensor):
 @register_method(torch.Tensor.bitwise_not)
 @register_method(torch.Tensor.bitwise_not_)
 def invert(x: Tensor):
-    return ops.bitwise_invert(x)
+    from hidet import boolean
+
+    if x.dtype is boolean:
+        return ops.logical_not(x)
+    else:
+        return ops.bitwise_invert(x)
 
 
 @register_function(torch.nn.functional.batch_norm)
@@ -1958,7 +1963,8 @@ def torch_ceil(input: Tensor, *, out=None):
 @register_function(torch._C._nccl_all_reduce)
 @register_function(torch.distributed.all_reduce)
 @register_function(torch.ops._c10d_functional.all_reduce)
-def torch_all_reduce(tensor: Tensor, op_name, group_name):
+@register_function("torch.ops.vllm.all_reduce")
+def torch_all_reduce(tensor: Tensor, op_name='sum', group_name=None):
     from hidet.distributed import is_initialized, init_process_group, set_nccl_comms
     from hidet.cuda.nccl.ffi import load_nccl_library
 
@@ -1978,6 +1984,13 @@ def torch_all_reduce(tensor: Tensor, op_name, group_name):
 @register_function(torch.ops._c10d_functional.wait_tensor)
 def torch_wait_tensor(x: Tensor):
     return ops.wait_tensor(x)
+
+
+@register_function(getattr)
+def torch_getattr(obj, attr):
+    if isinstance(obj, Tensor) and attr == 'is_cpu':
+        return obj.device.kind == 'cpu'
+    raise RuntimeError('Unsupported getattr')
 
 
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
