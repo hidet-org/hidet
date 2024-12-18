@@ -115,6 +115,43 @@ def test_matmul_fp16(a_shape, b_shape):
     )
 
 
+@pytest.mark.hopper
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 128, 128], [128, 128]],
+        [[1, 128, 128 + 4], [128 + 4, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128]],
+        [[1, 128, 128 + 2], [128 + 2, 128 - 2]],
+        [[1, 128, 128], [128, 128 - 4]],
+    ],
+)
+def test_matmul_fp16_sm90(a_shape, b_shape):
+    from hidet.graph.ops.matmul.matmul_f16_sm90 import matmul_f16_sm90
+
+    check_binary(
+        a_shape,
+        b_shape,
+        lambda x, y: np.matmul(x, y),
+        lambda x, y: ops.squeeze(matmul_f16_sm90(x, y, is_a_shared=True), 0),
+        dtype='float16',
+        atol=1e-1,
+        rtol=1e-1,
+        device='cuda',
+    )
+
+    check_binary(
+        a_shape,
+        b_shape,
+        lambda x, y: np.matmul(x, y),
+        lambda x, y: ops.squeeze(matmul_f16_sm90(x, y, is_a_shared=False), 0),
+        dtype='float16',
+        atol=1e-1,
+        rtol=1e-1,
+        device='cuda',
+    )
+
+
 # This test checks the correctness of the implementation of using f16/f32 accumulator of tensor's core mma
 def test_matmul_fp16_fp32():
     from hidet.graph.ops.matmul.matmul_f16 import matmul_f16

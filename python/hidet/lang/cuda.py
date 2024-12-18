@@ -32,3 +32,12 @@ from hidet.ir.primitives.cuda.mutex import acquire_lock, release_lock, acquire_s
 from hidet.lang.constructs.declare import register_tensor, shared_tensor
 
 from hidet.ir.library.cuda import cublas
+
+from hidet.ir.primitives.cuda.wgmma import (
+    WgmmaConfig,
+    wgmma_async,
+    make_wgmma_desc,
+    wgmma_wait_group,
+    wgmma_commit_group,
+    wgmma_fence,
+)  # TODO rewrite to use hidet.lang.cuda import
