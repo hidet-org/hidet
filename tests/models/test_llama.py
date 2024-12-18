@@ -69,7 +69,6 @@ def test_llama2(device, opt):
     print(current_memory_pool("vcuda"))
 
 
-
 @pytest.mark.skip(
     reason='We now focus on the torch.compile API. '
     'The current llama model definition is not compatible huggingface thus disable the test.'
