@@ -338,6 +338,8 @@ def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
         return scalar_dtype
     elif tensor_dtype.is_float() and scalar_dtype.is_complex():
         return scalar_dtype
+    elif tensor_dtype.is_boolean():
+        return scalar_dtype
     else:
         return tensor_dtype
 
@@ -836,7 +838,7 @@ def binary_arithmetic(
         elif isinstance(v, bool):
             return dtypes.boolean(v)
         elif isinstance(v, int):
-            return dtypes.int32(v)
+            return dtypes.int64(v)
         elif isinstance(v, float):
             return dtypes.float32(v)
         elif isinstance(v, complex):

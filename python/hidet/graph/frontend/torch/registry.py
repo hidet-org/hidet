@@ -86,9 +86,17 @@ def register_module(torch_cls: Type[torch.nn.Module]):
 
 def register_function(func: Union[Callable, str]):
     def decorator(hidet_func):
-        if func not in Registry.registered_functions:
-            Registry.registered_functions[func] = OverloadedFunction()
-        Registry.registered_functions[func].overload(hidet_func)
+        if isinstance(func, str):
+            try:
+                nfunc = eval(func)  # pylint: disable=eval-used
+            except AttributeError:
+                # No function with such name
+                return hidet_func
+        else:
+            nfunc = func
+        if nfunc not in Registry.registered_functions:
+            Registry.registered_functions[nfunc] = OverloadedFunction()
+        Registry.registered_functions[nfunc].overload(hidet_func)
         return hidet_func
 
     return decorator
