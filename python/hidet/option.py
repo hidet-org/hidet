@@ -303,6 +303,13 @@ def register_hidet_options():
         default_value='disabled',
         description='Parallelization on k dimension of the matrix multiplication.',
     )
+    register_option(
+        name='hexcute_matmul',
+        type_hint='str',
+        default_value='disable',
+        description="Whether to enable the hexcute matmul kernels. The valid values for this option can be"
+        "'enable', 'disable', and 'auto'",
+    )
 
     # Load hidet config
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet', 'hidet.toml')
@@ -896,6 +903,39 @@ def get_parallel_k() -> Union[str, int]:
         Get parallelization strategy.
     """
     return OptionContext.current().get_option('parallel_k')
+
+
+def hexcute_matmul(strategy: str = "disable"):
+    """
+    Whether to enable hexcute matmul kernels, such as the Hexcute matmul kernels.
+
+    - ``enable``:
+        Always enable the hexcute matmul kernels on all the GPU platforms.
+    - ``disable``:
+        Always disable the hexcute matmul kernels on all the GPU platforms.
+    - ``auto``:
+        Use a heuristic strategy to decide whether to enable the hexcute matmul kernels.
+        The decision is based on the metrics of the current GPU platform, such as
+        the memory bandwidth, the compute throughput, etc.
+
+    Parameters
+    ----------
+    strategy: str
+        The strategy to enable the hexcute matmul kernels.
+    """
+    OptionContext.current().set_option('hexcute_matmul', strategy)
+
+
+def get_hexcute_matmul() -> str:
+    """
+    Get strategy to enable the hexcute matmul kernels.
+
+    Returns
+    -------
+    ret: str
+        Get strategy to enable the hexcute matmul kernels.
+    """
+    return OptionContext.current().get_option('hexcute_matmul')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):

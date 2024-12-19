@@ -433,6 +433,7 @@ def test_problem(M, N, K, L, dtype):
         # hidet.option.debug_cache_tuning()
         # hidet.option.save_lower_ir(True)
         hidet.option.parallel_k(strategy='disabled')
+        hidet.option.hexcute_matmul(strategy='enable')
 
         D = graph(*graph_args)
         dynamo.reset()
@@ -456,7 +457,7 @@ def main():
     headers = ["problem(m,n,k,l)", "max-autotune", "hidet", "speedup"]
 
     for problem in matmul_tests:
-        torch_time, hidet_time = test_problem(*problem)
+        torch_time, hidet_time = test_problem(*problem, dtype='bfloat16')
         records.append([problem, torch_time, hidet_time, (torch_time - hidet_time) / torch_time * 100.0])
 
     with open("results_matmul.txt", "w") as f:
