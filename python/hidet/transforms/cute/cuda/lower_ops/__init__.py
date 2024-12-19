@@ -11,9 +11,13 @@
 # limitations under the License.
 from .registry import OpEmitter, Buffer, register_impl, emit_op, request_smem_nbytes
 from . import registry
-from . import tiled_tensor_view
+from . import tensor
 from . import partition
 from . import copy
 from . import rearrange
 from . import collective
 from . import arithmetic
+from . import mma
+from . import subtensor
+from . import reduce
+from . import misc

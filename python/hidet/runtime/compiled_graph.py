@@ -14,12 +14,10 @@ import zipfile
 import os
 import json
 from dataclasses import dataclass
-import warnings
 import tempfile
 
 from tabulate import tabulate
 import numpy
-
 import hidet
 from hidet.ffi.utils import ctypes_func_pointer
 from hidet.ffi.array import Array
@@ -34,6 +32,7 @@ from hidet.utils.py import prod, median
 from hidet.utils.trace_utils import TraceEventEmitter
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
+global_cuda_workspace: Optional[Storage] = None
 
 
 class ExternalStorage(Storage):
@@ -348,9 +347,13 @@ class CompiledGraph:
             self.cpu_workspace = Storage.new('cpu', required_cpu_workspace)
             self._set_workspace(0, self.cpu_workspace.addr)
 
-        if self.cuda_workspace is None or self.cuda_workspace.num_bytes < required_cuda_workspace:
-            self.cuda_workspace = Storage.new('cuda', required_cuda_workspace)
-            self._set_workspace(1, self.cuda_workspace.addr)
+        global global_cuda_workspace
+        if global_cuda_workspace is not None and global_cuda_workspace.num_bytes < required_cuda_workspace:
+            global_cuda_workspace.__del__()
+            global_cuda_workspace = None
+        if global_cuda_workspace is None:
+            global_cuda_workspace = Storage.new('cuda', required_cuda_workspace)
+        self._set_workspace(1, global_cuda_workspace.addr)
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...], output_to_torch_tensor):
         # create output tensors
@@ -362,7 +365,6 @@ class CompiledGraph:
         # run the kernels
         kernel_array = self.dispatch_table[symbol_dims]
         self._launch(*inputs, *outputs, kernel_array)
-
         return outputs
 
     def _run_slow_path(self, inputs, symbol_dims: Tuple[int, ...]):
@@ -481,9 +483,14 @@ class CompiledGraph:
                 res = [tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in res]
             return res
 
-    def cuda_graph(self):
+    def cuda_graph(self, *args):
         """
         Create a CUDA graph for this compiled graph.
+
+        Parameters
+        ----------
+        args: Sequence[hidet.Tensor]
+            The input tensors. Weight tensors are excluded from args.
 
         Returns
         -------
@@ -491,7 +498,7 @@ class CompiledGraph:
             The CUDA graph.
         """
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
-        from hidet.graph.tensor import Tensor, randn, zeros, empty
+        from hidet.graph.tensor import Tensor
 
         for x in self.meta.inputs + self.meta.outputs:
             if x.device == 'cpu':
@@ -506,27 +513,22 @@ class CompiledGraph:
                 raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
-            with hidet.option.context():
-                hidet.option.imperative(True)
-                dummy_inputs = []
-                for meta_input in self.meta.inputs:
-                    dtype = hidet.ir.data_type(meta_input.dtype)
-                    if dtype.is_float():
-                        inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                    elif dtype.is_integer():
-                        inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                    else:
-                        warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
-                        inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                    dummy_inputs.append(inp)
+            import torch
 
-                return dummy_inputs
+            with hidet.option.context():
+                hidet.option.execution_mode('compilaion')
+                inputs = []
+                for arg in args:
+                    arg = hidet.from_torch(arg) if isinstance(arg, torch.Tensor) else arg
+                    inputs.append(hidet.randn_like(arg))
+                return inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
 
+        global global_cuda_workspace
         # clear the workspace to avoid the storage being captured by the CUDA graph.
-        self.cuda_workspace = None
+        global_cuda_workspace = None
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 

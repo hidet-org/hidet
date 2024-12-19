@@ -12,9 +12,8 @@
 from typing import List, Tuple, Union
 from functools import partial
 
-from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.dtypes import float16, float32
+from hidet.ir.dtypes import float16, float32, bfloat16
 from hidet.ir.expr import if_then_else, Int, Expr, cast
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
@@ -32,6 +31,10 @@ def cast_fp16(x: Expr):
     return float16(x)
 
 
+def cast_bf16(x: Expr):
+    return bfloat16(x)
+
+
 class MatmulF16CuteTask(Task):
     """
     A matmul template that enables f16 tensorcore with CuTe dialect.
@@ -39,20 +42,47 @@ class MatmulF16CuteTask(Task):
     We will replace the rest parts with our CuTe dialect later.
     """
 
-    def __init__(self, a: TensorNode, b: TensorNode, acc_dtype: Union[DataType, str], parallel_k_parts: int = 1):
-        if not a.type.dtype == float16 or not b.type.dtype == float16:
-            raise ValueError('Both inputs must be float16 tensors')
+    def __init__(
+        self,
+        a: TensorNode,
+        b: TensorNode,
+        acc_dtype: Union[DataType, str],
+        parallel_k_parts: int = 1,
+        transpose_b: bool = False,
+    ):
+        self.transpose_b = transpose_b
+
+        if not a.type.dtype == b.type.dtype:
+            raise ValueError(f'Both inputs must have the same dtype, but got {a.type.dtype} and {b.type.dtype}')
+
+        if a.type.dtype.is_any_float16():
+            target_float_type = a.type.dtype
+        else:
+            raise ValueError(
+                f'Both inputs must be float16 or bfloat tensors, but got {a.type.dtype} and {b.type.dtype}'
+            )
+
+        self.target_float_type = target_float_type
 
         if len(a.shape) < 2 or len(b.shape) < 2:
             raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a.shape, b.shape))
 
-        self._assert(
-            a.shape[-1] == b.shape[-2],
-            msg=(
-                'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
-                ', got {} and {}'.format(a.shape, b.shape)
-            ),
-        )
+        if not self.transpose_b:
+            self._assert(
+                a.shape[-1] == b.shape[-2],
+                msg=(
+                    'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
+                    ', got {} and {}'.format(a.shape, b.shape)
+                ),
+            )
+        else:
+            self._assert(
+                a.shape[-1] == b.shape[-1],
+                msg=(
+                    'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
+                    ', got {} and {}'.format(a.shape, b.shape)
+                ),
+            )
 
         self._assert(
             can_mutually_broadcast(a.shape[:-2], b.shape[:-2]),
@@ -65,34 +95,49 @@ class MatmulF16CuteTask(Task):
         a_shape = a.shape
         b_shape = b.shape
         k_size = a.shape[-1]
-        c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        if not transpose_b:
+            c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        else:
+            c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-2]]
+
         k_part_extent = cdiv(k_size, parallel_k_parts)
 
         acc_dtype = data_type(acc_dtype)
 
         def inner_compute(k_part, indices, k):
-            return if_then_else(
-                k_part * k_part_extent + k < k_size,
-                cast(
-                    a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
-                    * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
-                    acc_dtype,
-                ),
-                acc_dtype(0.0),
-            )
+            if not transpose_b:
+                return if_then_else(
+                    k_part * k_part_extent + k < k_size,
+                    cast(
+                        a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
+                        * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
+                        acc_dtype,
+                    ),
+                    acc_dtype(0.0),
+                )
+            else:
+                return if_then_else(
+                    k_part * k_part_extent + k < k_size,
+                    cast(
+                        a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
+                        * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [indices[-1], k]],
+                        acc_dtype,
+                    ),
+                    acc_dtype(0.0),
+                )
 
         def outer_compute(k_part, *indices):
-            return float16(
+            return target_float_type(
                 reduce(shape=[k_part_extent], fcompute=partial(inner_compute, k_part, indices), reduce_type='sum')
             )
 
         c = compute(name='c', shape=c_shape, fcompute=outer_compute)
 
         super().__init__(
-            name='matmul_f16_pk_cute',
+            name=f'matmul_{target_float_type.short_name}_pk_cute_transpose_b_{transpose_b}',
             inputs=[a, b],
             outputs=[c],
-            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts},
+            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'transpose_b': transpose_b},
         )
 
     def allow_prologue(self) -> bool:
@@ -156,17 +201,31 @@ class MatmulF16CuteTask(Task):
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
         from hidet.lang.cuda import register_tensor
+        from hidet.lang.constructs.declare import as_tensor_pointer
+
+        transpose_b = self.attrs['transpose_b']
+        target_float_type = self.target_float_type
+        cast_func = cast_fp16 if target_float_type == float16 else cast_bf16
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
         a_shape: Tuple[Int, ...] = node_a.shape
         b_shape: Tuple[Int, ...] = node_b.shape
         c_shape: Tuple[Int, ...] = node_c.shape
-        m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
+
+        if not transpose_b:
+            m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
+        else:
+            m_size, n_size, k_size = a_shape[-2], b_shape[-2], a_shape[-1]
+
         a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
         k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
         acc_dtype = self.attrs['acc_dtype']
+
+        if transpose_b:
+            # TODO: Is there a way to support cuBLAS with B transposed?
+            tune.check(not use_cublas, 'Cublas does not support transpose_b')
 
         if use_cublas:
             from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
@@ -189,11 +248,22 @@ class MatmulF16CuteTask(Task):
                 and mma == 'm16n8k16'
             )
             tune.check(schedule_filter)
+            # Don't know how to convert the matmuls with parallel_k opt to batched matmul, so we disable it here.
+            tune.check(k_parts == 1)
             return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type)
 
         # schedule parameters
+
+        # For the bfloat16 case, there is no mma config with float16 accumulator, only float32
+        if target_float_type == bfloat16:
+            tune.check(acc_dtype == float32, 'bfloat16 only supports float32 accumulator')
+
         mma_configs_f16 = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
-        mma_configs_f32 = {'m16n8k8': MmaConfig.m16n8k8_f16_f32(), 'm16n8k16': MmaConfig.m16n8k16_f16_f32()}
+        mma_configs_f32 = (
+            {'m16n8k8': MmaConfig.m16n8k8_f16_f32(), 'm16n8k16': MmaConfig.m16n8k16_f16_f32()}
+            if target_float_type == float16
+            else {'m16n8k8': MmaConfig.m16n8k8_bf16_f32(), 'm16n8k16': MmaConfig.m16n8k16_bf16_f32()}
+        )
         tune.check(mma in mma_configs_f16 or mma in mma_configs_f32)
         mma_config = mma_configs_f16[mma] if acc_dtype == float16 else mma_configs_f32[mma]
 
@@ -210,24 +280,43 @@ class MatmulF16CuteTask(Task):
         maximum_smem_bytes = 49152
         tune.check(dynamic_smem_bytes <= maximum_smem_bytes, 'dynamic shared memory <= 49152')
 
-        tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
+        if not transpose_b:
+            tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
         tune.check(block_k % 8 == 0)
         tune.check(is_power_of_two(block_k // 8))
         smem_a_type = tensor_type(
-            'float16', shape=[block_m, block_k], layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8)
+            self.target_float_type.name,
+            shape=[block_m, block_k],
+            layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8),
         )
-        smem_b_type = tensor_type(
-            'float16',
-            shape=[block_k, block_n],
-            layout=row_major(block_k // 8, block_n // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8),
-        )
+        if not transpose_b:
+            smem_b_type = tensor_type(
+                target_float_type.name,
+                shape=[block_k, block_n],
+                layout=row_major(block_k // 8, block_n // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8),
+            )
+        else:
+            smem_b_type = tensor_type(
+                target_float_type.name,
+                shape=[block_n, block_k],
+                layout=row_major(block_n, block_k // 8).swizzle(1) * row_major(1, 8),
+            )
+
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
-        load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+
+        if not transpose_b:
+            load_smem_b_map = auto_map(
+                block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg)
+            )
+        else:
+            load_smem_b_map = auto_map(
+                block_n, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg)
+            )
 
         with hidet.script_module() as module:
 
             @hidet.script
-            def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: float16[mma_config.a_elements]):
+            def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: target_float_type[mma_config.a_elements]):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     p, q = col_spatial(16, 2).map(lane_id)
@@ -241,27 +330,46 @@ class MatmulF16CuteTask(Task):
                     )
 
             @hidet.script
-            def load_regs_b_2x(mj: int, k1: int, smem_b: smem_b_type, regs_b: float16[2 * mma_config.b_elements]):
+            def load_regs_b_2x(
+                mj: int, k1: int, smem_b: smem_b_type, regs_b: target_float_type[2 * mma_config.b_elements]
+            ):
                 """
                 We merge two ldmatrix.x2 insts to a single ldmatrix.x4 so that we can improve the throughput.
                 """
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    p, q = col_spatial(16, 2).map(lane_id)
-                    row_addr = ~smem_b[wk * warp_k + k1 * mma_k + p, wj * warp_n + mj * mma_n + q * mma_n]
-                    regs = view(regs_b, u32[4])
-                    ldmatrix(regs=[regs[0], regs[1], regs[2], regs[3]], smem_addr=row_addr, trans=True)
+                if not transpose_b:
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        p, q = col_spatial(16, 2).map(lane_id)
+                        row_addr = ~smem_b[wk * warp_k + k1 * mma_k + p, wj * warp_n + mj * mma_n + q * mma_n]
+                        regs = view(regs_b, u32[4])
+                        ldmatrix(regs=[regs[0], regs[1], regs[2], regs[3]], smem_addr=row_addr, trans=True)
+                else:
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        # Need to change the mapping from col_spatial(16, 2) to col_spatial(8, 2, 2)
+                        # due to the matrix B's layout of the fragments held by different threads:
+                        # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#mma-16816-b-f16
+                        p, q, r = col_spatial(8, 2, 2).map(lane_id)
+
+                        row_addr = ~smem_b[wj * warp_n + mj * mma_n + p + r * 8, wk * warp_k + k1 * mma_k + q * 8]
+
+                        regs = view(regs_b, u32[4])
+                        ldmatrix(
+                            regs=[regs[0], regs[1], regs[2], regs[3]],
+                            smem_addr=row_addr,
+                            shared_space_addr=False,
+                            trans=False,
+                        )
 
             @hidet.script
             def warp_mma(
-                regs_a: float16[mma_config.a_elements],
-                regs_b: float16[mma_config.b_elements],
+                regs_a: target_float_type[mma_config.a_elements],
+                regs_b: target_float_type[mma_config.b_elements],
                 regs_c: acc_dtype[mma_config.c_elements],
             ):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
 
             @hidet.script
-            def load_smem_a(k0: int, a: float16[a_head + [m_size, k_size]], smem_a: smem_a_type):
+            def load_smem_a(k0: int, a: target_float_type[a_head + [m_size, k_size]], smem_a: smem_a_type):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 offset_m = blockIdx.x * block_m
                 offset_k = c_head_index[0] * k_part_extent + k0 * block_k
@@ -293,38 +401,95 @@ class MatmulF16CuteTask(Task):
                         )
 
             @hidet.script
-            def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
+            def load_smem_b(k0: int, b_ptr: ~target_float_type, smem_b: smem_b_type):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 offset_n = blockIdx.y * block_n
                 offset_k = c_head_index[0] * k_part_extent + k0 * block_k
                 maximum_k = min(k_size, (c_head_index[0] + 1) * k_part_extent)
-                gmem_b = b[broadcast_indices(c_head_index[1:], b_head, c_head[1:])][offset_k:, offset_n:]
-                for k, j_seg in load_smem_b_map.on(threadIdx.x):
-                    j = j_seg * 8
-                    src_size = (
-                        0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
-                    )
-                    if b_shape[-1] % 8 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    # trivially support other cp_sizes, perhaps do this in a more clever way?
-                    elif b_shape[-1] % 4 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
-                        cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
-                    elif b_shape[-1] % 2 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=4, src_size=min(4, src_size * 2))
-                        cp_async(
-                            ~smem_b[k, j + 2], ~gmem_b[k, j + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
+
+                if not transpose_b:
+                    b = as_tensor_pointer(b_ptr, target_float_type.name, b_head + [k_size, n_size])
+                    gmem_b = b[broadcast_indices(c_head_index[1:], b_head, c_head[1:])][offset_k:, offset_n:]
+                else:
+                    b = as_tensor_pointer(b_ptr, target_float_type.name, b_head + [n_size, k_size])
+                    gmem_b = b[broadcast_indices(c_head_index[1:], b_head, c_head[1:])][offset_n:, offset_k:]
+
+                if not transpose_b:
+                    for k, j_seg in load_smem_b_map.on(threadIdx.x):
+                        j = j_seg * 8
+                        src_size = (
+                            0
+                            if (offset_k + k >= maximum_k or offset_n + j >= n_size)
+                            else min(n_size - (offset_n + j), 8)
                         )
-                        cp_async(
-                            ~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
+                        if b_shape[-1] % 8 == 0:
+                            cp_async(
+                                ~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global'
+                            )
+                        # trivially support other cp_sizes, perhaps do this in a more clever way?
+                        elif b_shape[-1] % 4 == 0:
+                            cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
+                            cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
+                        elif b_shape[-1] % 2 == 0:
+                            cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=4, src_size=min(4, src_size * 2))
+                            cp_async(
+                                ~smem_b[k, j + 2],
+                                ~gmem_b[k, j + 2],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 4)),
+                            )
+                            cp_async(
+                                ~smem_b[k, j + 4],
+                                ~gmem_b[k, j + 4],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 8)),
+                            )
+                            cp_async(
+                                ~smem_b[k, j + 6],
+                                ~gmem_b[k, j + 6],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 12)),
+                            )
+                else:
+                    for j, k_seg in load_smem_b_map.on(threadIdx.x):
+                        k = k_seg * 8
+                        src_size = (
+                            0
+                            if (offset_k + k >= maximum_k or offset_n + j >= n_size)
+                            else min(maximum_k - (offset_k + k), 8)
                         )
-                        cp_async(
-                            ~smem_b[k, j + 6], ~gmem_b[k, j + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
-                        )
+                        if b_shape[-1] % 8 == 0:
+                            cp_async(
+                                ~smem_b[j, k], ~gmem_b[j, k], cp_size=16, src_size=src_size * 2, cache_level='global'
+                            )
+                        # trivially support other cp_sizes, perhaps do this in a more clever way?
+                        elif b_shape[-1] % 4 == 0:
+                            cp_async(~smem_b[j, k], ~gmem_b[j, k], cp_size=8, src_size=min(8, src_size * 2))
+                            cp_async(~smem_b[j, k + 4], ~gmem_b[j, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
+                        elif b_shape[-1] % 2 == 0:
+                            cp_async(~smem_b[j, k], ~gmem_b[j, k], cp_size=4, src_size=min(4, src_size * 2))
+                            cp_async(
+                                ~smem_b[j, k + 2],
+                                ~gmem_b[j, k + 2],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 4)),
+                            )
+                            cp_async(
+                                ~smem_b[j, k + 4],
+                                ~gmem_b[j, k + 4],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 8)),
+                            )
+                            cp_async(
+                                ~smem_b[j, k + 6],
+                                ~gmem_b[j, k + 6],
+                                cp_size=4,
+                                src_size=min(4, max(0, src_size * 2 - 12)),
+                            )
 
             tune.check(mma in ("m16n8k8", "m16n8k16"))
             from hidet.ir.cute import TensorLayout, ThrValAtom, Level, TiledTensorLayout
-            from hidet.ir.cute.ops import tiled_tensor_view, rearrange, partition_src, partition_dst, copy, arithmetic
+            from hidet.ir.cute.ops import tensor_view, rearrange, partition_src, partition_dst, copy, arithmetic
             from hidet.ir.cute.collective import collective_store
 
             atom_shape = (mma_m, mma_n)
@@ -366,13 +531,13 @@ class MatmulF16CuteTask(Task):
             @hidet.script
             def store_c_reg2gmem(
                 regs_c: acc_dtype[mma_count_m, mma_count_n, mma_config.c_elements],
-                c: float16[c_head + [m_size, n_size]],
+                c: target_float_type[c_head + [m_size, n_size]],
             ):
-                t_regs_c = tiled_tensor_view(regs_c, mma_layout, "register")
+                t_regs_c = tensor_view(regs_c, mma_layout, "register")
                 if fp16_acc:
                     cvt_t_regs_c = rearrange(t_regs_c, store_c_layout, "register")
                 else:
-                    cvt_t_regs_c = rearrange(arithmetic(t_regs_c, op=cast_fp16), store_c_layout, "register")
+                    cvt_t_regs_c = rearrange(arithmetic(t_regs_c, op=cast_func), store_c_layout, "register")
                 extents = [m_size - blockIdx.x * block_m, n_size - blockIdx.y * block_n]
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
                 c_head_index = spatial(*c_head).map(blockIdx.z)
@@ -400,10 +565,10 @@ class MatmulF16CuteTask(Task):
             smem_layout = TensorLayout((block_m, block_n), (block_n, 1))
 
             @hidet.script
-            def store_c_smem2gmem(smem_c: acc_dtype[block_m, block_n], c: float16[c_head + [m_size, n_size]]):
+            def store_c_smem2gmem(smem_c: acc_dtype[block_m, block_n], c: target_float_type[c_head + [m_size, n_size]]):
                 regs_c = register_tensor(acc_dtype, [store_c_layout.val_layout().size()])
-                t_regs_c = tiled_tensor_view(regs_c, store_c_layout, "register")
-                t_smem_c = tiled_tensor_view(smem_c, smem_layout, "shared")
+                t_regs_c = tensor_view(regs_c, store_c_layout, "register")
+                t_smem_c = tensor_view(smem_c, smem_layout, "shared", volatile=True)
                 tcsc = partition_src(t_smem_c, tiled_copy)
                 tcrc = partition_dst(t_regs_c, tiled_copy)
                 copy(tiled_copy, tcsc, tcrc)
@@ -415,31 +580,44 @@ class MatmulF16CuteTask(Task):
                     collective_store(tiled_copy, t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
                 else:
                     collective_store(
-                        tiled_copy, arithmetic(t_regs_c, op=cast_fp16), c, c_head_index + [offset_m, offset_n], extents
+                        tiled_copy, arithmetic(t_regs_c, op=cast_func), c, c_head_index + [offset_m, offset_n], extents
                     )
 
             @hidet.script
             def matmul_f16_kernel(
-                a: float16[a_head + [m_size, k_size]],
-                b: float16[b_head + [k_size, n_size]],
-                c: float16[c_head + [m_size, n_size]],
+                a: target_float_type[a_head + [m_size, k_size]],
+                b_ptr: ~target_float_type,
+                c: target_float_type[c_head + [m_size, n_size]],
             ):
                 # matrix multiplication, using mma instruction
                 attrs.cuda.grid_dim = grid_dim
                 attrs.cuda.block_dim = threads
                 # the second 2 means '2 bytes per float16'
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
+
+                if not transpose_b:
+                    b = as_tensor_pointer(b_ptr, target_float_type.name, b_head + [k_size, n_size])
+                else:
+                    b = as_tensor_pointer(b_ptr, target_float_type.name, b_head + [n_size, k_size])
+
                 # smem_storage = dyn_smem_storage
                 smem_a = tensor_pointer(
-                    'float16', shape=[2, block_m, block_k], layout=row_major(2) + smem_a_type.layout
+                    target_float_type.name, shape=[2, block_m, block_k], layout=row_major(2) + smem_a_type.layout
                 )
-                smem_b = tensor_pointer(
-                    'float16', shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
-                )
+
+                if not transpose_b:
+                    smem_b = tensor_pointer(
+                        target_float_type.name, shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
+                    )
+                else:
+                    smem_b = tensor_pointer(
+                        target_float_type.name, shape=[2, block_n, block_k], layout=row_major(2) + smem_b_type.layout
+                    )
+
                 smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
                 smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
-                regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
-                regs_b = register_tensor(float16, [2, mma_count_n, mma_config.b_elements])
+                regs_a = register_tensor(target_float_type, [2, mma_count_m, mma_config.a_elements])
+                regs_b = register_tensor(target_float_type, [2, mma_count_n, mma_config.b_elements])
                 regs_c = register_tensor(acc_dtype, [mma_count_m, mma_count_n, mma_config.c_elements])
 
                 for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
@@ -501,17 +679,21 @@ class MatmulF16CuteTask(Task):
 
 
 class MatmulF16CuteOp(Operator):
-    def __init__(self, a: Tensor, b: Tensor, acc_dtype: Union[DataType, str], parallel_k_parts=1):
+    def __init__(
+        self, a: Tensor, b: Tensor, acc_dtype: Union[DataType, str], parallel_k_parts=1, transpose_b: bool = False
+    ):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
         super().__init__(
             inputs=[a, b],
-            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts},
-            task=MatmulF16CuteTask(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, parallel_k_parts),
+            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'transpose_b': transpose_b},
+            task=MatmulF16CuteTask(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, parallel_k_parts, transpose_b),
         )
 
 
-def matmul_f16_cute(a: Tensor, b: Tensor, parallel_k_parts=1, acc_dtype: Union[DataType, str] = "float32") -> Tensor:
+def matmul_f16_cute(
+    a: Tensor, b: Tensor, parallel_k_parts=1, acc_dtype: Union[DataType, str] = "float32", transpose_b: bool = False
+) -> Tensor:
     if len(a.shape) < 2 or len(b.shape) < 2:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     # TODO: impliment dynamic run-time shape assertion
@@ -519,7 +701,11 @@ def matmul_f16_cute(a: Tensor, b: Tensor, parallel_k_parts=1, acc_dtype: Union[D
         a.shape[-1] % 2 != 0 or b.shape[-1] % 2 != 0
     ):
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
-    if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
-        raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
+    if a.dtype != b.dtype:
+        raise ValueError('a and b must have the same dtype, got {} and {}'.format(a.dtype, b.dtype))
+
+    if not a.dtype.is_any_float16() or not b.dtype.is_any_float16():
+        raise ValueError('matmul_f16_cute only supports float16 or bfloat16, got {} and {}'.format(a.dtype, b.dtype))
+
     acc_dtype = data_type(acc_dtype)
-    return MatmulF16CuteOp(a, b, acc_dtype, parallel_k_parts).outputs[0]
+    return MatmulF16CuteOp(a, b, acc_dtype, parallel_k_parts, transpose_b).outputs[0]

@@ -25,6 +25,7 @@ from hidet.ir.primitives.cuda.barrier import (
     mbarrier_test_wait,
     mbarrier_try_wait,
     mbarrier_wait,
+    barrier_sync,
 )
 from hidet.ir.primitives.debug import printf
 from hidet.ir.stmt import AssertStmt, AssignStmt, BlackBoxStmt, DeclareStmt, DeclareScope, SeqStmt, WhileStmt
@@ -32,6 +33,7 @@ from hidet.ir.type import tensor_pointer_type
 from hidet.ir.dtypes import i32, u32, u64
 from hidet.lang import attrs, script
 from hidet.lang.constructs.declare import shared_tensor
+from hidet.testing.capture_stdout import capture_stdout
 
 
 def test_mbarrier_basic():
@@ -231,6 +233,90 @@ def test_mbarrier_tx_count_ops():
     func = ir_module.build()
     func()
     hidet.cuda.synchronize()
+
+
+def test_barrier():
+    from hidet.lang import attrs, printf, asm
+    from hidet.lang.cuda import threadIdx, syncthreads
+    from hidet.ir.primitives.cuda import barrier_sync
+
+    with hidet.script_module() as script_module:
+
+        num_groups = 2
+        group_size = 32
+
+        @hidet.script
+        def with_barrier():
+            attrs.func_kind = 'cuda_kernel'
+            attrs.cuda.grid_dim = 1
+            attrs.cuda.block_dim = num_groups * group_size
+
+            for i in range(num_groups):
+                if threadIdx.x // group_size == i:
+                    if threadIdx.x % group_size <= 1:
+                        asm('nanosleep.u32 1024;')
+                        printf('group %d, thread %d, before sync\n', i, threadIdx.x % group_size)
+                    barrier_sync(1, group_size)
+                    if group_size - 1 - threadIdx.x % group_size <= 1:
+                        printf('group %d, thread %d, after sync\n', i, threadIdx.x % group_size)
+
+                barrier_sync(0, aligned=True)
+                syncthreads()
+
+        @hidet.script
+        def without_barrier():
+            attrs.func_kind = 'cuda_kernel'
+            attrs.cuda.grid_dim = 1
+            attrs.cuda.block_dim = num_groups * group_size
+
+            for i in range(num_groups):
+                if threadIdx.x // group_size == i:
+                    if threadIdx.x % group_size <= 1:
+                        asm('nanosleep.u32 1024;')
+                        printf('group %d, thread %d, before sync\n', i, threadIdx.x % group_size)
+                    if group_size - 1 - threadIdx.x % group_size <= 1:
+                        printf('group %d, thread %d, after sync\n', i, threadIdx.x % group_size)
+
+                barrier_sync(0, aligned=True)
+                syncthreads()
+
+        @hidet.script
+        def launch():
+            attrs.func_kind = 'public'
+            printf('with barrier\n')
+            with_barrier()
+            BlackBoxStmt('cudaDeviceSynchronize();')
+            printf('without barrier\n')
+            without_barrier()
+            BlackBoxStmt('cudaDeviceSynchronize();')
+
+    func = script_module.build()
+    with capture_stdout() as captured:
+        func()
+
+    assert (
+        str(captured).strip()
+        == """
+with barrier
+group 0, thread 0, before sync
+group 0, thread 1, before sync
+group 0, thread 30, after sync
+group 0, thread 31, after sync
+group 1, thread 0, before sync
+group 1, thread 1, before sync
+group 1, thread 30, after sync
+group 1, thread 31, after sync
+without barrier
+group 0, thread 30, after sync
+group 0, thread 31, after sync
+group 0, thread 0, before sync
+group 0, thread 1, before sync
+group 1, thread 30, after sync
+group 1, thread 31, after sync
+group 1, thread 0, before sync
+group 1, thread 1, before sync
+    """.strip()
+    )
 
 
 if __name__ == "__main__":

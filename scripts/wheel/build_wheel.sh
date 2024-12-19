@@ -48,3 +48,13 @@ rm -rf ./build
 rm ./setup.py
 rm ./MANIFEST.in
 rm ./README.md
+
+if [ "$GITHUB_ACTIONS" == "true" ]; then
+  echo "Running in GitHub Actions environment"
+  echo $(pwd)
+  WHEEL=$(find $CURRENT_SCRIPT_DIR/built_wheel -maxdepth 1 -name '*.whl')
+  WHEEL_FILENAME=$(basename "$WHEEL")
+
+  echo "wheel_path=./scripts/wheel/built_wheel" >> "$GITHUB_OUTPUT"
+  echo "wheel_name=${WHEEL_FILENAME}" >> "$GITHUB_OUTPUT"
+fi

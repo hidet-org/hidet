@@ -41,7 +41,9 @@ def export_transformer_model_as_onnx(
     if skip_exists and os.path.exists(output_path):
         return
     temp_dir = '/tmp/hidet'
-    command = '{} -m transformers.onnx --model {} --feature {} {}'.format(sys.executable, model_name, feature, temp_dir)
+    command = '{} -m transformers.onnx --model {} --feature {} {} --opset 14'.format(
+        sys.executable, model_name, feature, temp_dir
+    )
     print("Running '{}'".format(command))
     subprocess.run(command.split(), check=True)
     shutil.move(os.path.join(temp_dir, 'model.onnx'), output_path)

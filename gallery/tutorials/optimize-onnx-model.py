@@ -44,7 +44,7 @@ print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2**20)))
 # The :func:`benchmark_func() <hidet.utils.benchmark_func>` function runs the given function multiple times to
 # get the median latency.
 
-from hidet.utils import benchmark_func
+from hidet.utils.benchmark import benchmark_func
 
 print('PyTorch: {:.3f} ms'.format(benchmark_func(lambda: torch_model(torch_data))))
 
@@ -117,7 +117,7 @@ def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
     (output,) = cuda_graph.run([data])
     np.testing.assert_allclose(
-        actual=output.cpu().numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+        actual=output.cpu().numpy(), desired=torch_output.cpu().numpy(), rtol=5e-2, atol=5e-2
     )
     print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: cuda_graph.run())))
 

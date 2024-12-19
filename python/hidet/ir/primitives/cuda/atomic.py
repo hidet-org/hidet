@@ -21,7 +21,28 @@ from hidet.utils import initialize
 
 @initialize()
 def register_functions():
+    from hidet.lang import script, attrs, asm
+
     i32 = data_type('int32')
+
+    for sem in ['acq_rel', 'acquire', 'release']:
+        for space in ['global', 'shared']:
+            func_name = f'cuda_atomic_add_{sem}_{space}'
+            # If the .scope qualifier is absent, .gpu scope is assumed by default.
+            # If no sub-qualifier is specified with .shared state space, then ::cta is assumed by default.
+            scope = 'gpu' if space == 'global' else 'cta'
+            template = f'atom.{sem}.{scope}.{space}.add.s32 %0, [%1], %2;'
+
+            @script
+            def func(addr: ~i32, v0: i32) -> i32:
+                attrs.func_kind = 'cuda_internal'
+                attrs.func_name = func_name
+                inputs = [addr, v0]
+                ret = i32(0)
+                asm(template, outputs=[ret], inputs=inputs, is_volatile=True)
+                return ret
+
+            register_primitive_function(name=func.name, func_or_type=func)
     register_primitive_function('cuda_atomic_add', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicAdd')
     register_primitive_function('cuda_atomic_sub', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicSub')
     register_primitive_function('cuda_atomic_min', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicMin')
@@ -141,8 +162,33 @@ def reduce_add(dtype, addr: Expr, src_values: List[Expr], scope='gpu'):
     return call_primitive_func(func_name, [addr] + src_values)
 
 
-def atomic_add(addr: Expr, value: Expr):
-    return call_primitive_func('cuda_atomic_add', [addr, value])
+def atomic_add(addr: Expr, value: Expr, sem='relaxed', space='global'):
+    """
+    Atomic reduction operations for thread-to-thread communication.
+
+    See Also:
+    ---------
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=fence#parallel-synchronization-and-communication-instructions-atom
+
+
+    Parameters:
+    -----------
+    addr: Expr
+        Address of the memory location to be updated.
+    value: Expr
+        Value to be added to the memory location.
+    sem: str
+        Memory ordering semantics. One of ['acq_rel', 'relaxed', 'acquire', 'release'].
+
+        The optional sem qualifier specifies a memory synchronizing effect as described in the Memory Consistency Model.
+        If the sem qualifier is absent, "relaxed" is assumed by default.
+    space: str
+        Memory space. One of ['global', 'shared'].
+    """
+    if sem == 'relaxed':
+        return call_primitive_func('cuda_atomic_add', [addr, value])
+    else:
+        return call_primitive_func(f'cuda_atomic_add_{sem}_{space}', [addr, value])
 
 
 def atomic_sub(addr: Expr, value: Expr):

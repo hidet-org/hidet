@@ -71,22 +71,22 @@ def test_cache_write(num_kv_heads, block_size, head_size, seq_lengths_list, is_p
     seq_lengths = from_torch(torch.asarray(seq_lengths_list, dtype=torch.int32, device='cuda'))
     key = from_torch(
         torch.randn(
-            bs, num_kv_heads, max_seq_length if is_prefill else 1, head_size, dtype=torch.float16, device='cuda'
+            bs, num_kv_heads, max_seq_length if is_prefill else 1, head_size, dtype=torch.bfloat16, device='cuda'
         )
     )
-    # key = from_torch(torch.ones(bs, num_kv_heads, max_seq_length, head_size, dtype=torch.float16, device='cuda'))
+    # key = from_torch(torch.ones(bs, num_kv_heads, max_seq_length, head_size, dtype=torch.bfloat16, device='cuda'))
     value = from_torch(
         torch.randn(
-            bs, num_kv_heads, max_seq_length if is_prefill else 1, head_size, dtype=torch.float16, device='cuda'
+            bs, num_kv_heads, max_seq_length if is_prefill else 1, head_size, dtype=torch.bfloat16, device='cuda'
         )
     )
     cache_slots = from_torch(torch.asarray(cache_slots_list, dtype=torch.int64, device='cuda'))
     key_caches = [
-        from_torch(torch.zeros(num_blocks, num_kv_heads, head_size, block_size, dtype=torch.float16, device='cuda'))
+        from_torch(torch.zeros(num_blocks, num_kv_heads, head_size, block_size, dtype=torch.bfloat16, device='cuda'))
         for _ in range(2)
     ]
     value_caches = [
-        from_torch(torch.zeros(num_blocks, num_kv_heads, head_size, block_size, dtype=torch.float16, device='cuda'))
+        from_torch(torch.zeros(num_blocks, num_kv_heads, head_size, block_size, dtype=torch.bfloat16, device='cuda'))
         for _ in range(2)
     ]
 

@@ -115,7 +115,7 @@ class PythonAstFunctor:
         if hasattr(self, method):
             visitor = getattr(self, method)
         else:
-            msg = 'The AST node {} does not support in HidetScript.'.format(node.__class__.__name__)
+            msg = 'The AST node {} is not supported in HidetScript.'.format(node.__class__.__name__)
             raise HidetProgramError(self, node, msg)
 
         try:
@@ -870,7 +870,34 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_Subscript(self, expr: Subscript):
         base = self.visit(expr.value)
         indices = self.visit(expr.slice)
-        return base[indices]
+        from hidet.ir.tools import infer_type
+        from hidet.ir.cute.type import TiledTensorType
+        from hidet.ir.cute.ops import sub_tensor
+
+        if not isinstance(base, ir.Expr):
+            return base[indices]
+
+        base_ty = infer_type(base)
+        if isinstance(base_ty, TiledTensorType):
+            if not isinstance(indices, (tuple, list)):
+                indices = [indices]
+
+            def slice_(items):
+                coord = []
+                for item in items:
+                    if isinstance(item, slice):
+                        if any(x is not None for x in [item.start, item.stop, item.step]):
+                            raise HidetProgramError(self, expr, 'Slicing a tensor not supported')
+                        coord.append(None)
+                    elif isinstance(item, (tuple, list)):
+                        coord.append(slice_(item))
+                    else:
+                        coord.append(item)
+                return tuple(coord)
+
+            return sub_tensor(base, slice_(indices))
+        else:
+            return base[indices]
 
     def visit_Attribute(self, expr: Attribute):
         base = self.visit(expr.value)
@@ -944,9 +971,16 @@ class PythonToHidetTranslator(PythonAstFunctor):
             from hidet.lang.script import ScriptModuleContext
 
             ctx = ScriptModuleContext.current_context()
+            if func.name not in ctx.name2var:
+                # the function is not defined in the current script module, we import it
+                ctx.append_function(func)
+            else:
+                # check whether the function we called is identical to the one we defined in script module
+                funcs = [ctx_func for ctx_func in ctx.functions if ctx_func.name == func.name]
+                if len(funcs) != 1 or funcs[0] is not func:
+                    raise HidetProgramError(self, expr, 'Function "{}" is ambiguous'.format(func.name))
+
             func_var = ctx.lookup(func.name)
-            if func_var is None:
-                raise HidetProgramError(self, expr, 'Call undefined function.')
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
             assert isinstance(func_var.type, ir.FuncType)

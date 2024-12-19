@@ -11,8 +11,12 @@
 # limitations under the License.
 # %%
 import pytest
+import torch
+from torch import nn
+from transformers.activations import ACT2FN
 from hidet.testing.models.llama import get_compiled_model, generate, convert_model
 from hidet.runtime.storage import current_memory_pool
+from hidet.testing.torch_utils import Backend
 
 
 # @pytest.mark.parametrize('device,opt', [('cuda', True)])
@@ -93,7 +97,7 @@ def test_model_architecture():
             "rms_norm_eps": 1e-05,
             "rope_scaling": None,
             "tie_word_embeddings": False,
-            "torch_dtype": "float16",
+            "torch_dtype": dtype,
             "use_cache": True,
             "vocab_size": 32000,
         }
@@ -104,7 +108,7 @@ def test_model_architecture():
 
     model = convert_model(hf_model, device='cuda', dtype=hidet.float32)
 
-    def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
+    def build_flow_graph(model, batch_size=1, device='cuda', dtype=dtype):
         config = model.config
         input_ids = hidet.symbol([batch_size, 'seq_len'], dtype=hidet.int32, device=device)
         position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
@@ -125,3 +129,37 @@ def test_model_architecture():
     logits1 = res1.logits
     logits2 = res2.torch()
     assert torch.allclose(logits1, logits2, rtol=1e-3, atol=1e-3)
+
+
+class LlamaMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.hidden_size = 4096
+        self.intermediate_size = 11008
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+
+    def forward(self, x):
+        down_proj = self.down_proj(self.gate_proj(x) * self.up_proj(x))
+        return down_proj
+
+
+@pytest.mark.parametrize("dtype", ['bfloat16', 'float16'])
+def test_llama_issue419(dtype):
+    # hidet.option.cache_dir("./llama")
+    # hidet.option.debug_cache_tuning()
+    if dtype == 'bfloat16':
+        torch_type = torch.bfloat16
+    elif dtype == 'float16':
+        torch_type = torch.float16
+    model = LlamaMLP().cuda().to(torch_type)
+
+    x = torch.randn(1, 143, 4096, dtype=torch_type, device='cuda')
+    with torch.inference_mode(True):
+        y_true = model(x)
+        backend = Backend(backend='hidet', mode='max-autotune', dtype=dtype)
+        model = backend.compile(model)
+        y_ac = model(x)
+
+    torch.testing.assert_close(y_true, y_ac, rtol=0.01, atol=0.01)

@@ -35,7 +35,7 @@ class LlamaRMSNorm(nn.Module):
         hidden_states = hidden_states * hidet.ops.rsqrt(variance + self.variance_epsilon)
 
         # convert into half-precision if necessary
-        if self.weight.dtype in [hidet.float16, hidet.bfloat16]:
+        if self.weight.dtype.is_any_float16():
             hidden_states = hidden_states.to(self.weight.dtype)
 
         return self.weight * hidden_states

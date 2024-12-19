@@ -9,22 +9,132 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Type, Union
+from enum import Enum
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
 from hidet.ir.type import tensor_type, BaseType, ArrayType
-from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
+from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.compute import ArgReduceCompute, ReduceCompute, GridCompute, TensorInput, ScalarInput
 from hidet.ir.functors import IRFunctor
 from hidet.ir.dialects.pattern import PlaceholderExpr
+from hidet.ir import dtypes
 
 
+from hidet.ir.cute.type import TiledTensorType, tiled_tensor
 from hidet.ir.cute.expr import CallOp
+
+
+class OpKind(Enum):
+    ARITHMATIC = 0
+    COMPARE = 1
+    LOGICAL = 2
 
 
 def is_bool(tp: DataType):
     return isinstance(tp, DataType) and tp.name == 'bool'
+
+
+class BinaryTypeInfer:
+    def infer(self, lhs: BaseType, rhs: BaseType, op: Type[BinaryExpr]):
+        if isinstance(lhs, DataType) and isinstance(rhs, DataType):
+            return self.dtype(lhs, rhs, op)
+        elif lhs.is_pointer() and rhs.is_pointer():
+            return self.pointer(lhs, rhs, op)
+        elif lhs.is_pointer() and isinstance(rhs, DataType):
+            return self.pointer_dtype(lhs, rhs, op)
+        elif isinstance(lhs, DataType) and rhs.is_pointer():
+            return self.pointer_dtype(rhs, lhs, op)
+        elif isinstance(lhs, TiledTensorType) and isinstance(rhs, TiledTensorType):
+            from hidet.ir.cute.ops import Arithmetic
+
+            if lhs.scope != rhs.scope:
+                return self.fail(lhs, rhs, op)
+            dtype = self.infer(lhs.dtype, rhs.dtype, op)
+            layout = Arithmetic.infer_layout(lhs, rhs)
+            return tiled_tensor(dtype, layout, lhs.scope)
+        elif isinstance(lhs, TiledTensorType) and isinstance(rhs, DataType):
+            from hidet.ir.cute.ops import Arithmetic
+
+            if not lhs.scope.is_register():
+                return self.fail(lhs, rhs, op)
+            dtype = self.infer(lhs.dtype, rhs, op)
+            layout = Arithmetic.infer_layout(lhs)
+            return tiled_tensor(dtype, layout, lhs.scope)
+        elif isinstance(lhs, DataType) and isinstance(rhs, TiledTensorType):
+            from hidet.ir.cute.ops import Arithmetic
+
+            if not rhs.scope.is_register():
+                return self.fail(lhs, rhs, op)
+            dtype = self.infer(lhs, rhs.dtype, op)
+            layout = Arithmetic.infer_layout(rhs)
+            return tiled_tensor(dtype, layout, rhs.scope)
+        else:
+            return self.fail(lhs, rhs, op)
+
+    def dtype(self, lhs: DataType, rhs: DataType, op: Type[BinaryExpr]):
+        self.fail(lhs, rhs, op)
+
+    def pointer(self, lhs: Union[TensorPointerType, PointerType], rhs: Union[TensorPointerType, PointerType], op):
+        self.fail(lhs, rhs, op)
+
+    def pointer_dtype(self, pointer: Union[TensorPointerType, PointerType], dtype: DataType, op):
+        self.fail(pointer, dtype, op)
+
+    def fail(self, a, b, op):
+        raise RuntimeError('can not infer type for: {} {} {}'.format(a, type(op).__name__, b))
+
+
+class ArithBinaryInfer(BinaryTypeInfer):
+    def dtype(self, lhs: DataType, rhs: DataType, op):
+        from hidet.ir.dtypes.promotion import promote_type
+
+        return promote_type(lhs, rhs)
+
+    def pointer(self, lhs: Union[TensorPointerType, PointerType], rhs: Union[TensorPointerType, PointerType], op):
+        if issubclass(op, Sub):
+            return data_type('int32')
+        else:
+            return self.fail(lhs, rhs, op)
+
+    def pointer_dtype(self, pointer: Union[TensorPointerType, PointerType], dtype: DataType, op):
+        if issubclass(op, (Add, Sub)):
+            return pointer
+        else:
+            return self.fail(pointer, dtype, op)
+
+
+class CompareBinaryInfer(BinaryTypeInfer):
+    def dtype(self, lhs: DataType, rhs: DataType, op):
+        return dtypes.boolean
+
+    def pointer(self, lhs: Union[TensorPointerType, PointerType], rhs: Union[TensorPointerType, PointerType], op):
+        if issubclass(op, (Equal, NotEqual)):
+            return dtypes.boolean
+        else:
+            return self.fail(lhs, rhs, op)
+
+    def pointer_dtype(self, pointer: Union[TensorPointerType, PointerType], dtype: DataType, op):
+        if issubclass(op, (Equal, NotEqual)):
+            return dtypes.boolean
+        else:
+            return self.fail(pointer, dtype, op)
+
+
+class LogicalBinaryInfer(BinaryTypeInfer):
+    # and, or
+    def dtype(self, lhs: DataType, rhs: DataType, op):
+        if is_bool(lhs) and is_bool(rhs):
+            return dtypes.boolean
+        else:
+            return self.fail(lhs, rhs, op)
+
+
+_arith_binary_infer = ArithBinaryInfer()
+_compare_binary_infer = CompareBinaryInfer()
+_logical_binary_infer = LogicalBinaryInfer()
 
 
 class TypeInfer(IRFunctor):
@@ -36,37 +146,17 @@ class TypeInfer(IRFunctor):
         return self(e.expr)
 
     def visit_Binary(self, e: BinaryExpr):
-        from hidet.ir.utils.type_utils import numeric_promotion
-
         a_type: BaseType = self.visit(e.a)
         b_type: BaseType = self.visit(e.b)
-        if a_type.is_data_type() and b_type.is_data_type():
-            a_dtype: DataType = a_type.as_data_type()
-            b_dtype: DataType = b_type.as_data_type()
-
-            if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-                return numeric_promotion(a_dtype, b_dtype)
-            elif isinstance(e, Condition):
-                return data_type('bool')
-            else:
-                raise NotImplementedError('Binary operator type infer {}'.format(type(e)))
-        elif a_type.is_pointer() and b_type.is_pointer():
-            if isinstance(e, Sub):
-                return data_type('int32')
-            else:
-                raise TypeError("Can only do pointer subtraction, got {}".format(type(e)))
-        elif a_type.is_pointer() and b_type.is_data_type():
-            if isinstance(e, (Sub, Add)):
-                return a_type
-            else:
-                raise TypeError("Can only pointer +/- integer, got {} {} {}".format(a_type, type(e), b_type))
-        elif a_type.is_data_type() and b_type.is_pointer():
-            if isinstance(e, Add):
-                return b_type
-            else:
-                raise TypeError("Can only integer + pointer, got {} {} {}".format(a_type, type(e), b_type))
+        op = type(e)
+        if isinstance(e, (Add, Sub, Multiply, Div, Mod)):
+            return _arith_binary_infer.infer(a_type, b_type, op)
+        elif isinstance(e, (LessThan, Equal, LessEqual, NotEqual)):
+            return _compare_binary_infer.infer(a_type, b_type, op)
+        elif isinstance(e, (LogicalAnd, LogicalOr)):
+            return _logical_binary_infer.infer(a_type, b_type, op)
         else:
-            raise NotImplementedError('Binary operator type infer {} {} {}'.format(a_type, type(e), b_type))
+            raise NotImplementedError()
 
     def visit_Neg(self, e: Neg):
         return self(e.a)
@@ -234,7 +324,7 @@ class TypeInfer(IRFunctor):
         raise NotImplementedError()
 
     def visit_CallOp(self, call: CallOp):
-        arg_types = [self.visit(arg) for arg in call.op.args]
+        arg_types = [self.visit(arg) for arg in call.op.args if not isinstance(arg, (tuple, list))]
         return call.op.infer_type(arg_types)
 
 

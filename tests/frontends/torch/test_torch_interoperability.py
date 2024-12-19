@@ -32,22 +32,25 @@ def test_torch_reshape_tuple_arg():
 
 
 @pytest.mark.parametrize(
-    'shape1,shape2', [([2, 2], [2, 2]), ([2, 3, 4], [2, 3, 4]), ([2, 3, 4], [2, 3, 1]), ([2, 3, 4], [2, 1, 1])]
+    'input1, input2',
+    [
+        [torch.tensor([7, -7, 8], dtype=torch.int16), torch.tensor([2, 3, -2], dtype=torch.int32)],
+        [torch.tensor([71, -72], dtype=torch.int32), torch.tensor([2.5, -2.0], dtype=torch.float32)],
+        [torch.tensor([101, 103], dtype=torch.int64), 55],
+        [torch.tensor([101, 103], dtype=torch.int64), 55.0],
+        [torch.randn([3, 3, 4]) * 100, torch.randn([3, 1, 1]) * 75],
+        [torch.tensor([101, 103], dtype=torch.float32), 66],
+    ],
 )
-def test_torch_div(shape1, shape2):
-    check_module(
-        FunctionalModule(op=lambda x, y: torch.div(x, y)),
-        args=[torch.randn(shape1), torch.randn(shape2)],
-        atol=1e-5,
-        rtol=1e-5,
-    )
-
-    check_module(
-        FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor')),
-        args=[torch.randn(shape1), torch.randn(shape2)],
-        atol=1e-5,
-        rtol=1e-5,
-    )
+def test_torch_div(input1, input2):
+    input1 = input1.cuda() if isinstance(input1, torch.Tensor) else input1
+    input2 = input2.cuda() if isinstance(input2, torch.Tensor) else input2
+    func = FunctionalModule(op=lambda x, y: torch.div(x, y))
+    func_floor = FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor'))
+    func_floor_divice = FunctionalModule(op=lambda x, y: torch.floor_divide(x, y))
+    check_module(func, args=[input1, input2], atol=1e-5, rtol=1e-5)
+    check_module(func_floor, args=[input1, input2], atol=1e-5, rtol=1e-5)
+    check_module(func_floor_divice, args=[input1, input2], atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize('shape,expanded_shape', [([2, 1], [2, 11]), ([2, 3, 4], [2, 3, 4]), ([1], [6])])
@@ -138,7 +141,7 @@ def test_torch_var(shape, dim):
 @pytest.mark.parametrize('target_len, src_len', [[77, 77]])
 @pytest.mark.parametrize('have_mask', [True])
 @pytest.mark.parametrize('is_causal', [False])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
 def test_torch_multihead_attention(
     embed_dim, num_heads, batch_first, batch_size, target_len, src_len, have_mask, is_causal, dtype
 ):
@@ -178,7 +181,7 @@ def test_torch_multihead_attention(
 @pytest.mark.parametrize('need_mask', [True])
 @pytest.mark.parametrize('mask_shape', [[77, 77]])
 @pytest.mark.parametrize('is_causal', [True])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.float32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
 def test_torch_transformer_encoder(
     d_model,
     nhead,
@@ -324,6 +327,87 @@ def test_torch_leaky_relu(shape, negative_slope):
 
     leaky_relu_mod = torch.nn.LeakyReLU(negative_slope=negative_slope)
     check_module(leaky_relu_mod, args=[a], atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.parametrize(
+    'input_shape, offsets_shape, weight_shape', [([223], [156], [333, 444]), ([26], [1], [33, 33])]
+)
+@pytest.mark.parametrize('mode_name', ['mean', 'sum'])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32])
+def test_torch_embedding_bag(input_shape, offsets_shape, weight_shape, mode_name, dtype):
+
+    input_data = torch.randint(0, weight_shape[0], input_shape, dtype=torch.int64, device='cuda')
+    offsets_data = torch.randint(0, input_shape[0], offsets_shape, dtype=torch.int64, device='cuda')
+    offsets_data, _ = torch.sort(offsets_data)
+    offsets_data = torch.unique(offsets_data, sorted=True)
+
+    weight_data = torch.randn(weight_shape, device='cuda', dtype=dtype)
+
+    torch_embedding_bag_module = torch.nn.EmbeddingBag.from_pretrained(weight_data, mode=mode_name)
+
+    atol = 1e-4 if dtype == torch.float32 else 1e-2
+
+    check_module(torch_embedding_bag_module, args=[input_data, offsets_data], atol=atol, rtol=1e-4)
+
+
+@pytest.mark.parametrize(
+    "equation, operand_shapes",
+    [
+        ["bhwc,hkc->bhwk", [[400, 14, 14, 80], [14, 14, 80]]],
+        ["bhwc,wkc->bhwk", [[400, 14, 14, 80], [14, 14, 80]]],
+        ["abcd,cd->ab", [[10, 20, 30, 40], [30, 40]]],
+        ["i, j -> ij", [[160], [26]]],
+        ["..., f -> ... f", [[160], [26]]],
+        ["...ij, j -> ...i", [[5, 5, 10, 20], [20]]],
+        ["...ij, ...ij -> ...", [[5, 10, 15], [5, 10, 15]]],
+    ],
+)
+def test_torch_einsum(equation, operand_shapes):
+    operands_torch = [torch.randn(shape, device='cuda') for shape in operand_shapes]
+
+    atol = 5e-2
+    if equation == 'abcd,cd->ab':
+        atol = 1e-1
+
+    check_module(
+        FunctionalModule(op=lambda *args: torch.einsum(equation, *args)), args=operands_torch, atol=atol, rtol=1e-4
+    )
+
+
+def test_scatter_add_compile():
+    # This operator was already tested in tests/operators/test_inplace_operator.py.
+    # Just to add one more additional test here to ensure the bug mentioned in #429 is gone.
+    input_tensor = torch.zeros((6, 6), dtype=torch.float32, device='cuda')
+
+    index_tensor = torch.tensor([[4, 1, 4, 4, 2], [0, 1, 4, 5, 2], [5, 1, 3, 4, 2]]).to(dtype=torch.int64).cuda()
+
+    input_tensor_clone = input_tensor.clone()
+    src = torch.tensor([[0, 5, 3, 6, 5], [9, 6, 8, 8, 4], [7, 4, 5, 4, 7]]).to(dtype=torch.float32).cuda()
+
+    dim = 1
+
+    check_module(
+        FunctionalModule(op=lambda x, y, z: x.scatter_add_(dim, y, z)),
+        args=[input_tensor_clone, index_tensor, src],
+        atol=0,
+        rtol=0,
+        dynamic=False,
+    )
+
+
+def test_linear_odd_dims():
+    # As mentioned in #509, the we cannot use `matmul_nt` when the n or k dimension is odd.
+    # This test is to ensure those corner cases are handled correctly.
+    x = torch.randn(10, 20, device='cuda', dtype=torch.half)
+    w = torch.randn(1, 20, device='cuda', dtype=torch.half)
+
+    check_module(
+        FunctionalModule(op=lambda x, w: torch.nn.functional.linear(x, w)),
+        args=[x, w],
+        atol=1e-2,
+        rtol=1e-2,
+        dynamic=False,
+    )
 
 
 if __name__ == '__main__':

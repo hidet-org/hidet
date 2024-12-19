@@ -90,8 +90,6 @@ composition_tests = [
     # dynamic shapes.
     # We keep the divisibility check to reject incorrect composition results
     # (TensorLayout((48, 24, 5), (1, 128, 3072)), TensorLayout(32, 1)),
-    # FIXME: the testcase
-    # (TensorLayout((4, 3), (3, 1)), TensorLayout((24))),
 ]
 
 

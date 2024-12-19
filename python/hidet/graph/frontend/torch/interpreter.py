@@ -56,6 +56,10 @@ class UniqueWarnings:
 warnings = UniqueWarnings()
 
 
+def is_torch_method_inplace(name: str):
+    return name[-1] == '_'
+
+
 class Interpreter:
     def __init__(self, graph_module: torch.fx.GraphModule):
         super().__init__()
@@ -127,8 +131,17 @@ class Interpreter:
     def _lookup_hidet_function(self, torch_func) -> Optional[OverloadedFunction]:
         if torch_func not in Registry.registered_functions:
             name = self._get_callable_name(torch_func)
+            from hidet.graph.ops import cast
+
             pattern2func = {
-                '_dynamo_get_item_lambda': OverloadedFunction.from_lambda(lambda target, index: target[index])
+                '_dynamo_get_item_lambda': OverloadedFunction.from_lambda(lambda target, index: target[index]),
+                # Turns out the wrapped ops in issue #358 are some `numpy_method_wrapper` and `numpy_operator_wrapper`.
+                # According to the class definition in pytorch/torch/_dynamo/utils.py(line 2461-2497),
+                # they're just functionally equivalent to the original numpy functions.
+                '<Wrapped operator <original wrapped_ge>>': OverloadedFunction.from_lambda(lambda x, y: x >= y),
+                '<Wrapped method <original astype>>': OverloadedFunction.from_lambda(
+                    lambda x, dtype: cast(x, data_type(dtype))
+                ),
             }
             for pattern, func in pattern2func.items():
                 if pattern in name:
@@ -238,14 +251,21 @@ class Interpreter:
             elif node.op == "call_method":
                 args = load_arg(node.args, hidet_env)
                 kwargs = load_arg(node.kwargs, hidet_env)
+                self_arg_name = node.args[0].name
 
                 if isinstance(args[0], Tensor):
                     torch_method = getattr(torch.Tensor, node.target)
                 else:
+                    # hidet expect only `torch.Tensor` methods here.
+                    # If something else appear we should consider a support if it.
+                    assert False
                     torch_method = getattr(type(args[0]), node.target)
                 hidet_method = self._lookup_hidet_method(torch_method)
                 try:
-                    hidet_env[node.name] = hidet_method(*args, **kwargs)
+                    res = hidet_method(*args, **kwargs)
+                    hidet_env[node.name] = res
+                    if is_torch_method_inplace(node.target):
+                        hidet_env[self_arg_name] = res
                 except Exception as e:
                     self._raise_exception(e, node.target, hidet_method, args, kwargs)
             elif node.op == "call_module":

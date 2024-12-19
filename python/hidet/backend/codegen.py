@@ -630,12 +630,14 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
             'float16x2': 'half2',
+            'float32x2': 'float2',
             'float32x4': '__m128',
             'float32x8': '__m256',
             'int8x4': 'char4',
             'uint8x4': 'uint4',
             'int4bx8': 'uint32_t',
             'uint4bx8': 'uint32_t',
+            'bfloat16x2': '__nv_bfloat162',
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
@@ -712,7 +714,7 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
-
+        doc += Text('#include <hidet/runtime/int_fastdiv.h>') + NewLine()
         for header in self.ir_module.include_headers:
             doc += Text('#include <{}>').format(header) + NewLine()
 
@@ -801,6 +803,7 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float32.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
+        doc += Text('#include <hidet/runtime/int_fastdiv.h>') + NewLine()
 
         if self.require_complex:
             doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()

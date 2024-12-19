@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Union, Callable, Optional, Tuple
 import os
 import enum
 import pickle
+from hashlib import sha256
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
@@ -115,6 +116,7 @@ class Task(Node):
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
         self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
         self.share_map: Dict[int, int] = share_map
+        self.str = None
 
         from hidet.ir.tools import collect
 
@@ -298,6 +300,9 @@ class Task(Node):
                 'Expect the `implement` method to return an IRModule or List[IRModule], got {}'.format(ir_modules)
             )
 
+        for ir_module in ir_modules:
+            ir_module.task = self
+
         return ir_modules
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
@@ -333,6 +338,14 @@ class Task(Node):
     def load(fname: str) -> Task:
         with open(fname, 'rb') as f:
             return pickle.load(f)
+
+    def calculate_hash(self, len: int = 16) -> str:
+        return sha256(str(self).encode()).hexdigest()[:len]
+
+    def __str__(self):
+        if self.str is None:
+            self.str = super().__str__()
+        return self.str
 
 
 def save_task(task: Task, fname: str):

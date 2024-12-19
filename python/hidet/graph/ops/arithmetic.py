@@ -19,6 +19,8 @@ from hidet.ir.expr import Expr, if_then_else, logical_or, is_constant, is_true
 from hidet.ir.tools import rewrite
 from hidet.utils import prod, same_list
 from hidet.ir.cute import TensorLayout
+from hidet.graph.tensor import from_torch
+from hidet.graph.frontend.torch.utils import dtype_to_torch
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from .utils import normalize_slice, normalize_dim
@@ -336,14 +338,27 @@ def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
         return scalar_dtype
     elif tensor_dtype.is_float() and scalar_dtype.is_complex():
         return scalar_dtype
+    elif tensor_dtype.is_boolean():
+        return scalar_dtype
     else:
         return tensor_dtype
 
 
 class AddScalarOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, scalar: Expr):
-        dtype = resolve_dtype(x.dtype, get_dtype(scalar))
-        super().__init__(x, op=lambda v: v + dtype(scalar), attributes={'scalar': scalar}, name='adds')
+        self.dtype = resolve_dtype(x.dtype, get_dtype(scalar))
+        super().__init__(x, op=lambda v: v + self.dtype(scalar), attributes={'scalar': scalar}, name='adds')
+
+    def run_torch(self):
+        import torch
+
+        x = self.inputs[0]
+        scalar = torch.tensor(self.attrs['scalar'].value)
+        scalar = scalar.to(dtype_to_torch(self.dtype))
+        x_torch = x.torch()
+        y_torch = x_torch + scalar
+        result = [from_torch(y_torch)]
+        return result
 
 
 class SubScalarOp(UnaryElementwiseOp):
@@ -420,6 +435,17 @@ class RsqrtOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.rsqrt(v), name='rsqrt')
 
+    def run_torch(self):
+        import torch
+
+        x = self.inputs[0]
+        x_torch = x.torch()
+        # torch.rsqrt(x: float16) might output a tensor with type float32
+        # In order to align with the behaviour of hidet, we used type_as(x_torch)
+        # to maintain the type of tensor
+        result = [from_torch(torch.rsqrt(x_torch).type_as(x_torch))]
+        return result
+
 
 class PowOp(BinaryElementwiseOp):
     def __init__(self, x, y):
@@ -429,6 +455,10 @@ class PowOp(BinaryElementwiseOp):
 class NegativeOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: -v, name='negative')
+
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        return [from_torch(-x_torch)]
 
 
 class ReciprocalOp(UnaryElementwiseOp):
@@ -440,6 +470,12 @@ class AddOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, op=lambda a, b: a + b, name='add')
 
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        y_torch = self.inputs[1].torch()
+        result = [from_torch(x_torch + y_torch)]
+        return result
+
 
 class SubtractOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
@@ -449,6 +485,11 @@ class SubtractOp(BinaryElementwiseOp):
 class MultiplyOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, op=lambda a, b: a * b, name='mul')
+
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        y_torch = self.inputs[1].torch()
+        return [from_torch(x_torch * y_torch)]
 
 
 class DivideOp(BinaryElementwiseOp):
@@ -460,10 +501,22 @@ class SinOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: primitives.sin(a), name='sin')
 
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        return [from_torch(torch.sin(x_torch))]
+
 
 class CosOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: primitives.cos(a), name='cos')
+
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        return [from_torch(torch.cos(x_torch))]
 
 
 class TanOp(UnaryElementwiseOp):
@@ -785,7 +838,7 @@ def binary_arithmetic(
         elif isinstance(v, bool):
             return dtypes.boolean(v)
         elif isinstance(v, int):
-            return dtypes.int32(v)
+            return dtypes.int64(v)
         elif isinstance(v, float):
             return dtypes.float32(v)
         elif isinstance(v, complex):
@@ -1002,7 +1055,19 @@ def clamp(x: Tensor, min: Union[Tensor, float, int], max: Union[Tensor, float, i
 def where(cond: Tensor, x: Union[Tensor, PyScalar], y: Union[Tensor, PyScalar]) -> Tensor:
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
+    if isinstance(x, Tensor) and len(x.shape) == 0 and x.storage:
+        x = x.item()
+    if isinstance(y, Tensor) and len(y.shape) == 0 and y.storage:
+        y = y.item()
     if isinstance(x, Tensor) and isinstance(y, Tensor):
+        import hidet.ir.primitives.math
+
+        out_dtype = hidet.ir.primitives.math.type_infer_func([x.dtype, y.dtype])
+        if x.dtype != out_dtype:
+            x = x.to(dtype=out_dtype)
+        if y.dtype != out_dtype:
+            y = y.to(dtype=out_dtype)
+
         return WhereOp(cond, x, y).outputs[0]
     elif isinstance(x, Tensor) and isinstance(y, (int, float, complex)):
         return WhereTensorScalarOp(cond, x=x, y=y).outputs[0]

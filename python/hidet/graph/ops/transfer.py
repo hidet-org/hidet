@@ -56,7 +56,10 @@ class TransferTask(Task):
 
                 memcpy_async(y, x, count=nbytes, kind=kind)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class TransferOp(Operator):

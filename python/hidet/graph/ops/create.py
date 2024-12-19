@@ -16,6 +16,8 @@ from hidet.ir import dtypes
 from hidet.ir.expr import Constant, Expr, Int, if_then_else
 from hidet.ir.type import DataType, data_type
 from hidet.ir.tools import infer_type
+from hidet.graph.tensor import from_torch
+from hidet.graph.frontend.torch.utils import dtype_to_torch
 from hidet.runtime.device import Device, instantiate_device
 from .utils import Task, Operator, Tensor, compute
 
@@ -154,6 +156,20 @@ class FullOp(Operator):
             attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
             task=FullTask(shape=shape, value=value, dtype=dtype),
         )
+
+    def run_torch(self):
+        import torch
+
+        shape = self.attrs['shape']
+        value = self.attrs['value']
+        if isinstance(value, Constant):
+            value = value.value
+        elif isinstance(value, Tensor):
+            value = value.torch()
+        dtype = dtype_to_torch(self.attrs['dtype'])
+        device = self.attrs['device'].target
+
+        return [from_torch(torch.full(tuple(shape), value, dtype=dtype, device=device))]
 
 
 class TriOp(Operator):

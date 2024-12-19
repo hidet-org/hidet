@@ -134,11 +134,6 @@ def graph_analyze_share_map(graph: FlowGraph) -> Dict[int, int]:
             if shared_tensor in graph.inputs:
                 input_index = graph.inputs.index(shared_tensor)
                 share_map[output_index] = input_index
-            else:
-                raise ValueError(
-                    'The following output tensor of the graph shares the memory with a graph intermediate tensor:\n'
-                    '  Output {}: {}'.format(output_index, output.signature())
-                )
     return share_map
 
 

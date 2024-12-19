@@ -60,6 +60,10 @@ import hidet.graph.frontend.torch.register_functions
 import hidet.graph.frontend.torch.register_modules
 import hidet.graph.frontend.torch.register_methods
 
+# Before removing registered functions, make sure to
+# call allow_in_graph_registered_funcs_only() by importing dynamo_backends
+import hidet.graph.frontend.torch.dynamo_backends
+
 # we remove the rules for the following operators for demonstration purpose
 # we will add them back later
 del Registry.registered_functions[torch.nn.functional.relu]
@@ -96,7 +100,7 @@ def run_model():
     x = torch.randn(10, 10, device='cuda')
     y1 = model_opt(x)
     y2 = model(x)
-    torch.testing.assert_close(actual=y1, expected=y2)
+    torch.testing.assert_close(actual=y1, expected=y2, atol=3e-3, rtol=3e-3)
     print('success!')
 
 

@@ -104,7 +104,7 @@ c = hidet.empty([m_size, n_size], device='cuda')
 module(a, b, c)
 
 # compare the result with torch.matmul
-hidet.utils.assert_close(c, a.torch() @ b.torch(), atol=1e-4, rtol=1e-4)
+hidet.utils.assert_close(c, a.torch() @ b.torch(), atol=1e-3, rtol=1e-3)
 
 # %%
 # We can check the generated source code:

@@ -47,7 +47,7 @@ def get_parallel_num_workers(max_num_workers: Optional[int] = None, mem_for_work
         limit_by_memory = psutil.virtual_memory().available // mem_for_worker
         limit_by_memory = max(limit_by_memory, 1)
         num_workers = min(num_workers, limit_by_memory)
-    return num_workers
+    return int(num_workers)
 
 
 def parallel_imap(

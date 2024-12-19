@@ -20,7 +20,7 @@ res[0].save("diffusion_app_example.png")
 
 A stable diffusion app can be constructed using any Huggingface model identifier that uses the StableDiffusion v2-1 architecture. Currently supported model inputs are a prompt/negative-prompt. The app produces a PIL image, which can then be saved to disk. Use kernel_search_space=2 for optimization.
 
-If the weights used are not public, be sure to modify `hidet.toml` so that option `auth_tokens.for_huggingface` is set to your Huggingface account credential.
+If the weights used are not public, be sure to set `HF_TOKEN` corresponds to your Huggingface account credential. Details can be found [here](https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables#hftoken).
 
 ### Model Details
 

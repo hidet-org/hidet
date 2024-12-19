@@ -19,7 +19,7 @@ An image classifier app currently only supports ResNet50 from Huggingface. Curre
 
 Load sample datasets using the datasets library, and change label ids back to string labels using the Huggingface config. Returns the top k candidates with the highest score.
 
-If the weights used are not public, be sure to modify `hidet.toml` so that option `auth_tokens.for_huggingface` is set to your Huggingface account credential.
+If the weights used are not public, be sure to set `HF_TOKEN` corresponds to your Huggingface account credential. Details can be found [here](https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables#hftoken).
 
 ### Model Details
 

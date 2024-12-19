@@ -347,6 +347,8 @@ class IRDumper(IRFunctor):
                 ret = '{}'.format(float(e.value))
             elif dtype == 'float16':
                 ret = '{}'.format(float(e.value))
+            elif dtype == 'bfloat16':
+                ret = '{}'.format(float(e.value))
             elif dtype == 'int32':
                 ret = '{}'.format(int(e.value))
             elif dtype == 'bool':
@@ -1591,7 +1593,7 @@ ptr_type : "~" type
 tensor_type : data_type "<" [tensor_tt_shape ("," tensor_tt_shape)*] [tensor_layout] ">"
 ?tensor_tt_shape : expr
 tensor_layout : ";" expr
-!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "f32" | "f64" | "bool" | "void"
+!data_type : "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f16" | "bf16" | "f32" | "f64" | "bool" | "void"
 
 // attributes
 attribute_name : "#" IDENT

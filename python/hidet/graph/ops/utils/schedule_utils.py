@@ -17,7 +17,7 @@ from hidet.utils import gcd, prod
 from hidet.ir.mapping import TaskMapping, row_repeat, spatial_map
 from hidet.ir.layout import DataLayout, row_major, local_layout
 from hidet.ir.expr import Expr, is_true
-from hidet.ir.dtypes import f16, f32
+from hidet.ir.dtypes import f16, f32, bf16
 from hidet.ir.type import DataType
 from hidet.cuda.cublas import cublasComputeType
 
@@ -157,7 +157,7 @@ def resolve_cublas_compute_type(
     if in_dtype == out_dtype == f16:
         # use tensor core whenever possible
         return cublasComputeType.CUBLAS_COMPUTE_16F
-    elif in_dtype == out_dtype == f32:
+    elif in_dtype == out_dtype and in_dtype in [f32, bf16]:
         # use tensor core whenever possible
         return cublasComputeType.CUBLAS_COMPUTE_32F
     else:

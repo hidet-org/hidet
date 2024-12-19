@@ -25,6 +25,7 @@ add_library(hidet_runtime SHARED
         src/hidet/runtime/callbacks.cpp
         src/hidet/runtime/logging.cpp
         src/hidet/runtime/symbols.cpp
+        src/hidet/runtime/int_fastdiv.cpp
         src/hidet/runtime/llm/tokenizer/decoders.cpp
         src/hidet/runtime/llm/tokenizer/models.cpp
         src/hidet/runtime/llm/tokenizer/normalizers.cpp

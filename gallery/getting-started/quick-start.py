@@ -12,7 +12,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # .. note::
 #   :class: margin
 #
-#   ``torch.compile(...)`` requires PyTorch 2.0+.
+#   ``torch.compile(...)`` requires PyTorch 2.3+.
 #
 # The easiest way to use Hidet is to use the :func:`torch.compile` function with ``hidet`` as the backend, such as
 #
@@ -33,9 +33,9 @@ import hidet
 import torch
 
 # take resnet18 as an example
-x = torch.randn(1, 3, 224, 224).cuda()
+x = torch.randn(1, 3, 224, 224, dtype=torch.float16).cuda()
 model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
-model = model.cuda().eval()
+model = model.cuda().eval().to(torch.float16)
 
 # optimize the model with 'hidet' backend
 model_opt = torch.compile(model, backend='hidet', mode='max-autotune')
@@ -45,7 +45,7 @@ y1 = model_opt(x)
 y2 = model(x)
 
 # check the correctness
-torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-2, atol=1e-2)
+torch.testing.assert_close(actual=y1, expected=y2, rtol=2e-2, atol=2e-2)
 
 
 # benchmark the performance

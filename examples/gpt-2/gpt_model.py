@@ -102,7 +102,6 @@ def gpt2(model_size: str = "124M", seq_length: Optional[int] = 1000, use_fp16=Fa
         with hidet.graph.PassContext() as ctx:
             if use_fp16:
                 ctx.set_precision('float16')
-                ctx.set_mma('mma')
             graph_opt = hidet.graph.optimize(graph)
 
         hidet.save_graph(graph_opt, hf_path)

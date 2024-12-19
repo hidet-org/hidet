@@ -22,8 +22,9 @@ from hidet.graph.ops import quant
 @pytest.mark.parametrize('dim', [0, 1])
 @pytest.mark.parametrize('dtype', ['int8', 'int16'])
 @pytest.mark.parametrize('device', ['cuda'])
-def test_symmetric_quant(shape, dim, dtype, device):
-    a = hidet.randn(shape, dtype='float16', device=device)
+@pytest.mark.parametrize('atype', ['float16', 'bfloat16'])
+def test_symmetric_quant(shape, dim, dtype, device, atype):
+    a = hidet.randn(shape, dtype=atype, device=device)
     aq, scale = quant.symmetric_quantize(a, dims=dim, quant_type=dtype)
     a1 = quant.symmetric_dequantize(aq, scale, dims=dim)
     assert np.allclose(a.cpu().numpy(), a1.cpu().numpy(), atol=1e-1, rtol=1e-1)

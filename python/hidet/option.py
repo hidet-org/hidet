@@ -291,16 +291,17 @@ def register_hidet_options():
         description='The CPU architecture to compile the kernels for (e.g., "x86-64"). "auto" for auto-detect.',
     )
     register_option(
-        name='imperative',
-        type_hint='bool',
-        default_value=True,
-        description='Whether to enable imperative execution when op arguments allows',
+        name='execution_mode',
+        type_hint='str',
+        default_value='interpreter',
+        description="Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed",
+        choices=['symbolic', 'interpreter', 'compilaion'],
     )
     register_option(
-        name='auth_tokens.for_huggingface',
-        type_hint='str',
-        default_value='',
-        description='The auth token to use for accessing private huggingface models.',
+        name='parallel_k',
+        type_hint='Union[str, int]',
+        default_value='disabled',
+        description='Parallelization on k dimension of the matrix multiplication.',
     )
 
     # Load hidet config
@@ -840,28 +841,61 @@ def get_runtime_check() -> bool:
     return OptionContext.current().get_option('runtime_check')
 
 
-def imperative(enable: bool = True):
+def execution_mode(kind: str = 'compilaion'):
     """
-    Whether to enable imperative execution when op arguments allows.
+    Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
 
     Parameters
     ----------
-    enable: bool
-        Whether to enable imperative execution when op arguments allows.
+    kind: str
+        Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
     """
-    OptionContext.current().set_option('imperative', enable)
+    OptionContext.current().set_option('execution_mode', kind)
 
 
-def get_imperative() -> bool:
+def get_execution_mode() -> str:
     """
-    Get whether to enable imperative execution when op arguments allows.
+    Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
 
     Returns
     -------
-    ret: bool
-        Get whether to enable imperative execution when op arguments allows.
+    ret: str
+        Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
     """
-    return OptionContext.current().get_option('imperative')
+    return OptionContext.current().get_option('execution_mode')
+
+
+def parallel_k(strategy: Union[str, int] = "default"):
+    """
+    Parallelization on k dimension of the matrix multiplication
+    Candidates are: ``default``, ``disabled``, ``search``, 2, 3, 4...
+
+    - ``default``:
+        Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k
+        dimension and the size of split factor
+    - ``disabled``:
+        Disable parallelization on k dimension
+    - ``search``:
+        Search for the best parallelization strategy. Takes more time but usually achieves the best performance.
+
+    Parameters
+    ----------
+    strategy: str
+        The parallelization strategy.
+    """
+    OptionContext.current().set_option('parallel_k', strategy)
+
+
+def get_parallel_k() -> Union[str, int]:
+    """
+    Get parallelization on k dimension of the matrix multiplication
+
+    Returns
+    -------
+    ret: Union[str, int]
+        Get parallelization strategy.
+    """
+    return OptionContext.current().get_option('parallel_k')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):
@@ -1080,20 +1114,6 @@ class compile_server:
         """
         OptionContext.current().set_option('compile_server.repo_url', repo_url)
         OptionContext.current().set_option('compile_server.repo_version', version)
-
-
-class auth_tokens:
-    @staticmethod
-    def for_huggingface(token: str):
-        """
-        Set the token for accessing to huggingface.
-
-        Parameters
-        ----------
-        token: str
-            The token for huggingface.
-        """
-        OptionContext.current().set_option('auth_tokens.for_huggingface', token)
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

@@ -143,6 +143,13 @@ class HidetLeakyReLU(HidetModule):
         return reg_funcs.leaky_relu(x, self.mod.negative_slope, self.mod.inplace)
 
 
+@register_module(torch.nn.GLU)
+class HidetGLU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GLU)
+        return reg_funcs.glu(x, self.mod.dim)
+
+
 @register_module(torch.nn.MaxPool2d)
 class HidetMaxPool2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -183,18 +190,28 @@ class HidetZeroPad2d(HidetModule):
 @register_module(torch.nn.Linear)
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):
+        from hidet.graph.frontend.torch.utils import is_any_torch_float16
+
         super().__init__(torch_module)
+        self.can_use_nt_matmul = is_any_torch_float16(self.mod.weight.dtype)
         steal = dynamo_config['steal_weights']
-        self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
-        self.torch_params['weight'] = None
-        self.hidet_params['weight'] = None
+        if not self.can_use_nt_matmul:
+            self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
+        else:
+            self.weight = self.param('weight', steal=steal)
         torch.cuda.empty_cache()
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return reg_funcs.linear(
-            x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True), weight_is_transposed=True
-        )
+        if self.can_use_nt_matmul:
+            return reg_funcs.linear(
+                x=x, weight=self.weight, bias=self.param('bias', optional=True), weight_is_transposed=False
+            )
+        else:
+            assert self.transposed_weight is not None
+            return reg_funcs.linear(
+                x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True), weight_is_transposed=True
+            )
 
 
 @register_module(torch.nn.BatchNorm2d)
@@ -204,10 +221,10 @@ class HidetBatchNorm2d(HidetModule):
         assert isinstance(self.mod, (torch.nn.BatchNorm2d, torch.nn.BatchNorm3d))
         return reg_funcs.batch_norm(
             x=x,
-            running_mean=self.param('running_mean'),
-            running_var=self.param('running_var'),
-            weight=self.param('weight'),
-            bias=self.param('bias'),
+            running_mean=self.param('running_mean', optional=True),
+            running_var=self.param('running_var', optional=True),
+            weight=self.param('weight', optional=True),
+            bias=self.param('bias', optional=True),
             training=self.mod.training,
             momentum=self.mod.momentum,
             eps=self.mod.eps,
@@ -277,6 +294,27 @@ class HidetEmbedding(HidetModule):
             norm_type=self.mod.norm_type,
             scale_grad_by_freq=self.mod.scale_grad_by_freq,
             sparse=self.mod.sparse,
+        )
+
+
+@register_module(torch.nn.EmbeddingBag)
+class HidetEmbeddingBag(HidetModule):
+    def __call__(
+        self, input: Tensor, offsets: Optional[Tensor] = None, per_sample_weights: Optional[Tensor] = None
+    ) -> Tensor:
+        assert isinstance(self.mod, torch.nn.EmbeddingBag)
+        return reg_funcs.torch_embedding_bag(
+            input=input,
+            weight=self.param('weight'),
+            offsets=offsets,
+            max_norm=self.mod.max_norm,
+            norm_type=self.mod.norm_type,
+            scale_grad_by_freq=self.mod.scale_grad_by_freq,
+            mode=self.mod.mode,
+            sparse=self.mod.sparse,
+            per_sample_weights=per_sample_weights,
+            include_last_offset=self.mod.include_last_offset,
+            padding_idx=self.mod.padding_idx,
         )
 
 
@@ -356,6 +394,13 @@ class HidetSoftmin(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Softmin)
         return reg_funcs.softmin(x, self.mod.dim)
+
+
+@register_module(torch.nn.LogSoftmax)
+class HidetLogSoftmax(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.LogSoftmax)
+        return reg_funcs.logsoftmax(x, self.mod.dim)
 
 
 @register_module(torch.nn.Softplus)

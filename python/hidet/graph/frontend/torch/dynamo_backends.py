@@ -24,7 +24,7 @@ from hidet.cuda.graph import CudaGraphCreationError
 from hidet.ffi import runtime_api
 from .dynamo_config import dynamo_config
 from .interpreter import Interpreter
-from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
+from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph, tensor_from_torch
 from .utils import symbol_like_torch
 from .registry import allow_in_graph_registered_funcs_only
 
@@ -74,11 +74,22 @@ def process_options(kwargs):
 # We use this data to determinate shapes of the inputs.
 def get_flow_graph(interpreter: Interpreter, example_inputs):
     inputs: List[Union[Tensor, SymbolVar]] = []  # for flow graph construction
-    for fxgraph_node, example_input in zip(interpreter.graph.nodes, example_inputs):
+    traceable_input_ids = []
+    for idx, (fxgraph_node, example_input) in enumerate(zip(interpreter.graph.nodes, example_inputs)):
         if isinstance(example_input, torch.Tensor):
-            fake_input = fxgraph_node.meta['example_value']
-            symbolic_input = symbol_like_torch(fake_input)
-            inputs.append(symbolic_input)
+            tensor_dict = fxgraph_node.meta.get('tensor_dict', {})
+            # pylint: disable=protected-access
+            if tensor_dict.get('_dynamo_static_input_type', None) == 'unguarded' and not isinstance(
+                example_input, torch._subclasses.fake_tensor.FakeTensor
+            ):
+                # Usually, such tensors are weight tensors passed as inputs
+                inputs.append(tensor_from_torch(example_input))
+            else:
+                traceable_input_ids.append(idx)
+                fake_input = fxgraph_node.meta['example_value']
+                symbolic_input = symbol_like_torch(fake_input)
+                inputs.append(symbolic_input)
+
         elif isinstance(example_input, int):
             inputs.append(example_input)
         elif isinstance(example_input, torch.SymInt):
@@ -96,24 +107,34 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
         else:
             logger.info('hidet:   %s', arg)
 
-    output = interpreter(*inputs)
-    output_format, output_tensors = serialize_output(output)
-    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
+    with hidet.option.context():
+        hidet.option.execution_mode('symbolic')
+        output = interpreter(*inputs)
+        output_format, output_tensors = serialize_output(output)
+        input_tensors = []
+        weight_tensors = []
+        for idx, x in enumerate(inputs):
+            if not isinstance(x, hidet.Tensor):
+                continue
+            if idx in traceable_input_ids:
+                input_tensors.append(x)
+            else:
+                weight_tensors.append(x)
 
-    return hidet.trace_from(output_tensors, inputs=input_tensors), inputs, output_format
+    return (
+        hidet.trace_from(output_tensors, inputs=input_tensors, weight_tensors=weight_tensors),
+        inputs,
+        traceable_input_ids,
+        output_format,
+    )
 
 
 def get_compiled_graph(flow_graph: FlowGraph):
-    parallel_k = dynamo_config['parallel_k']
-    tensor_core = dynamo_config['use_tensor_core']
     save_dir = dynamo_config['dump_graph_ir']
     with PassContext() as ctx:
         if save_dir:
             graph_dir = resolve_save_dir_multigraph(save_dir)
             ctx.save_graph_instrument(graph_dir)
-        if tensor_core:
-            ctx.set_mma('mma' if tensor_core else 'simt')
-        ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
         ctx.allow_source_graph_removal(True)
         logger.info('start to optimize the flow graph')
         graph_opt: FlowGraph = optimize(flow_graph)
@@ -134,9 +155,15 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[torch.Tensor]:
 
 
 class HidetCompiledModel:
-    def __init__(self, cgraph: CompiledGraph, inputs, output_format):
+    def __init__(self, cgraph: CompiledGraph, inputs, nonconstant_input_ids, output_format):
+        '''
+        Torch (>=2.5) compile treats all weights as inputs. Hidet, on the other hand,
+        treats weights as constant tensors. Actual inputs selected from all inputs
+        provided by torch using `nonconstant_input_ids`.
+        '''
         super().__init__()
         self.inputs = inputs
+        self.nonconstant_input_ids = nonconstant_input_ids
         self.output_format = output_format
         self.cgraph_configured = False
         self.cgraph = cgraph
@@ -144,7 +171,8 @@ class HidetCompiledModel:
     def configure_cgraph(self):
         if dynamo_config['use_cuda_graph']:
             try:
-                self.cgraph = self.cgraph.cuda_graph()
+                inputs_for_cgraph = [self.inputs[idx] for idx in self.nonconstant_input_ids]
+                self.cgraph = self.cgraph.cuda_graph(*inputs_for_cgraph)
             except CudaGraphCreationError:
                 pass  # Leave cgraph as is
 
@@ -154,8 +182,8 @@ class HidetCompiledModel:
             self.cgraph_configured = True
 
         tensor_args = []
-        for param, arg in zip(self.inputs, args):
-            if isinstance(param, Tensor):
+        for idx, (param, arg) in enumerate(zip(self.inputs, args)):
+            if isinstance(param, Tensor) and idx in self.nonconstant_input_ids:
                 tensor_args.append(arg)
             elif isinstance(param, SymbolVar):
                 dtype = param.type
@@ -167,8 +195,11 @@ class HidetCompiledModel:
             else:
                 # ignore constant
                 pass
-
+        # Inherited cuda stream from torch
+        runtime_api.set_current_stream(torch.cuda.current_stream().cuda_stream)
+        # Prepare inputs
         tensor_args = preprocess_inputs(tensor_args)
+        # Run graph/model
         outputs = self.cgraph.run_async(tensor_args, output_to_torch_tensor=True)
         outputs: Sequence[torch.Tensor] = [
             tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in outputs
@@ -205,11 +236,10 @@ def hidet_backend(graph_module, example_inputs, **kwargs):
 
             return wrapper
 
-        flow_graph, inputs, output_format = get_flow_graph(interpreter, example_inputs)
+        flow_graph, inputs, traceable_input_ids, output_format = get_flow_graph(interpreter, example_inputs)
         del interpreter
         cgraph = get_compiled_graph(flow_graph)
-
-        return HidetCompiledModel(cgraph, inputs, output_format)
+        return HidetCompiledModel(cgraph, inputs, traceable_input_ids, output_format)
 
 
 allow_in_graph_registered_funcs_only()

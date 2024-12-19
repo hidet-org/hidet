@@ -16,6 +16,7 @@ import math
 import operator
 import functools
 import torch
+
 from hidet.graph.tensor import Tensor, from_torch, ones_like, randn
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -158,10 +159,16 @@ def max_pool3d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=
 
 
 @register_function(torch.nn.functional.linear)
-def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor], weight_is_transposed=False):
+def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor] = None, weight_is_transposed=False):
+
     if len(weight.shape) > 1 and not weight_is_transposed:
-        weight = ops.transpose(weight, [1, 0])
-    y = ops.matmul(x, weight)
+        if weight.dtype.is_any_float16():
+            y = ops.matmul_nt(x, weight)
+        else:
+            weight = ops.transpose(weight, [1, 0])
+            y = ops.matmul(x, weight)
+    else:
+        y = ops.matmul(x, weight)
     if bias is not None:
         y = y + bias
     return y
@@ -296,7 +303,12 @@ def logical_xor(x: Tensor, y: Tensor):
 @register_method(torch.Tensor.bitwise_not)
 @register_method(torch.Tensor.bitwise_not_)
 def invert(x: Tensor):
-    return ops.bitwise_invert(x)
+    from hidet import boolean
+
+    if x.dtype is boolean:
+        return ops.logical_not(x)
+    else:
+        return ops.bitwise_invert(x)
 
 
 @register_function(torch.nn.functional.batch_norm)
@@ -304,11 +316,11 @@ def batch_norm(
     x: Tensor,
     running_mean: Optional[Tensor],
     running_var: Optional[Tensor],
-    weight: Optional[Tensor],
-    bias: Optional[Tensor],
-    training: bool,
-    momentum: float,
-    eps: float,
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    training: bool = False,
+    momentum: float = 0.1,
+    eps: float = 1e-05,
 ):
     if training:
         warnings.warn_once(
@@ -558,6 +570,7 @@ def interpolate(
     )
 
 
+@register_function(operator.itruediv)
 @register_function(operator.truediv)
 @register_function(torch.true_divide)
 @register_method(torch.Tensor.true_divide)
@@ -568,6 +581,8 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     def is_integer(v: Union[Tensor, int, float]) -> bool:
         return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
+    if not isinstance(x, Tensor) and not isinstance(y, Tensor):
+        return x / y
     if is_integer(x) and is_integer(y):
         if isinstance(y, (int, float)):
             y = hidet.asarray(y).to(device=x.device)
@@ -582,15 +597,53 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
 @register_method(torch.Tensor.div_)
 @register_method(torch.Tensor.divide)
 @register_method(torch.Tensor.divide_)
-def div(x: Tensor, y: Tensor, *, rounding_mode: Optional[str] = None, out=None):
+def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Optional[str] = None, out=None):
     result = truediv(x, y)
     if rounding_mode is None:
         return result
     elif rounding_mode == 'floor':
-        return ops.floor(result)
+        # Turns out the `floor` rounding mode will follow a slightly different type promotion rule,
+        # and this subtle difference is the cause of issue #264.
+        from hidet import int32, float32
+
+        primitive_type_map = {int: int32, float: float32, bool: int32}
+
+        x_dtype = x.dtype if isinstance(x, Tensor) else primitive_type_map[type(x)]
+        y_dtype = y.dtype if isinstance(y, Tensor) else primitive_type_map[type(y)]
+
+        result = ops.floor(result)
+
+        # `rounding_mode = 'floor'` retains the integer type if both inputs are integers
+        if x_dtype.is_integer() and y_dtype.is_integer():
+            return result.to(dtype=promote_type(x_dtype, y_dtype))
+        else:
+            return result
+
     else:
-        assert rounding_mode == 'trunc'
-        raise NotImplementedError("torch.div(..., rounding_mode='trunc') is currently not supported by Hidet")
+        assert rounding_mode == 'trunc', 'rounding_mode should be one of "floor" or "trunc"'
+        if isinstance(result, Tensor):
+            dtype = result.dtype
+            result = result.to(dtype='int64')
+            return result.to(dtype=dtype)
+        else:
+            if isinstance(x, float) or isinstance(y, float):
+                return float(int(result))
+            return int(result)
+
+
+@register_function(torch.floor_divide)
+@register_method(torch.Tensor.floor_divide)
+@register_method(torch.Tensor.floor_divide_)
+def floor_divide(x: Union[Tensor, Number], y: Union[Tensor, Number]):
+    return div(x, y, rounding_mode='floor')
+
+
+@register_function(torch.as_strided)
+@register_method(torch.Tensor.as_strided)
+def torch_as_strided(
+    input: Tensor, size: Union[int, Tuple[int]], stride: Union[int, Tuple[int]], storage_offset: Optional[int] = None
+):
+    return ops.as_strided(input, size, stride, storage_offset)
 
 
 @register_function(operator.sub)
@@ -624,6 +677,15 @@ def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     if dtype is not None:
         x = ops.cast(x, dtype_from_torch(dtype))
     return ops.softmax(x, dim)
+
+
+@register_function(torch.nn.functional.log_softmax)
+@register_method(torch.Tensor.log_softmax)
+@register_function(torch.log_softmax)
+def logsoftmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
+    if dtype is not None:
+        x = ops.cast(x, dtype_from_torch(dtype))
+    return ops.logsoftmax(x, dim)
 
 
 @register_function(operator.matmul)
@@ -777,6 +839,44 @@ def embedding(
     return y
 
 
+@register_function(torch.nn.functional.embedding_bag)
+def torch_embedding_bag(
+    input: Tensor,
+    weight: Tensor,
+    offsets: Optional[Tensor] = None,
+    max_norm: Optional[float] = None,
+    norm_type: float = 2.0,
+    scale_grad_by_freq: bool = False,
+    mode: str = 'mean',
+    sparse: bool = False,
+    per_sample_weights: Optional[Tensor] = None,
+    include_last_offset: bool = False,
+    padding_idx: Optional[int] = None,
+):
+    # Since we assume max_norm is None for now, norm_type is not used.
+    # And we can ignore `sparse` in inference since it's about gradient.
+    _, _ = norm_type, sparse  # unused
+
+    if scale_grad_by_freq:
+        raise NotImplementedError("scale_grad_by_freq=True is not supported for embedding_bag")
+    if per_sample_weights is not None:
+        raise NotImplementedError("per_sample_weights is not supported for embedding_bag")
+    if max_norm is not None:
+        raise NotImplementedError("max_norm is not supported for embedding_bag")
+    if include_last_offset:
+        raise NotImplementedError("include_last_offset is not supported for embedding_bag")
+    if padding_idx is not None:
+        raise NotImplementedError("padding_idx is not supported for embedding_bag")
+    if mode not in ('sum', 'mean'):
+        # TODO: Currently don't support 'max' since it is not encountered yet.
+        assert mode == 'max'
+        raise ValueError("embedding bag: mode 'max' is not supported yet")
+
+    assert offsets is not None, "embedding_bag: currently we only support 1d inputs with offsets"
+
+    return ops.embedding_bag(input, weight, offsets, mode=mode)
+
+
 @register_function(torch.permute)
 @register_method(torch.Tensor.permute)
 def permute(x: Tensor, *args):
@@ -904,9 +1004,13 @@ def tensor_where(self: Tensor, condition: Tensor, y: Union[Tensor, Number]):
 @register_function(torch.pow)
 @register_method(torch.Tensor.pow)
 @register_method(torch.Tensor.pow_)
-def pow(base: Tensor, exponent: Union[Number, Tensor]):
+def torch_pow(base: Union[Number, Tensor], exponent: Union[Number, Tensor]):
     if isinstance(exponent, (int, float, bool)):
+        if exponent in (2, 2.0):
+            return ops.square(base)
         exponent = full_like(base, exponent)
+    elif isinstance(base, (int, float, bool)):
+        base = full_like(exponent, base)
     return ops.pow(base, exponent)
 
 
@@ -1085,6 +1189,14 @@ def silu(x: Tensor, inplace: bool = False):
     return ops.silu(x)
 
 
+@register_function(torch.nn.functional.glu)
+def glu(x: Tensor, dim: int = -1):
+
+    # split the tensor into two halves along the specified dim
+    x1, x2 = ops.split(x, 2, axis=dim)
+    return x1 * ops.sigmoid(x2)
+
+
 @register_function(torch.nn.functional.hardswish)
 def hardswish(x: Tensor, inplace: bool = False):
     if inplace:
@@ -1148,10 +1260,10 @@ def mish(x: Tensor, inplace: bool = False):
 def scaled_dot_product_attention(
     q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
 ):
-    from hidet import boolean, float16, float32
+    from hidet import boolean, float32
 
     if attn_mask is not None and attn_mask.dtype == float32:
-        attn_mask = attn_mask.to(float16)
+        attn_mask = attn_mask.to(q.dtype)
 
     if not math.isclose(dropout_p, 0.0):
         warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
@@ -1163,14 +1275,15 @@ def scaled_dot_product_attention(
     )
 
     type_match = (
-        q.dtype == k.dtype == v.dtype == float16
+        q.dtype == k.dtype == v.dtype
+        and q.dtype.is_any_float16()
         and len(q.shape) == len(k_transpose_scaled.shape) == len(v.shape)
         and k_transpose_scaled.shape[-1] == v.shape[-2]
         and q.shape[-1] == k_transpose_scaled.shape[-2] == v.shape[-1]
         and q.shape[-1] <= 160
     )
     fmha_requirements = q.shape[-1] <= 160 and (
-        attn_mask is None or attn_mask is not None and attn_mask.dtype == float16
+        attn_mask is None or attn_mask is not None and attn_mask.dtype.is_any_float16()
     )
     if type_match and fmha_requirements:
         return ops.attention(q, k_transpose_scaled, v, attn_mask, is_causal)
@@ -1527,6 +1640,7 @@ def torch_conj(x: Tensor) -> Tensor:
 @register_function(torch.amp.autocast_mode._enter_autocast)
 @register_function(torch.amp.autocast_mode._exit_autocast)
 @register_function(torch._C._set_grad_enabled)
+@register_function(torch.autograd.function.FunctionCtx)
 def torch_noop(*args, **kwargs):
     return
 
@@ -1732,8 +1846,8 @@ def torch_einsum(equation, *operands):
 
 
 @register_function(torch.triu)
-@register_function(torch.Tensor.triu)
-@register_function(torch.Tensor.triu_)
+@register_method(torch.Tensor.triu)
+@register_method(torch.Tensor.triu_)
 def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.triu(..., out=...)")
@@ -1741,8 +1855,8 @@ def torch_triu(x: Tensor, diagonal: int = 0, *, out=None):
 
 
 @register_function(torch.tril)
-@register_function(torch.Tensor.tril)
-@register_function(torch.Tensor.tril_)
+@register_method(torch.Tensor.tril)
+@register_method(torch.Tensor.tril_)
 def torch_tril(x: Tensor, diagonal: int = 0, *, out=None):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.tril(..., out=...)")
@@ -1820,6 +1934,65 @@ def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) ->
     return ops.im2col(input, kernel_size, dilation, padding, stride)
 
 
+@register_method(torch.Tensor.scatter_add_)
+def torch_scatter_add_(input: Tensor, dim: int, index: Tensor, src: Tensor):
+    return ops.scatter_add_(input, dim, index, src)
+
+
+@register_function(torch.flip)
+@register_method(torch.Tensor.flip)
+def torch_unfold(input: Tensor, dims) -> Tensor:
+    return ops.flip(input, dims)
+
+
+@register_function(torch.sign)
+def torch_sign(input: Tensor, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.sign(..., out=...)")
+    return ops.sign(input)
+
+
+@register_function(torch.ceil)
+def torch_ceil(input: Tensor, *, out=None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.ceil(..., out=...)")
+    return ops.ceil(input)
+
+
+@register_function(torch.cuda.nccl.all_reduce)
+@register_function(torch._C._nccl_all_reduce)
+@register_function(torch.distributed.all_reduce)
+@register_function(torch.ops._c10d_functional.all_reduce)
+@register_function("torch.ops.vllm.all_reduce")
+def torch_all_reduce(tensor: Tensor, op_name='sum', group_name=None):
+    from hidet.distributed import is_initialized, init_process_group, set_nccl_comms
+    from hidet.cuda.nccl.ffi import load_nccl_library
+
+    if not is_initialized():
+        load_nccl_library()
+        init_process_group(
+            backend='nccl',
+            init_method='file:///tmp/hidet-nccl-init-group',
+            world_size=torch.distributed.get_world_size(),
+            rank=torch.distributed.get_rank(),
+        )
+        set_nccl_comms()
+    res = ops.all_reduce(tensor, op_name)
+    return res
+
+
+@register_function(torch.ops._c10d_functional.wait_tensor)
+def torch_wait_tensor(x: Tensor):
+    return ops.wait_tensor(x)
+
+
+@register_function(getattr)
+def torch_getattr(obj, attr):
+    if isinstance(obj, Tensor) and attr == 'is_cpu':
+        return obj.device.kind == 'cpu'
+    raise RuntimeError('Unsupported getattr')
+
+
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.
 # Hidet never should see them.
 @register_function(torch._C._has_torch_function)
@@ -1833,6 +2006,7 @@ def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) ->
 @register_function(torch._dynamo.external_utils.is_compiling)
 @register_function(torch._utils.is_compiling)
 @register_function(torch.compiler.is_compiling)
+@register_function(torch.compiler.is_dynamo_compiling)
 @register_function(torch._assert)
 @register_function(torch._assert_scalar)
 @register_function(torch._assert_tensor_metadata)

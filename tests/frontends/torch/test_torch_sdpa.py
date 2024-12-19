@@ -16,13 +16,14 @@ from hidet.testing.torch_utils import check_module, FunctionalModule
 
 @pytest.mark.parametrize('shape', [[1, 16, 1024, 1024, 128], [4, 4, 4096, 4096, 64], [4, 4, 333, 77, 64]])
 @pytest.mark.parametrize('attn_mask_type', [None, 'bool', 'float16', 'causal'])
-def test_sdpa(shape, attn_mask_type):
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_sdpa(shape, attn_mask_type, dtype):
     bs, nheads, s_q, s_kv, d = shape
     q_shape = [bs, nheads, s_q, d]
     kv_shape = [bs, nheads, s_kv, d]
-    q = torch.randn(q_shape, dtype=torch.float16)
-    k = torch.randn(kv_shape, dtype=torch.float16)
-    v = torch.randn(kv_shape, dtype=torch.float16)
+    q = torch.randn(q_shape, dtype=dtype)
+    k = torch.randn(kv_shape, dtype=dtype)
+    v = torch.randn(kv_shape, dtype=dtype)
     is_causal = False
     attn_mask = None
     mask_shape = q.shape[:-2] + (q.shape[-2], k.shape[-2])
@@ -31,7 +32,7 @@ def test_sdpa(shape, attn_mask_type):
     elif attn_mask_type == 'bool':
         attn_mask = torch.rand(mask_shape) > 0.5
     elif attn_mask_type == 'float16':
-        attn_mask = torch.randn(mask_shape, dtype=torch.float16)
+        attn_mask = torch.randn(mask_shape, dtype=dtype)
 
     check_module(
         FunctionalModule(

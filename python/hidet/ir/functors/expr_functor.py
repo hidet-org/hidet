@@ -25,8 +25,6 @@ class ExprFunctor(BaseFunctor):
             return self.visit_Var(node)
         elif isinstance(node, Add):
             return self.visit_Add(node)
-        elif isinstance(node, Add):
-            return self.visit_Add(node)
         elif isinstance(node, Sub):
             return self.visit_Sub(node)
         elif isinstance(node, Multiply):

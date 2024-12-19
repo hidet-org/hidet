@@ -11,13 +11,13 @@
 # limitations under the License.
 from typing import List, Union, Optional
 from hidet.ir.expr import Expr, Var, Constant, var, logical_and, cast
-from hidet.ir.type import PointerType
+from hidet.ir.type import TensorType, PointerType
 from hidet.ir.dtypes import u32, boolean
 from hidet.ir.tools import infer_type
 from hidet.lang.cuda import threadIdx
 
-from hidet.ir.cute.ops import Copy, Mask
-from hidet.ir.cute.layout import TensorLayout
+from hidet.ir.cute.ops import Copy, Mask, Atomic
+from hidet.ir.cute.layout import TensorLayout, composition
 from hidet.ir.cute.int_tuple import size, idx2crd
 
 from .registry import OpEmitter, Buffer, register_impl
@@ -73,8 +73,61 @@ class CopyEmitter(OpEmitter):
         shape, _ = op.tiled_copy.src_tv_layout()
         _shape, _ = op.tiled_copy.dst_tv_layout()
         assert shape == _shape
-        operands = [src_buf, dst_buf]
+        var_names = ["src_addr", "dst_addr"]
         operand_tys = [src_ty, dst_ty]
+        annotations = op.annotations
+        assert len(annotations) > 0
+        inst = annotations["inst"]
+        src_layout = annotations["src_layout"]
+        dst_layout = annotations["dst_layout"]
+        attrs = op.attrs
+        evict = attrs["evict"]
+
+        extents = src_layout[1].shape
+        if mask is not None:
+            index = TensorLayout(extents)
+        with self.for_grid(extents) as indices:
+            src_addr, dst_addr = [var(vname, t) for vname, t in zip(var_names, operand_tys)]
+            self.declare(src_addr, src.buffer + src_layout[1](indices, base=src.offset))
+            self.declare(dst_addr, dst.buffer + dst_layout[1](indices, base=dst.offset))
+            if mask is not None:
+                idx = var("idx")
+                mask_idx = var("mask_idx")
+                bit = var("bit")
+                pred = var("pred", boolean)
+                self.declare(idx, index(indices))
+                self.declare(mask_idx, (idx >> 5))
+                self.declare(bit, (idx & 31))
+                self.declare(pred, mask.buffer[mask_idx] & (Constant(1, u32) << bit))
+            else:
+                pred = None
+            self.append(inst(src_addr, dst_addr, pred, evict=evict))
+
+
+@register_impl(Atomic)
+class AtomicEmitter(OpEmitter):
+    def emit(self, op: Atomic, args: List[Union[Buffer, Expr]], output: Optional[Buffer]):
+        assert isinstance(args[0], Buffer)
+        assert isinstance(args[1], Buffer)
+        assert len(args) <= 2 or isinstance(args[2], Buffer)
+        src: Buffer = args[0]
+        dst: Buffer = args[1]
+        mask: Optional[Buffer] = args[2] if len(args) >= 3 else None
+        src_buf = src.buffer
+        src_ty = infer_type(src_buf)
+        if isinstance(src_ty, TensorType):
+            src_buf = ~src_buf[0]
+        else:
+            assert isinstance(src_ty, PointerType)
+        dst_buf = dst.buffer
+        dst_ty = infer_type(dst_buf)
+        assert isinstance(dst_ty, PointerType)
+        src_shape = src.layout.shape()
+        thr = src.layout.thr_layout()
+        dst_shape = dst.layout.shape
+        assert src_shape == dst_shape
+        thr2mem = composition(dst.layout, thr)
+        dst_offset = self.auto_var(hint="partition_dst", e=thr2mem(threadIdx.x, base=dst.offset))
         annotations = op.annotations
         assert len(annotations) > 0
         inst = annotations["inst"]
@@ -85,9 +138,8 @@ class CopyEmitter(OpEmitter):
         if mask is not None:
             index = TensorLayout(extents)
         with self.for_grid(extents) as indices:
-            src_addr, dst_addr = [var(v.hint, t) for v, t in zip(operands, operand_tys)]
-            self.declare(src_addr, src.buffer + src_layout[1](indices, base=src.offset))
-            self.declare(dst_addr, dst.buffer + dst_layout[1](indices, base=dst.offset))
+            src_addr = self.auto_var(hint="src_addr", e=src_buf + src_layout[1](indices, base=src.offset))
+            dst_addr = self.auto_var(hint="dst_addr", e=dst_buf + dst_layout[1](indices, base=dst_offset))
             if mask is not None:
                 idx = var("idx")
                 mask_idx = var("mask_idx")

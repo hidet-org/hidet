@@ -11,14 +11,13 @@
 # limitations under the License.
 from typing import List, Dict, Optional
 
-from hidet.ir.cute.layout import ComposedTensorLayout, TensorLayout
+from hidet.ir.cute.layout import ComposedTensorLayout, TensorLayout, TiledTensorLayout, auto_layout, is_auto_layout
 from hidet.ir.expr import Expr
-from hidet.ir.cute.expr import Op
-from hidet.ir.cute.type import tiled_tensor, TiledTensorType
-from hidet.ir.cute.algorithm import TiledCopy
+from hidet.ir.cute.expr import Op, CConst
+from hidet.ir.cute.type import tiled_tensor, TiledTensorType, logical_encoding
+from hidet.ir.cute.algorithm import TiledCopy, is_auto_copy
 from hidet.ir.type import BaseType, void
 from hidet.ir.dtypes import u32
-from hidet.ir.cute.expr import CConst
 
 
 class Mask(Op):
@@ -57,7 +56,7 @@ class Mask(Op):
 
         super().__init__(args=extents, attrs={"tiled_copy": tiled_copy})
         self.extents: List[Expr] = extents
-        assert len(extents) == len(tiled_copy.copy_atom.shape)
+        assert is_auto_copy(tiled_copy) or len(extents) == len(tiled_copy.copy_atom.shape)
         self.tiled_copy = tiled_copy
 
     def reforward(
@@ -99,7 +98,9 @@ class Mask(Op):
         # So the "-1" here means the register count hasn't been determined, which can't be used to
         # generate code.
         annotations = self.annotations
-        if len(annotations) == 0:
+        if is_auto_copy(self.tiled_copy):
+            return tiled_tensor(dtype=u32, layout=auto_layout, scope="register")
+        elif len(annotations) == 0:
             return tiled_tensor(dtype=u32, layout=TensorLayout(-1), scope="register")
         rest_layout = annotations["rest_layout"]
         nr_masks = rest_layout.size()
@@ -133,12 +134,27 @@ class Copy(Op):
             Infers the type of the result of the copy operation based on input types.
     """
 
-    def __init__(self, tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None):
-        super().__init__(args=[src, dst] + ([mask_] if mask_ is not None else []), attrs={"tiled_copy": tiled_copy})
+    def __init__(
+        self, tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None, evict: Optional[str] = None
+    ):
+        super().__init__(
+            args=[src, dst] + ([mask_] if mask_ is not None else []), attrs={"tiled_copy": tiled_copy, "evict": evict}
+        )
         self.tiled_copy: TiledCopy = tiled_copy
         self.src: Expr = src
         self.dst: Expr = dst
         self.mask: Optional[Expr] = mask_
+        self.evict: Optional[str] = evict
+
+    def resolve_logical_encoding(self):
+        if is_auto_copy(self.tiled_copy):
+            raise RuntimeError(
+                "Cannot resolve the logical encoding for tensors because the tiled_copy"
+                f"hasn't been specified.(got:{self.tiled_copy.str_indented()})"
+            )
+        shape, src_tv = self.tiled_copy.src_tv_layout()
+        _, dst_tv = self.tiled_copy.dst_tv_layout()
+        return logical_encoding(shape, src_tv), logical_encoding(shape, dst_tv)
 
     def reforward(
         self, args: List[Expr], attrs_update: Dict[str, CConst] = None, annotations_update: Dict[str, CConst] = None
@@ -150,7 +166,8 @@ class Copy(Op):
         if annotations_update is not None:
             annotations.update(annotations_update)
         assert "tiled_copy" in attrs
-        ret = self.__class__(attrs["tiled_copy"], *args)
+        assert "evict" in attrs
+        ret = self.__class__(attrs["tiled_copy"], *args, evict=attrs["evict"])
         ret.annotations = annotations
         return ret
 
@@ -170,18 +187,112 @@ class Copy(Op):
             and (mask_ty is void or isinstance(mask_ty, TiledTensorType))
         ):
             raise TypeError(f"Type mismatch. (got:src({src_ty}),dst({dst_ty}),mask({mask_ty}))")
-        if not (
+        if is_auto_copy(self.tiled_copy):
+            return void
+        elif (
+            is_auto_layout(src_ty.layout)
+            or is_auto_layout(dst_ty.layout)
+            or (mask_ty is not void and is_auto_layout(mask_ty.layout))
+        ):
+            return void
+        elif not (
             isinstance(src_ty.layout, (TensorLayout, ComposedTensorLayout))
             and isinstance(dst_ty.layout, (TensorLayout, ComposedTensorLayout))
             and (mask_ty is void or isinstance(mask_ty.layout, TensorLayout))
         ):
             raise TypeError(f"Invalid layout. (got:src({src_ty.layout}),dst({dst_ty.layout}),mask({mask_ty}))")
-        src_size = src_ty.layout.size()
-        dst_size = dst_ty.layout.size()
-        if src_size != dst_size:
-            raise TypeError(f"Tensor size mismatch. (got:src({src_size}),dst({dst_size}))")
+        elif src_ty.scope.is_global() or dst_ty.scope.is_global():
+            # as long as the total element of non-zero-stride dimensions are
+            # equal, we can perform the copy. The zero-stride dimensions can be
+            # redistributed arbitrarily.
+            src_count = src_ty.layout.count()
+            dst_count = dst_ty.layout.count()
+            if src_count != dst_count:
+                print(self)
+                raise TypeError(f"Tensor count mismatch. (got:src({src_count}),dst({dst_count}))")
         return void
 
 
-def copy(tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None):
-    return Copy(tiled_copy, src, dst, mask_).make_call()
+def copy(tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None, evict: Optional[str] = None):
+    return Copy(tiled_copy, src, dst, mask_, evict).make_call()
+
+
+class Atomic(Op):
+    """
+    Performs an atomic operation on a memory region (a tile) using a register tensor (a tile in register files).
+
+    Attributes:
+        src (Expr): Source expression, representing the register tensor.
+        dst (Expr): Destination expression, representing the memory region.
+        mask (Optional[Expr]): Optional mask expression, representing the mask tensor.
+    """
+
+    def __init__(self, src: Expr, dst: Expr, mask_: Optional[Expr] = None):
+        """
+        Initializes the Atomic operation with the given source, destination, and optional mask expressions.
+
+        Args:
+            src (Expr): Source expression, representing the register tensor.
+            dst (Expr): Destination expression, representing the memory region.
+            mask_ (Optional[Expr]): Optional mask expression, representing the mask tensor.
+        """
+        super().__init__(args=[src, dst] + ([mask_] if mask_ is not None else []), attrs={})
+        self.src: Expr = src
+        self.dst: Expr = dst
+        self.mask: Optional[Expr] = mask_
+
+    def write_memory_op(self) -> bool:
+        """
+        Indicates that this operation writes to memory.
+
+        Returns:
+            bool: Always returns True, indicating a memory write operation.
+        """
+        return True
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        """
+        Infers the type of the operation based on the types of its arguments.
+
+        Args:
+            arg_types (List[BaseType]): List of argument types.
+
+        Returns:
+            BaseType: The inferred type of the operation.
+
+        Raises:
+            TypeError: If there is a type mismatch between the arguments or if the input/output types are not
+            as expected.
+        """
+        src_ty = arg_types[0]
+        dst_ty = arg_types[1]
+        mask_ty = arg_types[2] if len(arg_types) >= 3 else void
+        if not (
+            isinstance(src_ty, TiledTensorType)
+            and isinstance(dst_ty, TiledTensorType)
+            and (mask_ty is void or isinstance(mask_ty, TiledTensorType))
+        ):
+            raise TypeError(f"Type mismatch. (got:src({src_ty}),dst({dst_ty}),mask({mask_ty}))")
+        if not dst_ty.scope.is_memory():
+            raise TypeError(f"ouput of atomic operation should be a memory region.got({dst_ty})")
+        if not src_ty.scope.is_register():
+            raise TypeError(f"input of atomic operation should be a register tensor.got({src_ty})")
+        if is_auto_layout(src_ty.layout):
+            return void
+        else:
+            dst_shape = dst_ty.layout.shape
+            assert dst_shape is not None
+            if not isinstance(src_ty.layout, TiledTensorLayout):
+                raise TypeError(f"input layout of atomic operation should be TiledTensorLayout.got({src_ty.layout})")
+            src_shape = src_ty.layout.shape()
+            if src_shape != dst_shape:
+                raise TypeError(f"Shape mismatch.(src:{src_shape},dst:{dst_shape})")
+            return void
+
+
+class AtomicAdd(Atomic):
+    pass
+
+
+def cute_atomic_add(src: Expr, dst: Expr, mask_: Optional[Expr] = None):
+    return AtomicAdd(src, dst, mask_).make_call()

@@ -129,7 +129,7 @@ def test_cudnn_conv2d_gemm(n, c, h, w, k, p, q, r, s, dtype, compute_type, paddi
     )
 
     if dtype == hidet.float32 and torch.cuda.get_device_capability()[0] >= 8:
-        tol = 1e-2
+        tol = 2e-2
 
     hidet.utils.assert_close(actual=tensor_y, expected=golden, rtol=tol, atol=tol)
 

@@ -25,7 +25,7 @@ from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 
 
 class BatchMatmulTask(Task):
-    def __init__(self, a: TensorNode, b: TensorNode, mma: str = 'simt'):
+    def __init__(self, a: TensorNode, b: TensorNode, mma: str = 'mma'):
         batch_size, m_size, k_size = a.shape
         batch_size, k_size, n_size = b.shape
         self.batch_size = batch_size
@@ -779,7 +779,7 @@ def is_false():
 
 
 class BatchMatmulOp(Operator):
-    def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):
+    def __init__(self, a: Tensor, b: Tensor, mma: str = 'mma'):
         # if is_false(a.shape[0] == b.shape[0]) or is_false(a.shape[2] == b.shape[1]):
         #     raise
         if not (
@@ -795,7 +795,7 @@ class BatchMatmulOp(Operator):
         super().__init__(inputs=[a, b], attributes={'mma': mma}, task=task)
 
 
-def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:
+def batch_matmul(a: Tensor, b: Tensor, mma: str = 'mma') -> Tensor:
     """Batched matrix multiplication.
 
     Parameters

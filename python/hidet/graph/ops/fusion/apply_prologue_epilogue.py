@@ -30,8 +30,8 @@ from hidet.ir.expr import (
     tensor_var,
     if_then_else,
 )
+from hidet.ir.stmt import Stmt, DeclareStmt, EvaluateStmt, AssignStmt, SeqStmt, BufferStoreStmt, LaunchKernelStmt
 from hidet.ir.dtypes import int64
-from hidet.ir.stmt import Stmt, BufferStoreStmt, LaunchKernelStmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.builders import StmtBuilder
@@ -63,30 +63,21 @@ from hidet.ir.type import DataType, PointerType
 from hidet.ir import cute
 from hidet.ir.cute import (
     TensorLayout,
-    rank,
     compact_row_major,
     compact_col_major,
     composition,
     coalesce,
     make_layout,
     complement,
+    canonicalize,
     CopyAtom,
     TiledCopy,
     ThrValAtom,
     TiledTensorLayout,
-    ComposedTensorLayout,
+    is_auto_layout,
 )
 from hidet.ir.cute.collective import CollectiveStore
-from hidet.ir.cute.ops import (
-    partition_src,
-    partition_dst,
-    copy,
-    mask,
-    tiled_tensor_view,
-    rearrange,
-    arithmetic,
-    Rearrange,
-)
+from hidet.ir.cute.ops import partition_src, partition_dst, copy, mask, tensor_view, rearrange, arithmetic, Rearrange
 from hidet.ir.cute.expr import CallOp
 from hidet.ir.cute.type import TiledTensorType
 from hidet.transforms import lower_with
@@ -214,6 +205,9 @@ class PrologueEpilogueExtractor(IRRewriter):
         # extract epilogues
         epilogues: Dict[Tensor, Epilogue] = {}
         for task_output, tensor in zip(self.anchor_task.outputs, self.anchor_operator.outputs):
+            if self.tensor_map[task_output] in self.graph.outputs:
+                # this output does not have a epilogue, skip
+                continue
             axes = [var('i') for _ in range(len(task_output.shape))]
             value = var('value', task_output.type.dtype)
             bss = BufferStoreStmt(buf=task_output, indices=axes, value=value)
@@ -738,6 +732,7 @@ class TileDerivation(GraphVisitor):
                                 TensorLayout(tuple(reversed(result_shape)), tuple(reversed(result_stride)))
                             )
                             layout = composition(tile_mapping, output_layout)
+                            layout = canonicalize(layout)
                             # assert all(is_constant(s) for s in output_shape)
                             self.tensor2tile[ti] = (self._tile_divide(layout), layout, tuple(output_shape))
             else:
@@ -912,6 +907,8 @@ class EpilogueVisitorRewriter(GraphVisitor):
         sorted_dsi = sorted(zip(stride, shape, index))
         vector_size = 0
         vector_dim_list = []
+        # maximum elements that each thread can process
+        non_vector_strides = [prod(shape) // self.threads]
         for d, s, i in sorted_dsi:
             if d == 0:  # stride that equals 0 indicates we need broadcasting this tensor
                 costride[i] = 0
@@ -923,7 +920,7 @@ class EpilogueVisitorRewriter(GraphVisitor):
                 vector_size *= s
                 vector_dim_list.append(i)
             else:
-                break
+                non_vector_strides.append(d)
         # Here, we handle the tensor that needs to be broadcasted seperately because we
         # want to eliminate the register rearrange through shared memory.
         if need_broadcast:
@@ -935,12 +932,8 @@ class EpilogueVisitorRewriter(GraphVisitor):
             return TiledCopy(copy_atom)
 
         BITS_PER_MEMORY_INST = 128
-        alignment = [i * dtype.nbits for i in filter(lambda x: x not in (0, 1), stride)]
-        if len(alignment) == 0:
-            alignment = BITS_PER_MEMORY_INST
-        else:
-            alignment = gcd(BITS_PER_MEMORY_INST, *alignment)
-        bits_per_inst = gcd(dtype.nbits * vector_size, alignment)
+        alignment = [i * dtype.nbits for i in non_vector_strides]
+        bits_per_inst = gcd(dtype.nbits * vector_size, BITS_PER_MEMORY_INST, *alignment)
         elements_per_inst = bits_per_inst // dtype.nbits
         val_shape = []
         val_stride = []
@@ -971,24 +964,22 @@ class EpilogueVisitorRewriter(GraphVisitor):
         sorted_dsi = sorted(zip(stride, shape, costride))
         for _, s, d in sorted_dsi:
             if remaining_threads > 1:
-                if remaining_threads > s:
-                    assert remaining_threads % s == 0
-                    thr_shape.append(s)
+                s1 = gcd(remaining_threads, s)
+                if s1 > 1:
+                    thr_shape.append(s1)
                     thr_stride.append(d)
-                    remaining_threads //= s
-                else:
-                    assert s % remaining_threads == 0
-                    s //= remaining_threads
-                    thr_shape.append(remaining_threads)
-                    thr_stride.append(d)
-                    if s > 1:
-                        val_shape.append(s)
-                        val_stride.append(d * remaining_threads)
-                    remaining_threads //= remaining_threads
+                    remaining_threads //= s1
+                    s = s // s1
+                    d = d * s1
+                if s > 1:
+                    val_shape.append(s)
+                    val_stride.append(d)
             else:
                 val_shape.append(s)
                 val_stride.append(d)
-
+        if remaining_threads > 1:
+            thr_shape.append(remaining_threads)
+            thr_stride.append(0)
         thr_layout = TensorLayout(tuple(thr_shape), tuple(thr_stride))
         val_layout = TensorLayout(tuple(val_shape), tuple(val_stride))
         copy_atom = CopyAtom("thread_block", self.tile_shape, make_layout(thr_layout, val_layout))
@@ -1011,21 +1002,22 @@ class EpilogueVisitorRewriter(GraphVisitor):
         else:
             tensor_stub = var("stub", PointerType(tensor.dtype))
             self.inputs2stub[tensor] = tensor_stub
-        tensor_layout = self.current_collective_store.tensor_layout
-        tile_rank = rank(tile.shape)
-        shape = tuple(mode.size() for mode in tile)
-        stride = tensor_layout.stride_tuple[:tile_rank]
-        tensor_layout = TensorLayout(shape, stride).reversed()
+        # tensor_layout = self.current_collective_store.tensor_layout
+        # tile_rank = rank(tile.shape)
+        # shape = tuple(mode.size() for mode in tile)
+        # stride = tensor_layout.stride_tuple[:tile_rank]
+        # tensor_layout = TensorLayout(shape, stride).reversed()
         if self.current_collective_store.base is None:
             self.current_collective_store.base = var("base")
-        composed_layout = ComposedTensorLayout(tensor_layout, self.current_collective_store.base, addr_functor)
-        t_regs = self.declare(hint="t_regs", e=tiled_tensor_view(regs, tiled_tensor_layout, "register"))
-        t_gmem = self.declare(hint="t_gmem", e=tiled_tensor_view(tensor_stub, composed_layout, "global"))
+        # composed_layout = ComposedTensorLayout(tensor_layout, self.current_collective_store.base, addr_functor)
+        t_regs = self.declare(hint="t_regs", e=tensor_view(regs, tiled_tensor_layout, "register"))
+        base = addr_functor(self.current_collective_store.base)
+        t_gmem = self.declare(hint="t_gmem", e=tensor_view(tensor_stub + base, tile_layout, "global"))
         txgx = self.declare(hint="txgx", e=partition_src(t_gmem, tiled_copy))
         txrx = self.declare(hint="txrx", e=partition_dst(t_regs, tiled_copy))
         masks = self.declare(hint="masks", e=mask(tiled_copy, self.current_collective_store.extents))
         self.append(copy(tiled_copy, txgx, txrx, masks))
-        t_load = self.declare(hint="t_load", e=tiled_tensor_view(txrx, tiled_tensor_layout, "register"))
+        t_load = self.declare(hint="t_load", e=tensor_view(txrx, tiled_tensor_layout, "register"))
         # all the layout of the input tensor should be aligned with the output
         # tensor. If the layout is not aligned with the output, we insert a
         # rearrange operator to re-distribute the data across the thread block.
@@ -1046,14 +1038,15 @@ class EpilogueVisitorRewriter(GraphVisitor):
         self.current_collective_store.buf_stub = var("t_gmem", PointerType(tensor.dtype))
         if self.current_collective_store.base is None:
             self.current_collective_store.base = var("base")
-        tensor_layout = self.current_collective_store.tensor_layout
-        tile_rank = rank(tile.shape)
-        shape = tuple(mode.size() for mode in tile)
-        stride = tensor_layout.stride_tuple[:tile_rank]
-        tensor_layout = TensorLayout(shape, stride).reversed()
-        composed_layout = ComposedTensorLayout(tensor_layout, self.current_collective_store.base, addr_functor)
+        # tensor_layout = self.current_collective_store.tensor_layout
+        # tile_rank = rank(tile.shape)
+        # shape = tuple(mode.size() for mode in tile)
+        # stride = tensor_layout.stride_tuple[:tile_rank]
+        # tensor_layout = TensorLayout(shape, stride).reversed()
+        base = addr_functor(self.current_collective_store.base)
+        # composed_layout = ComposedTensorLayout(tensor_layout, self.current_collective_store.base, addr_functor)
         t_gmem = self.declare(
-            hint="t_gmem", e=tiled_tensor_view(self.current_collective_store.buf_stub, composed_layout, "global")
+            hint="t_gmem", e=tensor_view(self.current_collective_store.buf_stub + base, tile_layout, "global")
         )
         txrx = self.declare(hint="txrx", e=partition_src(t_regs, tiled_copy))
         txgx = self.declare(hint="txgx", e=partition_dst(t_gmem, tiled_copy))
@@ -1080,7 +1073,7 @@ class EpilogueVisitorRewriter(GraphVisitor):
 
     @staticmethod
     def where_scalar_tensor(y: Expr, cond: Expr, x: Expr):
-        return if_then_else(cond, x, y)
+        return if_then_else(cond, y, x)
 
     @staticmethod
     def where_scalar_scalar(x: Expr, y: Expr, cond: Expr):
@@ -1189,8 +1182,8 @@ class EpilogueVisitorRewriter(GraphVisitor):
             tv = make_layout(thr_layout, val_layout)
             tv_atom = ThrValAtom("thread_block", tshp, tv)
             tiled_tensor_layout = TiledTensorLayout(tv_atom)
-            if not isinstance(src.type.layout, TiledTensorLayout):
-                src = self.declare(hint="view", e=tiled_tensor_view(src, tiled_tensor_layout, "register"))
+            if not is_auto_layout(src.type.layout) and not isinstance(src.type.layout, TiledTensorLayout):
+                src = self.declare(hint="view", e=tensor_view(src, tiled_tensor_layout, "register"))
             tiled_tensor_layout = self._output_aligned_layout(tiled_tensor_layout)
             cvt = self.declare(hint="cvt", e=rearrange(src, tiled_tensor_layout, "register"))
             self.tensor2var[tensor] = cvt
@@ -1833,8 +1826,20 @@ class FusePrologueEpiloguePass(Pass):
                 # have a generic tile derivation algorithm to handle dynamic
                 # shapes, we can remove the fallback mechanism. Because currently, we
                 # only support limited situations in dynamic shape scenarios.
+                # We can extend the tile derivation algorithm when
+                # `torch.compile(...)` for dynamic shapes is fixed.
+                from hidet.transforms.cute.generic.canonicalize import canonicalize_pass
+                from hidet.transforms.cute.generic.canonicalize_arithmetic_expression import (
+                    canonicalize_arithmetic_expression_pass,
+                )
+                from hidet.transforms.cute.generic.deadcode_elimination import deadcode_elimination_pass
+
+                from hidet.transforms.cute.cuda.resolve_bank_conflict import resolve_bank_conflict_pass
+                from hidet.transforms.cute.cuda.vectorize_elementwise import vectorize_elementwise_pass
+                from hidet.transforms.cute.cuda.shared_memory_allocation import shared_memory_allocation_pass
                 from hidet.transforms.cute.cuda.instruction_selection import instruction_selection_pass
-                from hidet.transforms.cute.cuda.update_shared_memory_usage import update_shared_memory_usage_pass
+                from hidet.transforms.cute.cuda.instantiate_auto_annotation import instantiate_auto_annotation_pass
+
                 from hidet.logging import logger
 
                 logger.warning(
@@ -1842,7 +1847,17 @@ class FusePrologueEpiloguePass(Pass):
                     "This happens when enabling dynamic shapes, otherwise "
                     "this may indicate a bug. Please report to the Hidet team."
                 )
-                transforms = [instruction_selection_pass(), update_shared_memory_usage_pass()]
+                transforms = [
+                    canonicalize_arithmetic_expression_pass(),
+                    canonicalize_pass(),
+                    deadcode_elimination_pass(),
+                    instantiate_auto_annotation_pass(),
+                    vectorize_elementwise_pass(),
+                    instruction_selection_pass(),
+                    resolve_bank_conflict_pass(),
+                    instruction_selection_pass(),
+                    shared_memory_allocation_pass(),
+                ]
                 ir_module = lower_with(ir_module, transforms)
                 rewriter = LowerCuteDialectToBufferStoreStmtRewriter()
                 ir_module = rewriter.rewrite(ir_module)
@@ -1886,8 +1901,9 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, target: 
     ]
     instruments = []
     if hidet.option.get_save_lower_ir():
-        instruments.append(SaveIRInstrument(out_dir=os.path.join(working_dir, './fuse_ir')))
-        instruments.append(ProfileInstrument(log_file=os.path.join(working_dir, './fuse_ir/profile.txt')))
+        fused_candidate_dir = os.path.join(working_dir, './fuse_ir', ir_module.namespace)
+        instruments.append(SaveIRInstrument(out_dir=fused_candidate_dir))
+        instruments.append(ProfileInstrument(log_file=os.path.join(fused_candidate_dir, 'profile.txt')))
 
     with PassContext(instruments=instruments):
         ir_module = lower_with(ir_module, transforms)
@@ -1904,12 +1920,16 @@ def apply_prologue_epilogue_batch(
     def _apply_prologue_epilogue_batch(args):
         return apply_prologue_epilogue(*args)
 
+    if len(anchor_modules) > 1:
+        for i, module in enumerate(anchor_modules):
+            module.namespace = f'candidate_{i}'
+
     jobs = [(m, fused_task, target, working_dir) for m in anchor_modules]
-    if len(jobs) == 1:
-        fused_modules: List[IRModule] = [apply_prologue_epilogue(*jobs[0])]
-    else:
+    max_num_worker, _, _ = hidet.option.get_parallel_tune()
+    if max_num_worker != 1 and len(jobs) > 1:
         fused_modules: List[IRModule] = list(
             tqdm(parallel_imap(_apply_prologue_epilogue_batch, jobs), desc='Appling fusing', total=len(jobs), ncols=80)
         )
-
+    else:
+        fused_modules: List[IRModule] = [apply_prologue_epilogue(*j) for j in jobs]
     return fused_modules

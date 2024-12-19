@@ -103,6 +103,9 @@ class MathFunctionSet:
     def exp(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def exp2(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
     def expm1(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
@@ -217,6 +220,7 @@ class MathFunctionSetGeneric(MathFunctionSet):
             'acosh',
             'atanh',
             'exp',
+            'exp2',
             'expm1',
             'erf',
             'sqrt',
@@ -291,6 +295,9 @@ class MathFunctionSetGeneric(MathFunctionSet):
 
     def exp(self, a: Expr) -> Expr:
         return self.call('exp', a)
+
+    def exp2(self, a: Expr) -> Expr:
+        return self.call('exp2', a)
 
     def expm1(self, a: Expr) -> Expr:
         return self.call('expm1', a)
@@ -424,6 +431,10 @@ def atanh(a: Expr) -> Expr:
 
 def exp(a: Expr) -> Expr:
     return generic_math_function_set.exp(a)
+
+
+def exp2(a: Expr) -> Expr:
+    return generic_math_function_set.exp2(a)
 
 
 def expm1(a: Expr) -> Expr:

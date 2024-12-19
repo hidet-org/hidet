@@ -13,6 +13,7 @@
 import pytest
 from hidet.ir.tools.ir_dumper import astext2, parse
 from hidet.ir.expr import symbol_var
+from hidet.transforms.attach_hash_to_signature import attach_hash_to_signature
 from hidet.transforms.unify_global_objects import unify_global_objects_pass
 from hidet.transforms.flatten_tensor_slice import flatten_tensor_slice_pass
 from hidet.transforms.flatten_tensor_index import flatten_tensor_index_pass
@@ -35,6 +36,9 @@ from hidet.transforms.propagate_launch_bound import propagate_launch_bound_pass
 from hidet.transforms.check_launch_configuration import check_launch_configuration_pass
 from hidet.transforms.lower_special_cast import lower_special_cast_pass
 from hidet.transforms.annotate_header_and_libs import annotate_header_and_libs_pass
+from hidet.transforms.spatial_simplification import spatial_simplification_pass
+from hidet.transforms.expand_repeat import expand_repeat_mapping_pass
+from hidet.transforms.task_mapping_bound_check import task_mapping_bound_check
 
 # from hidet.graph.ops.softmax import SoftmaxTask
 from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
@@ -54,10 +58,10 @@ def get_matmul_task():
     return mod
 
 
-def get_bmatmul_task(mma_str='simt'):
+def get_bmatmul_task(mma_str='mma'):
     s = symbol_var('s')
-    a = tensor_input('a', 'float16', [1, s, 256])
-    b = tensor_input('b', 'float16', [1, 256, 256])
+    a = tensor_input('a', 'bfloat16', [1, s, 256])
+    b = tensor_input('b', 'bfloat16', [1, 256, 256])
     task = BatchMatmulTask(a, b, mma_str)
     mods = task.implement_cuda('.')
     mod = mods[0]
@@ -65,7 +69,7 @@ def get_bmatmul_task(mma_str='simt'):
 
 
 def get_softmax_task():
-    a = tensor_input('a', 'float16', [1, 256])
+    a = tensor_input('a', 'bfloat16', [1, 256])
     task = SoftmaxTask(a, 1)
     mod = task.implement_cuda('.')
     return mod
@@ -74,9 +78,9 @@ def get_softmax_task():
 def get_attn_task():
     s = symbol_var('s')
     h = symbol_var('h')
-    q = tensor_input('q', 'float16', [1, h, s, 64])
-    k = tensor_input('k', 'float16', [1, h, s, 64])
-    v = tensor_input('v', 'float16', [1, h, s, 64])
+    q = tensor_input('q', 'bfloat16', [1, h, s, 64])
+    k = tensor_input('k', 'bfloat16', [1, h, s, 64])
+    v = tensor_input('v', 'bfloat16', [1, h, s, 64])
     task = AttnTask('attn', q, k, v, False)
     mod = task.implement_cuda('.')
     return mod[0]
@@ -85,22 +89,26 @@ def get_attn_task():
 def generate_ir_modules():
     transforms = [
         lambda x: x,
+        attach_hash_to_signature(),
         unify_global_objects_pass(),
         generate_launch_func_pass(),
+        propagate_launch_bound_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
+        spatial_simplification_pass(),
+        flatten_tensor_index_pass(),
+        task_mapping_bound_check(),
+        expand_repeat_mapping_pass(),
         lower_task_mapping_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),
-        flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
-        propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),

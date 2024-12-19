@@ -13,6 +13,7 @@ from typing import List, Union
 from hidet.ir.module import IRModule
 from hidet.ir.library import tune
 from hidet.utils.py import cdiv
+from hidet.graph.tensor import from_torch
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 
@@ -196,3 +197,7 @@ class TransposeTask2D(Task):
 class TransposeOp2D(Operator):
     def __init__(self, input: Tensor):
         super().__init__(inputs=[input], attributes={}, task=TransposeTask2D(input_like(input, 'input')))
+
+    def run_torch(self):
+        x_torch = self.inputs[0].torch()
+        return [from_torch(x_torch.T)]

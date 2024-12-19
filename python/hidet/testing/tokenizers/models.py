@@ -42,7 +42,7 @@ def _model_args(config: Dict[str, any]) -> Tuple[ctypes.c_char_p, ctypes.c_void_
 
     if type_ == "BPE":
         vocab: Dict[str, int] = config.get("vocab")
-        merges: List[Tuple[str, str]] = [m.split(" ") for m in config.get("merges")]
+        merges: List[Tuple[str, str]] = [tuple(m) for m in config.get("merges")]
         byte_fallback = config.get("byte_fallback", False)
         args = _marshal((len(vocab), vocab.items(), len(merges), merges, byte_fallback), BPEModelArgs)
         return _marshal(type_), _void_ptr_to(args)

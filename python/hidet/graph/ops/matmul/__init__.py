@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .matmul import matmul, MatmulOp, MatmulTask
+from .matmul import matmul, MatmulOp, MatmulTask, matmul_nt
 from .batch_matmul import batch_matmul, BatchMatmulOp, BatchMatmulTask
 from .matmul_cublas import matmul_cublas
 from . import resolve

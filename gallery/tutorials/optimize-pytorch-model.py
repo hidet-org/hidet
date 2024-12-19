@@ -70,9 +70,9 @@ not use the actual inputs). Let's take the resnet18 model as an example:
 import torch.backends.cudnn
 import hidet
 
-x = torch.randn(1, 3, 224, 224).cuda()
+x = torch.randn(1, 3, 224, 224, dtype=torch.float16).cuda()
 model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
-model = model.cuda().eval()
+model = model.to(torch.float16).cuda().eval()
 
 with torch.no_grad():
     hidet.torch.dynamo_config.correctness_report()

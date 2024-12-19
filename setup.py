@@ -18,25 +18,30 @@ setup(
     description="Hidet: a compilation-based DNN inference framework.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    python_requires='>=3.8',
+    python_requires='>=3.9',
     packages=find_packages(where='python'),
     package_dir={"": "python"},
     include_package_data=True,
     install_requires=[
         "numpy>=1.23",  # for from_dlpack
         "psutil",
+        "tabulate",
+        "pytest",
         "tqdm",
         "nvtx",
-        "tabulate",
         "astunparse",
         "click",
         "packaging",
         "requests",
         "filelock",
-        "cuda-python>=11.6.1; platform_system=='Linux'",
+        "cuda-python>=11.6.1",
         "lark",
-        "tomlkit"
+        "tomlkit", 
+        "scipy",
     ],
+    extras_require={
+        "torch": ["torch>=2.3.0"],
+    },
     platforms=["linux"],
     entry_points={
         'console_scripts': [

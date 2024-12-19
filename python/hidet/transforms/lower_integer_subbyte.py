@@ -12,26 +12,16 @@
 # pylint: disable=unused-variable
 from typing import Dict, List, Union, Tuple
 
-from hidet.ir.tools import infer_type, simplify
+from hidet.ir.tools import TypeInfer, simplify
 from hidet.ir.type import BaseType, DataType, TensorType, TensorPointerType, PointerType
-from hidet.ir.dtypes import i32
+from hidet.ir.dtypes import i32, boolean
 from hidet.ir.expr import Var, Expr, Add, TensorElement, Address, Constant, Cast, var, cast, bitwise_not
-from hidet.ir.stmt import (
-    Stmt,
-    DeclareStmt,
-    AssignStmt,
-    LetStmt,
-    EvaluateStmt,
-    BufferStoreStmt,
-    SeqStmt,
-    BlackBoxStmt,
-    WhileStmt,
-    DeclareScope,
-)
-
+from hidet.ir.primitives.cuda.atomic import atomic_cas
+from hidet.ir.stmt import Stmt, DeclareStmt, AssignStmt, LetStmt, EvaluateStmt, BufferStoreStmt, SeqStmt, DeclareScope
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
+from hidet.ir.builders import StmtBuilder
 from hidet.transforms import Pass
 from hidet.utils.py import is_power_of_two
 
@@ -72,6 +62,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
     # int4b c = a + b                    ==> not allowed
     def __init__(self):
         super().__init__()
+        self.type_infer = TypeInfer()
         self.old2new: Dict[Var, Var] = {}
         self.stmts: List[Stmt] = []
         self.var2scope: Dict[Var, DeclareScope] = {}
@@ -81,7 +72,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         if v is not None:
             self.stmts.append(DeclareStmt(v))
             return v
-        v_ty = infer_type(e)
+        v_ty = self.type_infer(e)
         v = var(hint, v_ty)
         self.stmts.append(DeclareStmt(v, e))
         return v
@@ -119,7 +110,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         idx = simplify(offset // divisor)
         offset_ = simplify(offset % divisor)
         mask = storage_ty.constant(dtype.bits_mask)
-        return (base[idx] >> (offset_ * dtype_bits)) & mask
+        return storage_ty((base[idx] >> (offset_ * dtype_bits)) & mask)
 
     def _set_subbyte_value(self, dtype: DataType, base: Var, offset: Expr, value: Expr):
         storage_ty = dtype.storage
@@ -130,29 +121,54 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
             raise TypeError(f"data type not supported yet(got:{dtype})")
         idx = simplify(offset // divisor)
         offset_ = simplify(offset % divisor)
-        value_ty = infer_type(value)
-        assert value_ty == storage_ty
+        value_ty = self.type_infer(value)
+        assert value_ty == storage_ty, f"expected {storage_ty}, but got {value_ty} (value={value})"
         mask = storage_ty.constant(dtype.bits_mask)
         item = self.auto_var(hint="item", e=value & mask)
-        updated_mask = self.auto_var(hint="updated_mask", e=bitwise_not(mask << (offset_ * dtype_bits)))
-        new_bits = self.auto_var(hint="new_bits", e=item << (offset_ * dtype_bits))
+        updated_mask = self.auto_var(hint="updated_mask", e=bitwise_not(storage_ty(mask << (offset_ * dtype_bits))))
+        new_bits = self.auto_var(hint="new_bits", e=storage_ty(item << (offset_ * dtype_bits)))
 
-        from hidet.ir.dtypes import u32, u16
+        from hidet.ir.dtypes import u32, u16, u8
+
+        if base not in self.var2scope:
+            raise NotImplementedError('Can not determine the scope of {}'.format(base))
 
         if self.var2scope[base].is_memory():
-            if not any(storage_ty is ty for ty in [i32, u32, u16]):
-                raise NotImplementedError(
-                    "writing subbyte data to memory requires the storage type must be"
-                    " int32, uint32, or uint16 due to atomicCAS, but got({storage_ty})"
-                )
-            original = self.auto_var(hint="original", e=storage_ty.zero)
-            updated = self.auto_var(hint="updated", e=storage_ty.zero)
-            body = []
-            body.append(AssignStmt(original, base[idx]))
-            body.append(AssignStmt(updated, (original & updated_mask) | new_bits))
-            body.append(BlackBoxStmt("atomicCAS({}, {}, {});", ~base[idx], original, updated))
-            body = SeqStmt(body)
-            self.stmts.append(WhileStmt(original == updated, body))
+            if storage_ty.nbits == 8:
+                sb = StmtBuilder()
+
+                original = sb.declare(Var("original", u16))
+                result = sb.declare(Var("result", u16))
+                with sb.while_loop(boolean.true):
+                    updated_value = (
+                        ((((original >> (8 * (idx % 2))) & u8(0xFF)) & updated_mask) | new_bits) << (8 * (idx % 2))
+                    ) | (original & (u16(0xFF) << (1 - idx % 2)))
+                    updated = sb.declare(Var("updated", storage_ty), init=updated_value)
+                    u16_ptr = cast(cast(base, ~u16) + (idx >> 1), ~u16)
+                    sb.assign(original, value=u16_ptr[0])
+                    sb.assign(result, value=atomic_cas(u16_ptr, compare=original, value=updated))
+                    with sb.if_then(result == original):
+                        sb.brk()
+                self.stmts.append(sb.finish())
+            else:
+                if not any(storage_ty is ty for ty in [i32, u32, u16]):
+                    raise NotImplementedError(
+                        "writing subbyte data to memory requires the storage type must be"
+                        f" int32, uint32, or uint16 due to atomicCAS, but got({storage_ty})"
+                    )
+
+                sb = StmtBuilder()
+
+                original = sb.declare(Var("original", storage_ty))
+                result = sb.declare(Var("result", storage_ty))
+                with sb.while_loop(boolean.true):
+                    sb.assign(original, value=base[idx])
+                    updated = sb.declare(Var("updated", storage_ty), init=(original & updated_mask) | new_bits)
+                    sb.assign(result, value=atomic_cas(~base[idx], compare=original, value=updated))
+                    with sb.if_then(result == original):
+                        sb.brk()
+
+                self.stmts.append(sb.finish())
         else:
             assert self.var2scope[base].is_register()
             original = self.auto_var(hint="original", e=base[idx])
@@ -199,7 +215,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
 
     def visit_TensorElement(self, e: TensorElement):
         if isinstance(e.base, Var):
-            base_ty = infer_type(e.base)
+            base_ty = self.type_infer(e.base)
             if is_pointer_type(base_ty):
                 dtype = get_pointer_base_type(base_ty)
                 if is_integer_subbyte(dtype):
@@ -213,7 +229,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         if isinstance(e.expr, TensorElement):
             base = e.expr.base
             if isinstance(base, Var):
-                base_ty = infer_type(base)
+                base_ty = self.type_infer(base)
                 if is_pointer_type(base_ty):
                     dtype = get_pointer_base_type(base_ty)
                     if is_integer_subbyte(dtype):
@@ -237,7 +253,7 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
         return (int_data << shift) >> shift
 
     def visit_Cast(self, e: Cast):
-        expr_ty = infer_type(e.expr)
+        expr_ty = self.type_infer(e.expr)
         if is_integer_subbyte(expr_ty):
             if is_integer_subbyte(e.target_type):
                 raise NotImplementedError(f"casting from {expr_ty} to {e.target_type} is not supported yet")
@@ -278,8 +294,8 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
             return ptr, offset
 
     def visit_Add(self, e: Add):
-        a_ty = infer_type(e.a)
-        b_ty = infer_type(e.b)
+        a_ty = self.type_infer(e.a)
+        b_ty = self.type_infer(e.b)
         if isinstance(a_ty, PointerType) and is_integer_subbyte(a_ty.base_type):
             self.recursive_depth += 1
             a = self.visit(e.a)
@@ -317,9 +333,12 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         if isinstance(stmt.buf, Var):
-            buf_ty = infer_type(stmt.buf)
-            if isinstance(buf_ty, TensorType):
-                dtype = buf_ty.dtype
+            buf_ty = self.type_infer(stmt.buf)
+            if isinstance(buf_ty, (TensorType, PointerType)):
+                if isinstance(buf_ty, TensorType):
+                    dtype = buf_ty.dtype
+                else:
+                    dtype = buf_ty.base_type
                 if is_integer_subbyte(dtype):
                     buf = self.visit(stmt.buf)
                     indices = self.visit(stmt.indices)
@@ -329,6 +348,13 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
                     return self.flatten_stmts(self.flush_stmts())
         self.append_stmt(super().visit_BufferStoreStmt(stmt))
         return self.flatten_stmts(self.flush_stmts())
+
+    def visit_Function(self, func: Function):
+        params = self.visit(func.params)
+        for param in params:
+            if is_pointer_type(param.type):
+                self.var2scope[param] = DeclareScope.Global
+        return super().visit_Function(func)
 
 
 class LowerIntegerSubbytePass(Pass):

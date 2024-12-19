@@ -1,7 +1,6 @@
 from typing import List, Union, Tuple
 
 from hidet.ir import IRModule
-from hidet.ir.dtypes import float16
 from hidet.graph.tensor import Tensor
 from hidet.graph.ops.opaque import OpaqueOperator
 from hidet.ir.library import tune
@@ -195,7 +194,7 @@ class PageAttentionOp(OpaqueOperator):
         self, query: Tensor, seq_lengths: Tensor, cache_blocks: Tensor, key_cache: Tensor, value_cache: Tensor
     ):
         assert query.dtype == key_cache.dtype == value_cache.dtype, 'Mismatched dtype of query, key, value'
-        assert query.dtype in [float16], f'Unsupported dtype: {query.dtype}'
+        assert query.dtype.is_any_float16(), f'Unsupported dtype: {query.dtype}'
         bs, num_heads, _, head_size = query.shape
         return {'output': self.symbol(shape=[bs, num_heads, 1, head_size], dtype=query.dtype, device=query.device)}
 

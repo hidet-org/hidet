@@ -66,6 +66,7 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
             'sin': ['hsin', 1],
             'cos': ['hcos', 1],
             'exp': ['hexp', 1],
+            'exp2': ['hexp2', 1],
             'sqrt': ['hsqrt', 1],
             'rsqrt': ['hrsqrt', 1],
             'log': ['hlog', 1],
@@ -157,6 +158,9 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
 
     def exp(self, a: Expr) -> Expr:
         return self.call('cuda_f16_exp', a)
+
+    def exp2(self, a: Expr) -> Expr:
+        return self.call('cuda_f16_exp2', a)
 
     def erf(self, a: Expr) -> Expr:
         # use float32 erf to delegate the float16 erf

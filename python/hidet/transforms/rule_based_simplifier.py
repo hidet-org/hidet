@@ -15,7 +15,7 @@ from itertools import product
 
 from hidet.ir import dtypes
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
-from hidet.ir.dtypes import boolean
+from hidet.ir.dtypes import boolean, int32
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var, LogicalOr
 from hidet.ir.expr import Div, Constant, Expr, logical_and, constant, IfThenElse
@@ -34,6 +34,10 @@ def any_expr(allow_const):
 
 def any_constant():
     return PlaceholderExpr(require_const=True)
+
+
+def int_constant():
+    return PlaceholderExpr(required_type=int32, require_const=True)
 
 
 def c_div(a, b):
@@ -99,8 +103,9 @@ class RuleBasedSimplifier(IRRewriter):
         self.const_expr_simplifier = ConstExprSimplifier()
         e1, e2 = any_expr(allow_const=False), any_expr(allow_const=False)
         c1, c2 = any_constant(), any_constant()
+        ic1, ic2 = int_constant(), int_constant()
         ec1, ec2 = any_expr(allow_const=True), any_expr(allow_const=True)
-        self.args = {e1, e2, c1, c2, ec1, ec2}
+        self.args = {e1, e2, c1, c2, ic1, ic2, ec1, ec2}
         true = constant(True, boolean)
         false = constant(False, boolean)
         self.patterns = [
@@ -129,7 +134,7 @@ class RuleBasedSimplifier(IRRewriter):
             # div
             (ec1 // ec1, dtypes.int32.one),
             (((e1 * c1) + (e2 % c1)) // c1, e1),
-            ((e1 // c1) // c2, e1 // (c1 * c2)),
+            ((e1 // ic1) // ic2, e1 // (ic1 * ic2)),
             ((e1 * c1) // c1, e1),
             ((e1 * c1 + e2) // c1, e1 + e2 // c1),
             # mod

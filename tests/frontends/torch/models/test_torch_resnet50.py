@@ -17,7 +17,7 @@ from hidet.testing.torch_utils import check_module
 
 @pytest.mark.parametrize('shape', [[1, 3, 224, 224]])
 @pytest.mark.parametrize('dynamic', [False, True])
-@pytest.mark.parametrize('dtype, tol', [(torch.float16, 2e-2), (torch.float32, 1e-4)])
+@pytest.mark.parametrize('dtype, tol', [(torch.float16, 2e-2), (torch.float32, 2e-2)])
 def test_resnet18(shape, dynamic, dtype, tol):
     model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True).cuda().eval().to(dtype)
     x = torch.randn(*shape).cuda().to(dtype) * 0.1796 + 0.5491

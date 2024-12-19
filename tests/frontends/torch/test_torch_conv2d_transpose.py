@@ -23,7 +23,6 @@ import torch.backends.cudnn as cudnn
 @pytest.mark.parametrize('groups', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
 def test_conv2d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype):
-    cudnn.allow_tf32 = False
     check_module(
         model=torch.nn.ConvTranspose2d(
             in_channels=in_shape[1],
@@ -36,8 +35,8 @@ def test_conv2d_transpose(in_shape, w_shape, stride, padding, output_padding, gr
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
         atol=2e-4,
+        rtol=2e-3,
     )
-    cudnn.allow_tf32 = True
 
 
 if __name__ == '__main__':

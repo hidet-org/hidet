@@ -48,7 +48,7 @@ class DeclareScope(enum.Enum):
         return self == DeclareScope.Shared
 
     def is_register(self):
-        return self == DeclareScope.Register
+        return self in (DeclareScope.Register, DeclareScope.Default)
 
     def is_memory(self):
         return not self.is_register()

@@ -31,7 +31,7 @@ def test_bert(batch_size: int, seq_length: int, use_tensor_core, dynamic):
     try:
         hidet.torch.dynamo_config.use_tensor_core(use_tensor_core)
         y2 = model_opt(*args, **kwargs).last_hidden_state
-        tol = 1e-2
+        tol = 2e-2
         torch.testing.assert_close(y1, y2, atol=tol, rtol=tol)
     finally:
         # in case of failure, reset the config

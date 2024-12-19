@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.04-py3
+FROM nvcr.io/nvidia/pytorch:24.07-py3
 ADD ./hidet /workspace/hidet
 ADD ./models /workspace/models
 WORKDIR /workspace

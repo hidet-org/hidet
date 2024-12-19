@@ -86,9 +86,17 @@ def register_module(torch_cls: Type[torch.nn.Module]):
 
 def register_function(func: Union[Callable, str]):
     def decorator(hidet_func):
-        if func not in Registry.registered_functions:
-            Registry.registered_functions[func] = OverloadedFunction()
-        Registry.registered_functions[func].overload(hidet_func)
+        if isinstance(func, str):
+            try:
+                nfunc = eval(func)  # pylint: disable=eval-used
+            except AttributeError:
+                # No function with such name
+                return hidet_func
+        else:
+            nfunc = func
+        if nfunc not in Registry.registered_functions:
+            Registry.registered_functions[nfunc] = OverloadedFunction()
+        Registry.registered_functions[nfunc].overload(hidet_func)
         return hidet_func
 
     return decorator
@@ -150,7 +158,25 @@ class HidetModule:
                 if steal:
                     del self.torch_params[name]
                     setattr(self.mod, name, None)
-                self.hidet_params[name] = tensor_from_torch(torch_param)
+
+                # Force the memory of the parameter to be managed by hidet.
+                # The graph optimization may create new parameters during the
+                # graph transformation. If the storage of the parameter is managed
+                # by other libraries, the memory won't be freed after the graph
+                # optimization, which will cause OOM error.
+                def tensor_clone_from_torch(tensor: torch.Tensor):
+                    hidet_tensor = tensor_from_torch(tensor)
+                    from hidet.graph import empty_like
+
+                    hidet_param = empty_like(hidet_tensor)
+                    hidet_param.copy_(hidet_tensor)
+                    del hidet_tensor
+                    return hidet_param
+
+                if steal:
+                    self.hidet_params[name] = tensor_clone_from_torch(torch_param.contiguous())
+                else:
+                    self.hidet_params[name] = tensor_from_torch(torch_param.contiguous())
                 del torch_param
                 torch.cuda.empty_cache()
         return self.hidet_params[name]
@@ -201,6 +227,7 @@ def allow_in_graph_registered_funcs_only():
             if obj in Registry.registered_functions:
                 continue
             disallow_in_graph(obj)
+            # print(f"{obj.__module__}.{obj.__qualname__}")
 
     new_func_ids = set()
     for registered_func in Registry.registered_functions:

@@ -824,6 +824,13 @@ def parallel_part_heuristic(
     n_size = OC // groups
     k_size = WC * KX * KY
     estimate_blocks = N * cdiv(m_size, 64) * cdiv(n_size, 64) * groups
+
+    if estimate_blocks == 0:
+        # `estimate_blocks` can be 0 in some cases, which caused the error in issue #467
+        # failure case: input_shape = (1, 2, 32, 512), weight_shape = (512, 512, 3, 3), stride = dilation = (1, 1)
+        # In this case we will have `OUT_H = 0` and thus `m_size = estimate_blocks = 0`
+        return 1
+
     estimate_concurrent_blocks = 80 * 5
     max_k_parts = cdiv(k_size, 64)
     k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)

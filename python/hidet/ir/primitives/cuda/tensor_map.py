@@ -24,12 +24,16 @@ def create_tensor_map(
     stride: Expr,
     box_size: Expr,
     elem_stride: Expr,
+    interleave: str = 'NONE',
+    swizzle: str = 'NONE',
+    l2_promotion: str = 'NONE',
 ):
     """
     Initialize a CUDA tensor map construct for async tensor bulk copy.
 
     See Also:
     https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#using-tma-to-transfer-multi-dimensional-arrays
+    https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TENSOR__MEMORY.html
 
     Parameters
     ----------
@@ -52,10 +56,57 @@ def create_tensor_map(
     elem_stride: int[rank]
         The distance between elements in units of sizeof(element). A stride of 2
         can be used to load only the real component of a complex-valued tensor, for instance
+    swizzle_mode: str
+        The shared memory bank swizzling pattern. It has to be one of the following:
+        - NONE: No swizzling
+        - 32B: 32-byte swizzling
+        - 64B: 64-byte swizzling
+        - 128B: 128-byte swizzling
     """
 
     dtypes = ['float16', 'float32', 'float64', 'int32', 'int64', 'uint32', 'uint64']
     assert str(dtype) in dtypes
+
+    # From the CUDA driver API(linked above):
+    # ```
+    # typedef enum CUtensorMapSwizzle_enum {
+    #           CU_TENSOR_MAP_SWIZZLE_NONE = 0,
+    #           CU_TENSOR_MAP_SWIZZLE_32B,
+    #           CU_TENSOR_MAP_SWIZZLE_64B,
+    #           CU_TENSOR_MAP_SWIZZLE_128B
+    #       } CUtensorMapSwizzle;
+    # ```
+    swizzle_modes = ('NONE', '32B', '64B', '128B')
+    assert swizzle in swizzle_modes, f"Invalid swizzle mode: must be one of {swizzle_modes}, but got {swizzle}"
+
+    # From the CUDA driver API(linked above):
+    # ```
+    # typedef enum CUtensorMapInterleave_enum {
+    #           CU_TENSOR_MAP_INTERLEAVE_NONE = 0,
+    #           CU_TENSOR_MAP_INTERLEAVE_16B,
+    #           CU_TENSOR_MAP_INTERLEAVE_32B
+    #       } CUtensorMapInterleave;
+    # ```
+    interleave_modes = ('NONE', '16B', '32B')
+    assert (
+        interleave in interleave_modes
+    ), f"Invalid interleave mode: must be one of {interleave_modes}, but got {interleave}"
+
+    # From the CUDA driver API(linked above):
+    # ```
+    # typedef enum CUtensorMapL2promotion_enum {
+    #           CU_TENSOR_MAP_L2_PROMOTION_NONE = 0,
+    #           CU_TENSOR_MAP_L2_PROMOTION_L2_64B,
+    #           CU_TENSOR_MAP_L2_PROMOTION_L2_128B,
+    #           CU_TENSOR_MAP_L2_PROMOTION_L2_256B
+    #       } CUtensorMapL2promotion;
+    # ```
+    l2_promotion_modes = ('NONE', '64B', '128B', '256B')
+    assert (
+        l2_promotion in l2_promotion_modes
+    ), f"Invalid L2 promotion mode: must be one of {l2_promotion_modes}, but got {l2_promotion}"
+    if l2_promotion != 'NONE':
+        l2_promotion = 'L2_' + l2_promotion
 
     template_string = f"""
 cuTensorMapEncodeTiled(
@@ -67,9 +118,9 @@ cuTensorMapEncodeTiled(
     {{}}, 
     {{}}, 
     {{}}, 
-    CUtensorMapInterleave::CU_TENSOR_MAP_INTERLEAVE_NONE,
-    CUtensorMapSwizzle::CU_TENSOR_MAP_SWIZZLE_NONE,
-    CUtensorMapL2promotion::CU_TENSOR_MAP_L2_PROMOTION_NONE,
+    CUtensorMapInterleave::CU_TENSOR_MAP_INTERLEAVE_{interleave},
+    CUtensorMapSwizzle::CU_TENSOR_MAP_SWIZZLE_{swizzle},
+    CUtensorMapL2promotion::CU_TENSOR_MAP_L2_PROMOTION_{l2_promotion},
     CUtensorMapFloatOOBfill::CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE
 );
     """

@@ -16,9 +16,9 @@ from hidet.ir.expr import Expr
 from hidet.ir.stmt import DeclareScope
 
 from hidet.ir.cute.expr import Op
-from hidet.ir.cute.type import tiled_tensor, TiledTensorType
-from hidet.ir.cute import TensorLayout
-from hidet.ir.cute.layout import TiledTensorLayout
+from hidet.ir.cute.type import tiled_tensor, TiledTensorType, logical_encoding
+from hidet.ir.cute import TensorLayout, TiledTensorLayout, is_auto_layout, make_layout
+from hidet.ir.cute.layout import AutoLayout
 
 
 class Rearrange(Op):
@@ -54,6 +54,17 @@ class Rearrange(Op):
         self.layout = layout
         self.scope: DeclareScope = scope
 
+    def resolve_logical_encoding(self):
+        if is_auto_layout(self.layout):
+            raise RuntimeError(
+                "Cannot resolve the logical encoding for tensors because the output layout"
+                f"hasn't been specified.(got:{self.layout})"
+            )
+        shape = self.layout.shape()
+        thr_layout, val_layout = self.layout.thr_layout(), self.layout.val_layout()
+        tv = make_layout(thr_layout, val_layout)
+        return None, logical_encoding(shape, tv)
+
     def infer_type(self, arg_types: List[BaseType]) -> BaseType:
         """
         Infers the type of the result of the rearrange operation based on input types.
@@ -67,8 +78,12 @@ class Rearrange(Op):
 
         x_type = arg_types[0]
         assert isinstance(x_type, TiledTensorType)
-        assert isinstance(x_type.layout, TiledTensorLayout) and isinstance(self.layout, TiledTensorLayout)
-        assert x_type.layout.shape() == self.layout.shape()
+        assert isinstance(x_type.layout, (AutoLayout, TiledTensorLayout)) and isinstance(
+            self.layout, (AutoLayout, TiledTensorLayout)
+        )
+        if is_auto_layout(self.layout):
+            return tiled_tensor(x_type.dtype, self.layout, self.scope)
+        assert is_auto_layout(x_type.layout) or x_type.layout.shape() == self.layout.shape()
         return tiled_tensor(x_type.dtype, self.layout, self.scope)
 
 

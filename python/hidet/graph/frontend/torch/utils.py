@@ -55,6 +55,9 @@ def dtype_from_torch(torch_dtype) -> Optional[DataType]:
         torch.int16: dtypes.int16,
         torch.int8: dtypes.int8,
         torch.uint8: dtypes.uint8,
+        torch.uint16: dtypes.uint16,
+        torch.uint32: dtypes.uint32,
+        torch.uint64: dtypes.uint64,
         torch.bool: dtypes.boolean,
         torch.double: dtypes.float64,
         torch.complex64: dtypes.complex64,
@@ -76,9 +79,18 @@ def dtype_to_torch(dtype: DataType):
         dtypes.int16: torch.int16,
         dtypes.int8: torch.int8,
         dtypes.uint8: torch.uint8,
+        dtypes.uint16: torch.uint16,
+        dtypes.uint32: torch.uint32,
+        dtypes.uint64: torch.uint64,
         dtypes.boolean: torch.bool,
     }
     return mapping[dtype]
+
+
+def is_any_torch_float16(torch_dtype) -> bool:
+    import torch
+
+    return torch_dtype in (torch.float16, torch.bfloat16)
 
 
 def device_from_torch(torch_device) -> Device:

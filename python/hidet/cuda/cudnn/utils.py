@@ -15,6 +15,7 @@ from .ffi import cudnnDataType
 
 _cudnn_type_dict = {
     dtypes.float16: cudnnDataType.CUDNN_DATA_HALF,
+    dtypes.bfloat16: cudnnDataType.CUDNN_DATA_BFLOAT16,
     dtypes.float32: cudnnDataType.CUDNN_DATA_FLOAT,
     dtypes.float64: cudnnDataType.CUDNN_DATA_DOUBLE,
     dtypes.int32: cudnnDataType.CUDNN_DATA_INT32,
@@ -23,6 +24,7 @@ _cudnn_type_dict = {
 
 _cudnn_type_dict_str = {
     "float16": cudnnDataType.CUDNN_DATA_HALF,
+    "bfloat16": cudnnDataType.CUDNN_DATA_BFLOAT16,
     "float32": cudnnDataType.CUDNN_DATA_FLOAT,
     "float64": cudnnDataType.CUDNN_DATA_DOUBLE,
     "int32": cudnnDataType.CUDNN_DATA_INT32,

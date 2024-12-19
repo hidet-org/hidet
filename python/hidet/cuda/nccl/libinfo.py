@@ -15,7 +15,9 @@ import os
 def _get_nccl_dirs():
     import site
 
-    return [os.path.join(root, 'nvidia', 'nccl') for root in site.getsitepackages()]
+    res = [os.path.join(root, 'nvidia', 'nccl') for root in site.getsitepackages()]
+    res += [os.path.join(site.getusersitepackages(), 'nvidia', 'nccl')]
+    return res
 
 
 def get_nccl_include_dirs():

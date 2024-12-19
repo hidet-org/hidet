@@ -19,7 +19,7 @@ from hidet.utils.benchmark import Bench
 
 @dataclass
 class BenchMatmulConfig:
-    dtype: torch.dtype = torch.float16
+    dtype: torch.dtype = torch.bfloat16
     space: int = 2
 
 

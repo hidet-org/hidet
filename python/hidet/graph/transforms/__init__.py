@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
+import hidet
 from hidet.graph.flow_graph import FlowGraph
 
 from .base import GraphPass, PassContext, logger
@@ -50,20 +51,22 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     ret: FlowGraph
         The optimized flow graph.
     """
-    ctx = PassContext.current()
-    passes = [
-        conv_channel_last_pass(),
-        subgraph_rewrite_pass(),
-        automatic_mix_precision_pass(),
-        selective_quantize_pass(),
-        resolve_variant_pass(),
-        fuse_operator_pass(),
-        eliminate_barrier_pass(),
-    ]
-    for inst in ctx.instruments:
-        inst.before_all_passes(graph)
-    for optimize_pass in passes:
-        graph = optimize_pass(graph)
-    for inst in reversed(ctx.instruments):
-        inst.after_all_passes(graph)
-    return graph.update_nodes()
+    with hidet.option.context():
+        hidet.option.execution_mode('interpreter')
+        ctx = PassContext.current()
+        passes = [
+            conv_channel_last_pass(),
+            subgraph_rewrite_pass(),
+            automatic_mix_precision_pass(),
+            selective_quantize_pass(),
+            resolve_variant_pass(),
+            fuse_operator_pass(),
+            eliminate_barrier_pass(),
+        ]
+        for inst in ctx.instruments:
+            inst.before_all_passes(graph)
+        for optimize_pass in passes:
+            graph = optimize_pass(graph)
+        for inst in reversed(ctx.instruments):
+            inst.after_all_passes(graph)
+        return graph.update_nodes()

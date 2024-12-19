@@ -18,6 +18,7 @@ from . import builders
 from . import layout
 from . import mapping
 from . import task
+from . import polinomial
 
 from .node import Node
 from .module import IRModule

@@ -84,3 +84,7 @@ def reduce_scatter(sendbuff: Expr, recvbuff: Expr, recvcount: Expr, dtype: DataT
         comm,
         get_cuda_stream(),
     )
+
+
+def wait_tensor():
+    return BlackBoxStmt('cudaStreamSynchronize((cudaStream_t){});', get_cuda_stream())

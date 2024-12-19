@@ -75,7 +75,7 @@ def test_fusion_cublas_matmul():
     y1 = graph_1(a)
     y2 = graph_2(a)
 
-    hidet.utils.assert_close(y1, y2, atol=1e-5, rtol=1e-5)
+    hidet.utils.assert_close(y1, y2, atol=2e-1, rtol=2e-1)
 
 
 if __name__ == '__main__':

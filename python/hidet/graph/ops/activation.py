@@ -283,8 +283,27 @@ def softshrink(x: Tensor, lambda_val: float) -> Tensor:
 
 
 def softmax(x: Tensor, axis=1) -> Tensor:
-    return SoftmaxOp(x, axis).outputs[0]
+    from hidet.graph.ops import max, exp, sum, divide
+
+    max_x = max(x, axis, keep_dim=True)
+    normalized_x = x - max_x
+    x_exp = exp(normalized_x)
+    sum_exp_x = sum(x_exp, axis, keep_dim=True)
+    soft_max = divide(x_exp, sum_exp_x)
+    return soft_max
 
 
 def softmin(x: Tensor, axis: int) -> Tensor:
-    return SoftmaxOp(-x, axis).outputs[0]
+    return softmax(-x, axis)
+
+
+def logsoftmax(x: Tensor, axis=1) -> Tensor:
+    from hidet.graph.ops import max, exp, sum, log
+
+    max_x = max(x, axis, keep_dim=True)
+    normalized_x = x - max_x
+    x_exp = exp(normalized_x)
+    sum_exp_x = sum(x_exp, axis, keep_dim=True)
+    log_sum_exp_x = log(sum_exp_x)
+    log_soft_max = x - max_x - log_sum_exp_x
+    return log_soft_max

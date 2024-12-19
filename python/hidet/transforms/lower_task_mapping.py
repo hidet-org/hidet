@@ -10,14 +10,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Dict, Sequence, Union, Optional
-from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt
+from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt, IRModule
+
+from hidet.ir.dtypes import int32
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
-from hidet.transforms.base import Pass, FunctionPass
+from hidet.ir.tools.rewriter import PolinomialExpr2ExprRewriter
+from hidet.transforms.base import Pass
 from hidet.utils import prod
+
 
 Int = Union[Expr, int]
 TaskIndex = List[Int]
@@ -36,7 +40,15 @@ class TaskMappingExpander:
         self.loop_nests: List[ForStmt] = []
 
     def expand(self, mapping: TaskMapping, worker: Expr, loop_vars: List[Var], body: Stmt) -> Stmt:
-        tasks: List[TaskIndex] = self.visit(mapping, worker)
+        if isinstance(mapping, SpatialTaskMapping) and len(loop_vars) != 0:
+            strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
+            flatten = int32.zero
+            for loop_var, stride in zip(loop_vars, strides):
+                flatten += loop_var * stride
+            rewriter = PolinomialExpr2ExprRewriter(flatten, worker)
+            body = rewriter.rewrite(body)
+
+        tasks = self.visit(mapping, worker)
         seq = []
         for task in tasks:
             remap: Dict[Var, Expr] = {a: b for a, b in zip(loop_vars, task)}
@@ -62,8 +74,14 @@ class TaskMappingExpander:
     def visit_Spatial(self, mapping: SpatialTaskMapping, worker: Expr) -> List[TaskIndex]:
         strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
         task = []
-        for extent, stride in zip(mapping.task_shape, strides):
-            task.append(worker // stride % extent)
+        if len(strides) != 0:
+            for i, (extent, stride) in enumerate(zip(mapping.task_shape, strides)):
+                # For first index we don't need to do `% extent` because `taks_size == num_workers`
+                # It's guarantee by `task_mapping_bound_check_pass()`
+                if mapping.ranks[i] == 0:
+                    task.append(worker // stride)
+                else:
+                    task.append(worker // stride % extent)
         return [task]
 
     def visit_Repeat(self, mapping: RepeatTaskMapping, worker: Expr) -> List[TaskIndex]:
@@ -95,12 +113,23 @@ class TaskMappingExpander:
 
 class LowerTaskMappingRewriter(IRRewriter):
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
-        body = self.visit(stmt.body)
+        new_body = self.visit(stmt.body)
         expander = TaskMappingExpander()
-        return expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=body)
+        new_stmt = expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=new_body)
+        return new_stmt
 
 
-class LowerTaskMappingPass(FunctionPass):
+class LowerTaskMappingPass(Pass):
+    def __init__(self, name=None):
+        self.block_dim = None
+        super().__init__(name)
+
+    def process_module(self, ir_module: IRModule) -> IRModule:
+        for func in ir_module.functions.values():
+            if func.kind == 'cuda_kernel':
+                self.block_dim = func.attrs['cuda.block_dim']
+        return super().process_module(ir_module)
+
     def process_func(self, func: Function) -> Function:
         rewriter = LowerTaskMappingRewriter()
         return rewriter.rewrite(func)

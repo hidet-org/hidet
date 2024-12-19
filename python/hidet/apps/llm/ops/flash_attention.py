@@ -26,7 +26,7 @@ def flash_attention(query: Tensor, key: Tensor, value: Tensor) -> Tensor:
 
     _, _, seq_length, head_size = query.shape
     transposed_key = ops.transpose(key, [0, 1, 3, 2])  # [bs, num_kv_heads, head_size, seq_length]
-    norm_scalar = ops.sqrt(ops.full([], value=cast(head_size, dtype='float16'), device=query.device))
+    norm_scalar = ops.sqrt(ops.full([], value=cast(head_size, dtype=query.dtype), device=query.device))
     causal_mask = (
         1.0 - ops.tri(seq_length, seq_length, dtype=query.dtype, device=query.device)
     ) * query.dtype.min_value

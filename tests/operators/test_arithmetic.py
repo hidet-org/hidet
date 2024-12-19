@@ -12,6 +12,7 @@
 import math
 import pytest
 import hidet
+import torch
 import numpy as np
 from hidet import ops
 
@@ -72,8 +73,73 @@ def test_sqrt(shape):
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
+def test_sin(shape):
+    check_unary(shape, np.float32, np.sin, ops.sin)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_cos(shape):
+    check_unary(shape, np.float32, np.cos, ops.cos)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_tan(shape):
+    check_unary(shape, np.float32, np.tan, ops.tan)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_sinh(shape):
+    check_unary(shape, np.float32, np.sinh, ops.sinh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_cosh(shape):
+    check_unary(shape, np.float32, np.cosh, ops.cosh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
 def test_tanh(shape):
     check_unary(shape, np.float32, np.tanh, ops.tanh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_asin(shape):
+    check_unary(shape, np.float32, np.arcsin, ops.asin)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_acos(shape):
+    check_unary(shape, np.float32, np.arccos, ops.acos)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_atan(shape):
+    check_unary(shape, np.float32, np.arctan, ops.atan)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_asinh(shape):
+    check_unary(shape, np.float32, np.arcsinh, ops.asinh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_acosh(shape):
+    check_unary(shape, np.float32, np.arccosh, ops.acosh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_atanh(shape):
+    check_unary(shape, np.float32, np.arctanh, ops.atanh)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_exp(shape):
+    check_unary(shape, np.float32, np.exp, ops.exp)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_expm1(shape):
+    check_unary(shape, np.float32, np.expm1, ops.expm1)
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
@@ -82,8 +148,38 @@ def test_erf(shape):
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
+def test_sqrt(shape):
+    check_unary(shape, np.float32, np.sqrt, ops.sqrt, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
 def test_rsqrt(shape):
     check_unary(shape, np.float32, lambda v: np.reciprocal(np.sqrt(v)), ops.rsqrt, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_log(shape):
+    check_unary(shape, np.float32, np.log, ops.log, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_log2(shape):
+    check_unary(shape, np.float32, np.log2, ops.log2, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_log10(shape):
+    check_unary(shape, np.float32, np.log10, ops.log10, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_log1p(shape):
+    check_unary(shape, np.float32, np.log1p, ops.log1p, positive=True)
+
+
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_round(shape):
+    check_unary(shape, np.float32, np.round, ops.round)
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
@@ -141,6 +237,31 @@ def test_ceil(a_shape):
     check_unary(a_shape, np.float32, np.ceil, ops.ceil)
 
 
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_floor(a_shape):
+    check_unary(a_shape, np.float32, np.floor, ops.floor)
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_trunc(a_shape):
+    check_unary(a_shape, np.float32, np.trunc, ops.trunc)
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_isfinite(a_shape):
+    check_unary(a_shape, np.float32, np.isfinite, ops.isfinite)
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_isinf(a_shape):
+    check_unary(a_shape, np.float32, np.isinf, ops.isinf)
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_isnan(a_shape):
+    check_unary(a_shape, np.float32, np.isnan, ops.isnan)
+
+
 @pytest.mark.parametrize("a_shape", [[20]])
 def test_cast_from_fp16(a_shape):
     check_unary(a_shape, np.float16, np.int8, lambda x: ops.cast(x, "int8"))
@@ -154,6 +275,30 @@ def test_cast_from_fp16(a_shape):
 
     check_unary(a_shape, np.float16, np.int64, lambda x: ops.cast(x, "int64"))
     check_unary(a_shape, np.float16, np.uint64, lambda x: ops.cast(x, "uint64"))
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+@pytest.mark.parametrize(
+    "a_dtype, b_dtype",
+    [
+        ['float16', 'float32'],
+        ['int32', 'float32'],
+        ['int8', 'int32'],
+        ['int32', 'float16'],
+        ['bfloat16', 'float32'],
+        ['int32', 'bfloat16'],
+    ],
+)
+def test_where(a_shape, a_dtype, b_dtype):
+    from hidet.testing import assert_torch_allclose
+
+    a = hidet.randn(a_shape, dtype=a_dtype)
+    b = hidet.randn(a_shape, dtype=b_dtype)
+    c = hidet.ops.where(a > 0.5, a, b)
+
+    c_torch = torch.where(a.torch() > 0.5, a.torch(), b.torch())
+    assert str(c.dtype).split('.')[1] == str(c_torch.dtype).split('.')[1]
+    assert_torch_allclose(c, c_torch)
 
 
 if __name__ == '__main__':

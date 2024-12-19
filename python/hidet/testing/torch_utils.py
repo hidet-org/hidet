@@ -57,6 +57,9 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
         assert (
             torch_output.dtype == hidet_output.dtype
         ), f"dtype mismatch --- eager: {torch_output.dtype} vs hidet: {hidet_output.dtype}"
+        if torch_output.dtype == torch.bfloat16:
+            torch_output = torch_output.to(torch.float32)
+            hidet_output = hidet_output.to(torch.float32)
         torch_output = torch_output.detach().cpu().numpy()
         hidet_output = hidet_output.detach().cpu().numpy()
         numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)
@@ -84,6 +87,7 @@ class Backend:
         # hidet.option.debug_cache_tuning(True)
         # hidet.option.save_lower_ir(True)
         # hidet.option.debug_show_verbose_flow_graph(True)
+        # hidet.torch.dynamo_config.dump_graph_ir("./graph_ir")
 
         # Initialise compiler server
         if os.environ.get('CI_CS_HOSTNAME'):
@@ -105,10 +109,13 @@ class Backend:
 
 
 # Make benchmarking of given torch model
-def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
+def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
     for _ in range(warmup_iters):
-        out = model(*torch_inputs)  # pylint:disable=unused-variable
+        outs = model(*inputs)  # pylint:disable=unused-variable
     torch.cuda.empty_cache()
+
+    if true_outputs is not None:
+        torch.testing.assert_close(outs, true_outputs, rtol=0.2, atol=0.2)
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -120,7 +127,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
 
     start = time.time_ns()
     for _ in range(bench_iters):
-        out = model(*torch_inputs)  # pylint:disable=unused-variable
+        _ = model(*inputs)  # pylint:disable=unused-variable
     torch.cuda.synchronize()
     end = time.time_ns()
 
@@ -151,12 +158,13 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
 
             predicted_token_ids = torch.reshape(predicted_token_ids, (bs, 1))
             inputs = torch.cat([inputs, predicted_token_ids], dim=1)
-        # print(text_output)
-        return (i + 1) * bs
 
-    torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
+        # print(text_output)
+        return (i + 1) * bs, inputs
+
+    # torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
     for _ in range(warmup_iters):
-        num_tokens = one_iter(inputs)
+        num_tokens, output_text = one_iter(inputs)
     torch.cuda.empty_cache()
 
     start = torch.cuda.Event(enable_timing=True)
@@ -164,11 +172,11 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
     torch.cuda.synchronize()
     start.record()
     for _ in range(bench_iters):
-        num_tokens = one_iter(inputs)
+        num_tokens, output_text = one_iter(inputs)
     end.record()
     end.synchronize()
     torch.cuda.empty_cache()
 
     latency = start.elapsed_time(end) / bench_iters
     token_per_second = num_tokens / latency * 1000.0
-    return token_per_second
+    return token_per_second, output_text

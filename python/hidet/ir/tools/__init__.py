@@ -11,7 +11,7 @@
 # limitations under the License.
 from .type_infer import infer_type, TypeInfer
 from .util_functors import collect
-from .rewriter import rewrite
+from .rewriter import rewrite, MapBasedRewriter
 from .free_var_collector import collect_free_vars
 from .printer import IRPrinter, astext
 from .simplifier import simplify, simplify_to_int

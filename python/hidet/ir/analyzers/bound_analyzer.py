@@ -197,7 +197,7 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[Union[Expr, i
         while len(dims) < 3:
             dims = dims + [1]
     else:
-        dims = [dims, dims, dims]
+        dims = [dims, 1, 1]
     ret = []
     for dim in dims:
         if isinstance(dim, int):

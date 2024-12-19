@@ -51,6 +51,9 @@ class FloatType(DataType):
     def is_vector(self) -> bool:
         return False
 
+    def is_any_float16(self):
+        return self.short_name in ['f16', 'bf16']
+
     def is_boolean(self) -> bool:
         return False
 

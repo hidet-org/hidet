@@ -52,6 +52,11 @@ def tensor_half(self: Tensor) -> Tensor:
     return ops.cast(self, "float16")
 
 
+@register_method(torch.Tensor.bfloat16)
+def tensor_bfloat16(self: Tensor) -> Tensor:
+    return ops.cast(self, "bfloat16")
+
+
 @register_method(torch.Tensor.bool)
 def tensor_bool(self: Tensor) -> Tensor:
     return ops.cast(self, "bool")
@@ -219,6 +224,11 @@ def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
 
 @register_method(torch.Tensor.repeat)
 def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
+    if len(self.shape) < len(sizes):
+        shape = [1] * (len(sizes) - len(self.shape)) + list(self.shape)
+        x = ops.reshape(self, shape)
+        return ops.tile(x, sizes)
+
     return ops.tile(self, sizes)
 
 
@@ -278,3 +288,39 @@ def tensor_new_full(
 @register_method(torch.Tensor.zero_)
 def tensor_zero_(self: Tensor):
     return ops.full(self.shape, dtype=self.dtype, device=self.device, value=self.dtype.zero)
+
+
+@register_method(torch.Tensor.new_ones)
+def tensor_new_ones(self: Tensor, size, *, dtype=None, device=None, requires_grad=False, layout=None, pin_memory=False):
+    if layout is not None and layout != torch.strided:
+        raise NotImplementedError("layout is not None and layout != torch.strided")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = size
+    if dtype is None:
+        dtype = self.dtype
+        device = self.device
+    _ = pin_memory
+    _ = requires_grad
+
+    return ops.full(shape, dtype=dtype, device=device, value=dtype.one)
+
+
+@register_method(torch.Tensor.new_ones)
+def tensor_new_ones_v2(
+    self: Tensor, *size, dtype=None, device=None, requires_grad=False, layout=None, pin_memory=False
+):
+    if layout is not None and layout != torch.strided:
+        raise NotImplementedError("layout is not None and layout != torch.strided")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = size
+    if dtype is None:
+        dtype = self.dtype
+        device = self.device
+    _ = pin_memory
+    _ = requires_grad
+
+    return ops.full(shape, dtype=dtype, device=device, value=dtype.one)

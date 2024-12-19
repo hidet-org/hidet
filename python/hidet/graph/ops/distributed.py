@@ -47,7 +47,10 @@ class AllReduceTask(Task):
                 attrs.func_kind = 'public'
                 _all_reduce(x, y, size, dtype, str_to_nccl_op(self.op), self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class AllReduceOp(Operator):
@@ -87,7 +90,10 @@ class AllGatherTask(Task):
                 attrs.func_kind = 'public'
                 _all_gather(x, y, size, dtype, self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class AllGatherOp(Operator):
@@ -132,7 +138,10 @@ class ReduceScatterTask(Task):
                 attrs.func_kind = 'public'
                 _reduce_scatter(x, y, size, dtype, str_to_nccl_op(self.op), self.comm_id)
 
-        return [script_module.ir_module()]
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
 
 
 class ReduceScatterOp(Operator):
@@ -142,6 +151,43 @@ class ReduceScatterOp(Operator):
             attributes={'op': op, 'comm_id': comm_id},
             task=ReduceScatterTask(input_like(x, 'x'), op, comm_id),
         )
+
+
+class WaitTensorTask(Task):
+    def __init__(self, x: TensorNode, comm_id: int = 0):
+        if not isinstance(x.type.layout, RowMajorLayout):
+            raise RuntimeError("Communication operations only support row major layout.")
+        y = compute('out', x.shape, lambda *indices: x[indices])
+        self.comm_id = comm_id
+
+        super().__init__(
+            'distributed.wait_tensor', inputs=[x], outputs=[y], attributes={'comm_id': comm_id}, share_map={0: 0}
+        )
+
+    def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
+        import hidet
+        from hidet.ir.primitives.cuda.nccl import wait_tensor as _wait_tensor
+        from hidet.lang import attrs
+
+        dtype: DataType = self.inputs[0].type.dtype
+        shape: Tuple[Expr, ...] = self.inputs[0].shape
+
+        with hidet.script_module() as script_module:
+
+            @hidet.script
+            def launch(x: dtype[shape], y: dtype[shape]):
+                attrs.func_kind = 'public'
+                _wait_tensor()
+
+        ir_module: IRModule = script_module.ir_module()
+        ir_module.task = self
+
+        return [ir_module]
+
+
+class WaitTensorOp(Operator):
+    def __init__(self, x: Tensor, comm_id: int):
+        super().__init__(inputs=[x], attributes={'comm_id': comm_id}, task=WaitTensorTask(input_like(x, 'x'), comm_id))
 
 
 def all_reduce(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
@@ -160,6 +206,12 @@ def reduce_scatter(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
     if x.device.kind != 'cuda':
         raise RuntimeError("NCCL only supports CUDA tensors")
     return ReduceScatterOp(x, op, comm_id).outputs[0]
+
+
+def wait_tensor(x: Tensor, comm_id: int = 0) -> Tensor:
+    if x.device.kind != 'cuda':
+        raise RuntimeError("NCCL only supports CUDA tensors")
+    return WaitTensorOp(x, comm_id).outputs[0]
 
 
 # We haven't decided how to integrate asymmetric communication functions into computational graphs

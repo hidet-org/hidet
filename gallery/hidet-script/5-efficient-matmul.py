@@ -20,6 +20,7 @@ from hidet.lang import as_tensor_pointer, register_tensor, shared_tensor
 from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
 from hidet.lang.mapping import spatial, auto_map
 from hidet.lang.layout import row_major, local_layout
+from hidet.utils.benchmark import benchmark_func
 
 # the hyperparameters of the kernel
 warps_m, warps_n = 4, 2  # we use 4x2 warps
@@ -154,10 +155,10 @@ for m, n, k in [(1024, 1024, 1024), (256, 256, 256), (32, 32, 32)]:
 
     torch.testing.assert_close(c1, c2, atol=1e-4, rtol=1e-4)
 
-    hidet_latency = hidet.utils.benchmark_func(lambda: hidet_matmul_relu(a, b), repeat=50)
+    hidet_latency = benchmark_func(lambda: hidet_matmul_relu(a, b), repeat=50)
     print(f'{m}x{k}x{n}:')
-    print(' torch: {:.3f} ms'.format(hidet.utils.benchmark_func(lambda: torch_matmul_relu(a, b))))
-    print(' hidet: {:.3f} ms'.format(hidet.utils.benchmark_func(lambda: hidet_matmul_relu(a, b))))
+    print(' torch: {:.3f} ms'.format(benchmark_func(lambda: torch_matmul_relu(a, b))))
+    print(' hidet: {:.3f} ms'.format(benchmark_func(lambda: hidet_matmul_relu(a, b))))
 
 # %%
 # Get the source code:

@@ -9,13 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence
+from typing import List, Optional, Tuple, Union, Sequence
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
+from hidet.ir import dtypes
 from hidet.utils import prod
+from hidet.graph.tensor import from_torch
+from hidet.graph.frontend.torch.utils import dtype_to_torch
 from hidet.ir.cute import TensorLayout, compact_row_major, coalesce
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput, normalize_slice
@@ -449,15 +452,94 @@ class Im2ColTask(Task):
         )
 
 
+class AsStridedTask(Task):
+    def __init__(
+        self,
+        x: TensorNode,
+        size: Union[int, List[int]],
+        stride: Union[int, List[int]],
+        storage_offset: Optional[int] = None,
+    ):
+        def unravel_index(index, shape):
+            out = []
+            for s in reversed(shape):
+                out.append(index % s)
+                index = index // s
+            return list(reversed(out))
+
+        storage_shift = storage_offset if storage_offset is not None else 0
+
+        def fmap(*indices):
+            stride1d = 0
+            for i, s in zip(indices, stride):
+                stride1d += i * s
+            stride1d += storage_shift
+
+            new_indices = unravel_index(stride1d, x.shape)
+            return x[new_indices]
+
+        out = compute(name='out', shape=size, fcompute=fmap)
+
+        super().__init__(
+            name='as_strided',
+            inputs=[x],
+            attributes={'size': size, 'stride': stride, 'storage_offset': storage_offset},
+            outputs=[out],
+        )
+
+
+class FlipTask(Task):
+    def __init__(self, x: Tensor, dims: Union[List[int], Tuple[int]]):
+        def fmap(*indices):
+            idx = []
+            for i in range(len(indices)):
+                idx.append(if_then_else(i in dims, x.shape[i] - indices[i] - 1, indices[i]))
+            return x[idx]
+
+        out = compute(name='out', shape=x.shape, fcompute=fmap)
+        super().__init__(name='flip', inputs=[x], attributes={'dims': dims}, outputs=[out])
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
         super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        shape = self.attrs['shape']
+        return [from_torch(torch.reshape(x_torch, tuple(shape)).contiguous())]
+
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
         super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
+
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        plan = self.attrs['plan']
+        shape = []
+
+        for dims in plan:
+            if len(dims) == 0:
+                shape.append(1)
+            elif len(dims) == 1:
+                shape.append(x_torch.size(dims[0]))
+            else:
+                size = 1
+                for dim in dims:
+                    size *= x_torch.size(dim)
+                shape.append(size)
+
+        flat_plan = [dim for dims in plan for dim in dims]
+
+        x_torch = torch.permute(x_torch, tuple(flat_plan))
+
+        return [from_torch(x_torch.reshape(shape).contiguous())]
 
 
 class SqueezeOp(Operator):
@@ -484,6 +566,15 @@ class UnsqueezeOp(Operator):
             raise ValueError('Invalid unsqueeze dims: {} for shape: {}'.format(dims, x.shape))
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        dims = self.attrs['dims']
+        for dim in dims:
+            x_torch = torch.unsqueeze(x_torch, dim)
+        return [from_torch(x_torch.contiguous())]
+
 
 class FlattenOp(Operator):
     def __init__(self, x: Tensor, start_dim: int, end_dim: int):
@@ -499,6 +590,14 @@ class FlattenOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
 
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        start_dim = self.attrs['start_dim']
+        end_dim = self.attrs['end_dim']
+        return [from_torch(torch.flatten(x_torch, start_dim, end_dim).contiguous())]
+
 
 class PermuteDimsOp(Operator):
     def __init__(self, x: Tensor, axes: Optional[List[int]] = None):
@@ -512,6 +611,15 @@ class PermuteDimsOp(Operator):
         plan = [[v] for v in axes]
         super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
 
+    def run_torch(self):
+        import torch
+
+        x = self.inputs[0]
+        x_torch = x.torch()
+        axes = self.attrs['axes']
+        result = [from_torch(torch.permute(x_torch, axes).contiguous())]
+        return result
+
 
 class CastOp(Operator):
     def __init__(self, x: Tensor, dtype: DataType):
@@ -523,18 +631,43 @@ class CastOp(Operator):
             task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: ir_cast(v, dtype)),
         )
 
+    def run_torch(self):
+        x = self.inputs[0]
+        dtype: DataType = self.attrs['dtype']
+
+        unsupported_types = [dtypes.boolean, dtypes.tfloat32]
+
+        if x.dtype in unsupported_types or dtype in unsupported_types:
+            raise NotImplementedError
+
+        x_torch = x.torch()
+        new_tensor = x_torch.to(dtype_to_torch(dtype))
+        return [from_torch(new_tensor)]
+
 
 class ConcatOp(Operator):
     def __init__(self, *tensors: Tensor, axis: int):
         tensors = list(tensors)
         if len(tensors) == 0:
             raise ValueError('Concat requires at least one tensor, 0 given.')
+        tensors = [tensor for tensor in tensors if tensor.shape != (0,)] or [tensors[0]]
         axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
             attributes={'axis': axis},
             task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
         )
+
+    def run_torch(self):
+        import torch
+
+        if len(self.inputs) == 1 and self.inputs[0].shape == (0,):
+            return self.inputs
+
+        inputs_torch = [x.torch() for x in self.inputs]
+        axis = self.attrs['axis']
+
+        return [from_torch(torch.cat(inputs_torch, axis))]
 
 
 class TakeOp(Operator):
@@ -548,6 +681,7 @@ class TakeOp(Operator):
 
 class GatherOp(Operator):
     def __init__(self, data: Tensor, indices: Tensor, axis: int):
+        axis = normalize_dim(axis, rank=len(data.shape))
         super().__init__(
             inputs=[data, indices],
             attributes={'axis': axis},
@@ -595,6 +729,13 @@ class BroadcastOp(Operator):
             inputs=[data], attributes={'shape': shape}, task=BroadcastTask(input_like(data, 'data'), shape)
         )
 
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        shape = self.attrs['shape']
+        return [from_torch(torch.broadcast_to(x_torch, shape))]
+
 
 class PadOp(Operator):
     def __init__(self, data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0):
@@ -610,6 +751,22 @@ class PadOp(Operator):
             attributes={'pads': pads, 'mode': mode, 'value': value},
             task=PadTask(input_like(data, 'data'), pads, value),
         )
+
+    def run_torch(self):
+        import torch
+
+        x_torch = self.inputs[0].torch()
+        pads = self.attrs['pads']
+        mode = self.attrs['mode']
+        value = self.attrs['value']
+
+        half = len(pads) // 2
+        pads_torch = [None] * len(pads)
+        pads_torch[1::2] = pads[:half]
+        pads_torch[::2] = pads[half:]
+        pads_torch.reverse()
+
+        return [from_torch(torch.nn.functional.pad(x_torch, pads_torch, mode, value))]
 
 
 class TileOp(Operator):
@@ -641,6 +798,26 @@ class Im2ColOp(Operator):
             attributes={'kernel_size': kernel_size, 'dilation': dilation, 'padding': padding, 'stride': stride},
             task=Im2ColTask(input_like(x, 'x'), kernel_size, dilation, padding, stride),
         )
+
+
+class AsStridedOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        size: Union[int, List[int]],
+        stride: Union[int, List[int]],
+        storage_offset: Optional[int] = None,
+    ):
+        super().__init__(
+            inputs=[x],
+            attributes={'size': size, 'stride': stride, 'storage_offset': storage_offset},
+            task=AsStridedTask(input_like(x, 'x'), size, stride, storage_offset),
+        )
+
+
+class FlipOp(Operator):
+    def __init__(self, x: Tensor, dims: Union[List[int], Tuple[int]]):
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=FlipTask(input_like(x, 'x'), dims))
 
 
 def reshape(x: Tensor, shape) -> Tensor:
@@ -916,3 +1093,13 @@ def im2col(
     if nd == 3:
         return x.squeeze(0)
     return x
+
+
+def as_strided(
+    x: Tensor, size: Union[int, List[int]], stride: Union[int, List[int]], storage_offset: Optional[int] = None
+):
+    return AsStridedOp(x, size, stride, storage_offset).outputs[0]
+
+
+def flip(x: Tensor, dims: Union[List[int], Tuple[int]]):
+    return FlipOp(x, dims).outputs[0]

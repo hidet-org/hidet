@@ -13,7 +13,6 @@ from typing import List, Optional, Callable, Any
 from functools import lru_cache
 
 import hidet.cuda
-from hidet.ir import dtypes
 from hidet.ir.expr import is_constant
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
@@ -65,8 +64,6 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
         c = cc.reshape([batch_size, nparts, m_size, n_size]).sum(1)
 
         graph: hidet.FlowGraph = hidet.trace_from(c, [a, b])
-        # with hidet.graph.PassContext() as ctx:
-        # graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
         graph: hidet.FlowGraph = hidet.graph.optimize(graph)
 
         latency: float = graph.latency()
@@ -97,8 +94,8 @@ class MatmulResolveRule(ResolveRule):
     """
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
-        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
-        mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
+        parallel_k = hidet.option.get_parallel_k()
+        mma = self.get_config('mma', default='mma')  # 'simt', 'mma'
 
         if any(not isinstance(v, int) for v in a.shape + b.shape):
             nparts = 1
@@ -132,6 +129,18 @@ class MatmulResolveRule(ResolveRule):
         c_shape = list(op.outputs[0].shape)
         if a.dtype.nbytes > 4 or b.dtype.nbytes > 4:
             return None
+
+        # If either a or b is a tensor with actual storage(i.e., not symbolic),
+        # the operator `flatten` calls in the code below will
+        # require additional memory and somehow these allocated spaces are not released during the model compilation.
+        # This causes the error described in issue #326.
+
+        exection_mode = hidet.option.get_execution_mode()
+        if a.is_symbolic() or b.is_symbolic():
+            hidet.option.execution_mode('symbolic')
+
+        if op.attrs['transpose_b']:
+            b = b.transpose(-2, -1)
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
@@ -170,6 +179,8 @@ class MatmulResolveRule(ResolveRule):
             b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
+
+        hidet.option.execution_mode(exection_mode)
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
@@ -182,18 +193,29 @@ class MatmulResolveRule(ResolveRule):
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]
 
-        if not (
-            a.dtype == dtypes.float16
-            and b.dtype == dtypes.float16
+        transpose_b = op.attrs['transpose_b']
+
+        if not transpose_b and not (
+            a.dtype.is_any_float16()
+            and b.dtype.is_any_float16()
             and is_constant(a.shape[-1], b.shape[-1])
             and (a.shape[-1] % 2 == b.shape[-1] % 2 == 0)
+        ):
+            return None
+
+        elif transpose_b and not (
+            a.dtype.is_any_float16()
+            and b.dtype.is_any_float16()
+            and is_constant(a.shape[-1], b.shape[-2])
+            and (a.shape[-1] % 2 == b.shape[-2] % 2 == 0)
         ):
             return None
 
         if hidet.option.cuda.get_arch_pair() < (8, 0):
             return None
 
-        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        parallel_k = hidet.option.get_parallel_k()
+
         if op.task.has_symbolic_shape():
             k_parts = 1
         elif isinstance(parallel_k, str):
@@ -215,9 +237,7 @@ class MatmulResolveRule(ResolveRule):
                 latencies: List[float] = []
                 print('Searching the best parallel_k for {} x {} among {}'.format(a.shape, b.shape, candidates))
                 for candidate in candidates:
-                    cc = matmul_f16_cute(aa, bb, parallel_k_parts=candidate)
-                    # if candidate > 1:
-                    #     cc = cc.sum(0)
+                    cc = matmul_f16_cute(aa, bb, parallel_k_parts=candidate, transpose_b=transpose_b)
                     graph = hidet.trace_from([cc], [aa, bb])
                     graph: hidet.FlowGraph = hidet.graph.optimize(graph)
                     latency: float = graph.latency()
@@ -236,7 +256,7 @@ class MatmulResolveRule(ResolveRule):
             k_parts = min(max(parallel_k, 1), 32)
         else:
             raise ValueError(f'invalid parallel_k: {parallel_k}')
-        c = matmul_f16_cute(a, b, parallel_k_parts=k_parts).sum(0)
+        c = matmul_f16_cute(a, b, parallel_k_parts=k_parts, transpose_b=transpose_b).sum(0)
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:

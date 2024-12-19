@@ -12,21 +12,24 @@
 from typing import Union, Sequence, List, cast, Optional
 
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForMappingStmt, ForStmtAttr
-from hidet.ir.stmt import DeclareStmt, BufferStoreStmt, AssignStmt
+from hidet.ir.stmt import DeclareStmt, BufferStoreStmt, AssignStmt, ReturnStmt, WhileStmt, BreakStmt
 from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.mapping import RepeatTaskMapping
 from hidet.ir.dtypes import int32
 from hidet.ir.mapping import TaskMapping, repeat_map
 
-ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForMappingStmt]
+ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForMappingStmt, WhileStmt]
 
 
 class StmtScope:
-    def __init__(self, sb: 'StmtBuilder', stmts: Union[Sequence[ScopedStmt], ScopedStmt], ret=None):
-        if isinstance(stmts, (IfStmt, ForStmt, LetStmt, ForMappingStmt)):
+    def __init__(self, sb, stmts: Union[ScopedStmt, Sequence[ScopedStmt]], ret=None):
+        if not isinstance(stmts, Sequence):
             stmts = [stmts]
-        self.sb = sb
-        self.stmts = stmts
+
+        assert all(isinstance(stmt, (IfStmt, ForStmt, LetStmt, ForMappingStmt, WhileStmt)) for stmt in stmts)
+
+        self.sb: StmtBuilder = sb
+        self.stmts: List[ScopedStmt] = list(stmts)
         self.ret = ret
 
     def __enter__(self):
@@ -37,6 +40,52 @@ class StmtScope:
     def __exit__(self, exc_type, exc_val, exc_tb):
         for _ in self.stmts:
             self.sb.exit_body()
+
+
+class ElseIfScope:
+    def __init__(self, sb, stmt: IfStmt):
+        self.sb: StmtBuilder = sb
+        self.stmt: IfStmt = stmt
+
+    def __enter__(self):
+        if not isinstance(self.sb.scope_stack[-1][-1], IfStmt):
+            raise RuntimeError('else_if() must be called after if_then() or else_if()')
+
+        # put the current one into the scope stack
+        self.sb.scope_stack[-1].append(self.stmt)
+        self.sb.scope_stack.append([])
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # exit the then body of the current if statement
+        self.stmt.then_body = SeqStmt(self.sb.scope_stack.pop())
+        self.sb.scope_stack[-1].pop()
+
+        cur: IfStmt = self.sb.scope_stack[-1][-1]
+        while cur.else_body is not None:
+            if not isinstance(cur.else_body, IfStmt):
+                raise RuntimeError('else_if() must be called after if_then() or else_if()')
+            cur = cur.else_body
+
+        cur.else_body = self.stmt
+
+
+class OtherwiseScope:
+    def __init__(self, sb):
+        self.sb: StmtBuilder = sb
+
+    def __enter__(self):
+        if not isinstance(self.sb.scope_stack[-1][-1], IfStmt):
+            raise RuntimeError('otherwise() must be called after if_then() or else_if()')
+        self.sb.scope_stack.append([])
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        else_body = SeqStmt(self.sb.scope_stack.pop())
+        cur: IfStmt = self.sb.scope_stack[-1][-1]
+        while cur.else_body is not None:
+            if not isinstance(cur.else_body, IfStmt):
+                raise RuntimeError('otherwise() must be called after if_then() or else_if()')
+            cur = cur.else_body
+        cur.else_body = else_body
 
 
 class StmtBuilder:
@@ -65,11 +114,7 @@ class StmtBuilder:
             iter_names = [f'i{idx}' for idx in range(num_vars)]
         return iter_names
 
-    def let(self, v: Union[str, Var], value: Union[int, Expr]) -> StmtScope:
-        if isinstance(v, str):
-            v = var(v)
-        return StmtScope(self, stmts=LetStmt(v, value), ret=v)
-
+    # singleton statements
     def declare(self, v: Var, init: Optional[Expr] = None, scope=None):
         self.append(DeclareStmt(v, init, scope=scope))
         return v
@@ -77,12 +122,23 @@ class StmtBuilder:
     def buffer_store(self, buf: Expr, indices: Sequence[Union[Expr, int]], value: Expr):
         self.append(BufferStoreStmt(buf, convert(indices), value))
 
+    def assign(self, dst: Var, value: Expr):
+        self.append(AssignStmt(dst, value))
+
+    def brk(self):
+        self.append(BreakStmt())
+
+    # scope statements
+    def let(self, v: Union[str, Var], value: Union[int, Expr]) -> StmtScope:
+        if isinstance(v, str):
+            v = var(v)
+        return StmtScope(self, stmts=LetStmt(v, value), ret=v)
+
     def lets(self, bind_vars: Sequence[Union[str, Var]], values: Sequence[Union[int, Expr]]) -> StmtScope:
         assert len(bind_vars) == len(values)
         bind_vars = [var(v) if isinstance(v, str) else v for v in bind_vars]
         bind_values = [convert(value) for value in values]
-        seq_let_stmt = LetStmt(bind_vars, bind_values, body=1)
-        return StmtScope(self, stmts=seq_let_stmt, ret=bind_vars)
+        return StmtScope(self, stmts=LetStmt(bind_vars, bind_values, body=1), ret=bind_vars)
 
     def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], attr: str = '.') -> StmtScope:
         if isinstance(v, str):
@@ -90,15 +146,13 @@ class StmtBuilder:
         return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr.parse(attr, num_loops=1)[0]), ret=v)
 
     def if_then(self, cond: Union[bool, Expr]) -> StmtScope:
-        return StmtScope(self, stmts=[IfStmt(cond)], ret=None)
+        return StmtScope(self, stmts=IfStmt(cond), ret=None)
 
-    def otherwise(self) -> StmtScope:
-        assert len(self.scope_stack[-1]) > 0
-        if_stmt = self.scope_stack[-1].pop()
-        assert isinstance(if_stmt, IfStmt)
-        assert if_stmt.then_body is not None
-        assert if_stmt.else_body is None
-        return StmtScope(self, stmts=if_stmt, ret=None)
+    def else_if(self, cond: Union[bool, Expr]) -> ElseIfScope:
+        return ElseIfScope(self, IfStmt(cond))
+
+    def otherwise(self) -> OtherwiseScope:
+        return OtherwiseScope(self)
 
     def for_mapping(
         self,
@@ -109,25 +163,26 @@ class StmtBuilder:
         if worker is None:
             if not isinstance(mapping, RepeatTaskMapping):
                 raise ValueError('worker must be specified for non-repeat mapping')
-            worker = 0
+            worker = int32.zero
         if iter_names is None:
             iter_names = self._name_index_vars(len(mapping.task_shape))
         iter_vars = [var(name) for name in iter_names]
         return StmtScope(self, stmts=ForMappingStmt(iter_vars, mapping, worker, cast(Stmt, None)), ret=iter_vars)
 
     def for_grid(self, shape: List[Union[Expr, int]]) -> StmtScope:
-        iter_names = self._name_index_vars(len(shape))
-        iter_vars = [var(name) for name in iter_names]
-        mapping = repeat_map(shape)
-        return StmtScope(self, stmts=ForMappingStmt(iter_vars, mapping, int32(0), cast(Stmt, None)), ret=iter_vars)
-
-    def assign(self, dst: Var, value: Expr):
-        self.append(AssignStmt(dst, value))
+        return self.for_mapping(mapping=repeat_map(shape), iter_names=self._name_index_vars(len(shape)), worker=0)
 
     def for_range(self, extent: Union[Expr, int]):
         iter_var = var('i')
         return StmtScope(self, stmts=ForStmt(iter_var, extent), ret=iter_var)
 
+    def while_loop(self, cond: Expr):
+        return StmtScope(self, stmts=WhileStmt(cond, body=None), ret=None)
+
+    def ret(self, value: Optional[Expr] = None):
+        self.append(ReturnStmt(value))
+
+    # utils
     def append(self, stmt: Union[Stmt, Expr, Sequence[Stmt]]):
         if stmt is None:
             return
@@ -140,7 +195,7 @@ class StmtBuilder:
             for s in stmt:
                 self.append(s)
 
-    def enter_body(self, stmt: Union[IfStmt, ForStmt, LetStmt]):
+    def enter_body(self, stmt: Union[IfStmt, ForStmt, LetStmt, WhileStmt]):
         self.scope_stack[-1].append(stmt)
         self.scope_stack.append([])
 
@@ -148,8 +203,8 @@ class StmtBuilder:
         body = SeqStmt(self.scope_stack.pop())
         assert len(self.scope_stack) > 0
         last_stmt = self.scope_stack[-1][-1]
-        if isinstance(last_stmt, (ForStmt, LetStmt)):
-            assert last_stmt.body is None or last_stmt.body == 1
+        if isinstance(last_stmt, (ForStmt, LetStmt, WhileStmt)):
+            assert last_stmt.body is None
             last_stmt.body = body
         elif isinstance(last_stmt, IfStmt):
             if last_stmt.then_body is None:
