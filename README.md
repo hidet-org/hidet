@@ -9,7 +9,7 @@
 
 
 Hidet is an open-source deep learning compiler, written in Python. 
-It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
+It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels. 
 A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
 Currently, hidet focuses on optimizing the inference workloads on NVIDIA GPUs, and requires
