@@ -52,7 +52,7 @@ jobs:
 
   build-docs:
     runs-on:
-      group: ${{ inputs.runner_group || 'arc-l4' }}
+      arc-runner-set
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
       options: --gpus all
@@ -112,7 +112,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
-      group: ${{ inputs.runner_group || 'arc-l4' }}
+      arc-runner-set
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
