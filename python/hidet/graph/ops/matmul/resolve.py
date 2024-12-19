@@ -21,7 +21,8 @@ from hidet.utils.py import gcd, factorize, prod, cdiv
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
-from .matmul_f16_cute import matmul_f16_cute
+from .matmul_f16_cute_experimental import matmul_f16_cute as matmul_f16_cute_experimental
+from .matmul_f16_cute import matmul_f16_cute as matmul_f16_cute_stable
 from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
 
@@ -215,6 +216,13 @@ class MatmulResolveRule(ResolveRule):
             return None
 
         parallel_k = hidet.option.get_parallel_k()
+        hexcute_matmul = hidet.option.get_hexcute_matmul()
+        if hexcute_matmul == 'enable':
+            matmul_f16_cute = matmul_f16_cute_experimental
+        elif hexcute_matmul == 'disable':
+            matmul_f16_cute = matmul_f16_cute_stable
+        else:
+            raise NotImplementedError('The heuristic for hexcute_matmul is not implemented.')
 
         if op.task.has_symbolic_shape():
             k_parts = 1
