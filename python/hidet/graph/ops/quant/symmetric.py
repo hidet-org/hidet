@@ -27,11 +27,13 @@ class SymmetricQuantizationTask(Task):
         if not isinstance(dims, (list, tuple)):
             dims = [dims]
 
-        # bf16 can't hold int16.max_value. Should convert to f32 first. 
-        # For another types pair is similar. 
+        # bf16 can't hold int16.max_value. Should convert to f32 first.
+        # For another types pair is similar.
         # For cases when float type can hold quant_type.max_value we can skip this step but leave it for simplicity
-        wm = compute(name='abs', shape=w.shape, 
-            fcompute=lambda *indices: if_then_else(w[indices] >= 0, cast(w[indices], f32), cast(-w[indices], f32))
+        wm = compute(
+            name='abs',
+            shape=w.shape,
+            fcompute=lambda *indices: if_then_else(w[indices] >= 0, cast(w[indices], f32), cast(-w[indices], f32)),
         )
 
         scale = cops.reduce(wm, dims, keep_dim=False, reduce_type='max')
