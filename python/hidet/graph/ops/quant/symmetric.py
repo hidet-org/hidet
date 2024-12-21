@@ -11,8 +11,7 @@
 # limitations under the License.
 from typing import Union, List
 from hidet import ir
-from hidet.ir.type import DataType
-from hidet.ir.dtypes import int32
+from hidet.ir.type import DataType, int32
 from hidet.ir.expr import cast, if_then_else
 from hidet.ir.compute.primitives import TensorNode, compute
 from hidet.ir import primitives as prim
