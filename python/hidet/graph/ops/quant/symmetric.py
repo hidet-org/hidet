@@ -12,7 +12,7 @@
 from typing import Union, List
 from hidet import ir
 from hidet.ir.type import DataType
-from hidet.ir.dtypes import int32
+from hidet.ir.dtypes import f32
 from hidet.ir.expr import cast, if_then_else
 from hidet.ir.compute.primitives import TensorNode, compute
 from hidet.ir import primitives as prim
@@ -27,9 +27,13 @@ class SymmetricQuantizationTask(Task):
         if not isinstance(dims, (list, tuple)):
             dims = [dims]
 
-        wm = compute(
-            name='abs', shape=w.shape, fcompute=lambda *indices: if_then_else(w[indices] >= 0, w[indices], -w[indices])
+        # bf16 can't hold int16.max_value. Should convert to f32 first. 
+        # For another types pair is similar. 
+        # For cases when float type can hold quant_type.max_value we can skip this step but leave it for simplicity
+        wm = compute(name='abs', shape=w.shape, 
+            fcompute=lambda *indices: if_then_else(w[indices] >= 0, cast(w[indices], f32), cast(-w[indices], f32))
         )
+
         scale = cops.reduce(wm, dims, keep_dim=False, reduce_type='max')
         scale = compute(
             name='scaling', shape=scale.shape, fcompute=lambda *indices: scale[indices] / quant_type.max_value
@@ -37,9 +41,7 @@ class SymmetricQuantizationTask(Task):
 
         def scale_weight(*indices):
             scale_indices = [indices[i] for i in range(len(indices)) if not i in dims]
-            # Have to cast to int32 first because there are several ways convert bf16 to int8
-            cast_to_int = cast(prim.round(w[indices] / scale[scale_indices]), int32)
-            return cast(cast_to_int, quant_type)
+            return cast(prim.round(w[indices] / scale[scale_indices]), quant_type)
 
         wq = compute(name='quantize', shape=w.shape, fcompute=scale_weight)
         super().__init__(
