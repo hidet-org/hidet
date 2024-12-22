@@ -965,6 +965,34 @@ def is_option_exist(name: str) -> bool:
     return name in OptionRegistry.registered_options
 
 
+def use_torch_stream(use: bool):
+    """Set the flag for whether to use torch steam
+
+    Parameters
+    ----------
+    use: bool
+        whether to set
+    """
+    from hidet.ffi.runtime_api import runtime_api
+
+    # set use torch stream flag according to the option
+    runtime_api.use_torch_cuda_stream(use)
+
+
+def is_use_torch_stream() -> bool:
+    """Checking if currently is using torch stream
+
+
+    Returns
+    -------
+    ret: bool
+        True if using torch stream, False otherwise.
+    """
+    from hidet.ffi.runtime_api import runtime_api
+
+    return runtime_api.get_use_torch_cuda_stream()
+
+
 class cuda:
     """
     The CUDA related options.
