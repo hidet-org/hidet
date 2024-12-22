@@ -24,6 +24,11 @@ from hidet.graph.ops import quant
 @pytest.mark.parametrize('device', ['cuda'])
 @pytest.mark.parametrize('atype', ['float16', 'bfloat16'])
 def test_symmetric_quant(shape, dim, dtype, device, atype):
+    h_dtype = hidet.ir.data_type(dtype)
+    h_atype = hidet.ir.data_type(atype)
+    if h_dtype.nbytes >= h_atype.nbytes:
+        pytest.skip("Quantized type must have smaller size than original type")
+
     a = hidet.randn(shape, dtype=atype, device=device)
     aq, scale = quant.symmetric_quantize(a, dims=dim, quant_type=dtype)
     a1 = quant.symmetric_dequantize(aq, scale, dims=dim)
