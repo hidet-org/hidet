@@ -195,8 +195,6 @@ class HidetCompiledModel:
             else:
                 # ignore constant
                 pass
-        # Inherited cuda stream from torch
-        runtime_api.set_current_stream(torch.cuda.current_stream().cuda_stream)
         # Prepare inputs
         tensor_args = preprocess_inputs(tensor_args)
         # Run graph/model

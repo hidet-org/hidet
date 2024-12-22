@@ -16,6 +16,10 @@ First clone the repository to local:
 
 Build shared libraries
 ~~~~~~~~~~~~~~~~~~~~~~
+Before building the runtime library, make sure you have ``torch`` installed in your python environment:
+.. code-block:: console
+
+  $ pip install torch
 
 The runtime library is written in C++ and compiled into a shared library. To build the shared library, you need to have
 a C++ compiler installed (as well as build tools like ``cmake``, and ``make``). The following command will build the

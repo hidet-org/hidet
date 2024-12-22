@@ -13,10 +13,15 @@ set -e  # exit immediately if a command exits with a non-zero status.
 # This script builds a wheel for the current platform and Python version.
 ###############################################################################
 
+
 # work in the same directory of this script
 CURRENT_SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 ROOT_DIR=$(cd -- "$CURRENT_SCRIPT_DIR/../.." &> /dev/null && pwd)
 cd $CURRENT_SCRIPT_DIR
+
+pip3 install torch
+pip3 install nvidia-cuda-runtime-cu12
+pip3 install triton
 
 # create a new build directory
 rm -rf build; mkdir build;

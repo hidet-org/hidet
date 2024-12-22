@@ -9,33 +9,46 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import List, Dict, Optional
 import os
 import os.path
 import ctypes
+import torch
 from hidet.libinfo import get_library_search_dirs
 
 _LIB: Optional[ctypes.CDLL] = None
 _LIB_RUNTIME: Optional[ctypes.CDLL] = None
+_LIB_HIDET_TORCH_WRAPPER: Optional[ctypes.CDLL] = None
 
 
-library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None}
+library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None, 'hidet_torch': None}
 
 
 def load_library():
-    global _LIB, _LIB_RUNTIME
+    global _LIB, _LIB_RUNTIME, _LIB_HIDET_TORCH_WRAPPER
     if _LIB:
         return
+    libc10_path = os.path.join(os.path.dirname(torch.__file__), 'lib/libc10_cuda.so')
+    ctypes.cdll.LoadLibrary(libc10_path)
+
     library_dirs = get_library_search_dirs()
     for library_dir in library_dirs:
         libhidet_path = os.path.join(library_dir, 'libhidet.so')
         libhidet_runtime_path = os.path.join(library_dir, 'libhidet_runtime.so')
-        if not os.path.exists(libhidet_path) or not os.path.exists(libhidet_runtime_path):
+        libhidet_torch_wrapper_path = os.path.join(library_dir, 'libhidet_torch_wrapper.so')
+        if (
+            not os.path.exists(libhidet_path)
+            or not os.path.exists(libhidet_runtime_path)
+            or not os.path.exists(libhidet_torch_wrapper_path)
+        ):
             continue
         _LIB_RUNTIME = ctypes.cdll.LoadLibrary(libhidet_runtime_path)
+        _LIB_HIDET_TORCH_WRAPPER = ctypes.cdll.LoadLibrary(libhidet_torch_wrapper_path)
         _LIB = ctypes.cdll.LoadLibrary(libhidet_path)
         library_paths['hidet_runtime'] = libhidet_runtime_path
         library_paths['hidet'] = libhidet_path
+        library_paths['hidet_torch_wrapper'] = libhidet_torch_wrapper_path
         break
     if _LIB is None:
         raise OSError('Can not find library in the following directory: \n' + '\n'.join(library_dirs))
@@ -71,6 +84,8 @@ def get_func(func_name, arg_types: List, restype, lib=None):
         func = getattr(_LIB, func_name)
     elif func_exists(func_name, _LIB_RUNTIME):
         func = getattr(_LIB_RUNTIME, func_name)
+    elif func_exists(func_name, _LIB_HIDET_TORCH_WRAPPER):
+        func = getattr(_LIB_HIDET_TORCH_WRAPPER, func_name)
     elif func_exists(func_name, lib):
         func = getattr(lib, func_name)
     else:
