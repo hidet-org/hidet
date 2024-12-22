@@ -83,7 +83,7 @@ jobs:
     runs-on:
       group: 'arc-l4'
     container:
-      image: nvidia/cuda:12.4.0-devel-ubuntu20.04
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
       - name: Install dependencies via apt
         run: |
