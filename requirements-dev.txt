@@ -12,7 +12,6 @@ black==22.10.0
 pylint==2.13.9
 
 # for models to test
-torch>=2.3.0
 torchvision
 datasets
 diffusers
