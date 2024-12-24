@@ -137,7 +137,7 @@ def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=No
     torch.cuda.empty_cache()
 
     latency = (end - start) / bench_iters / 10**6
-    return latency, out
+    return latency
 
 
 def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):

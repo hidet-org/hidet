@@ -196,8 +196,6 @@ class MatmulResolveRule(ResolveRule):
 
         transpose_b = op.attrs['transpose_b']
 
-        valid_dtypes = [dtypes.float16, dtypes.bfloat16]
-
         if not transpose_b and not (
             a.dtype.is_any_float16()
             and b.dtype.is_any_float16()
