@@ -224,7 +224,6 @@ class CompilationResource(Resource):
 
             with lock:  # Only one thread can access the following code at the same time
                 print('[{}] Start compiling: {}'.format(pid, job_id[:16]), flush=True)
-                from .compile_worker import compile_job
                 compile_job(job_id)
 
             # respond to the client
