@@ -137,9 +137,10 @@ def bench_masked_lm(model_name, seqlen, bs, dtype, backend, mode, cache):
     with torch.no_grad(), torch.autocast("cuda"):
         torch_output = model(inputs)
         model = comp_backend.compile(model)
-        latency = bench_model(model, [inputs], true_outputs=torch_output)
+        latency, output = bench_torch_model(model, [inputs])
         del model
 
+    torch.testing.assert_close(torch_output, output, rtol=0.2, atol=0.2)
     return latency
 
 

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_bool
 from hidet.cuda import Stream
 from .ffi import get_func
 from .array import Array
@@ -26,15 +26,17 @@ class RuntimeAPI:
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
     _set_nccl_comms = get_func('set_nccl_comms', [c_int32, c_void_p], None)
+    _get_use_torch_stream = get_func('get_use_torch_cuda_stream', [], c_bool)
+    _use_torch_cuda_stream = get_func('use_torch_cuda_stream', [c_bool], None)
 
     @staticmethod
     def set_current_stream(stream: Union[Stream, int]) -> None:
         RuntimeAPI._set_current_stream(c_void_p(int(stream)))
 
     @staticmethod
-    def get_current_stream() -> int:
+    def get_current_stream() -> Union[int, None]:
         p = RuntimeAPI._get_current_stream()
-        return p.value
+        return p if p else None
 
     @staticmethod
     def register_callback(name: str, cfunc):
@@ -67,6 +69,14 @@ class RuntimeAPI:
     def set_nccl_comms(comms: Array) -> None:
         comms_array_t = c_void_p * comms.length
         RuntimeAPI._set_nccl_comms(comms.length, comms_array_t.from_buffer(comms.buffer))
+
+    @staticmethod
+    def get_use_torch_cuda_stream() -> bool:
+        return RuntimeAPI._get_use_torch_stream()
+
+    @staticmethod
+    def use_torch_cuda_stream(use: bool) -> None:
+        RuntimeAPI._use_torch_cuda_stream(use)
 
 
 runtime_api = RuntimeAPI()

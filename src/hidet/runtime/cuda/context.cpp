@@ -12,6 +12,7 @@
 #include <hidet/runtime/callbacks.h>
 #include <hidet/runtime/cuda/context.h>
 #include <hidet/runtime/logging.h>
+#include <hidet/runtime/torch/stream.h>
 
 CudaContext *CudaContext::global() {
     static CudaContext instance;
@@ -36,7 +37,18 @@ DLL void set_cuda_stream(void *stream) {
     CudaContext::global()->stream = stream;
 }
 
+DLL bool get_use_torch_cuda_stream() {
+    return CudaContext::global()->use_torch_stream;
+}
+
+DLL void use_torch_cuda_stream(bool use) {
+    CudaContext::global()->use_torch_stream = use;
+}
+
 DLL void *get_cuda_stream() {
+    if (CudaContext::global()->use_torch_stream) {
+        return hidet_get_current_torch_stream();
+    }
     return CudaContext::global()->stream;
 }
 

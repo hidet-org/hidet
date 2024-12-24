@@ -42,3 +42,6 @@ tomlkit
 
 # for performance measurements
 scipy
+
+# for torch runtime api dependency
+torch>=2.3.0

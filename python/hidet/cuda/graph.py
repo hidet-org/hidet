@@ -13,6 +13,7 @@
 from typing import List, Sequence, Optional, Any, Callable
 from cuda import cudart
 from cuda.cudart import cudaGraphExec_t
+from hidet.option import use_torch_stream, is_use_torch_stream
 from hidet.graph.tensor import Tensor
 from hidet.runtime.storage import MemoryPool, CudaMemoryAPI, memory_pool
 from hidet.runtime.device import Device
@@ -116,7 +117,6 @@ class CudaGraph:
         self._inputs: List[Tensor] = []
         self._outputs: List[Tensor] = []
         self._ref_objs: List[Any] = ref_objs
-
         with memory_pool(self._memory_pool):
             # create the input tensors
             self._inputs = f_create_inputs()
@@ -126,11 +126,18 @@ class CudaGraph:
             for _ in range(num_warmup):
                 f_run(self._inputs)
 
+            # There are two scenarios:
+            # 1. if torch or hidet is using default stream we use hidet created new stream
+            # 2. If torch is using its own new stream we use hidet created new stream to avoid
+            #    interfere with torch stream
+            # Both cases we switch back to use hidet stream
+            prev_flag = is_use_torch_stream()
+            use_torch_stream(False)
             # capture the cuda graph
             self._memory_api.freeze()
             with self._graph_capture:
                 self._outputs = f_run(self._inputs)
-
+            use_torch_stream(prev_flag)
         # instantiate the cuda graph
         self._graph_exec: cudaGraphExec_t = self._graph_capture.instantiate()
 

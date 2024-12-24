@@ -19,6 +19,9 @@ struct CudaContext: BaseContext {
     /* The cuda stream the kernels will be launched on. */
     void *stream = nullptr;
 
+    /* whether to use torch stream */
+    bool use_torch_stream = true;
+
     /* NCCL Comunicators*/
     void **nccl_comms = nullptr;
 
@@ -34,6 +37,16 @@ struct CudaContext: BaseContext {
  * Set the cuda stream of cuda context.
  */
 DLL void set_cuda_stream(void *stream);
+
+/**
+ * Get the use torch stream flag
+ */
+DLL bool get_use_torch_cuda_stream();
+
+/**
+ * set the flag of whether to use torch stream
+ */
+DLL void use_torch_cuda_stream(bool use);
 
 /**
  * Get the cuda stream of cuda context.

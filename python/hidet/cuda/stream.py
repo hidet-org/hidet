@@ -210,8 +210,15 @@ def current_stream(device=None) -> Stream:
     stream: Stream
         The current stream.
     """
+    from hidet.ffi import runtime_api
+
     device_id = _get_device_id(device)
-    if device_id not in _current_streams:
+    c_stream = runtime_api.get_current_stream()
+    if c_stream is not None:
+        # we return the current stream no matter if it's hidet/torch stream
+        _current_streams[device_id] = ExternalStream(handle=c_stream, device_id=device_id)
+    else:
+        # if no current stream is set, we use the default stream
         _current_streams[device_id] = ExternalStream(handle=0, device_id=device_id)
     return _current_streams[_get_device_id(device)]
 
