@@ -805,8 +805,8 @@ def tanh(x: Tensor):
 
 
 @register_function(torch.nn.functional.hardtanh)
-def hardtanh(x: Tensor, min_val: float, max_val: float):
-    return ops.hardtanh(x, min_val, max_val)
+def hardtanh(x: Tensor, min_val: float, max_val: float, inplace: bool = False):
+    return ops.hardtanh(x, min_val, max_val, inplace=inplace)
 
 
 @register_function(torch.nn.functional.embedding)

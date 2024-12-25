@@ -69,13 +69,18 @@ class BinaryElementwiseOperation:
 
 
 class UnaryElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None):
+    def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None, share_map=None):
         shape = x.shape
         y = compute(name='y', shape=shape, fcompute=lambda *indices: op(x.__getitem__(indices)))
         inverse_map = InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))
         inverse_map.tile_mapping = TensorLayout(1)
         super().__init__(
-            name=name, inputs=[x], outputs=[y], inverse_map={x: inverse_map}, attributes={} if attrs is None else attrs
+            name=name,
+            inputs=[x],
+            outputs=[y],
+            inverse_map={x: inverse_map},
+            attributes={} if attrs is None else attrs,
+            share_map=share_map,
         )
 
 
@@ -283,14 +288,23 @@ class RollTask(Task):
 
 
 class UnaryElementwiseOp(Operator):
-    def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
+    def __init__(
+        self,
+        x: Tensor,
+        op,
+        name: str,
+        attributes: Optional[Dict[str, Any]] = None,
+        task_attributes=None,
+        inplace: bool = False,
+    ):
         if attributes is None:
             attributes = {}
+        share_map = {0: 0} if inplace else {}
         self.op = UnaryElementwiseOperation.from_callable(op, name, attributes, task_attributes)
         super().__init__(
             inputs=[x],
             attributes=attributes,
-            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op, attrs=task_attributes),
+            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op, attrs=task_attributes, share_map=share_map),
         )
 
 

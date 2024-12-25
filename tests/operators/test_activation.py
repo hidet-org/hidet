@@ -188,14 +188,15 @@ def test_tanhshrink_torch(shape, dtype):
 @pytest.mark.parametrize("min_val", [-1])
 @pytest.mark.parametrize("max_val", [1])
 @pytest.mark.parametrize("dtype", ["float32"])
-def test_hardtanh_torch(shape, min_val, max_val, dtype):
+@pytest.mark.parametrize("inplace", [False, True])
+def test_hardtanh_torch(shape, min_val, max_val, dtype, inplace):
     check_torch_unary(
         shape,
-        lambda x: F.hardtanh(x, min_val, max_val),
-        lambda x: ops.hardtanh(x, min_val, max_val),
+        lambda x: F.hardtanh(x, min_val, max_val, inplace),
+        lambda x: ops.hardtanh(x, min_val, max_val, inplace),
         dtype=dtype,
-        rtol=1e-5,
-        atol=1e-5,
+        rtol=0,
+        atol=0,
     )
 
 
