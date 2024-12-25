@@ -103,8 +103,10 @@ class ThresholdOp(UnaryElementwiseOp):
 
 
 class HardTanhOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, min_val: float = -1.0, max_val: float = 1.0):
-        super().__init__(x, op=lambda v: prim.min(x.dtype(max_val), prim.max(x.dtype(min_val), v)), name='hardtanh')
+    def __init__(self, x: Tensor, min_val: float = -1.0, max_val: float = 1.0, inplace: bool = False):
+        super().__init__(
+            x, op=lambda v: prim.min(x.dtype(max_val), prim.max(x.dtype(min_val), v)), name='hardtanh', inplace=inplace
+        )
 
 
 class EluOp(UnaryElementwiseOp):
@@ -242,8 +244,8 @@ def threshold(x: Tensor, threshold_val: float, value: float) -> Tensor:
     return ThresholdOp(x, threshold_val, value).outputs[0]
 
 
-def hardtanh(x: Tensor, min_val: float, max_val: float) -> Tensor:
-    return HardTanhOp(x, min_val, max_val).outputs[0]
+def hardtanh(x: Tensor, min_val: float, max_val: float, inplace: bool = False) -> Tensor:
+    return HardTanhOp(x, min_val, max_val, inplace).outputs[0]
 
 
 def elu(x: Tensor, alpha: float) -> Tensor:

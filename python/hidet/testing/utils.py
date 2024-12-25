@@ -161,6 +161,8 @@ def check_torch_unary(
     np.testing.assert_allclose(
         actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
     )
+    # Check inplace correctness
+    np.testing.assert_allclose(actual=hidet_data.cpu().numpy(), desired=torch_data.cpu().numpy(), atol=atol, rtol=rtol)
 
 
 def check_torch_binary(
