@@ -47,11 +47,12 @@ jobs:
         with:
           name: ${{ steps.build_step.outputs.wheel_name }}
           path: ${{ steps.build_step.outputs.wheel_path }}
-          retention-days: 1
+          retention-days: 3
           if-no-files-found: "error"
 
   build-docs:
-    runs-on: arc-runner-set
+    runs-on: 
+      arc-runner-set
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
       options: --gpus all
