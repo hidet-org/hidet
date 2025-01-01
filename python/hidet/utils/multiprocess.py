@@ -39,6 +39,11 @@ def _wrapped_func(job_index):
 
 
 def get_parallel_num_workers(max_num_workers: Optional[int] = None, mem_for_worker: Optional[int] = None):
+    from hidet.option import compile_server
+
+    if compile_server.enabled():
+        return os.cpu_count() if max_num_workers is None else min(max_num_workers, 128)
+
     num_workers = (
         os.cpu_count() if (max_num_workers is None or max_num_workers == -1) else min(max_num_workers, os.cpu_count())
     )
