@@ -418,5 +418,25 @@
         "param_name": "128x3x224x224",
         "dtype_id": 1,
         "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 1,
+        "name": "batch_matmul",
+        "runfile": "bench_op.py",
+        "param_id": 5,
+        "param_name": "1x4096x4096,1x4096x4096",
+        "dtype_id": 1,
+        "dtype_name": "float16"
+    },
+    {
+        "type": "operator",
+        "id": 1,
+        "name": "batch_matmul",
+        "runfile": "bench_op.py",
+        "param_id": 6,
+        "param_name": "1x1024x128,1x128x512",
+        "dtype_id": 1,
+        "dtype_name": "float16"
     }
 ]
