@@ -54,10 +54,13 @@ class CollectSymVarsAndFuncNames(IRVisitor):
 
     def visit_LetStmt(self, stmt: LetStmt):
         if not is_required_letstmt(stmt):
-            logger.warning(
-                f'public launch function contains LetStmt {stmt} \
-                         that may be optimized with fast int div'
-            )
+            for bv in stmt.bind_vars:
+                if bv.type == i32:
+                    logger.debug(
+                        f'public launch function contains LetStmt {stmt} \
+                                that may be optimized with fast int div'
+                    )
+                    break
             return stmt
         super().visit_LetStmt(stmt)
         self.sym_var_names = [bv.hint for bv in stmt.bind_vars]
