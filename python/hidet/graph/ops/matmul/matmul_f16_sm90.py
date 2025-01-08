@@ -106,7 +106,7 @@ class MatmulF16SM90Task(Task):
         block_n=[64, 128, 256],
         block_k=[16, 32, 64, 128],
         warp_group_m=[64, 128],
-        warp_group_n=[16, 32, 64, 128],
+        warp_group_n=[16, 32, 64, 128, 256],
         warp_group_k=[16, 32, 64],
     )
     @tune.space(
@@ -176,7 +176,10 @@ class MatmulF16SM90Task(Task):
         tune.check(
             warp_group_m % mma_m == warp_group_n % mma_n == warp_group_k % mma_k == 0, 'mma dims divide warp dims'
         )
-        tune.check(threads <= 512, 'threads in a block <= 512')
+        tune.check(
+            (mma_n == 256 and threads <= 256) or (mma_n != 256 and threads <= 512),
+            'Invalid configuration: threads must be <= 256 if mma_n == 256, else threads must be <= 512',
+        )
         maximum_smem_bytes = 227 * 1024
         tune.check(dynamic_smem_bytes <= maximum_smem_bytes, 'dynamic shared memory <= 227 * 1024')
 
@@ -191,13 +194,63 @@ class MatmulF16SM90Task(Task):
                 layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8),
             )
         else:
-            smem_a_type = tensor_type(
-                'float16', shape=[block_m, block_k], layout=row_major(block_m // 8, block_k // 8) * row_major(8, 8)
-            )
+            if block_k % 64 == 0:
+                smem_a_type = tensor_type(
+                    'float16',
+                    shape=[block_m, block_k],
+                    layout=row_major(block_m // 8, block_k // 64)
+                    * row_major(8, 8).swizzle(dim=1, regards_dim=0, log_step=0)
+                    * row_major(1, 8),
+                )
+            elif block_k % 32 == 0:
+                smem_a_type = tensor_type(
+                    'float16',
+                    shape=[block_m, block_k],
+                    layout=row_major(block_m // 8, block_k // 32)
+                    * row_major(8, 4).swizzle(dim=1, regards_dim=0, log_step=1)
+                    * row_major(1, 8),
+                )
+            elif block_k % 16 == 0:
+                smem_a_type = tensor_type(
+                    'float16',
+                    shape=[block_m, block_k],
+                    layout=row_major(block_m // 8, block_k // 16)
+                    * row_major(8, 2).swizzle(dim=1, regards_dim=0, log_step=2)
+                    * row_major(1, 8),
+                )
+            else:
+                smem_a_type = tensor_type(
+                    'float16', shape=[block_m, block_k], layout=row_major(block_m // 8, block_k // 8) * row_major(8, 8)
+                )
 
-        smem_b_type = tensor_type(
-            'float16', shape=[block_k, block_n], layout=column_major(block_k // 8, block_n // 8) * row_major(8, 8)
-        )
+        if block_n % 64 == 0:
+            smem_b_type = tensor_type(
+                'float16',
+                shape=[block_k, block_n],
+                layout=column_major(block_k // 8, block_n // 64)
+                * row_major(8, 8).swizzle(dim=1, regards_dim=0, log_step=0)
+                * row_major(1, 8),
+            )
+        elif block_n % 32 == 0:
+            smem_b_type = tensor_type(
+                'float16',
+                shape=[block_k, block_n],
+                layout=column_major(block_k // 8, block_n // 32)
+                * row_major(8, 4).swizzle(dim=1, regards_dim=0, log_step=1)
+                * row_major(1, 8),
+            )
+        elif block_n % 16 == 0:
+            smem_b_type = tensor_type(
+                'float16',
+                shape=[block_k, block_n],
+                layout=column_major(block_k // 8, block_n // 16)
+                * row_major(8, 2).swizzle(dim=1, regards_dim=0, log_step=2)
+                * row_major(1, 8),
+            )
+        else:
+            smem_b_type = tensor_type(
+                'float16', shape=[block_k, block_n], layout=column_major(block_k // 8, block_n // 8) * row_major(8, 8)
+            )
 
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -226,8 +279,23 @@ class MatmulF16SM90Task(Task):
             # when core matrix is 8 * 8 and column_major slide core matrix to fill the smem
             # The SBO block_k // 8 * 64 * 2 calculate the byte offset of
             # first element of a core matrix to first element of next core matrix in next column
-            b_desc_template: u64 = make_wgmma_desc(128, block_k // 8 * 64 * 2, 0)
-            a_desc_template: u64 = make_wgmma_desc(128, block_k // 8 * 64 * 2, 0)
+            if block_n % 64 == 0:
+                b_desc_template: u64 = make_wgmma_desc(block_k // 8 * 512 * 2, 1024, 1)
+            elif block_n % 32 == 0:
+                b_desc_template: u64 = make_wgmma_desc(block_k // 8 * 256 * 2, 512, 2)
+            elif block_n % 16 == 0:
+                b_desc_template: u64 = make_wgmma_desc(block_k // 8 * 128 * 2, 256, 3)
+            else:
+                b_desc_template: u64 = make_wgmma_desc(128, block_k // 8 * 64 * 2, 0)
+
+            if block_k % 64 == 0:
+                a_desc_template: u64 = make_wgmma_desc(1, block_k // 64 * 512 * 2, 1)
+            elif block_k % 32 == 0:
+                a_desc_template: u64 = make_wgmma_desc(1, block_k // 32 * 256 * 2, 2)
+            elif block_k % 16 == 0:
+                a_desc_template: u64 = make_wgmma_desc(1, block_k // 16 * 128 * 2, 3)
+            else:
+                a_desc_template: u64 = make_wgmma_desc(128, block_k // 8 * 64 * 2, 0)
 
             @hidet.script
             def load_smem_a(k0: int, a: float16[a_head + [m_size, k_size]], smem_a: smem_a_type):
@@ -368,7 +436,7 @@ class MatmulF16SM90Task(Task):
                     syncthreads()
 
                 # store back
-                warp_id_in_group, lane_id = (threadIdx.x / 32) % 4, threadIdx.x % 128
+                lane_id = threadIdx.x % 128
                 warp_group_id = threadIdx.x / 128
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
                 c_head_index = spatial(*c_head).map(blockIdx.z)
