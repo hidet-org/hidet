@@ -344,12 +344,6 @@ def register_wgmma_instructions_generic(config: WgmmaConfig):
                 register_primitive_function(name=func_name, func_or_type=cuda_wgmma)
 
 
-@initialize()
-def register_wgmma_instructions():
-    for config in wgmma_configs.values():
-        register_wgmma_instructions_generic(config)
-
-
 def wgmma_async(
     config: WgmmaConfig,
     a_expr: Expr,
@@ -362,6 +356,7 @@ def wgmma_async(
     trans_b: Expr = 0,
 ):
     from hidet.ir.tools import infer_type
+    from hidet.ir.primitives import is_primitive_function
 
     # from hidet import uint64
     scale_d_values = [0, 1]
@@ -395,6 +390,10 @@ def wgmma_async(
             name = name + "_{}".format(scale_d)
         else:
             name = name + "_{}_{}_{}".format(scale_d, scale_a_str, scale_b_str)
+
+    if not is_primitive_function(f"cuda_{name}"):
+        register_wgmma_instructions_generic(config)
+
     return call_cuda(func_name=name, args=[a_expr, c_addr, b_desc])
 
 
