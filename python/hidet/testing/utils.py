@@ -276,7 +276,7 @@ def init_hidet(cache=''):
     hidet.option.cache_dir(hidet.option.get_cache_dir() + cache)
 
     # hidet.option.cache_dir(hidet.option.get_cache_dir() + '')
-    # hidet.option.parallel_tune(max_parallel_jobs=1)
+    # hidet.option.num_local_workers(1)
     # hidet.option.debug_cache_tuning(True)
     # hidet.option.save_lower_ir(True)
     # hidet.option.debug_show_verbose_flow_graph(True)

@@ -12,7 +12,6 @@
 from typing import Any, Sequence, Callable, Optional, Iterable
 import multiprocessing
 import os
-import psutil
 
 
 class JobQueue:
@@ -38,36 +37,36 @@ def _wrapped_func(job_index):
     return func(job)
 
 
-def get_parallel_num_workers(max_num_workers: Optional[int] = None, mem_for_worker: Optional[int] = None):
-    from hidet.option import compile_server
+def get_parallel_num_workers(is_remote_allowed: bool) -> int:
+    from hidet.option import compile_server, get_num_local_workers
 
-    if compile_server.enabled():
-        return os.cpu_count() if max_num_workers is None else min(max_num_workers, 128)
+    if is_remote_allowed and compile_server.enabled():
+        return compile_server.get_num_workers()
 
-    num_workers = (
-        os.cpu_count() if (max_num_workers is None or max_num_workers == -1) else min(max_num_workers, os.cpu_count())
-    )
-    if mem_for_worker is not None:
-        mem_for_worker *= 1024**3
-        limit_by_memory = psutil.virtual_memory().available // mem_for_worker
-        limit_by_memory = max(limit_by_memory, 1)
-        num_workers = min(num_workers, limit_by_memory)
-    return int(num_workers)
+    num_workers = get_num_local_workers()
+    assert num_workers > 0, 'Number of workers must be positive.'
+    return num_workers
 
 
-def parallel_imap(
-    func: Callable, jobs: Sequence[Any], max_num_workers: Optional[int] = None, mem_for_worker: Optional[int] = None
-) -> Iterable[Any]:
+def parallel_imap(func: Callable, jobs: Sequence[Any], is_remote_allowed: bool = False) -> Iterable[Any]:
+    jobs_num = len(jobs)
+    assert jobs_num > 0
+
+    num_workers = get_parallel_num_workers(is_remote_allowed)
+    num_workers = min(num_workers, jobs_num)
+
+    # num_workers == 1 or len(jobs) == 1
+    if num_workers == 1:
+        for job in jobs:
+            yield func(job)
+        return
+
     global _job_queue
-    assert len(jobs) > 1
 
     if _job_queue is not None:
-        raise RuntimeError('Cannot call parallel_map recursively.')
+        raise RuntimeError('Cannot call parallel_imap recursively.')
 
     _job_queue = JobQueue(func, jobs)
-
-    num_workers = get_parallel_num_workers(max_num_workers, mem_for_worker)
-    num_workers = min(num_workers, len(jobs))
 
     ctx = multiprocessing.get_context('fork')
     # Chunksize is taken from cpython/Lib/multiprocessing/pool.py::_map_async
@@ -82,6 +81,7 @@ def parallel_imap(
 
 
 def parallel_map(func: Callable, jobs: Sequence[Any], num_workers: Optional[int] = None) -> Iterable[Any]:
+    assert False, 'Old version. Should be addopted similar to parallel_imap.'
     global _job_queue
 
     if _job_queue is not None:

@@ -142,13 +142,14 @@ def extract_ir_modules(template_func) -> List[IRModule]:
     from hidet.drivers.utils import lazy_initialize_cuda
 
     lazy_initialize_cuda()
-    max_num_worker, _, _ = hidet.option.get_parallel_tune()
-    if max_num_worker != 1 and len(kwargs_list) > 1:
-        ir_modules = list(
-            tqdm(parallel_imap(_extract_ir_modules, kwargs_list), desc='Gen IR', total=len(kwargs_list), ncols=80)
+    ir_modules = list(
+        tqdm(
+            parallel_imap(_extract_ir_modules, kwargs_list),
+            desc='Generating Hidet IR',
+            total=len(kwargs_list),
+            ncols=80,
         )
-    else:
-        ir_modules = [_extract_ir_modules(kw) for kw in kwargs_list]
+    )
     ir_modules = [i for i in ir_modules if i is not None]
 
     # Too many schedules

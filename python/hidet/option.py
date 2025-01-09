@@ -175,8 +175,13 @@ def register_hidet_options():
         name='parallel_tune',
         type_hint='int, float',
         default_value=(-1, 1.5, 32),
-        description='The pair (max_parallel_jobs, mem_gb_per_job, max_candidates_per_job) that describe '
-        'the maximum number of parallel jobs and memory reserved for each job',
+        description='Deprecated option. Please use the `num_local_workers` option instead.',
+    )
+    register_option(
+        name='num_local_workers',
+        type_hint='int',
+        default_value=os.cpu_count(),
+        description='Number of local worker processes to use for parallel compilation/tuning',
     )
     register_option(
         name='save_lower_ir',
@@ -271,6 +276,13 @@ def register_hidet_options():
         type_hint='str',
         default_value='main',
         description='The version (e.g., branch, commit, or tag) that the remote server will use.',
+    )
+    # TODO: this value should be requested from the compilation server
+    register_option(
+        name='compile_server.num_workers',
+        type_hint='int',
+        default_value=96,
+        description='The number of worker processes of the compile server.',
     )
     register_option(
         name='cuda.arch',
@@ -724,10 +736,11 @@ def parallel_tune(max_parallel_jobs: int = -1, mem_gb_per_job: float = 1.5, max_
     mem_gb_per_job: float
         The minimum amount of memory (in GiB) reserved for each tuning job, default 1.5GiB.
     """
+    warnings.warn('`parallel_tune` option is deprecated.' 'Please use the `num_local_workers` option instead.')
     OptionContext.current().set_option('parallel_tune', (max_parallel_jobs, mem_gb_per_job, max_candidates_per_job))
 
 
-def get_parallel_tune() -> Tuple[int, float]:
+def get_parallel_tune() -> Tuple[int, float, int]:
     """
     Get the option value of whether to build operators in parallel.
 
@@ -737,7 +750,32 @@ def get_parallel_tune() -> Tuple[int, float]:
         Get the maximum number of jobs and minumum amount of memory reserved for tuning.
 
     """
-    return OptionContext.current().get_option('parallel_tune')
+    warnings.warn('`parallel_tune` option is deprecated.' 'Please use the `num_local_workers` option instead.')
+    return (get_num_local_workers(), 1.5, 32)
+
+
+def num_local_workers(num_workers: Optional[int] = None):
+    """
+    Set the number of local worker processes to use for parallel compilation/tuning.
+
+    Parameters
+    ----------
+    num_workers: Optional[int]
+        The number of local worker processes. If None, use os.cpu_count().
+    """
+    OptionContext.current().set_option('num_local_workers', num_workers if num_workers is not None else os.cpu_count())
+
+
+def get_num_local_workers() -> int:
+    """
+    Get the number of local worker processes to use for parallel compilation/tuning.
+
+    Returns
+    -------
+    ret: int
+        The number of local worker processes.
+    """
+    return OptionContext.current().get_option('num_local_workers')
 
 
 def save_lower_ir(enabled: bool = True):
@@ -1182,6 +1220,30 @@ class compile_server:
         """
         OptionContext.current().set_option('compile_server.repo_url', repo_url)
         OptionContext.current().set_option('compile_server.repo_version', version)
+
+    @staticmethod
+    def num_workers(num_workers: int):
+        """
+        Set the number of worker processes of the compile server.
+
+        Parameters
+        ----------
+        num_workers: int
+            The number of worker processes of the compile server.
+        """
+        OptionContext.current().set_option('compile_server.num_workers', num_workers)
+
+    @staticmethod
+    def get_num_workers() -> int:
+        """
+        Get the number of worker processes of the compile server.
+
+        Returns
+        -------
+        ret: int
+            The number of worker processes of the compile server.
+        """
+        return OptionContext.current().get_option('compile_server.num_workers')
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

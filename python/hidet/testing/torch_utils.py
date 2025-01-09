@@ -83,7 +83,7 @@ class Backend:
         hidet.option.cache_dir(hidet.option.get_cache_dir() + self.cache)
         hidet.torch.dynamo_config.steal_weights(True)
         # hidet.option.cache_dir(hidet.option.get_cache_dir() + '/regression')
-        # hidet.option.parallel_tune(max_parallel_jobs=1)
+        # hidet.option.num_local_workers(1)
         # hidet.option.debug_cache_tuning(True)
         # hidet.option.save_lower_ir(True)
         # hidet.option.debug_show_verbose_flow_graph(True)

@@ -17,7 +17,6 @@ import random
 from tqdm import tqdm
 
 import hidet.cuda
-from hidet import option
 from hidet.backend import codegen, compile_source
 from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.ir.module import IRModule
@@ -187,19 +186,20 @@ def build_ir_module_batch(
         ir_module, output_dir = args
         build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
 
-    def regroup_modules(modules, num_workers):
+    def regroup_modules(modules):
         """
         Regroup IR modules for parallel processing.
         """
         from hidet.utils import cdiv
 
-        max_candidates_per_job = option.get_parallel_tune()[2]
+        MAX_CANDIDATES_PER_JOB = 32
+        num_workers = get_parallel_num_workers(is_remote_allowed=True)
         len_modules = len(modules)
 
         if len_modules <= num_workers:
             return modules
 
-        num_new_jobs = cdiv(len_modules, num_workers * max_candidates_per_job) * num_workers
+        num_new_jobs = cdiv(len_modules, num_workers * MAX_CANDIDATES_PER_JOB) * num_workers
         job_per_worker = len_modules // num_new_jobs
         num_modules_for_1st_pass = job_per_worker * num_new_jobs
 
@@ -229,34 +229,21 @@ def build_ir_module_batch(
                     name_set.add(func_str)
         return True
 
-    # Determine number of workers
-    max_num_worker, mem_for_worker, _ = option.get_parallel_tune()
-    if hidet.option.compile_server.enabled():
-        num_workers = min(len(ir_modules), 128)
-    else:
-        num_workers = get_parallel_num_workers(max_num_worker, mem_for_worker)
-
     # Shuffle modules for balanced workloads
     random.seed(42)
     random.shuffle(ir_modules)
     random.seed()
 
-    if num_workers > 1 and len(ir_modules) > 1:
-        lazy_initialize_cuda()
-        ir_modules_list = regroup_modules(ir_modules, num_workers)
-        assert check_function_singular(ir_modules_list), "Duplicate function names detected in regrouped modules."
+    lazy_initialize_cuda()
+    ir_modules_list = regroup_modules(ir_modules)
+    assert check_function_singular(ir_modules_list), "Duplicate function names detected in regrouped modules."
 
-        jobs = [(group, output_dir) for group, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])]
+    jobs = [(group, output_dir) for group, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])]
 
-        for _ in tqdm(
-            parallel_imap(build_job, jobs, num_workers, mem_for_worker), desc="Compiling", total=len(jobs), ncols=80
-        ):
-            pass
+    for _ in tqdm(parallel_imap(build_job, jobs, is_remote_allowed=True), desc="Compiling", total=len(jobs), ncols=80):
+        pass
 
-        return output_dirs[: len(ir_modules_list)]
-    else:
-        build_ir_module(ir_modules, output_dir=output_dirs[0], output_kind=output_kind, target=target, force=force)
-        return [output_dirs[0]]
+    return output_dirs[: len(ir_modules_list)]
 
 
 def get_library_name(output_kind):
