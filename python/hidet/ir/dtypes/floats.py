@@ -111,6 +111,18 @@ class FloatType(DataType):
         )
 
 
+float8_e4m3 = FloatType(
+    'float8_e4m3', 'f8e4m3', 1, min_value=float(-448), max_value=float(448), eps=2 ** (-2), smallest_normal=2 ** (-6)
+)
+float8_e5m2 = FloatType(
+    'float8_e5m2',
+    'f8e5m2',
+    1,
+    min_value=float(-57344),
+    max_value=float(57344),
+    eps=2 ** (-2),
+    smallest_normal=2 ** (-14),
+)
 float16 = FloatType(
     'float16',
     'f16',
@@ -141,6 +153,8 @@ float64 = FloatType(
 bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.4e38, 3.4e38, None, None)  # TODO: find correct values
 tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.4e38, 3.4e38, None, None)
 
+f8e4m3 = float8_e4m3
+f8e5m2 = float8_e5m2
 f16 = float16
 f32 = float32
 f64 = float64

@@ -14,8 +14,8 @@ from .integer import int8, int16, int32, int64, uint8, uint16, uint32, uint64
 from .integer import i8, i16, i32, i64, u8, u16, u32, u64
 from .integer_subbyte import int4b, int3b, int2b, int1b, uint4b, uint3b, uint2b, uint1b
 from .integer_subbyte import i4, i3, i2, i1, u4, u3, u2, u1
-from .floats import float16, float32, float64, bfloat16, tfloat32
-from .floats import f16, f32, f64, bf16, tf32
+from .floats import float8_e4m3, float8_e5m2, float16, float32, float64, bfloat16, tfloat32
+from .floats import f8e4m3, f8e5m2, f16, f32, f64, bf16, tf32
 from .boolean import boolean
 from .vector import (
     float16x2,
@@ -41,6 +41,8 @@ name2dtype = {
     'tfloat32': tfloat32,
     'bfloat16': bfloat16,
     'float16': float16,
+    'float8_e5m2': float8_e5m2,
+    'float8_e4m3': float8_e4m3,
     'int64': int64,
     'int32': int32,
     'int16': int16,
@@ -77,6 +79,8 @@ sname2dtype = {
     'tf32': tfloat32,
     'bf16': bfloat16,
     'f16': float16,
+    'f8e5m2': float8_e5m2,
+    'f8e4m3': float8_e4m3,
     'i64': int64,
     'i32': int32,
     'i16': int16,

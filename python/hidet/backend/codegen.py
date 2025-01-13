@@ -48,6 +48,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
         self.require_immintrin = False
         self.require_complex = False
+        self.require_fp8 = False
         self.require_fp16 = False
         self.require_bf16 = False
         self.require_tf32 = False
@@ -625,6 +626,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'float16': 'half',
             'float32': 'float',
             'float64': 'double',
+            'float8_e4m3': 'float8_e4m3',
+            'float8_e5m2': 'float8_e5m2',
             'bfloat16': 'bfloat16_t',
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
@@ -642,6 +645,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
         self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8']
+        self.require_fp8 = self.require_fp8 or t.name in ['float8_e4m3', 'float8_e5m2']
         self.require_bf16 = self.require_bf16 or t.name == 'bfloat16'
         self.require_fp16 = self.require_fp16 or t.name == 'float16'
         self.require_tf32 = self.require_tf32 or t.name == 'tfloat32'
@@ -705,6 +709,8 @@ class CUDACodegen(Codegen):
             doc += Text('#include <cuda_fp16.h>') + NewLine()
         if self.require_bf16:
             doc += Text('#include <cuda_bf16.h>') + NewLine()
+        if self.require_fp8:
+            doc += Text('#include <hidet/runtime/cuda/float8.h>') + NewLine()
         if self.require_cooperative_groups:
             doc += Text('#include <cooperative_groups.h>') + NewLine()
         doc += Text('#include <cudaTypedefs.h>') + NewLine()
