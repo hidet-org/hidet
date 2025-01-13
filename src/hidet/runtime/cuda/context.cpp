@@ -47,7 +47,7 @@ DLL void use_torch_cuda_stream(bool use) {
 
 DLL void *get_cuda_stream() {
     if (CudaContext::global()->use_torch_stream) {
-        return hidet_get_current_torch_stream();
+        return reinterpret_cast<void *>(get_torch_stream());
     }
     return CudaContext::global()->stream;
 }

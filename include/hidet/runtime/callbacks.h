@@ -23,3 +23,5 @@ DLL uint64_t allocate_cpu_storage(uint64_t nbytes);
 DLL void free_cpu_storage(uint64_t ptr);
 
 DLL void cuda_memset(uint64_t ptr, int value, uint64_t nbytes);
+
+DLL uint64_t get_torch_stream();

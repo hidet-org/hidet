@@ -28,6 +28,7 @@ struct CallbackRegistryPool {
         name2id["allocate_cpu_storage"] = 2;
         name2id["free_cpu_storage"] = 3;
         name2id["cuda_memset"] = 4;
+        name2id["get_torch_stream"] = 5;
 
         for (auto &kv : name2id) {
             id2name[kv.second] = kv.first;
@@ -107,5 +108,14 @@ DLL void cuda_memset(uint64_t ptr, int value, uint64_t nbytes) {
         get_callback_ptr<4, decltype(cuda_memset)>()(ptr, value, nbytes);
     } catch (HidetException &e) {
         hidet_set_last_error(e.what());
+    }
+}
+
+DLL uint64_t get_torch_stream() {
+    try {
+        return get_callback_ptr<5, decltype(get_torch_stream)>()();
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return 0;
     }
 }
