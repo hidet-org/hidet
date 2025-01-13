@@ -27,6 +27,8 @@ from hidet.graph.operator import Operator, Tensor
 from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices
 
+from hidet import option
+
 
 class MatmulF16SM90Task(Task):
     def __init__(
@@ -98,7 +100,13 @@ class MatmulF16SM90Task(Task):
         return True
 
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
-        return tune.extract_ir_modules(self.schedule)
+        # FIXME: currently, we need to disable multi-processing
+        # while generating the IR modules for Hopper kernels
+        # because it does not work with the on-demand registration
+        # introduced in the PR #677
+        with option.context():
+            option.num_local_workers(1)
+            return tune.extract_ir_modules(self.schedule)
 
     @tune.space(
         2,
