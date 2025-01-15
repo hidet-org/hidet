@@ -80,7 +80,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on: arc-runner-set
+    runs-on:
+      group: 'arc-l4'
     container:
       image: nvidia/cuda:12.4.0-devel-ubuntu20.04
     steps:
