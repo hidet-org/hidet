@@ -224,8 +224,13 @@ cublasHandle_t CublasContext::current_handle() {
 
 // hidet cublas api functions
 DLL void hidet_cublas_set_library_path(const char *path) {
-    if (path) {
-        library_path = path;
+    try {
+        if (path) {
+            library_path = path;
+        }
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
     }
 }
 

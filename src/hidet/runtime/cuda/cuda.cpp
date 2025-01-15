@@ -78,7 +78,12 @@ static inline void lazy_load_cuda_runtime() {
 
 // Hidet exported APIs
 DLL void hidet_cuda_set_library_path(const char *path) {
-    library_path = path;
+    try {
+        library_path = path;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL int hidet_cuda_device_count() {

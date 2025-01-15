@@ -34,22 +34,42 @@ static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
 }
 
 DLL void set_cuda_stream(void *stream) {
-    CudaContext::global()->stream = stream;
+    try {
+        CudaContext::global()->stream = stream;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL bool get_use_torch_cuda_stream() {
-    return CudaContext::global()->use_torch_stream;
+    try {
+        return CudaContext::global()->use_torch_stream;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return false;
+    }
 }
 
 DLL void use_torch_cuda_stream(bool use) {
-    CudaContext::global()->use_torch_stream = use;
+    try {
+        CudaContext::global()->use_torch_stream = use;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void *get_cuda_stream() {
-    if (CudaContext::global()->use_torch_stream) {
-        return reinterpret_cast<void *>(get_torch_stream());
+    try {
+        if (CudaContext::global()->use_torch_stream) {
+            return reinterpret_cast<void *>(get_torch_stream());
+        }
+        return CudaContext::global()->stream;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
     }
-    return CudaContext::global()->stream;
 }
 
 DLL void *request_cuda_workspace(size_t nbytes, bool require_clean) {
@@ -69,14 +89,24 @@ DLL void *request_cuda_workspace(size_t nbytes, bool require_clean) {
 }
 
 DLL void set_nccl_comms(int num_comms, void **comms) {
-    CudaContext::global()->num_comms = num_comms;
-    CudaContext::global()->nccl_comms = comms;
+    try {
+        CudaContext::global()->num_comms = num_comms;
+        CudaContext::global()->nccl_comms = comms;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void *get_nccl_comm(int idx) {
-    const int num_comms = CudaContext::global()->num_comms;
-    if (idx >= num_comms) {
-        LOG(ERROR) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
+    try {
+        const int num_comms = CudaContext::global()->num_comms;
+        if (idx >= num_comms) {
+            LOG(ERROR) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
+        }
+        return CudaContext::global()->nccl_comms[idx];
+    } catch (std::exception &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
     }
-    return CudaContext::global()->nccl_comms[idx];
 }

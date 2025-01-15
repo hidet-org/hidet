@@ -17,6 +17,7 @@
 #include <hidet/runtime/llm/tokenizer/normalizers.h>
 #include <hidet/runtime/llm/tokenizer/postprocessors.h>
 #include <hidet/runtime/llm/tokenizer/pretokenizers.h>
+#include <hidet/runtime/logging.h>
 
 // Extern global debugging stream declared here
 std::stringstream dbg;
@@ -271,36 +272,46 @@ struct TokenizerArgs {
 };
 
 DLL void *tokenizer_new(void *args_vp) {
-    auto args = static_cast<TokenizerArgs *>(args_vp);
+    try {
+        auto args = static_cast<TokenizerArgs *>(args_vp);
 
-    std::unique_ptr<Normalizer> normalizer;
-    if (args->use_normalizer) {
-        normalizer = std::unique_ptr<Normalizer>(make_normalizer(args->normalizer_type, args->normalizer_args));
+        std::unique_ptr<Normalizer> normalizer;
+        if (args->use_normalizer) {
+            normalizer = std::unique_ptr<Normalizer>(make_normalizer(args->normalizer_type, args->normalizer_args));
+        }
+
+        std::unique_ptr<PreTokenizer> pretokenizer;
+        if (args->use_pretokenizer) {
+            pretokenizer =
+                std::unique_ptr<PreTokenizer>(make_pretokenizer(args->pretokenizer_type, args->pretokenizer_args));
+        }
+
+        auto model = std::unique_ptr<Model>(make_model(args->model_type, args->model_args));
+
+        std::unique_ptr<PostProcessor> postprocessor;
+        if (args->use_postprocessor) {
+            postprocessor =
+                std::unique_ptr<PostProcessor>(make_postprocessor(args->postprocessor_type, args->postprocessor_args));
+        }
+
+        auto decoder = std::unique_ptr<Decoder>(make_decoder(args->decoder_type, args->decoder_args));
+
+        return new Tokenizer(std::move(normalizer), std::move(pretokenizer), std::move(model), std::move(postprocessor),
+                             std::move(decoder));
+    } catch (const std::exception &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
     }
-
-    std::unique_ptr<PreTokenizer> pretokenizer;
-    if (args->use_pretokenizer) {
-        pretokenizer =
-            std::unique_ptr<PreTokenizer>(make_pretokenizer(args->pretokenizer_type, args->pretokenizer_args));
-    }
-
-    auto model = std::unique_ptr<Model>(make_model(args->model_type, args->model_args));
-
-    std::unique_ptr<PostProcessor> postprocessor;
-    if (args->use_postprocessor) {
-        postprocessor =
-            std::unique_ptr<PostProcessor>(make_postprocessor(args->postprocessor_type, args->postprocessor_args));
-    }
-
-    auto decoder = std::unique_ptr<Decoder>(make_decoder(args->decoder_type, args->decoder_args));
-
-    return new Tokenizer(std::move(normalizer), std::move(pretokenizer), std::move(model), std::move(postprocessor),
-                         std::move(decoder));
 }
 
 DLL void tokenizer_delete(void *tokenizer_vp) {
-    auto tokenizer = static_cast<Tokenizer *>(tokenizer_vp);
-    delete tokenizer;
+    try {
+        auto tokenizer = static_cast<Tokenizer *>(tokenizer_vp);
+        delete tokenizer;
+    } catch (const std::exception &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 struct EncodeResult {
@@ -318,8 +329,13 @@ struct EncodeResult {
 };
 
 DLL void encode_result_delete(void *result_vp) {
-    auto result = static_cast<EncodeResult *>(result_vp);
-    delete result;
+    try {
+        auto result = static_cast<EncodeResult *>(result_vp);
+        delete result;
+    } catch (const std::exception &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void *tokenizer_encode(void *tokenizer_vp, char *s) {
@@ -333,6 +349,7 @@ DLL void *tokenizer_encode(void *tokenizer_vp, char *s) {
         std::copy(tmp.begin(), tmp.end(), ids);
         return new EncodeResult{nullptr, debug, tmp.size(), ids};
     } catch (const std::exception &e) {
+        hidet_set_last_error(e.what());
         return new EncodeResult{strdup(e.what()), debug, 0, nullptr};
     }
 }
@@ -350,8 +367,13 @@ struct DecodeResult {
 };
 
 DLL void decode_result_delete(void *result_vp) {
-    auto result = static_cast<DecodeResult *>(result_vp);
-    delete result;
+    try {
+        auto result = static_cast<DecodeResult *>(result_vp);
+        delete result;
+    } catch (const std::exception &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void *tokenizer_decode(void *tokenizer_vp, size_t n, uint32_t *ids) {

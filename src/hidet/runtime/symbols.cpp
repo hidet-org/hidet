@@ -15,7 +15,12 @@
 static std::map<std::string, int32_t> symbol_mapping;
 
 DLL void reset_symbol_table() {
-    symbol_mapping.clear();
+    try {
+        symbol_mapping.clear();
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL int32_t get_symbol_value(const char *symbol_name) {
@@ -32,5 +37,10 @@ DLL int32_t get_symbol_value(const char *symbol_name) {
 }
 
 DLL void set_symbol_value(const char *symbol_name, int32_t value) {
-    symbol_mapping[symbol_name] = value;
+    try {
+        symbol_mapping[symbol_name] = value;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
