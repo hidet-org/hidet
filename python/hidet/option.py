@@ -322,6 +322,21 @@ def register_hidet_options():
         description="Whether to enable the hexcute matmul kernels. The valid values for this option can be"
         "'enable', 'disable', and 'auto'",
     )
+    # Exclusive `torch.compile` API option.
+    # Torch Dynamo passes two arguments to the compiler: `fx.graph` and `example_inputs`.
+    # From torch==2.4, `example_inputs` is an actual tensor (not FakeTensor, non-symbolic).
+    # We use `fx.graph` to get symbolic shapes because `example_inputs` doesn't contain such info.
+    #
+    # On the other hand, vllm passes symbolic `example_inputs` if dynamic shapes are expected and
+    # non-symbolic `example_inputs` if static shapes are expected. `fx.graph` remains the same in both cases.
+    # With `internal.torch_api_use_example_input_shapes` set to True, we use the shape of `example_inputs` to determine
+    # the requested shapes.
+    register_option(
+        name='internal.torch_api_use_example_input_shapes',
+        type_hint='bool',
+        default_value=False,
+        description='Applicable when using torch.compile only. Use `example_inputs` shapes instead of fx.graph shapes.',
+    )
 
     # Load hidet config
     config_file_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet', 'hidet.toml')
@@ -1244,6 +1259,36 @@ class compile_server:
             The number of worker processes of the compile server.
         """
         return OptionContext.current().get_option('compile_server.num_workers')
+
+
+class internal:
+    """
+    Internal options.
+    """
+
+    @staticmethod
+    def torch_api_use_example_input_shapes(enable: bool = False):
+        """
+        Applicable when using `torch.compile` only. Use `example_inputs` shapes instead of fx.graph shapes.
+
+        Parameters
+        ----------
+        enable: bool
+            Applicable when using torch.compile only. Use `example_inputs` shapes instead of fx.graph shapes.
+        """
+        OptionContext.current().set_option('internal.torch_api_use_example_input_shapes', enable)
+
+    @staticmethod
+    def is_torch_api_use_example_input_shapes():
+        """
+        Get whether to use `example_inputs` shapes instead of `fx.graph` shapes.
+
+        Returns
+        -------
+        ret: bool
+            Whether to use `example_inputs` shapes instead of `fx.graph` shapes.
+        """
+        return OptionContext.current().get_option('internal.torch_api_use_example_input_shapes')
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists
