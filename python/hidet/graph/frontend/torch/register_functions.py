@@ -1063,6 +1063,20 @@ def empty(
     )
 
 
+@register_function(torch.empty_like)
+def empty_like(input, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format):
+    if layout is not None:
+        raise NotImplementedError("hidet: does not support torch.empty_like(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    if memory_format != torch.preserve_format:
+        raise NotImplementedError("hidet: does not support torch.empty_like(..., memory_format=..., ...)")
+
+    hidet_device: Device = device_from_torch(torch_device=device) if device is not None else input.device
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype is not None else input.dtype
+    return ops.full(input.shape, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
+
+
 @register_function(torch.bmm)
 @register_method(torch.Tensor.bmm)
 def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
