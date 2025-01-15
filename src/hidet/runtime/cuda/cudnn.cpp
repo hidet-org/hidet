@@ -573,213 +573,226 @@ DLL void hidet_cudnn_set_library_path(const char *path) {
 DLL void hidet_cudnn_conv2d_gemm(int n, int c, int h, int w, int k, int r, int s, void *ptr_x, void *ptr_w, void *ptr_y,
                                  int tx, int tw, int ty, int compute_type, int pad_dim1, int pad_dim2, int str_dim1,
                                  int str_dim2, int dil_dim1, int dil_dim2) {
-    lazy_load_cudnn();
+    try {
+        lazy_load_cudnn();
 
-    cudnnHandle_t cur_handle = CudnnContext::current_handle();
+        cudnnHandle_t cur_handle = CudnnContext::current_handle();
 
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUDNN(cudnnSetStream(cur_handle, cur_stream));
+        // Set the stream to the current stream
+        cudaStream_t cur_stream = get_cuda_stream();
+        CHECK_CUDNN(cudnnSetStream(cur_handle, cur_stream));
 
-    // Build descriptors and launch the kernel
-    cudnnTensorDescriptor_t input_descriptor;
-    CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_descriptor));
-    CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(tx), n, c, h, w));
-    cudnnFilterDescriptor_t kernel_descriptor;
-    CHECK_CUDNN(cudnnCreateFilterDescriptor(&kernel_descriptor));
-    CHECK_CUDNN(cudnnSetFilter4dDescriptor(kernel_descriptor, cudnnDataType_t(tw), CUDNN_TENSOR_NCHW, k, c, r, s));
-    cudnnConvolutionDescriptor_t convolution_descriptor;
-    CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&convolution_descriptor));
-    CHECK_CUDNN(cudnnSetConvolution2dDescriptor(convolution_descriptor, pad_dim1, pad_dim2, str_dim1, str_dim2,
-                                                dil_dim1, dil_dim2, CUDNN_CROSS_CORRELATION,
-                                                cudnnDataType_t(compute_type)));
+        // Build descriptors and launch the kernel
+        cudnnTensorDescriptor_t input_descriptor;
+        CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_descriptor));
+        CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(tx), n, c, h, w));
+        cudnnFilterDescriptor_t kernel_descriptor;
+        CHECK_CUDNN(cudnnCreateFilterDescriptor(&kernel_descriptor));
+        CHECK_CUDNN(cudnnSetFilter4dDescriptor(kernel_descriptor, cudnnDataType_t(tw), CUDNN_TENSOR_NCHW, k, c, r, s));
+        cudnnConvolutionDescriptor_t convolution_descriptor;
+        CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&convolution_descriptor));
+        CHECK_CUDNN(cudnnSetConvolution2dDescriptor(convolution_descriptor, pad_dim1, pad_dim2, str_dim1, str_dim2,
+                                                    dil_dim1, dil_dim2, CUDNN_CROSS_CORRELATION,
+                                                    cudnnDataType_t(compute_type)));
 
-    int out_n{0}, out_c{0}, out_h{0}, out_w{0};
-    CHECK_CUDNN(cudnnGetConvolution2dForwardOutputDim(convolution_descriptor, input_descriptor, kernel_descriptor,
-                                                      &out_n, &out_c, &out_h, &out_w));
-    cudnnTensorDescriptor_t output_descriptor;
-    CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_descriptor));
-    CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(ty), out_n, out_c,
-                                           out_h, out_w));
+        int out_n{0}, out_c{0}, out_h{0}, out_w{0};
+        CHECK_CUDNN(cudnnGetConvolution2dForwardOutputDim(convolution_descriptor, input_descriptor, kernel_descriptor,
+                                                          &out_n, &out_c, &out_h, &out_w));
+        cudnnTensorDescriptor_t output_descriptor;
+        CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_descriptor));
+        CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_descriptor, CUDNN_TENSOR_NCHW, cudnnDataType_t(ty), out_n, out_c,
+                                               out_h, out_w));
 
-    size_t workspaceSize{0};
-    CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-        cur_handle, input_descriptor, kernel_descriptor, convolution_descriptor, output_descriptor,
-        CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM, &workspaceSize));
-    void *workspace = hidet_cuda_malloc_async(workspaceSize, cur_stream);
+        size_t workspaceSize{0};
+        CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(
+            cur_handle, input_descriptor, kernel_descriptor, convolution_descriptor, output_descriptor,
+            CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM, &workspaceSize));
+        void *workspace = hidet_cuda_malloc_async(workspaceSize, cur_stream);
 
-    void *p_alpha = nullptr;
-    void *p_beta = nullptr;
-    cudnnDataType_t compType = cudnnDataType_t(compute_type);
-    set_alpha_beta(&p_alpha, &p_beta, compType);
+        void *p_alpha = nullptr;
+        void *p_beta = nullptr;
+        cudnnDataType_t compType = cudnnDataType_t(compute_type);
+        set_alpha_beta(&p_alpha, &p_beta, compType);
 
-    CHECK_CUDNN(cudnnConvolutionForward(cur_handle, p_alpha, input_descriptor, ptr_x, kernel_descriptor, ptr_w,
-                                        convolution_descriptor, CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM,
-                                        workspace, workspaceSize, p_beta, output_descriptor, ptr_y));
+        CHECK_CUDNN(cudnnConvolutionForward(cur_handle, p_alpha, input_descriptor, ptr_x, kernel_descriptor, ptr_w,
+                                            convolution_descriptor, CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM,
+                                            workspace, workspaceSize, p_beta, output_descriptor, ptr_y));
 
-    CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_descriptor));
-    CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_descriptor));
-    CHECK_CUDNN(cudnnDestroyFilterDescriptor(kernel_descriptor));
-    CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
-    hidet_cuda_free_async(workspace, cur_stream);
+        CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_descriptor));
+        CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_descriptor));
+        CHECK_CUDNN(cudnnDestroyFilterDescriptor(kernel_descriptor));
+        CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cudnn_conv2d(int n, int c, int h, int w, int k, int r, int s, int p, int q, void *ptr_x, void *ptr_w,
                             void *ptr_y, int tx, int tw, int ty, int compute_type, int pad_dim1, int pad_dim2,
                             int str_dim1, int str_dim2, int dil_dim1, int dil_dim2) {
-    lazy_load_cudnn();
+    try {
+        lazy_load_cudnn();
 
-    cudnnHandle_t cur_handle = CudnnContext::current_handle();
+        cudnnHandle_t cur_handle = CudnnContext::current_handle();
 
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUDNN(cudnnSetStream(cur_handle, cur_stream));
+        // Set the stream to the current stream
+        cudaStream_t cur_stream = get_cuda_stream();
+        CHECK_CUDNN(cudnnSetStream(cur_handle, cur_stream));
 
-    // Build the descriptor for x
-    int64_t xDim[] = {n, c, h, w};
-    int64_t xStr[] = {c * h * w, h * w, w, 1};
-    int64_t xUi = 'x';
-    int64_t alignment = 8;
-    cudnnBackendDescriptor_t xDesc;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &xDesc));
-    cudnnDataType_t xDtype = cudnnDataType_t(tx);
-    CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &xDtype));
-    CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, xDim));
-    CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, xStr));
-    CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &xUi));
-    CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
-    CHECK_CUDNN(cudnnBackendFinalize(xDesc));
+        // Build the descriptor for x
+        int64_t xDim[] = {n, c, h, w};
+        int64_t xStr[] = {c * h * w, h * w, w, 1};
+        int64_t xUi = 'x';
+        int64_t alignment = 8;
+        cudnnBackendDescriptor_t xDesc;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &xDesc));
+        cudnnDataType_t xDtype = cudnnDataType_t(tx);
+        CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &xDtype));
+        CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, xDim));
+        CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, xStr));
+        CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &xUi));
+        CHECK_CUDNN(cudnnBackendSetAttribute(xDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
+        CHECK_CUDNN(cudnnBackendFinalize(xDesc));
 
-    // Build the descriptor for w
-    int64_t wDim[] = {k, c, r, s};
-    int64_t wStr[] = {c * r * s, r * s, s, 1};
-    int64_t wUi = 'w';
-    cudnnBackendDescriptor_t wDesc;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &wDesc));
-    cudnnDataType_t wDtype = cudnnDataType_t(tw);
-    CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &wDtype));
-    CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, wDim));
-    CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, wStr));
-    CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &wUi));
-    CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
-    CHECK_CUDNN(cudnnBackendFinalize(wDesc));
+        // Build the descriptor for w
+        int64_t wDim[] = {k, c, r, s};
+        int64_t wStr[] = {c * r * s, r * s, s, 1};
+        int64_t wUi = 'w';
+        cudnnBackendDescriptor_t wDesc;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &wDesc));
+        cudnnDataType_t wDtype = cudnnDataType_t(tw);
+        CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &wDtype));
+        CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, wDim));
+        CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, wStr));
+        CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &wUi));
+        CHECK_CUDNN(cudnnBackendSetAttribute(wDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
+        CHECK_CUDNN(cudnnBackendFinalize(wDesc));
 
-    // Build the descriptor for y
-    int64_t yDim[] = {n, k, p, q};
-    int64_t yStr[] = {k * p * q, p * q, q, 1};
-    int64_t yUi = 'y';
-    cudnnBackendDescriptor_t yDesc;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &yDesc));
-    cudnnDataType_t yDtype = cudnnDataType_t(ty);
-    CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &yDtype));
-    CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, yDim));
-    CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, yStr));
-    CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &yUi));
-    CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
-    CHECK_CUDNN(cudnnBackendFinalize(yDesc));
+        // Build the descriptor for y
+        int64_t yDim[] = {n, k, p, q};
+        int64_t yStr[] = {k * p * q, p * q, q, 1};
+        int64_t yUi = 'y';
+        cudnnBackendDescriptor_t yDesc;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &yDesc));
+        cudnnDataType_t yDtype = cudnnDataType_t(ty);
+        CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &yDtype));
+        CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, yDim));
+        CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, 4, yStr));
+        CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &yUi));
+        CHECK_CUDNN(cudnnBackendSetAttribute(yDesc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &alignment));
+        CHECK_CUDNN(cudnnBackendFinalize(yDesc));
 
-    // Build the descriptor for the convolution operator
-    cudnnBackendDescriptor_t cDesc;
-    int64_t nbDims = 2;
-    cudnnDataType_t compType = cudnnDataType_t(compute_type);
-    cudnnConvolutionMode_t mode = CUDNN_CROSS_CORRELATION;
-    int64_t pad[] = {pad_dim1, pad_dim2};
-    int64_t filterStr[] = {str_dim1, str_dim2};
-    int64_t dilation[] = {dil_dim1, dil_dim2};
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR, &cDesc));
-    CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS, CUDNN_TYPE_INT64, 1, &nbDims));
-    CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_COMP_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &compType));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_CONV_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &mode));
-    CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_PRE_PADDINGS, CUDNN_TYPE_INT64, nbDims, pad));
-    CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_POST_PADDINGS, CUDNN_TYPE_INT64, nbDims, pad));
-    CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_DILATIONS, CUDNN_TYPE_INT64, nbDims, dilation));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_FILTER_STRIDES, CUDNN_TYPE_INT64, nbDims, filterStr));
-    CHECK_CUDNN(cudnnBackendFinalize(cDesc));
+        // Build the descriptor for the convolution operator
+        cudnnBackendDescriptor_t cDesc;
+        int64_t nbDims = 2;
+        cudnnDataType_t compType = cudnnDataType_t(compute_type);
+        cudnnConvolutionMode_t mode = CUDNN_CROSS_CORRELATION;
+        int64_t pad[] = {pad_dim1, pad_dim2};
+        int64_t filterStr[] = {str_dim1, str_dim2};
+        int64_t dilation[] = {dil_dim1, dil_dim2};
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR, &cDesc));
+        CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS, CUDNN_TYPE_INT64, 1, &nbDims));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_COMP_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &compType));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_CONV_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &mode));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_PRE_PADDINGS, CUDNN_TYPE_INT64, nbDims, pad));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_POST_PADDINGS, CUDNN_TYPE_INT64, nbDims, pad));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_DILATIONS, CUDNN_TYPE_INT64, nbDims, dilation));
+        CHECK_CUDNN(cudnnBackendSetAttribute(cDesc, CUDNN_ATTR_CONVOLUTION_FILTER_STRIDES, CUDNN_TYPE_INT64, nbDims,
+                                             filterStr));
+        CHECK_CUDNN(cudnnBackendFinalize(cDesc));
 
-    // Build the descriptor for the convolution forward operation
-    cudnnBackendDescriptor_t fprop;
-    void *p_alpha = nullptr;
-    void *p_beta = nullptr;
-    set_alpha_beta(&p_alpha, &p_beta, compType);
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR, &fprop));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X,
-                                         CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &xDesc));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W,
-                                         CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &wDesc));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y,
-                                         CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &yDesc));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC,
-                                         CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &cDesc));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA,
-                                         get_attribute_type_from_compute_type(compType), 1, p_alpha));
-    CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA,
-                                         get_attribute_type_from_compute_type(compType), 1, p_beta));
-    CHECK_CUDNN(cudnnBackendFinalize(fprop));
+        // Build the descriptor for the convolution forward operation
+        cudnnBackendDescriptor_t fprop;
+        void *p_alpha = nullptr;
+        void *p_beta = nullptr;
+        set_alpha_beta(&p_alpha, &p_beta, compType);
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR, &fprop));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X,
+                                             CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &xDesc));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W,
+                                             CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &wDesc));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y,
+                                             CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &yDesc));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC,
+                                             CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &cDesc));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA,
+                                             get_attribute_type_from_compute_type(compType), 1, p_alpha));
+        CHECK_CUDNN(cudnnBackendSetAttribute(fprop, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA,
+                                             get_attribute_type_from_compute_type(compType), 1, p_beta));
+        CHECK_CUDNN(cudnnBackendFinalize(fprop));
 
-    // Build the operation graph descriptor
-    cudnnBackendDescriptor_t op_graph;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR, &op_graph));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(op_graph, CUDNN_ATTR_OPERATIONGRAPH_OPS, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &fprop));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(op_graph, CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &cur_handle));
-    CHECK_CUDNN(cudnnBackendFinalize(op_graph));
+        // Build the operation graph descriptor
+        cudnnBackendDescriptor_t op_graph;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR, &op_graph));
+        CHECK_CUDNN(cudnnBackendSetAttribute(op_graph, CUDNN_ATTR_OPERATIONGRAPH_OPS, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1,
+                                             &fprop));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(op_graph, CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &cur_handle));
+        CHECK_CUDNN(cudnnBackendFinalize(op_graph));
 
-    // Set up engine config
-    cudnnBackendDescriptor_t engine;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &engine));
-    CHECK_CUDNN(cudnnBackendSetAttribute(engine, CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1,
-                                         &op_graph));
+        // Set up engine config
+        cudnnBackendDescriptor_t engine;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &engine));
+        CHECK_CUDNN(cudnnBackendSetAttribute(engine, CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                             1, &op_graph));
 
-    int64_t gidx = 0;
-    CHECK_CUDNN(cudnnBackendSetAttribute(engine, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &gidx));
-    CHECK_CUDNN(cudnnBackendFinalize(engine));
+        int64_t gidx = 0;
+        CHECK_CUDNN(cudnnBackendSetAttribute(engine, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &gidx));
+        CHECK_CUDNN(cudnnBackendFinalize(engine));
 
-    cudnnBackendDescriptor_t engcfg;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &engcfg));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(engcfg, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &engine));
-    CHECK_CUDNN(cudnnBackendFinalize(engcfg));
+        cudnnBackendDescriptor_t engcfg;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &engcfg));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(engcfg, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &engine));
+        CHECK_CUDNN(cudnnBackendFinalize(engcfg));
 
-    // Set up the execution plan
-    cudnnBackendDescriptor_t plan;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR, &plan));
-    CHECK_CUDNN(cudnnBackendSetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &cur_handle));
-    CHECK_CUDNN(cudnnBackendSetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG, CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                         1, &engcfg));
-    CHECK_CUDNN(cudnnBackendFinalize(plan));
+        // Set up the execution plan
+        cudnnBackendDescriptor_t plan;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR, &plan));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &cur_handle));
+        CHECK_CUDNN(cudnnBackendSetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG,
+                                             CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &engcfg));
+        CHECK_CUDNN(cudnnBackendFinalize(plan));
 
-    int64_t workspaceSize;
-    CHECK_CUDNN(cudnnBackendGetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL,
-                                         &workspaceSize));
+        int64_t workspaceSize;
+        CHECK_CUDNN(cudnnBackendGetAttribute(plan, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL,
+                                             &workspaceSize));
 
-    void *dev_ptrs[3] = {ptr_x, ptr_w, ptr_y};  // device pointers
-    int64_t uids[3] = {'x', 'w', 'y'};
-    void *workspace = request_cuda_workspace(workspaceSize, false);
+        void *dev_ptrs[3] = {ptr_x, ptr_w, ptr_y};  // device pointers
+        int64_t uids[3] = {'x', 'w', 'y'};
+        void *workspace = request_cuda_workspace(workspaceSize, false);
 
-    cudnnBackendDescriptor_t varpack;
-    CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, &varpack));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS, CUDNN_TYPE_VOID_PTR, 3, dev_ptrs));
-    CHECK_CUDNN(cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS, CUDNN_TYPE_INT64, 3, uids));
-    CHECK_CUDNN(
-        cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &workspace));
-    CHECK_CUDNN(cudnnBackendFinalize(varpack));
+        cudnnBackendDescriptor_t varpack;
+        CHECK_CUDNN(cudnnBackendCreateDescriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, &varpack));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS, CUDNN_TYPE_VOID_PTR, 3, dev_ptrs));
+        CHECK_CUDNN(cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS, CUDNN_TYPE_INT64, 3, uids));
+        CHECK_CUDNN(
+            cudnnBackendSetAttribute(varpack, CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &workspace));
+        CHECK_CUDNN(cudnnBackendFinalize(varpack));
 
-    // Execute the plan
-    CHECK_CUDNN(cudnnBackendExecute(cur_handle, plan, varpack));
+        // Execute the plan
+        CHECK_CUDNN(cudnnBackendExecute(cur_handle, plan, varpack));
 
-    // Cleanup
-    hidet_cuda_free_async(workspace, cur_stream);
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(xDesc));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(wDesc));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(yDesc));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(cDesc));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(fprop));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(op_graph));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(engine));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(engcfg));
-    CHECK_CUDNN(cudnnBackendDestroyDescriptor(plan));
+        // Cleanup
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(xDesc));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(wDesc));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(yDesc));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(cDesc));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(fprop));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(op_graph));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(engine));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(engcfg));
+        CHECK_CUDNN(cudnnBackendDestroyDescriptor(plan));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }

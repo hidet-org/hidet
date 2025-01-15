@@ -35,6 +35,10 @@ from hidet.cuda.cudnn import cudnnDataType
     ],
 )
 def test_cudnn_conv2d(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, stride, dilations, tol):
+    # see issue-#692 where cudnn free the workspace, add this line to trigger the error.
+    # keep this line is only used to detect this kind of error, which has been fixed in #697.
+    hidet.ffi.runtime_api.request_cuda_workspace(nbytes=10000, require_clean=False)
+
     tx = tw = ty = dtype
     pad_dim1, pad_dim2 = padding
     str_dim1, str_dim2 = stride

@@ -82,54 +82,99 @@ DLL void hidet_cuda_set_library_path(const char *path) {
 }
 
 DLL int hidet_cuda_device_count() {
-    lazy_load_cuda_runtime();
-    int count = 0;
-    CHECK_CUDA(cudaGetDeviceCount(&count));
-    return count;
+    try {
+        lazy_load_cuda_runtime();
+        int count = 0;
+        CHECK_CUDA(cudaGetDeviceCount(&count));
+        return count;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return 0;
+    }
 }
 
 DLL int hidet_cuda_get_device() {
-    lazy_load_cuda_runtime();
-    int current_device = -1;
-    CHECK_CUDA(cudaGetDevice(&current_device));
-    return current_device;
+    try {
+        lazy_load_cuda_runtime();
+        int current_device = -1;
+        CHECK_CUDA(cudaGetDevice(&current_device));
+        return current_device;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return -1;
+    }
 }
 
 DLL void hidet_cuda_set_device(int device) {
-    lazy_load_cuda_runtime();
-    CHECK_CUDA(cudaSetDevice(device));
-}
+    try {
+        lazy_load_cuda_runtime();
+        CHECK_CUDA(cudaSetDevice(device));
 
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
+}
 DLL void *hidet_cuda_malloc(size_t size) {
-    lazy_load_cuda_runtime();
-    void *devPtr;
-    CHECK_CUDA(cudaMalloc(&devPtr, size));
-    return devPtr;
+    try {
+        lazy_load_cuda_runtime();
+        void *devPtr;
+        CHECK_CUDA(cudaMalloc(&devPtr, size));
+        return devPtr;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
+    }
 }
 
 DLL void *hidet_cuda_malloc_async(size_t size, cudaStream_t stream) {
-    lazy_load_cuda_runtime();
-    void *devPtr;
-    CHECK_CUDA(cudaMallocAsync(&devPtr, size, stream));
-    return devPtr;
+    try {
+        lazy_load_cuda_runtime();
+        void *devPtr;
+        CHECK_CUDA(cudaMallocAsync(&devPtr, size, stream));
+        return devPtr;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
+    }
 }
 
 DLL void hidet_cuda_free(void *devPtr) {
-    lazy_load_cuda_runtime();
-    CHECK_CUDA(cudaFree(devPtr));
+    try {
+        lazy_load_cuda_runtime();
+        CHECK_CUDA(cudaFree(devPtr));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cuda_free_async(void *devPtr, cudaStream_t stream) {
-    lazy_load_cuda_runtime();
-    CHECK_CUDA(cudaFreeAsync(devPtr, stream));
+    try {
+        lazy_load_cuda_runtime();
+        CHECK_CUDA(cudaFreeAsync(devPtr, stream));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cuda_memcpy(void *dst, const void *src, size_t count, cudaMemcpyKind kind) {
-    lazy_load_cuda_runtime();
-    CHECK_CUDA(cudaMemcpy(dst, src, count, kind));
+    try {
+        lazy_load_cuda_runtime();
+        CHECK_CUDA(cudaMemcpy(dst, src, count, kind));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cuda_memcpy_async(void *dst, const void *src, size_t count, cudaMemcpyKind kind, cudaStream_t stream) {
-    lazy_load_cuda_runtime();
-    CHECK_CUDA(cudaMemcpyAsync(dst, src, count, kind, stream));
+    try {
+        lazy_load_cuda_runtime();
+        CHECK_CUDA(cudaMemcpyAsync(dst, src, count, kind, stream));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }

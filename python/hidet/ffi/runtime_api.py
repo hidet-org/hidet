@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_bool
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_bool, c_size_t
 from hidet.cuda import Stream
 from .ffi import get_func
 from .array import Array
@@ -25,6 +25,7 @@ class RuntimeAPI:
     _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
+    _request_cuda_workspace = get_func('request_cuda_workspace', [c_size_t, c_bool], c_void_p)
     _set_nccl_comms = get_func('set_nccl_comms', [c_int32, c_void_p], None)
     _get_use_torch_stream = get_func('get_use_torch_cuda_stream', [], c_bool)
     _use_torch_cuda_stream = get_func('use_torch_cuda_stream', [c_bool], None)
@@ -77,6 +78,11 @@ class RuntimeAPI:
     @staticmethod
     def use_torch_cuda_stream(use: bool) -> None:
         RuntimeAPI._use_torch_cuda_stream(use)
+
+    @staticmethod
+    def request_cuda_workspace(nbytes: int, require_clean: bool) -> Union[int, None]:
+        p = RuntimeAPI._request_cuda_workspace(nbytes, require_clean)
+        return p if p else None
 
 
 runtime_api = RuntimeAPI()

@@ -231,116 +231,132 @@ DLL void hidet_cublas_set_library_path(const char *path) {
 
 DLL void hidet_cublas_gemm(int m, int n, int k, int ta, int tb, int tc, void *ptr_a, void *ptr_b, void *ptr_c,
                            bool trans_a, bool trans_b, int compute_type) {
-    lazy_load_cublas();
+    try {
+        lazy_load_cublas();
 
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+        // Set the stream to the current stream
+        cudaStream_t cur_stream = get_cuda_stream();
+        CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
 
-    const void *p_alpha = nullptr;
-    const void *p_beta = nullptr;
+        const void *p_alpha = nullptr;
+        const void *p_beta = nullptr;
 
-    set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
+        set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
 
-    // we apply c^T = b^T @ a^T (c = a @ b) here
-    CHECK_CUBLAS(cublasGemmEx(CublasContext::current_handle(),
-                              trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
-                              trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k,
-                              p_alpha, ptr_b, cudaDataType(tb),
-                              n,  // ldb
-                              ptr_a, cudaDataType(ta),
-                              k,  // lda
-                              p_beta, ptr_c, cudaDataType(tc),
-                              n,  // ldc
-                              cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
+        // we apply c^T = b^T @ a^T (c = a @ b) here
+        CHECK_CUBLAS(cublasGemmEx(CublasContext::current_handle(),
+                                  trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+                                  trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k,
+                                  p_alpha, ptr_b, cudaDataType(tb),
+                                  n,  // ldb
+                                  ptr_a, cudaDataType(ta),
+                                  k,  // lda
+                                  p_beta, ptr_c, cudaDataType(tc),
+                                  n,  // ldc
+                                  cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cublas_strided_gemm(int b, int m, int n, int k, int ta, int tb, int tc, void *ptr_a, void *ptr_b,
                                    void *ptr_c, int64_t sa, int64_t sb, int64_t sc, bool trans_a, bool trans_b,
                                    int compute_type) {
-    lazy_load_cublas();
+    try {
+        lazy_load_cublas();
 
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+        // Set the stream to the current stream
+        cudaStream_t cur_stream = get_cuda_stream();
+        CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
 
-    const void *p_alpha = nullptr;
-    const void *p_beta = nullptr;
+        const void *p_alpha = nullptr;
+        const void *p_beta = nullptr;
 
-    set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
+        set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
 
-    CHECK_CUBLAS(cublasGemmStridedBatchedEx(
-        CublasContext::current_handle(), trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
-        trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
-        // b^t
-        ptr_b, cudaDataType(tb),
-        n,   // ldb
-        sb,  // strideB
-        // a^t
-        ptr_a, cudaDataType(ta),
-        k,   // lda
-        sa,  // strideA
-        p_beta,
-        // c^t
-        ptr_c, cudaDataType(tc),
-        n,   // ldc
-        sc,  // strideC
-        b,   // batchCount
-        cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
+        CHECK_CUBLAS(cublasGemmStridedBatchedEx(
+            CublasContext::current_handle(), trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+            trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
+            // b^t
+            ptr_b, cudaDataType(tb),
+            n,   // ldb
+            sb,  // strideB
+            // a^t
+            ptr_a, cudaDataType(ta),
+            k,   // lda
+            sa,  // strideA
+            p_beta,
+            // c^t
+            ptr_c, cudaDataType(tc),
+            n,   // ldc
+            sc,  // strideC
+            b,   // batchCount
+            cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
+    }
 }
 
 DLL void hidet_cublas_batched_gemm(int b, int m, int n, int k, int ta, int tb, int tc, void **ptr_a, void **ptr_b,
                                    void **ptr_c, bool trans_a, bool trans_b, int compute_type) {
-    lazy_load_cublas();
+    try {
+        lazy_load_cublas();
 
-    // Set the stream to the current stream
-    cudaStream_t cur_stream = get_cuda_stream();
-    CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
+        // Set the stream to the current stream
+        cudaStream_t cur_stream = get_cuda_stream();
+        CHECK_CUBLAS(cublasSetStream(CublasContext::current_handle(), cur_stream));
 
-    const void *p_alpha = nullptr;
-    const void *p_beta = nullptr;
+        const void *p_alpha = nullptr;
+        const void *p_beta = nullptr;
 
-    set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
+        set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
 
-    static void **ptr_a_device, **ptr_b_device, **ptr_c_device;
-    static int cur_device_ptr_size;  // Size of device memory currently allocated for each of the three a,b,c arrays.
+        static void **ptr_a_device, **ptr_b_device, **ptr_c_device;
+        static int
+            cur_device_ptr_size;  // Size of device memory currently allocated for each of the three a,b,c arrays.
 
-    // Allocate device memory
-    // first use synchronous versions of malloc and memcpy, later switch to async versions
-    if (b > cur_device_ptr_size) {
-        if (cur_device_ptr_size > 0) {
-            hidet_cuda_free_async((void *)ptr_a_device, cur_stream);
-            hidet_cuda_free_async((void *)ptr_b_device, cur_stream);
-            hidet_cuda_free_async((void *)ptr_c_device, cur_stream);
+        // Allocate device memory
+        // first use synchronous versions of malloc and memcpy, later switch to async versions
+        if (b > cur_device_ptr_size) {
+            if (cur_device_ptr_size > 0) {
+                hidet_cuda_free_async((void *)ptr_a_device, cur_stream);
+                hidet_cuda_free_async((void *)ptr_b_device, cur_stream);
+                hidet_cuda_free_async((void *)ptr_c_device, cur_stream);
+            }
+            ptr_a_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
+            ptr_b_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
+            ptr_c_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
+
+            cur_device_ptr_size = b;
         }
-        ptr_a_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
-        ptr_b_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
-        ptr_c_device = (void **)hidet_cuda_malloc_async(b * sizeof(void *), cur_stream);
 
-        cur_device_ptr_size = b;
+        // Copy input arrays (A and B) from host to device
+        hidet_cuda_memcpy_async((void *)ptr_a_device, (void *)ptr_a, b * sizeof(void *), cudaMemcpyHostToDevice,
+                                cur_stream);
+        hidet_cuda_memcpy_async((void *)ptr_b_device, (void *)ptr_b, b * sizeof(void *), cudaMemcpyHostToDevice,
+                                cur_stream);
+        hidet_cuda_memcpy_async((void *)ptr_c_device, (void *)ptr_c, b * sizeof(void *), cudaMemcpyHostToDevice,
+                                cur_stream);
+
+        CHECK_CUBLAS(cublasGemmBatchedEx(
+            CublasContext::current_handle(), trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+            trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
+            // b^t
+            ptr_b_device, cudaDataType(tb),
+            n,  // ldb
+            // a^t
+            ptr_a_device, cudaDataType(ta),
+            k,  // lda
+            p_beta,
+            // c^t
+            ptr_c_device, cudaDataType(tc),
+            n,  // ldc
+            b,  // batchCount
+            cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return;
     }
-
-    // Copy input arrays (A and B) from host to device
-    hidet_cuda_memcpy_async((void *)ptr_a_device, (void *)ptr_a, b * sizeof(void *), cudaMemcpyHostToDevice,
-                            cur_stream);
-    hidet_cuda_memcpy_async((void *)ptr_b_device, (void *)ptr_b, b * sizeof(void *), cudaMemcpyHostToDevice,
-                            cur_stream);
-    hidet_cuda_memcpy_async((void *)ptr_c_device, (void *)ptr_c, b * sizeof(void *), cudaMemcpyHostToDevice,
-                            cur_stream);
-
-    CHECK_CUBLAS(cublasGemmBatchedEx(
-        CublasContext::current_handle(), trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
-        trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
-        // b^t
-        ptr_b_device, cudaDataType(tb),
-        n,  // ldb
-        // a^t
-        ptr_a_device, cudaDataType(ta),
-        k,  // lda
-        p_beta,
-        // c^t
-        ptr_c_device, cudaDataType(tc),
-        n,  // ldc
-        b,  // batchCount
-        cublasComputeType_t(compute_type), cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT));
 }
