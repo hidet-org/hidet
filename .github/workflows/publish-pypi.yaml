@@ -56,7 +56,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on: arc-runner-set
+    runs-on:
+      group: 'arc-l4'
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
