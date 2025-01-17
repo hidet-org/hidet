@@ -17,6 +17,7 @@ from hidet import ops
 from hidet.cuda.cudnn import cudnnDataType
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 @pytest.mark.parametrize(
     "n, c, h, w, k, p, q, r, s, padding, stride, dilations",
     [
@@ -79,6 +80,7 @@ def test_cudnn_conv2d(n, c, h, w, k, p, q, r, s, dtype, compute_type, padding, s
     hidet.utils.assert_close(actual=tensor_y, expected=golden, rtol=tol, atol=tol)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 @pytest.mark.parametrize(
     "n, c, h, w, k, p, q, r, s, padding, stride, dilations",
     [

@@ -310,6 +310,7 @@ def pytest_generate_tests(metafunc):
 
 
 # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-multiply-and-accumulate-instruction-wgmma-mma-async
+@pytest.mark.requires_cuda
 def test_wgmma(
     config: WgmmaConfig,
     is_a_shared: bool,

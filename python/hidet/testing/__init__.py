@@ -22,3 +22,4 @@ from .utils import (
     check_torch_ternary,
     assert_torch_allclose,
 )
+from .torch_utils import device_to_torch

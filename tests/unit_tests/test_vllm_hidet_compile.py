@@ -17,6 +17,8 @@ import torch
 from torch import nn
 from torch._subclasses.fake_tensor import FakeTensorMode
 
+from hidet.testing import device_to_torch
+
 
 class TwoMatmul(nn.Module):
     def __init__(self):
@@ -30,8 +32,9 @@ class TwoMatmul(nn.Module):
         return y1, y2
 
 
-def test_compile_with_fake_tensor():
+def test_compile_with_fake_tensor(device):
     dynamo_config.use_cuda_graph(False)
+    torch_device = device_to_torch(device)
 
     graph_modules = []
 
@@ -41,7 +44,7 @@ def test_compile_with_fake_tensor():
         return graph_module
 
     model = TwoMatmul().to(torch.half).cuda().eval()
-    x = torch.randn(1, 47, 4096, device='cuda', dtype=torch.half)
+    x = torch.randn(1, 47, 4096, device=torch_device, dtype=torch.half)
 
     with torch.inference_mode(True):
         compiled_model = torch.compile(model, backend=get_graph_module, mode='max-autotune')

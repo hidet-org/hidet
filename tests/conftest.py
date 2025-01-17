@@ -17,7 +17,6 @@ import hidet
 def pytest_addoption(parser):
     parser.addoption("--clear-cache", action="store_true", help="Clear operator cache before running tests")
     parser.addoption("--runslow", action="store_true", help="Run slow tests")
-    parser.addoption("--hopper", action='store_true', help="Run test that requires sm_90+")
     parser.addoption(
         "--release", action="store_true", help="Run the test only when we are going to release the next version"
     )
@@ -26,8 +25,11 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
-    config.addinivalue_line("markers", "hopper: mark test as requiring sm_90+ to run")
     config.addinivalue_line("markers", "release: mark test as release-level test")
+
+    config.addinivalue_line("markers", "requires_cuda: mark test that requires NVIDIA GPUs")
+    config.addinivalue_line("markers", "requires_cuda_hopper: mark test that requires NVIDIA GPUs with Hopper arch")
+    config.addinivalue_line("markers", "requires_hip: mark test that requires hip AMD GPUs")
 
 
 def pytest_sessionstart(session):
@@ -49,22 +51,23 @@ def pytest_sessionstart(session):
 
 
 def pytest_collection_modifyitems(config, items):
-    keywords = {
-        "slow": pytest.mark.skip(reason="need --runslow option to run"),
-        "hopper": pytest.mark.skip(reason="need --hopper option to run"),
-        "release": pytest.mark.skip(reason="need --release option to run"),
-    }
-    if config.getoption("--runslow"):
-        del keywords["slow"]
-    if config.getoption("--hopper"):
-        del keywords["hopper"]
-    if config.getoption("--release"):
-        del keywords["release"]
+    keyword2mark = {}
+
+    if not config.getoption("--runslow"):
+        keyword2mark['slow'] = pytest.mark.skip(reason="need --runslow option to run")
+    if not config.getoption("--release"):
+        keyword2mark['release'] = pytest.mark.skip(reason="need --release option to run")
+    if 'cuda' not in available_devices():
+        keyword2mark['requires_cuda'] = pytest.mark.skip(reason="test requires CUDA GPUs")
+    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair() < (9, 0):
+        keyword2mark['requires_cuda_hopper'] = pytest.mark.skip(reason="test requires Hopper CUDA GPUs")
+    if 'hip' not in available_devices():
+        keyword2mark['requires_hip'] = pytest.mark.skip(reason="test requires HIP GPUs")
 
     for item in items:
-        for keyword in keywords.keys():
+        for keyword in keyword2mark.keys():
             if keyword in item.keywords:
-                item.add_marker(keywords[keyword])
+                item.add_marker(keyword2mark[keyword])
 
 
 @pytest.fixture(autouse=True)
@@ -80,8 +83,39 @@ def clear_before_test():
     hidet.utils.multiprocess._job_queue = None
 
     torch.cuda.empty_cache()
-    hidet.runtime.storage.current_memory_pool('cuda').clear()
+    if hidet.cuda.available():
+        hidet.runtime.storage.current_memory_pool('cuda').clear()
     gc.collect()  # release resources with circular references but are unreachable
     yield
     # run after each test
     pass
+
+
+def available_devices():
+    """
+    Returns the list of available devices.
+    """
+    import torch
+
+    if torch.cuda.is_available() and torch.version.hip:
+        return []  # todo: add 'hip' when it is supported
+    elif torch.cuda.is_available():
+        return ['cuda']
+    else:
+        return ['cpu']
+
+
+@pytest.fixture(params=available_devices())
+def device(request):
+    """
+    A fixture to enable automatic selection of devices to be tested on the current machine.
+
+    Usage:
+    ```
+    def test_something(device):
+        # this test will be run on all the available devices (determined by the `available_devices` function)
+        assert device in ['cpu', 'cuda', 'hip']
+        ...
+    ```
+    """
+    return request.param

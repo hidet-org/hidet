@@ -55,6 +55,7 @@ def matmul_mma_tensor_core(config: MmaConfig) -> IRModule:
     return ir_module
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     'config',
     [

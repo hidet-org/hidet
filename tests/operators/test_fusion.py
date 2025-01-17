@@ -15,28 +15,28 @@ import hidet
 from hidet.graph.ops.fusion.fused_operator import fused_operator
 
 
-def test_fusion():
+def test_fusion(device):
     def model() -> hidet.FlowGraph:
-        a = hidet.symbol([1, 3, 4], device='cuda')
-        b = hidet.symbol([1, 4, 5], device='cuda')
-        c = hidet.symbol([1, 3, 5], device='cuda')
+        a = hidet.symbol([1, 3, 4], device=device)
+        b = hidet.symbol([1, 4, 5], device=device)
+        c = hidet.symbol([1, 3, 5], device=device)
         d = hidet.ops.batch_matmul(a, b) + c
         return hidet.trace_from(d, [a, b, c])
 
     graph = model()
-    a = hidet.randn([1, 3, 4], device='cuda')
-    b = hidet.randn([1, 4, 5], device='cuda')
-    c = hidet.randn([1, 3, 5], device='cuda')
+    a = hidet.randn([1, 3, 4], device=device)
+    b = hidet.randn([1, 4, 5], device=device)
+    c = hidet.randn([1, 3, 5], device=device)
     cc1 = fused_operator(a, b, c, fused_graph=graph, anchor=0)
     cc2 = graph(a, b, c)
 
     numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy())
 
 
-def test_fusion_v2():
+def test_fusion_v2(device):
     def model() -> hidet.FlowGraph:
-        a = hidet.symbol([1, 9], device='cuda')
-        b = hidet.symbol([], device='cuda')
+        a = hidet.symbol([1, 9], device=device)
+        b = hidet.symbol([], device=device)
         c = hidet.ops.equal(a, b)
         d = hidet.ops.logical_not(c)
         e = d.astype('int32')
@@ -47,18 +47,18 @@ def test_fusion_v2():
         return hidet.trace_from(i, [a, b])
 
     graph = model()
-    a = hidet.zeros([1, 9], device='cuda')
-    b = hidet.zeros([], device='cuda')
+    a = hidet.zeros([1, 9], device=device)
+    b = hidet.zeros([], device=device)
     y1 = graph(a, b)
     y2 = fused_operator(a, b, fused_graph=graph)
 
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy())
 
 
-def test_fusion_cublas_matmul():
+def test_fusion_cublas_matmul(device):
     bs, m, n, k = 2, 1024, 1024, 1024
-    a = hidet.symbol(shape=[bs, m, k], dtype='float32', device='cuda')
-    b = hidet.randn(shape=[bs, k, n], dtype='float32', device='cuda')
+    a = hidet.symbol(shape=[bs, m, k], dtype='float32', device=device)
+    b = hidet.randn(shape=[bs, k, n], dtype='float32', device=device)
 
     def optimize_and_build(op):
         c = op(a + 1.0, b) + 1.0

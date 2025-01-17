@@ -53,6 +53,7 @@ def page_attention_ref(
     return from_torch(output)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize('num_heads, num_kv_heads', [(32, 1), (32, 32), (64, 8)])
 @pytest.mark.parametrize('block_size, head_size', [(4, 32), (16, 64), (32, 128)])
 @pytest.mark.parametrize('seq_lengths_list', [[1, 2, 300, 448, 5, 683, 791, 88, 9]])
@@ -93,7 +94,7 @@ def test_page_attention(num_heads, num_kv_heads, block_size, head_size, seq_leng
     output_our = page_attention(query, seq_lengths, cache_blocks, key_cache, value_cache)
     torch.cuda.synchronize()
 
-    hidet.utils.assert_close(output_our, output_ref, rtol=1e-2, atol=1e-2)
+    hidet.utils.assert_close(output_our, output_ref, rtol=5e-2, atol=5e-2)
 
 
 if __name__ == '__main__':

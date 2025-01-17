@@ -677,11 +677,13 @@ def data(batch_size, seqlen, dmodel, dffn, dtype="float16", device="cuda", retur
     return x, w1, w2, z, y
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("batch_size, seqlen, dmodel, dffn", [(8, 1, 4096, 4096 * 4), (8, 1, 1024, 1024 * 4)])
 def test_mlp(batch_size, seqlen, dmodel, dffn):
     mlp(batch_size, seqlen, dmodel, dffn)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("batch_size, seqlen, dmodel, dffn", [(8, 1, 4096, 4096 * 4), (8, 1, 1024, 1024 * 4)])
 def test_mlp_v2(batch_size, seqlen, dmodel, dffn):
     mlp_v2(batch_size, seqlen, dmodel, dffn)
@@ -689,6 +691,7 @@ def test_mlp_v2(batch_size, seqlen, dmodel, dffn):
 
 # this kernel requires inter threadblock communication, so we should limit the
 # block size. Otherwise, deadlock may occur.
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("batch_size, seqlen, dmodel, dffn", [(8, 1, 4096, 4096 * 4), (8, 1, 4096, 4096 * 3)])
 def test_mlp_v3(batch_size, seqlen, dmodel, dffn):
     # hidet.option.cache_dir("./demo_mlp")

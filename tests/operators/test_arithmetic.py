@@ -13,28 +13,8 @@ import math
 import pytest
 import hidet
 import torch
-import numpy as np
 from hidet import ops
-
-
-def check_binary(a_shape, b_shape, dtype, op, hidet_op=None, a_positive=False, b_positive=False):
-    a = np.random.rand(*a_shape).astype(dtype)
-    b = np.random.rand(*b_shape).astype(dtype)
-    a = np.abs(a) if a_positive else a
-    b = np.abs(b) if b_positive else b
-    numpy_c = op(a, b)
-    if hidet_op is None:
-        hidet_op = op
-    hidet_c = hidet_op(hidet.asarray(a).cuda(), hidet.asarray(b).cuda()).cpu().numpy()
-    np.testing.assert_allclose(actual=hidet_c, desired=numpy_c, atol=1e-5, rtol=1e-5)
-
-
-def check_unary(shape, dtype, numpy_op, hidet_op, positive=False):
-    a = np.random.rand(*shape).astype(dtype)
-    a = np.abs(a) if positive else a
-    numpy_b = numpy_op(a)
-    hidet_b = hidet_op(hidet.asarray(a).cuda()).cpu().numpy()
-    np.testing.assert_allclose(actual=hidet_b, desired=numpy_b, atol=1e-5, rtol=1e-5)
+from hidet.testing.utils import check_torch_binary, check_torch_unary, check_torch_binary_with_inputs
 
 
 binary_op_shapes = [[[1], [200]], [[100, 200], [1, 200]], [[200, 1], [200]]]
@@ -44,237 +24,384 @@ unary_op_shapes = [[1], [100], [200]]
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_add(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.float32, lambda a, b: a + b)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a + b,
+        hidet_func=lambda a, b: a + b,
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_sub(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.float32, lambda a, b: a - b)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a - b,
+        hidet_func=lambda a, b: a - b,
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_multiply(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.float32, lambda a, b: a * b)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a * b,
+        hidet_func=lambda a, b: a * b,
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_divide(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.float32, lambda a, b: a / b)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a / b,
+        hidet_func=lambda a, b: a / b,
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_pow(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.float32, np.power, ops.pow, a_positive=True)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: torch.pow(torch.abs(a), b),
+        hidet_func=lambda a, b: ops.pow(ops.abs(a), b),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_sqrt(shape):
-    check_unary(shape, np.float32, np.sqrt, ops.sqrt, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.sqrt(torch.abs(a)),
+        hidet_func=lambda a: ops.sqrt(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_sin(shape):
-    check_unary(shape, np.float32, np.sin, ops.sin)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.sin(a), hidet_func=lambda a: ops.sin(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_cos(shape):
-    check_unary(shape, np.float32, np.cos, ops.cos)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.cos(a), hidet_func=lambda a: ops.cos(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_tan(shape):
-    check_unary(shape, np.float32, np.tan, ops.tan)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.tan(a), hidet_func=lambda a: ops.tan(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_sinh(shape):
-    check_unary(shape, np.float32, np.sinh, ops.sinh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.sinh(a), hidet_func=lambda a: ops.sinh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_cosh(shape):
-    check_unary(shape, np.float32, np.cosh, ops.cosh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.cosh(a), hidet_func=lambda a: ops.cosh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_tanh(shape):
-    check_unary(shape, np.float32, np.tanh, ops.tanh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.tanh(a), hidet_func=lambda a: ops.tanh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_asin(shape):
-    check_unary(shape, np.float32, np.arcsin, ops.asin)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.asin(a), hidet_func=lambda a: ops.asin(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_acos(shape):
-    check_unary(shape, np.float32, np.arccos, ops.acos)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.acos(a), hidet_func=lambda a: ops.acos(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_atan(shape):
-    check_unary(shape, np.float32, np.arctan, ops.atan)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.atan(a), hidet_func=lambda a: ops.atan(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_asinh(shape):
-    check_unary(shape, np.float32, np.arcsinh, ops.asinh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.asinh(a), hidet_func=lambda a: ops.asinh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_acosh(shape):
-    check_unary(shape, np.float32, np.arccosh, ops.acosh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.acosh(a), hidet_func=lambda a: ops.acosh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_atanh(shape):
-    check_unary(shape, np.float32, np.arctanh, ops.atanh)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.atanh(a), hidet_func=lambda a: ops.atanh(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_exp(shape):
-    check_unary(shape, np.float32, np.exp, ops.exp)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.exp(a), hidet_func=lambda a: ops.exp(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_expm1(shape):
-    check_unary(shape, np.float32, np.expm1, ops.expm1)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.expm1(a), hidet_func=lambda a: ops.expm1(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_erf(shape):
-    check_unary(shape, np.float32, np.vectorize(math.erf), ops.erf)
-
-
-@pytest.mark.parametrize("shape", unary_op_shapes)
-def test_sqrt(shape):
-    check_unary(shape, np.float32, np.sqrt, ops.sqrt, positive=True)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.erf(a), hidet_func=lambda a: ops.erf(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_rsqrt(shape):
-    check_unary(shape, np.float32, lambda v: np.reciprocal(np.sqrt(v)), ops.rsqrt, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.rsqrt(torch.abs(a)),
+        hidet_func=lambda a: ops.rsqrt(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_log(shape):
-    check_unary(shape, np.float32, np.log, ops.log, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.log(torch.abs(a)),
+        hidet_func=lambda a: ops.log(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_log2(shape):
-    check_unary(shape, np.float32, np.log2, ops.log2, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.log2(torch.abs(a)),
+        hidet_func=lambda a: ops.log2(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_log10(shape):
-    check_unary(shape, np.float32, np.log10, ops.log10, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.log10(torch.abs(a)),
+        hidet_func=lambda a: ops.log10(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_log1p(shape):
-    check_unary(shape, np.float32, np.log1p, ops.log1p, positive=True)
+    check_torch_unary(
+        shape=shape,
+        torch_func=lambda a: torch.log1p(torch.abs(a)),
+        hidet_func=lambda a: ops.log1p(ops.abs(a)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_round(shape):
-    check_unary(shape, np.float32, np.round, ops.round)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.round(a), hidet_func=lambda a: ops.round(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_neg(shape):
-    check_unary(shape, np.float32, np.negative, ops.negative)
+    check_torch_unary(shape=shape, torch_func=lambda a: -a, hidet_func=lambda a: -a, atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_abs(shape):
-    check_unary(shape, np.float32, np.absolute, ops.abs)
+    check_torch_unary(
+        shape=shape, torch_func=lambda a: torch.abs(a), hidet_func=lambda a: ops.abs(a), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_rightshift(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.uint32, np.right_shift, ops.bitwise_right_shift)
+    a = torch.randint(1, 10000, a_shape)
+    b = torch.randint(1, 10, b_shape)
+    check_torch_binary_with_inputs(
+        a, b, torch_func=lambda a, b: a >> b, hidet_func=lambda a, b: ops.bitwise_right_shift(a, b), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_leftshift(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.uint32, np.left_shift, ops.bitwise_left_shift)
+    a = torch.randint(1, 10000, a_shape)
+    b = torch.randint(1, 10, b_shape)
+    check_torch_binary_with_inputs(
+        a, b, torch_func=lambda a, b: a << b, hidet_func=lambda a, b: ops.bitwise_left_shift(a, b), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_bitwise_and(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.int32, np.bitwise_and, ops.bitwise_and)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a & b,
+        hidet_func=lambda a, b: ops.bitwise_and(a, b),
+        dtype='int32',
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_bitwise_not(a_shape):
-    check_unary(a_shape, np.int32, np.invert, ops.bitwise_invert)
+    check_torch_unary(
+        shape=a_shape,
+        torch_func=lambda a: torch.bitwise_not((a * 10).to(torch.int32)),
+        hidet_func=lambda a: ops.bitwise_invert(ops.cast(a * 10, 'int32')),
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_bitwise_or(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.int32, np.bitwise_or, ops.bitwise_or)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a | b,
+        hidet_func=lambda a, b: ops.bitwise_or(a, b),
+        dtype='int32',
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_bitwise_xor(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.int32, np.bitwise_xor, ops.bitwise_xor)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: a ^ b,
+        hidet_func=lambda a, b: ops.bitwise_xor(a, b),
+        dtype='int32',
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_minimum(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.int32, np.minimum, ops.minimum)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: torch.minimum(a, b),
+        hidet_func=lambda a, b: ops.minimum(a, b),
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_maximum(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.int32, np.maximum, ops.maximum)
+    check_torch_binary(
+        a_shape=a_shape,
+        b_shape=b_shape,
+        torch_func=lambda a, b: torch.maximum(a, b),
+        hidet_func=lambda a, b: ops.maximum(a, b),
+        atol=0,
+        rtol=0,
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_ceil(a_shape):
-    check_unary(a_shape, np.float32, np.ceil, ops.ceil)
+    check_torch_unary(
+        shape=a_shape, torch_func=lambda a: torch.ceil(a), hidet_func=lambda a: ops.ceil(a), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_floor(a_shape):
-    check_unary(a_shape, np.float32, np.floor, ops.floor)
+    check_torch_unary(shape=a_shape, torch_func=lambda a: torch.floor(a), hidet_func=lambda a: ops.floor(a), atol=0)
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_trunc(a_shape):
-    check_unary(a_shape, np.float32, np.trunc, ops.trunc)
+    check_torch_unary(
+        shape=a_shape, torch_func=lambda a: torch.trunc(a), hidet_func=lambda a: ops.trunc(a), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_isfinite(a_shape):
-    check_unary(a_shape, np.float32, np.isfinite, ops.isfinite)
+    check_torch_unary(
+        shape=a_shape, torch_func=lambda a: torch.isfinite(a), hidet_func=lambda a: ops.isfinite(a), atol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_isinf(a_shape):
-    check_unary(a_shape, np.float32, np.isinf, ops.isinf)
+    check_torch_unary(
+        shape=a_shape, torch_func=lambda a: torch.isinf(a), hidet_func=lambda a: ops.isinf(a), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_isnan(a_shape):
-    check_unary(a_shape, np.float32, np.isnan, ops.isnan)
-
-
-@pytest.mark.parametrize("a_shape", [[20]])
-def test_cast_from_fp16(a_shape):
-    check_unary(a_shape, np.float16, np.int8, lambda x: ops.cast(x, "int8"))
-    check_unary(a_shape, np.float16, np.uint8, lambda x: ops.cast(x, "uint8"))
-
-    check_unary(a_shape, np.float16, np.int16, lambda x: ops.cast(x, "int16"))
-    check_unary(a_shape, np.float16, np.uint16, lambda x: ops.cast(x, "uint16"))
-
-    check_unary(a_shape, np.float16, np.int32, lambda x: ops.cast(x, "int32"))
-    check_unary(a_shape, np.float16, np.uint32, lambda x: ops.cast(x, "uint32"))
-
-    check_unary(a_shape, np.float16, np.int64, lambda x: ops.cast(x, "int64"))
-    check_unary(a_shape, np.float16, np.uint64, lambda x: ops.cast(x, "uint64"))
+    check_torch_unary(
+        shape=a_shape, torch_func=lambda a: torch.isnan(a), hidet_func=lambda a: ops.isnan(a), atol=0, rtol=0
+    )
 
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
@@ -289,11 +416,11 @@ def test_cast_from_fp16(a_shape):
         ['int32', 'bfloat16'],
     ],
 )
-def test_where(a_shape, a_dtype, b_dtype):
+def test_where(a_shape, a_dtype, b_dtype, device):
     from hidet.testing import assert_torch_allclose
 
-    a = hidet.randn(a_shape, dtype=a_dtype)
-    b = hidet.randn(a_shape, dtype=b_dtype)
+    a = hidet.randn(a_shape, dtype=a_dtype, device=device)
+    b = hidet.randn(a_shape, dtype=b_dtype, device=device)
     c = hidet.ops.where(a > 0.5, a, b)
 
     c_torch = torch.where(a.torch() > 0.5, a.torch(), b.torch())

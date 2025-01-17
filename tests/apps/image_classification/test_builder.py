@@ -18,6 +18,7 @@ from hidet.graph.tensor import from_torch
 from transformers import AutoImageProcessor
 
 
+@pytest.mark.requires_cuda
 def test_create_image_classifier():
     dataset = load_dataset("huggingface/cats-image", split="test", trust_remote_code=True)
 

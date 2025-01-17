@@ -10,6 +10,7 @@ import torch
 from quant_utils import bench, data
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "problem_size",
     (

@@ -80,6 +80,7 @@ def data(M, N, K, L, dtype="float16", device="cuda"):
     return a, b, c
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("args,graph,mode", pattern_tests)
 def test_pattern(args, graph, mode):
     M, N, K, L = args

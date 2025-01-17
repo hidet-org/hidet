@@ -16,10 +16,10 @@ from hidet.testing.torch_utils import check_module
 
 @pytest.mark.slow
 @pytest.mark.parametrize('shape', [[1, 3, 224, 224]])
-def test_densenet121(shape):
-    model = torch.hub.load('pytorch/vision:v0.6.0', 'densenet121', pretrained=True).cuda().eval().to(torch.float16)
-    x = torch.randn(*shape).cuda().to(torch.float16) * 0.1796 + 0.5491
-    check_module(model, [x], atol=4e-2, rtol=4e-2, dynamic=False)
+def test_densenet121(shape, device):
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'densenet121', pretrained=True).eval().to(torch.float16)
+    x = torch.randn(*shape).to(torch.float16) * 0.1796 + 0.5491
+    check_module(model, [x], atol=4e-2, rtol=4e-2, dynamic=False, device=device)
 
 
 if __name__ == '__main__':

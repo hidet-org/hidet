@@ -48,6 +48,13 @@ def available() -> bool:
     return False
 
 
+def is_available() -> bool:
+    """
+    mimic torch.cuda.is_available()
+    """
+    return available()
+
+
 @lru_cache(maxsize=None)
 def device_count() -> int:
     """

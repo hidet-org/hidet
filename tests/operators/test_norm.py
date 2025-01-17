@@ -43,7 +43,7 @@ def numpy_instance_norm(data: np.ndarray, epsilon: float = 1e-5) -> np.ndarray:
 
 
 @pytest.mark.parametrize("shape", [[1, 1, 1, 1], [1, 200, 20, 20], [1, 10, 1, 1], [1, 128, 32, 32], [1, 32, 24, 24]])
-def test_batch_norm_2d(shape):
+def test_batch_norm_2d(shape, device):
     epsilon = 1e-5
     check_ternary(
         a_shape=shape,
@@ -52,6 +52,7 @@ def test_batch_norm_2d(shape):
         numpy_op=lambda a, b, c: numpy_batch_norm_2d(a, b, c, epsilon, 1),
         hidet_op=lambda a, b, c: ops.batch_norm_infer(a, b, c, epsilon, 1),
         dtype='float32',
+        device=device,
         atol=1e-5,
         rtol=1e-5,
     )
@@ -60,22 +61,29 @@ def test_batch_norm_2d(shape):
 @pytest.mark.parametrize(
     "shape", [[1, 1, 1, 1], [1, 2, 1, 1], [1, 32, 48], [1, 20, 20, 20], [1, 20, 20, 5, 5], [1, 32, 26214]]
 )
-def test_instance_norm(shape):
-    check_unary(shape, numpy_op=numpy_instance_norm, hidet_op=ops.instance_norm, atol=1e-4, rtol=1e-4)
+def test_instance_norm(shape, device):
+    check_unary(shape, numpy_op=numpy_instance_norm, hidet_op=ops.instance_norm, device=device, atol=1e-4, rtol=1e-4)
 
 
 # hidet operators tested against torch equivalent operators
 
 
 @pytest.mark.parametrize('shape', [[10, 3, 3, 3, 4]])
-def test_instance_norm(shape):
-    check_torch_unary(shape, lambda x: F.instance_norm(x), lambda x: ops.instance_norm(x), atol=1e-4, rtol=1e-4)
+def test_instance_norm(shape, device):
+    check_torch_unary(
+        shape, lambda x: F.instance_norm(x), lambda x: ops.instance_norm(x), device=device, atol=1e-4, rtol=1e-4
+    )
 
 
 @pytest.mark.parametrize('shape, num_groups', [[[1, 32, 64], 4], [[2, 4, 32], 4], [[1, 4, 32], 1]])
-def test_group_norm(shape, num_groups):
+def test_group_norm(shape, num_groups, device):
     check_torch_unary(
-        shape, lambda x: F.group_norm(x, num_groups), lambda x: ops.group_norm(x, num_groups), atol=1e-4, rtol=1e-4
+        shape,
+        lambda x: F.group_norm(x, num_groups),
+        lambda x: ops.group_norm(x, num_groups),
+        device=device,
+        atol=1e-4,
+        rtol=1e-4,
     )
 
 
@@ -83,11 +91,12 @@ def test_group_norm(shape, num_groups):
     'shape, num_last_dims',
     [[[1, 2, 8, 8], 2], [[2, 2, 2, 255], 3], [[1, 8], 1], [[1, 1, 1, 18], 1], [[2, 2, 45, 45], 2], [[512, 768], 1]],
 )
-def test_layer_norm(shape, num_last_dims):
+def test_layer_norm(shape, num_last_dims, device):
     check_torch_unary(
         shape,
         lambda x: F.layer_norm(x, shape[-num_last_dims:]),
         lambda x: ops.layer_norm(x, num_last_dims),
+        device=device,
         atol=1e-4,
         rtol=1e-4,
     )

@@ -36,6 +36,7 @@ from hidet.lang.constructs.declare import shared_tensor
 from hidet.testing.capture_stdout import capture_stdout
 
 
+@pytest.mark.requires_cuda
 def test_mbarrier_basic():
     """
     Basic create/destroy mbarrier in shared memory.
@@ -53,7 +54,7 @@ def test_mbarrier_basic():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 @pytest.mark.parametrize('wait_type', ["wait", "test_wait", "try_wait"])
 def test_mbarrier_cp_async_single_cta(wait_type: str):
     """
@@ -131,7 +132,7 @@ def test_mbarrier_cp_async_single_cta(wait_type: str):
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_mbarrier_cp_async_cluster():
     """
     Test blocking/non-blocking wait instructions on mbarrier.
@@ -182,7 +183,7 @@ def test_mbarrier_cp_async_cluster():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_mbarrier_tx_count_ops():
     """
     Test transaction count operations with arrive-on operation for phase completion.
@@ -235,6 +236,7 @@ def test_mbarrier_tx_count_ops():
     hidet.cuda.synchronize()
 
 
+@pytest.mark.requires_cuda
 def test_barrier():
     from hidet.lang import attrs, printf, asm
     from hidet.lang.cuda import threadIdx, syncthreads

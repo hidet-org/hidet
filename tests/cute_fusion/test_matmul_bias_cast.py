@@ -41,6 +41,7 @@ def data(M, N, K, L, dtype="float16", device="cuda"):
     return a, b, bias
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_pattern(dtype):
     args = [256, 30522, 768, 1]
@@ -86,6 +87,7 @@ def test_pattern(dtype):
     print(f"hidet(torch.compile): {hidet_mean} ms")
 
 
+@pytest.mark.requires_cuda
 def test_longformer_issue404():
     args = [1, 2304, 768, 512]
 

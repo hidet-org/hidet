@@ -69,6 +69,7 @@ def data(M, N, K, dtype="float16", device="cuda"):
     return a, b
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("dim0,dim3,dims,args", pattern_tests)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_epilogue_fusion(dim0, dim3, dims, args, dtype):

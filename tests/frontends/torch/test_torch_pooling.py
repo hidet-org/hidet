@@ -19,9 +19,11 @@ from hidet.testing.torch_utils import check_module
 @pytest.mark.parametrize('stride', [2])
 @pytest.mark.parametrize('padding', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_average_pool_2d(shape, kernel_size, stride, padding, dtype):
+def test_average_pool_2d(shape, kernel_size, stride, padding, dtype, device):
     check_module(
-        torch.nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=padding), [torch.randn(shape, dtype=dtype)]
+        torch.nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=padding),
+        [torch.randn(shape, dtype=dtype)],
+        device=device,
     )
 
 
@@ -30,9 +32,11 @@ def test_average_pool_2d(shape, kernel_size, stride, padding, dtype):
 @pytest.mark.parametrize('stride', [2])
 @pytest.mark.parametrize('padding', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_max_pool_2d(shape, kernel_size, stride, padding, dtype):
+def test_max_pool_2d(shape, kernel_size, stride, padding, dtype, device):
     check_module(
-        torch.nn.MaxPool2d(kernel_size=kernel_size, stride=stride, padding=padding), [torch.randn(shape, dtype=dtype)]
+        torch.nn.MaxPool2d(kernel_size=kernel_size, stride=stride, padding=padding),
+        [torch.randn(shape, dtype=dtype)],
+        device=device,
     )
 
 
@@ -41,9 +45,11 @@ def test_max_pool_2d(shape, kernel_size, stride, padding, dtype):
 @pytest.mark.parametrize('stride', [2])
 @pytest.mark.parametrize('padding', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_max_pool_3d(shape, kernel_size, stride, padding, dtype):
+def test_max_pool_3d(shape, kernel_size, stride, padding, dtype, device):
     check_module(
-        torch.nn.MaxPool3d(kernel_size=kernel_size, stride=stride, padding=padding), [torch.randn(shape, dtype=dtype)]
+        torch.nn.MaxPool3d(kernel_size=kernel_size, stride=stride, padding=padding),
+        [torch.randn(shape, dtype=dtype)],
+        device=device,
     )
 
 

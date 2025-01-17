@@ -18,15 +18,21 @@ from hidet.testing.torch_utils import check_module
 @pytest.mark.parametrize('shape', [[2, 2]])
 @pytest.mark.parametrize('normalized_shape', [2])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_layer_norm(shape, normalized_shape, dtype):
-    check_module(torch.nn.LayerNorm(normalized_shape=normalized_shape), [torch.randn(shape, dtype=dtype)])
+def test_layer_norm(shape, normalized_shape, dtype, device):
+    check_module(
+        torch.nn.LayerNorm(normalized_shape=normalized_shape), [torch.randn(shape, dtype=dtype)], device=device
+    )
 
 
 @pytest.mark.parametrize('shape', [[1, 4, 32, 32]])
 @pytest.mark.parametrize('num_groups', [1, 2, 4])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_group_norm(shape, num_groups, dtype):
-    check_module(torch.nn.GroupNorm(num_groups=num_groups, num_channels=shape[1]), [torch.randn(shape, dtype=dtype)])
+def test_group_norm(shape, num_groups, dtype, device):
+    check_module(
+        torch.nn.GroupNorm(num_groups=num_groups, num_channels=shape[1]),
+        [torch.randn(shape, dtype=dtype)],
+        device=device,
+    )
 
 
 @pytest.mark.parametrize(
@@ -48,10 +54,12 @@ def test_upsample(
     scale_factor: Optional[float],
     mode: str,
     align_corners: Optional[bool],
+    device,
 ):
     check_module(
         model=torch.nn.Upsample(size=size, scale_factor=scale_factor, mode=mode, align_corners=align_corners),
         args=[torch.randn(input_size)],
+        device=device,
     )
 
 

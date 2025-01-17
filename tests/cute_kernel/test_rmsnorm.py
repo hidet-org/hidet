@@ -182,6 +182,7 @@ def data(batch_size, seqlen, hidden_size, hd_parallel_parts, dtype="float16", de
     return x, residual, weight, sum_, sum_part
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("batch_size,seqlen,hidden_size", [(16, 1, 4096 * 4), (16, 1, 4096)])
 def test_fused_add_rmsnorm(batch_size, seqlen, hidden_size):
     #    hidet.option.cache_dir("./demo_rmsnorm")

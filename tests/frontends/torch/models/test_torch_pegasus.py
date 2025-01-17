@@ -13,9 +13,12 @@ import pytest
 import torch
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 
+from hidet.testing import device_to_torch
+
 
 @pytest.mark.slow
-def test_pegasus():
+def test_pegasus(device):
+    torch_device = device_to_torch(device)
     src_text = [
         "The tower is 324 metres (1,063 ft) tall, about the same height as an 81-storey building, and the tallest "
         "structure in Paris. Its base is square, measuring 125 metres (410 ft) on each side. During its construction, "
@@ -28,11 +31,11 @@ def test_pegasus():
     ]
 
     tokenizer = PegasusTokenizer.from_pretrained("google/pegasus-cnn_dailymail")
-    model = PegasusForConditionalGeneration.from_pretrained("google/pegasus-cnn_dailymail").cuda().eval()
+    model = PegasusForConditionalGeneration.from_pretrained("google/pegasus-cnn_dailymail").to(torch_device).eval()
 
     model.model.encoder = torch.compile(model.model.encoder, backend='hidet', mode=None, dynamic=True)
     model.model.decoder = torch.compile(model.model.decoder, backend='hidet', mode=None, dynamic=True)
 
-    batch = tokenizer(src_text, truncation=True, return_tensors="pt").to('cuda')
+    batch = tokenizer(src_text, truncation=True, return_tensors="pt").to(torch_device)
     translated = model.generate(**batch)
     tgt_text = tokenizer.batch_decode(translated, skip_special_tokens=True)

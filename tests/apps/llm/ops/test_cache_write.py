@@ -41,6 +41,7 @@ def cache_write_ref(
     return from_torch(key_cache), from_torch(value_cache)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize('num_kv_heads', [1, 32])
 @pytest.mark.parametrize('block_size', [16, 32])
 @pytest.mark.parametrize('head_size', [128])

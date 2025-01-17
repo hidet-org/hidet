@@ -104,6 +104,7 @@ def initialize_tests():
     rearrange_tests.append((src, dst))
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("src,dst", rearrange_tests)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_rearrange(src: TiledTensorLayout, dst: TiledTensorLayout, dtype):

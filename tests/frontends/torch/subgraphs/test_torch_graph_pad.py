@@ -14,10 +14,11 @@ import pytest
 import numpy as np
 from numpy import testing
 import torch
+from hidet.testing import device_to_torch
 
 
-def test_torch_pad():
-    DEVICE = 'cuda'
+def test_torch_pad(device):
+    DEVICE = device_to_torch(device)
 
     class Model0(torch.nn.Module):
         def __init__(self):

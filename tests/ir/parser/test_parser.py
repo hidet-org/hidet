@@ -132,6 +132,7 @@ def generate_ir_modules():
             yield mod
 
 
+@pytest.mark.requires_cuda
 def test_parser():
     for mod in generate_ir_modules():
         text = astext2(mod)

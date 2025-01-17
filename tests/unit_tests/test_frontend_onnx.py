@@ -19,7 +19,7 @@ from hidet import symbol_like, Tensor
 from hidet.testing.onnx_models import get_onnx_model
 
 
-def check_model(model_path: str, input_names: List[str], input_tensors: List[Tensor], mode: str, dtype: str):
+def check_model(model_path: str, input_names: List[str], input_tensors: List[Tensor], mode: str, dtype: str, device):
     onnx.checker.check_model(model_path)
 
     # onnx
@@ -31,8 +31,8 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     )
 
     # hidet
-    hidet_model = hidet.graph.frontend.from_onnx(model_path)
-    hidet_inputs = [hidet.asarray(tensor).cuda() for tensor in input_tensors]
+    hidet_model = hidet.graph.frontend.from_onnx(model_path).to(device=device)
+    hidet_inputs = [hidet.asarray(tensor).to(device=device) for tensor in input_tensors]
 
     if mode == 'imperative':
         hidet_outputs = hidet_model(*hidet_inputs)
@@ -71,7 +71,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 @pytest.mark.parametrize("batch_size", [1])
 @pytest.mark.parametrize("dtype", ['float32', 'float16', 'bfloat16'])
 @pytest.mark.parametrize("mode", ['traced', 'imperative', 'opt'])
-def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
+def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str, device):
     if hidet.option.cuda.get_arch_pair() < (8, 0) and dtype == 'float16':
         pytest.skip(
             'float16 will triger hidet to use fp16 tensor core (mma.m16n8k16), '
@@ -85,7 +85,7 @@ def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
 
     print('checking model {} in {} mode with dtype {}'.format(model_name, mode, dtype))
     model_path, input_names, input_tensors = get_onnx_model(model_name, batch_size=batch_size)
-    check_model(model_path, input_names, input_tensors, mode, dtype)
+    check_model(model_path, input_names, input_tensors, mode, dtype, device=device)
 
 
 if __name__ == '__main__':

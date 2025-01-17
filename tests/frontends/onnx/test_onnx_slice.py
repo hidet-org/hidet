@@ -25,5 +25,5 @@ class SliceModule(torch.nn.Module):
 
 
 @pytest.mark.parametrize('shape,indices', [((100,), slice(2, None))])
-def test_slice(shape, indices):
-    check_onnx_and_hidet(SliceModule(indices), [torch.randn(shape)])
+def test_slice(shape, indices, device):
+    check_onnx_and_hidet(SliceModule(indices), [torch.randn(shape)], device=device)

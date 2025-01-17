@@ -12,11 +12,13 @@
 import pytest
 import numpy as np
 import hidet
+from hidet.testing import device_to_torch
 
 
-def test_add():
-    a = hidet.randn([10], device='cuda')
-    b = hidet.randn([10], device='cuda')
+def test_add(device):
+    torch_device = device_to_torch(device)
+    a = hidet.randn([10], device=torch_device)
+    b = hidet.randn([10], device=torch_device)
     c = a + b
     c_np = a.cpu().numpy() + b.cpu().numpy()
     np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c_np, atol=1e-5, rtol=1e-5)

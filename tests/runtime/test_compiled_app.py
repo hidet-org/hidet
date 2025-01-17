@@ -4,12 +4,12 @@ from hidet.testing.models import resnet18
 from hidet.runtime import save_compiled_app, load_compiled_app, create_compiled_app
 
 
-def test_compiled_app():
+def test_compiled_app(device):
     module_1 = resnet18().cuda()
     module_2 = resnet18().cuda()
 
-    x1 = hidet.symbol(['batch_size', 3, 224, 224], dtype='float32', device='cuda:0')
-    x2 = hidet.symbol([1, 3, 224, 224], dtype='float32', device='cuda:0')
+    x1 = hidet.symbol(['batch_size', 3, 224, 224], dtype='float32', device=device)
+    x2 = hidet.symbol([1, 3, 224, 224], dtype='float32', device=device)
 
     y1 = module_1(x1)
     y2 = module_2(x2)
@@ -25,7 +25,7 @@ def test_compiled_app():
 
     app = load_compiled_app('app.hidet')
 
-    x = hidet.randn([1, 3, 224, 224], device='cuda')
+    x = hidet.randn([1, 3, 224, 224], device=device)
     y1 = app.graphs['graph_1'](x)
     y2 = app.graphs['graph_2'](x)
     hidet.utils.assert_close(y1, y2)

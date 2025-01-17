@@ -57,9 +57,6 @@ def torch_conv2d(
 @pytest.mark.parametrize("stride", [[1, 1], [2, 3]])
 @pytest.mark.parametrize("dilations", [[1, 1], [2, 3]])
 @pytest.mark.parametrize("parallel_k", [1, 2, 3])
-@pytest.mark.parametrize(
-    "device", ["cuda"]
-)  # we don't test for cpu because its quite imprecise in fp16 for larger kernel sizes
 def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, padding, groups, stride, dilations, parallel_k, device):
     tol = 0.8
     padh, padw, padc = padding

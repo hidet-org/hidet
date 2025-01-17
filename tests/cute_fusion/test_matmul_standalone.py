@@ -404,6 +404,7 @@ def data(M, N, K, L, dtype="bfloat16", device="cuda"):
     return a, b
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("M,N,K,L", matmul_tests)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_problem(M, N, K, L, dtype):

@@ -15,6 +15,7 @@ import torch
 import transformers
 import hidet
 import hidet.testing
+from hidet.testing import device_to_torch
 
 
 def generate(model, text, num_hidden_layers, num_heads, head_dim, device, tokens_to_generate=10):
@@ -34,12 +35,11 @@ def generate(model, text, num_hidden_layers, num_heads, head_dim, device, tokens
     return tokenizer.decode(output_ids)
 
 
-@pytest.mark.parametrize('device,opt', [('cpu', False), ('cpu', True), ('cuda', False), ('cuda', True)])
-def test_gpt2(device: str, opt: bool):
+@pytest.mark.parametrize('opt', [False, True])
+def test_gpt2(opt: bool, device):
     gpt2_module = hidet.testing.models.gpt2.model(disable_cache=True)
 
-    if device == 'cuda':
-        gpt2_module.cuda()
+    gpt2_module = gpt2_module.to(device=device_to_torch(device))
 
     input_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)
     position_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)

@@ -525,6 +525,7 @@ def data(M, N, lo=-3, hi=3, dtype="float16", device="cuda", return_hidet=False):
     return a
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("m,n", [(4096, 4096 * 3), (4096 * 3, 4096)])
 def test_quant_4bits(m, n):
     qfunc = weight_quantization_4bits(m, n)
@@ -545,6 +546,7 @@ def test_quant_4bits(m, n):
     np.testing.assert_allclose(actual=w.cpu().numpy(), desired=wdq.cpu().numpy(), rtol=1e-2)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("m,n", [(4096, 4096 * 3), (4096 * 3, 4096)])
 def test_quant_2bits(m, n):
     qfunc = weight_quantization_2bits(m, n)

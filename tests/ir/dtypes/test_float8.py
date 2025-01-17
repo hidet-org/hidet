@@ -1,3 +1,4 @@
+import pytest
 import tabulate
 import torch
 import hidet
@@ -61,6 +62,7 @@ def float8_e5m2_to_float(n: int) -> float:
 float8_e4m3_table = [float8_e4m3_to_float(n) for n in range(256)]
 
 
+@pytest.mark.requires_cuda
 def test_float8_e4m3_from_float32():
     from hidet.lang import attrs
     from hidet.lang.types import float32, float8_e4m3
@@ -91,6 +93,7 @@ def test_float8_e4m3_from_float32():
     assert all(row[-1] for row in rows)
 
 
+@pytest.mark.requires_cuda
 def test_float8_e4m3_to_float32():
     from hidet.lang import attrs
     from hidet.lang.types import float32, float8_e4m3

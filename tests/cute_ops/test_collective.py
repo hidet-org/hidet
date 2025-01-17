@@ -9,6 +9,7 @@ from hidet.ir.cute.collective import collective_store
 from hidet.lang.mapping import auto_map
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_ldgstg(dtype):
     # hidet.option.cache_dir("./demo_collective_store")

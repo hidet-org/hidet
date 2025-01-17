@@ -16,6 +16,8 @@ import torch
 import torch.backends.cudnn
 from torch import nn
 
+import hidet
+
 
 class FunctionalModule(nn.Module):
     def __init__(self, op):
@@ -26,21 +28,35 @@ class FunctionalModule(nn.Module):
         return self.op(*args, **kwargs)
 
 
-def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4, dynamic=False):
-    model = model.cuda()
+def check_module(
+    model: torch.nn.Module, args: Sequence[torch.Tensor], device: str, atol=1e-4, rtol=1e-4, dynamic=False
+):
+    torch_device = device_to_torch(device)
+    model = model.to(device_to_torch(device))
     model.eval()
-    args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
-    args_torch = [x.clone().cuda() if isinstance(x, torch.Tensor) else x for x in args]
+
+    # convert args to the given device
+    hidet_args = []
+    torch_args = []
+    for arg in args:
+        if isinstance(arg, torch.Tensor):
+            hidet_args.append(arg.clone().to(torch_device))
+            torch_args.append(arg.clone().to(torch_device))
+        else:
+            assert not isinstance(arg, hidet.Tensor)
+            hidet_args.append(arg)
+            torch_args.append(arg)
+
     # we use a lambda to make sure the model is compiled by pytorch
     model_opt = torch.compile(
         lambda *args, **kwargs: model(*args, **kwargs), backend='hidet', mode=None, dynamic=dynamic
     )
 
     torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
-    torch_outputs = model(*args_torch)
+    torch_outputs = model(*torch_args)
     torch.backends.cudnn.allow_tf32 = True
 
-    hidet_outputs = model_opt(*args)
+    hidet_outputs = model_opt(*hidet_args)
     if isinstance(torch_outputs, torch.Tensor):
         torch_outputs = (torch_outputs,)
     if isinstance(hidet_outputs, torch.Tensor):
@@ -76,7 +92,6 @@ class Backend:
             self.init_hidet()
 
     def init_hidet(self):
-        import hidet
         import os
 
         hidet.torch.dynamo_config.use_tensor_core(True)
@@ -180,3 +195,12 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
     latency = start.elapsed_time(end) / bench_iters
     token_per_second = num_tokens / latency * 1000.0
     return token_per_second, output_text
+
+
+def device_to_torch(hidet_device: str) -> str:
+    if hidet_device in ['cuda', 'hip']:
+        return 'cuda'
+    elif hidet_device == 'cpu':
+        return 'cpu'
+    else:
+        raise NotImplementedError(hidet_device)

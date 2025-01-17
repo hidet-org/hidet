@@ -116,6 +116,7 @@ def data(k, n, k_parallel_parts, dtype="float16", device="cuda", return_hidet=Fa
     return x, w1, y, y_parts
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("n,k", [(4096, 4096 * 4), (4096 * 4, 4096)])
 def test_gemv(n, k):
     # hidet.option.cache_dir("./demo_gemv")

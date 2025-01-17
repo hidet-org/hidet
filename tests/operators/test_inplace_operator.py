@@ -24,8 +24,8 @@ def inplace_relu(x: Tensor) -> Tensor:
     return InplaceReLUOp(x).outputs[0]
 
 
-def test_inplace_relu():
-    x = hidet.symbol([1, 10], dtype=float32, device='cuda')
+def test_inplace_relu(device):
+    x = hidet.symbol([1, 10], dtype=float32, device=device)
     y = inplace_relu(x)
     graph = hidet.trace_from(y)
     xx = hidet.randn_like(x)
@@ -47,6 +47,7 @@ def test_inplace_relu():
     hidet.utils.assert_close(y1, yy)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "input_shape,index_shape,src_shape,dim",
     [[(22, 33), (11, 11), (11, 11), 0], [(257, 256), (128, 128), (128, 128), 1]],

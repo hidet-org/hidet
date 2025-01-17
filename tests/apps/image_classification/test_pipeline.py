@@ -15,6 +15,7 @@ import pytest
 from datasets import load_dataset
 
 
+@pytest.mark.requires_cuda
 def test_image_classifier_pipeline():
     dataset = load_dataset("huggingface/cats-image", split="test", trust_remote_code=True)
 

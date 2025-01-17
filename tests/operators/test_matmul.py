@@ -18,7 +18,6 @@ from hidet import ops
 from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary, check_torch_binary_with_inputs
 
 
-# @pytest.mark.skip(reason="when running matmul_x86 multiple times, it will produce wrong result. need fix.")
 @pytest.mark.parametrize("a_shape, b_shape", [[[333, 444], [444, 555]], [[133, 1], [1, 177]]])
 def test_matmul_x86(a_shape, b_shape):
     # TODO: Doesn't support broadcasting yet; need to add it later?
@@ -34,6 +33,7 @@ def test_matmul_x86(a_shape, b_shape):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape, dtype", [[[1, 333, 444], [1, 444, 555], "float32"], [[1, 333, 444], [1, 444, 555], "float16"]]
 )
@@ -55,6 +55,7 @@ def test_batch_matmul(a_shape, b_shape, dtype, mma):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape, dtype",
     [
@@ -80,16 +81,25 @@ def test_batch_matmul_dynamic(a_shape, b_shape, dtype: str, mma: str):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape, dtype",
     [[[1, 128, 128], [128, 128], "float32"], [[333, 444], [444], "float32"], [[129, 443], [443], "complex64"]],
 )
-def test_matmul(a_shape, b_shape, dtype):
+def test_matmul(a_shape, b_shape, dtype, device):
     check_binary(
-        a_shape, b_shape, lambda x, y: np.matmul(x, y), lambda x, y: ops.matmul(x, y), dtype=dtype, atol=1e-4, rtol=1e-4
+        a_shape,
+        b_shape,
+        lambda x, y: np.matmul(x, y),
+        lambda x, y: ops.matmul(x, y),
+        dtype=dtype,
+        atol=1e-4,
+        rtol=1e-4,
+        device=device,
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [
@@ -115,7 +125,8 @@ def test_matmul_fp16(a_shape, b_shape):
     )
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda
+@pytest.mark.requires_cuda_hopper
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [
@@ -153,6 +164,7 @@ def test_matmul_fp16_sm90(a_shape, b_shape):
 
 
 # This test checks the correctness of the implementation of using f16/f32 accumulator of tensor's core mma
+@pytest.mark.requires_cuda
 def test_matmul_fp16_fp32():
     from hidet.graph.ops.matmul.matmul_f16 import matmul_f16
 
@@ -182,6 +194,7 @@ def test_matmul_fp16_fp32():
         )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [
@@ -203,12 +216,13 @@ def test_matmul_fp16_cute(a_shape, b_shape):
     # hidet.option.search_space(2)
     # hidet.option.debug_cache_tuning()
     # hidet.option.save_lower_ir(True)
+    k = b_shape[0]
 
     check_torch_binary(
         a_shape,
         b_shape,
-        torch_func=lambda x, y: torch.matmul(x, y),
-        hidet_func=lambda x, y: ops.squeeze(matmul_f16(x, y), 0),
+        torch_func=lambda x, y: torch.matmul(x / k, y),
+        hidet_func=lambda x, y: ops.squeeze(matmul_f16(x / k, y), 0),
         device='cuda',
         dtype='float16',
         atol=1e-2,
@@ -216,6 +230,7 @@ def test_matmul_fp16_cute(a_shape, b_shape):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, ("s", 128)], [("s", 128), 128]]])
 def test_matmul_fp16_dynamic(a_shape, b_shape):
     from hidet.graph.ops.matmul.matmul_f16 import matmul_f16
@@ -232,6 +247,7 @@ def test_matmul_fp16_dynamic(a_shape, b_shape):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, 128], [128, 128]]])
 @pytest.mark.parametrize("dtype, tol", [("float32", 1e-5), ("float16", 1e-1), ("bfloat16", 5e-1)])
 def test_matmul_cublas(a_shape, b_shape, dtype, tol):
@@ -247,6 +263,7 @@ def test_matmul_cublas(a_shape, b_shape, dtype, tol):
     )
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [
@@ -278,6 +295,7 @@ def test_matmul_nt(a_shape, b_shape, dtype, parallel_k):
         assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=1e-1, rtol=1e-1)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [

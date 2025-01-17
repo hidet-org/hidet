@@ -101,6 +101,7 @@ def test_resize2d(
     cubic_exclude: bool,
     extrapolation_value: float,
     recompute_scale_factor: bool,
+    device,
 ):
     data_shape = [n, c, h, w]
     dtype = 'float32'
@@ -114,7 +115,7 @@ def test_resize2d(
 
     hidet_result_cuda = (
         ops.resize2d(
-            asarray(data).to(device='cuda'),
+            hidet.asarray(data, device=device),
             size=size,
             scale_factor=scale_factor,
             method=method,

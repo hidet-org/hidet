@@ -9,11 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 from hidet.testing.torch_utils import Backend
 
 import torch
 
 
+@pytest.mark.requires_cuda
 def test_gpt2xl_issue436():
     backend = Backend('hidet', 'max-autotune', 'bfloat16', '/gpt2.cache')
 

@@ -17,7 +17,7 @@ from hidet.testing import check_unary
 
 @pytest.mark.parametrize("op", ["triu", "tril"])
 @pytest.mark.parametrize("shape, diagonal", [[(3, 4), -1], [(4, 3), 2], [(3, 1, 4, 5), 0], [(3, 3), -99]])
-def test_tri(op, shape, diagonal):
+def test_tri(op, shape, diagonal, device):
     numpy_op, hidet_op = getattr(np, op), getattr(ops, op)
     check_unary(
         shape,
@@ -26,5 +26,5 @@ def test_tri(op, shape, diagonal):
         dtype="float32",
         atol=1e-6,
         rtol=1e-6,
-        device="cpu",
+        device=device,
     )

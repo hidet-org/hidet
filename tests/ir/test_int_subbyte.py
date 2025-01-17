@@ -15,6 +15,7 @@ import torch
 import hidet
 
 
+@pytest.mark.requires_cuda
 def test_int_4bit():
     from hidet.ir.dtypes import i4, u4, i4x8, i8, f16, f32
     from hidet.ir.expr import constant, cast
@@ -77,6 +78,7 @@ def test_int_4bit():
     np.testing.assert_equal(data.cpu().numpy(), groundtruth)
 
 
+@pytest.mark.requires_cuda
 def test_int_2bit():
     from hidet.ir.dtypes import i2, u2, i8, f16, f32
     from hidet.ir.expr import constant, cast
@@ -123,6 +125,7 @@ def test_int_2bit():
     np.testing.assert_equal(data.cpu().numpy(), groundtruth)
 
 
+@pytest.mark.requires_cuda
 def test_write_int4_to_global_memory():
     from hidet.lang import attrs
     from hidet.lang.cuda import threadIdx

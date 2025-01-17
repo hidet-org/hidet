@@ -9,18 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import pytest
-import multiprocessing
-from multiprocessing import Process
-import os
-import time
-from datetime import timedelta
-import random
 import numpy
 
 import hidet
 import hidet.distributed
-
 from utils import distributed_test
 
 

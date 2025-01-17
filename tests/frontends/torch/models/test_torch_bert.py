@@ -13,18 +13,20 @@ import torch
 import torch.backends.cudnn
 import pytest
 import hidet
+from hidet.testing import device_to_torch
 
 
 @pytest.mark.parametrize('batch_size', [1])
 @pytest.mark.parametrize('seq_length', [128])
 @pytest.mark.parametrize('use_tensor_core', [False, True])
 @pytest.mark.parametrize('dynamic', [False])  # TODO: enable dynamic when torch dynamo is fixed
-def test_bert(batch_size: int, seq_length: int, use_tensor_core, dynamic):
-    tokens_tensor = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
-    segments_tensors = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
-    args = (tokens_tensor.cuda(),)
-    kwargs = {'token_type_ids': segments_tensors.cuda()}
-    model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-uncased').cuda().eval()
+def test_bert(batch_size: int, seq_length: int, use_tensor_core, dynamic, device):
+    torch_device = device_to_torch(device)
+    tokens_tensor = torch.zeros((batch_size, seq_length), dtype=torch.long, device=torch_device)
+    segments_tensors = torch.zeros((batch_size, seq_length), dtype=torch.long, device=torch_device)
+    args = (tokens_tensor.to(torch_device),)
+    kwargs = {'token_type_ids': segments_tensors.to(torch_device)}
+    model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-uncased').to(torch_device).eval()
     model_opt = torch.compile(model, backend='hidet', mode=None, dynamic=dynamic)
     y1 = model(*args, **kwargs).last_hidden_state
 

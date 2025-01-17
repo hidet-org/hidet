@@ -23,7 +23,7 @@ import hidet
     'shape, dims, keep_dim',
     [[[11, 22, 33], 1, False], [[11, 22, 33], 1, True], [[11, 22, 33], (0, 2), False], [[11, 22, 33], (0, 2), True]],
 )
-def test_reduce_mean(dtype, shape, dims, keep_dim: bool):
+def test_reduce_mean(dtype, shape, dims, keep_dim: bool, device):
     check_unary(
         shape,
         numpy_op=lambda x: np.mean(x, dims, keepdims=keep_dim),
@@ -31,7 +31,7 @@ def test_reduce_mean(dtype, shape, dims, keep_dim: bool):
         dtype=dtype,
         atol=1e-5,
         rtol=1e-5,
-        device='all' if dtype != np.float16 else 'cuda',
+        device=device,
     )
 
 
@@ -45,7 +45,7 @@ def test_reduce_mean(dtype, shape, dims, keep_dim: bool):
         [[('a', 11), ('b', 22), ('c', 33)], (0, 2), True],
     ],
 )
-def test_reduce_mean_dynamic(dtype, shape, dims, keep_dim: bool):
+def test_reduce_mean_dynamic(dtype, shape, dims, keep_dim: bool, device):
     check_unary_dynamic(
         shape,
         numpy_op=lambda x: np.mean(x, dims, keepdims=keep_dim),
@@ -53,7 +53,7 @@ def test_reduce_mean_dynamic(dtype, shape, dims, keep_dim: bool):
         dtype=dtype,
         atol=1e-5,
         rtol=1e-5,
-        device='all' if dtype != np.float16 else 'cuda',
+        device=device,
     )
 
 
@@ -67,11 +67,12 @@ def test_reduce_mean_dynamic(dtype, shape, dims, keep_dim: bool):
         [[11, 22, 33], (0, 2), True],
     ],
 )
-def test_var(shape, axis, keep_dim: bool):
+def test_var(shape, axis, keep_dim: bool, device):
     check_unary(
         shape,
         numpy_op=lambda x: np.var(x, axis, keepdims=keep_dim),
         hidet_op=lambda x: ops.var(x, axis, keep_dim),
+        device=device,
         atol=1e-5,
         rtol=1e-5,
     )
@@ -87,11 +88,12 @@ def test_var(shape, axis, keep_dim: bool):
         [[('x', 11), ('y', 22), 33], (0, 2), True],
     ],
 )
-def test_var(shape, axis, keep_dim: bool):
+def test_var(shape, axis, keep_dim: bool, device):
     check_unary_dynamic(
         shape,
         numpy_op=lambda x: np.var(x, axis, keepdims=keep_dim),
         hidet_op=lambda x: ops.var(x, axis, keep_dim),
+        device=device,
         atol=1e-5,
         rtol=1e-5,
     )
@@ -101,14 +103,14 @@ def test_var(shape, axis, keep_dim: bool):
 @pytest.mark.parametrize("dims", [1, (0, 2)])
 @pytest.mark.parametrize("keep_dim", [False, True])
 @pytest.mark.parametrize("reduce_func", [mean, max, prod, min, sum])
-def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func):
+def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func, device):
     op_dict = {mean: np.mean, max: np.max, prod: np.prod, min: np.min, sum: np.sum}
     np_op = op_dict[reduce_func]
     check_unary(
         shape,
         numpy_op=lambda x: np_op(x, dims, keepdims=keep_dim),
         hidet_op=lambda x: reduce_func(x, dims, keep_dim),
-        device='cuda',
+        device=device,
         dtype=np.float16,
         atol=1e-2,
         rtol=1e-2,
@@ -119,7 +121,7 @@ def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func):
 @pytest.mark.parametrize("dim", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize("keep_dim", [False, True])
 @pytest.mark.parametrize("reduce_func", [argmax, argmin])
-def test_argmax_argmin(shape, dim, keep_dim: bool, reduce_func):
+def test_argmax_argmin(shape, dim, keep_dim: bool, reduce_func, device):
     op_dict = {argmax: np.argmax, argmin: np.argmin}
     np_op = op_dict[reduce_func]
     if dim < len(shape):
@@ -127,7 +129,7 @@ def test_argmax_argmin(shape, dim, keep_dim: bool, reduce_func):
             shape,
             numpy_op=lambda x: np_op(x, axis=dim, keepdims=keep_dim),
             hidet_op=lambda x: reduce_func(x, dim=dim, keep_dim=keep_dim),
-            device='cuda',
+            device=device,
             dtype=np.float16,
             atol=0,
             rtol=0,
@@ -138,40 +140,19 @@ def test_argmax_argmin(shape, dim, keep_dim: bool, reduce_func):
 @pytest.mark.parametrize("axis", [(1,), (0, 2)])
 @pytest.mark.parametrize("keep_dim", [False, True])
 @pytest.mark.parametrize("reduce_func", [all, any])
-def test_reduce_bool(shape, axis, keep_dim: bool, reduce_func):
+def test_reduce_bool(shape, axis, keep_dim: bool, reduce_func, device):
     op_dict = {all: np.all, any: np.any}
     np_op = op_dict[reduce_func]
     check_unary(
         shape,
         numpy_op=lambda x: np_op(x, axis=axis, keepdims=keep_dim),
         hidet_op=lambda x: reduce_func(x, axis=axis, keepdims=keep_dim),
-        device='cuda',
+        device=device,
         dtype=bool,
         atol=0,
         rtol=0,
     )
 
-
-# TODO: currently dynamic shape with this is not possible
-# See reduce_f16.py:reduce_f16 TODO for more details
-
-
-# @pytest.mark.parametrize("shape", [[11, ('x', 22), ('y', 34)], [('x', 11), 22, ('y', 34)], [('x', 11), ('y', 22), ('z', 34)]])
-# @pytest.mark.parametrize("dims", [1, (0, 2)])
-# @pytest.mark.parametrize("keep_dim", [False, True])
-# @pytest.mark.parametrize("reduce_type", [ReduceType.Average, ReduceType.Max, ReduceType.Product])
-# def test_reduce_mean_f16_dynamic(shape, dims, keep_dim: bool, reduce_type):
-#     op_dict = {ReduceType.Average: np.mean, ReduceType.Max: np.amax, ReduceType.Product: np.prod}
-#     np_op = op_dict[reduce_type]
-#     check_unary_dynamic(
-#         shape,
-#         numpy_op=lambda x: np_op(x, dims, keepdims=keep_dim),
-#         hidet_op=lambda x: reduce_f16(x, dims, keep_dim, reduce_type=reduce_type),
-#         device='cuda',
-#         dtype=np.float16,
-#         atol=1e-2,
-#         rtol=1e-2,
-#     )
 
 if __name__ == '__main__':
     pytest.main([__file__])

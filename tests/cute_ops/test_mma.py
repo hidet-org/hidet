@@ -21,6 +21,7 @@ from hidet.ir.cute.ops import (
 from hidet.lang.mapping import auto_map
 
 
+@pytest.mark.requires_cuda
 def test_mma():
     from hidet.lang.types import u32, i32, f16
     from hidet.lang import attrs
@@ -110,6 +111,7 @@ def test_mma():
     func(a_mem, b_mem, c_mem)
 
 
+@pytest.mark.requires_cuda
 def test_mma_1():
     from hidet.lang.types import u32, i32, f16
     from hidet.lang import attrs
@@ -750,6 +752,7 @@ def gemm_single_buffer(m, n, k):
     return func
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("m,n,k", [(4096, 4096, 4096), (120000, 320, 768)])
 def test_gemm_single_buffer(m, n, k):
     # hidet.option.cache_dir("./demo_mma")
@@ -788,6 +791,7 @@ def test_gemm_single_buffer(m, n, k):
     np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c2.cpu().numpy(), rtol=1e-2)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("gemm", [gemm_2, gemm_multi_buffer])
 @pytest.mark.parametrize("m,n,k", [(4096, 4096, 4096), (120000, 768, 320)])
 def test_gemm_multi_buffer(gemm, m, n, k):

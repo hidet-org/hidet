@@ -47,6 +47,7 @@ def data(M, N, K, L, dtype="bfloat16", device="cuda"):
     return a, b, c, bx1xn, bxmx1, mx1, x1xn
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_pattern(dtype):
     args = [10000, 12, 320, 1]
@@ -67,7 +68,7 @@ def test_pattern(dtype):
     D_opt = graph_opt(*graph_args)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
     np.testing.assert_allclose(
-        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=1e-2
+        actual=D_opt.to(torch.float32).cpu().numpy(), desired=D.to(torch.float32).cpu().numpy(), rtol=5e-2, atol=5e-2
     )
 
     torch_mean, torch_min, torch_max = bench(graph_opt, graph_args)

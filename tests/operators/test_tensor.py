@@ -13,9 +13,12 @@ import pytest
 import numpy as np
 import torch
 import hidet
+from hidet.testing import device_to_torch
 
 
-def test_from_dlpack():
+def test_from_dlpack(device):
+    torch_device = device_to_torch(device)
+
     a = torch.randn([2, 3])
     b = hidet.from_dlpack(a)
     np.testing.assert_allclose(a.numpy(), b.numpy())
@@ -23,7 +26,7 @@ def test_from_dlpack():
     a[1:] = 1.0
     np.testing.assert_allclose(a.numpy(), b.numpy())
 
-    c = torch.randn([2, 3]).cuda()
+    c = torch.randn([2, 3]).to(torch_device)
     d = hidet.from_dlpack(c)
     np.testing.assert_allclose(c.cpu().numpy(), d.cpu().numpy())
 
@@ -31,7 +34,9 @@ def test_from_dlpack():
     np.testing.assert_allclose(c.cpu().numpy(), d.cpu().numpy())
 
 
-def test_to_dlpack():
+def test_to_dlpack(device):
+    torch_device = device_to_torch(device)
+
     a = hidet.randn([2, 3]).cpu()
     b = torch.from_dlpack(a)
     np.testing.assert_allclose(a.numpy(), b.numpy())
@@ -39,7 +44,7 @@ def test_to_dlpack():
     b[1:] = 1.0
     np.testing.assert_allclose(a.numpy(), b.numpy())
 
-    d = hidet.randn([2, 3]).cuda()
+    d = hidet.randn([2, 3]).to(device=device)
     e = torch.from_dlpack(d)
     np.testing.assert_allclose(d.cpu().numpy(), e.cpu().numpy())
 

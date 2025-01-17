@@ -1071,6 +1071,7 @@ def data(
     return q, k, v, o
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "batch_size,num_heads,num_heads_k,head_size,seqlen_q,seqlen_k",
     [(1, 32, 32, 128, 8, 4096), (1, 32, 32, 128, 8, 2048), (1, 32, 32, 128, 8, 1024)],
@@ -1079,6 +1080,7 @@ def test_v1(batch_size, num_heads, num_heads_k, head_size, seqlen_q, seqlen_k):
     flash_decoding_v1(batch_size, seqlen_q, num_heads, head_size, seqlen_k, num_heads_k)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "batch_size,num_heads,num_heads_k,head_size,seqlen_q,seqlen_k",
     [(1, 32, 32, 128, 8, 4096), (1, 32, 32, 128, 8, 2048), (1, 32, 32, 128, 8, 1024)],

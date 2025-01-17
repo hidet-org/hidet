@@ -22,7 +22,7 @@ import torch.backends.cudnn as cudnn
 @pytest.mark.parametrize('output_padding', [3])
 @pytest.mark.parametrize('groups', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype):
+def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype, device):
     cudnn.allow_tf32 = False
     check_module(
         model=torch.nn.ConvTranspose3d(
@@ -36,6 +36,7 @@ def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, gr
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
         atol=2e-4,
+        device=device,
     )
     cudnn.allow_tf32 = True
 

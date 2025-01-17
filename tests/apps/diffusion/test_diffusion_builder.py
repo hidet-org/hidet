@@ -3,6 +3,7 @@ from hidet.apps.diffusion.builder import create_stable_diffusion
 import pytest
 
 
+@pytest.mark.requires_cuda
 def test_create_stable_diffusion():
     diffusion_app: DiffusionApp = create_stable_diffusion(
         "stabilityai/stable-diffusion-2-1", kernel_search_space=0, height=512, width=512

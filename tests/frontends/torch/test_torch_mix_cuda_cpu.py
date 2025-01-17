@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 import hidet
 import hidet.testing
 import torch
@@ -25,7 +26,9 @@ class CopyTensorModule(nn.Module):
         return ((x.cpu() + self.w_cpu).cuda() + self.w_cuda).cpu().cuda()
 
 
-def test_torch_mix_cuda_cpu():
+def test_torch_mix_cuda_cpu(device):
+    if device != 'cuda':
+        pytest.skip('TODO: support hip backend')
     model = CopyTensorModule()
     x = torch.randn(3, 4, device='cpu')
     y = model(x)

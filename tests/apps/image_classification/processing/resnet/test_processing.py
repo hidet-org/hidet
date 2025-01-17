@@ -15,6 +15,7 @@ import pytest
 import torch
 
 
+@pytest.mark.requires_cuda
 def test_resnet_processor_resize():
     # Channel first
     image = torch.zeros((3, 10, 15), dtype=torch.uint8)

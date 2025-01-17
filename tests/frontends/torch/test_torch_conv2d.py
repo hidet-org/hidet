@@ -21,7 +21,7 @@ import torch.backends.cudnn as cudnn
 )
 @pytest.mark.parametrize('groups', [1, 3])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv2d(in_shape, w_shape, stride, padding, groups, dtype):
+def test_conv2d(in_shape, w_shape, stride, padding, groups, dtype, device):
     check_module(
         model=torch.nn.Conv2d(
             in_channels=in_shape[1],
@@ -34,6 +34,7 @@ def test_conv2d(in_shape, w_shape, stride, padding, groups, dtype):
         args=[torch.randn(in_shape, dtype=dtype)],
         atol=2e-3,
         rtol=1e-3,
+        device=device,
     )
 
 

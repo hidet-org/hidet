@@ -85,6 +85,7 @@ def initialize_tests():
     reduce_tests.append((memory_layout, tiled_copy, tiled_copy_r))
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("memory_layout,tiled_copy,tiled_copy_r", reduce_tests)
 def test_reduce(memory_layout, tiled_copy, tiled_copy_r):
     from hidet.lang.types import u32, i32, f16

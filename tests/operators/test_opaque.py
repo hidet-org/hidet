@@ -51,6 +51,7 @@ def opaque_matmul(x: Tensor, y: Tensor) -> Tensor:
     return OpaqueMatmul(x, y).outputs[0]
 
 
+@pytest.mark.requires_cuda
 def test_opaque_operator():
     a = hidet.randn([128, 128], dtype='float32', device='cuda')
     b = hidet.randn([128, 128], dtype='float32', device='cuda')

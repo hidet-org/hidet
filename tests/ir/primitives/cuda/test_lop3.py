@@ -1,7 +1,9 @@
+import pytest
 import torch
 import hidet
 
 
+@pytest.mark.requires_cuda
 def test_lop3():
     from hidet.lang import attrs, script
     from hidet.lang.types import uint32

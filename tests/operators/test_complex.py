@@ -12,12 +12,13 @@
 import pytest
 import hidet
 import torch
+from hidet.testing import device_to_torch
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-@pytest.mark.parametrize("device", ['cpu', 'cuda'])
 def test_real(shape, dtype, device):
+    device = device_to_torch(device)
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
@@ -26,8 +27,8 @@ def test_real(shape, dtype, device):
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-@pytest.mark.parametrize("device", ['cpu', 'cuda'])
 def test_imag(shape, dtype, device):
+    device = device_to_torch(device)
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
@@ -36,8 +37,8 @@ def test_imag(shape, dtype, device):
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-@pytest.mark.parametrize("device", ['cpu', 'cuda'])
 def test_conj(shape, dtype, device):
+    device = device_to_torch(device)
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
@@ -46,8 +47,8 @@ def test_conj(shape, dtype, device):
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-@pytest.mark.parametrize("device", ['cpu', 'cuda'])
 def test_make_complex(shape, dtype, device):
+    device = device_to_torch(device)
     real = torch.randn(shape, dtype=dtype, device=device)
     imag = torch.randn(shape, dtype=dtype, device=device)
     a = torch.complex(real, imag)
@@ -58,8 +59,8 @@ def test_make_complex(shape, dtype, device):
 
 @pytest.mark.parametrize("a_shape,b_shape", [[[1, 33, 44], [1, 44, 55]]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-@pytest.mark.parametrize("device", ['cpu', 'cuda'])
 def test_complex_matmul(a_shape, b_shape, dtype, device):
+    device = device_to_torch(device)
     a = torch.randn(a_shape, dtype=dtype, device=device)
     b = torch.randn(b_shape, dtype=dtype, device=device)
     c = torch.matmul(a, b)

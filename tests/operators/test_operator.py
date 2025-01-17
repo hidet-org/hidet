@@ -14,9 +14,8 @@ import pytest
 import torch
 import numpy as np
 
-hidet.option.save_lower_ir()
 
-
+@pytest.mark.requires_cuda
 def test_profile_config():
     a = hidet.randn([1, 10, 10], device='cuda')
     b = hidet.randn([1, 10, 10], device='cuda')

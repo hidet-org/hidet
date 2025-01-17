@@ -15,6 +15,7 @@ import torch
 from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
 from hidet.ir.dtypes import bfloat16
+from hidet.testing.torch_utils import device_to_torch
 
 
 def assert_allclose(hidet_result, numpy_result, atol=0, rtol=0):
@@ -29,14 +30,25 @@ def assert_torch_allclose(hidet_result, torch_result, atol=0, rtol=0):
     if hidet_result.dtype == bfloat16:
         hidet_result = hidet_result.to('float32')
         torch_result = torch_result.to(torch.float32)
-    hidet_result = hidet_result.numpy()
-    torch_result = torch_result.numpy()
+    hidet_result = hidet_result.cpu().numpy()
+    torch_result = torch_result.cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=torch_result, atol=atol, rtol=rtol)
 
 
-def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype=np.float32, atol=0, rtol=0):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+def resolve_test_devices():
+    if torch.cuda.is_available():
+        if torch.version.hip:
+            return []  # todo: enable this after we have support for hip
+        else:
+            return ['cuda']
+    else:
+        return ['cpu']
+
+
+def check_unary(shape, numpy_op, hidet_op, device: str = 'auto', dtype=np.float32, atol=0, rtol=0):
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_unary(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
         return
     # wrap np.array(...) in case shape = []
@@ -53,13 +65,14 @@ def check_unary_dynamic(
     shape: Sequence[Union[int, Tuple[str, int]]],
     numpy_op,
     hidet_op,
-    device: str = 'all',
+    device: str = 'auto',
     dtype=np.float32,
     atol=0,
     rtol=0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_unary_dynamic(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
         return
     concrete_shape = [(i if isinstance(i, int) else i[1]) for i in shape]
@@ -79,13 +92,14 @@ def check_binary(
     b_shape,
     numpy_op,
     hidet_op,
-    device: str = 'all',
+    device: str = 'auto',
     dtype: Union[str, np.dtype] = np.float32,
     atol=0.0,
     rtol=0.0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             print('checking', dev)
             check_binary(a_shape, b_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
         return
@@ -101,13 +115,14 @@ def check_binary_dynamic(
     b_shape,  # Sequence[Union[int, Tuple[str, int]]]
     numpy_op,
     hidet_op,
-    device: str = 'all',
+    device: str = 'auto',
     dtype: Union[str, np.dtype] = np.float32,
     atol=0.0,
     rtol=0.0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_binary_dynamic(a_shape, b_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
         return
     a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
@@ -129,8 +144,13 @@ def check_binary_dynamic(
 
 
 def check_ternary(
-    a_shape, b_shape, c_shape, numpy_op, hidet_op, dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0
+    a_shape, b_shape, c_shape, numpy_op, hidet_op, device, dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0
 ):
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
+            check_ternary(a_shape, b_shape, c_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     c = np.array(np.random.randn(*c_shape)).astype(dtype)
@@ -140,21 +160,23 @@ def check_ternary(
     numpy_result = numpy_op(a, b, c)
     import hidet as hi
 
-    hidet_args = [hi.asarray(v).cuda() for v in [a, b, c]]
+    hidet_args = [hi.asarray(v).to(device=device) for v in [a, b, c]]
     hidet_result = hidet_op(*hidet_args).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
 def check_torch_unary(
-    shape: Sequence[int], torch_func, hidet_func, device: str = 'all', dtype: str = 'float32', atol=0.0, rtol=0.0
+    shape: Sequence[int], torch_func, hidet_func, device: str = 'auto', dtype: str = 'float32', atol=0.0, rtol=0.0
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_torch_unary(shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
     import hidet
 
-    torch_data = torch.randn(*shape, dtype=getattr(torch, dtype)).to(device=device)
+    torch_device = device_to_torch(device)
+    torch_data = torch.randn(*shape, dtype=getattr(torch, dtype)).to(device=torch_device)
     hidet_data = hidet.from_torch(torch_data)
     torch_result: torch.Tensor = torch_func(torch_data)
     hidet_result: hidet.Tensor = hidet_func(hidet_data)
@@ -170,19 +192,25 @@ def check_torch_binary(
     b_shape: Sequence[int],
     torch_func,
     hidet_func,
-    device: str = 'all',
+    device: str = 'auto',
     dtype: str = 'float32',
     atol=0.0,
     rtol=0.0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_torch_binary(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
     import hidet
 
-    torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=device)
-    torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=device)
+    torch_device = device_to_torch(device)
+    if hidet.ir.data_type(dtype).is_integer():
+        torch_a = torch.randint(0, 128, a_shape, dtype=getattr(torch, dtype)).to(device=torch_device)
+        torch_b = torch.randint(0, 128, b_shape, dtype=getattr(torch, dtype)).to(device=torch_device)
+    else:
+        torch_a = torch.randint(-10, 10, a_shape, dtype=getattr(torch, dtype)).to(device=torch_device) / 10
+        torch_b = torch.randint(-10, 10, b_shape, dtype=getattr(torch, dtype)).to(device=torch_device) / 10
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
     torch_result: torch.Tensor = torch_func(torch_a, torch_b).cpu()
@@ -191,12 +219,19 @@ def check_torch_binary(
 
 
 def check_torch_binary_with_inputs(
-    torch_a: torch.Tensor, torch_b: torch.Tensor, torch_func, hidet_func, atol=0.0, rtol=0.0
+    torch_a: torch.Tensor, torch_b: torch.Tensor, torch_func, hidet_func, device='auto', atol=0.0, rtol=0.0
 ):
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
+            check_torch_binary_with_inputs(torch_a, torch_b, torch_func, hidet_func, dev, atol, rtol)
+        return
+
     import hidet
 
-    hidet_a = hidet.from_torch(torch_a)
-    hidet_b = hidet.from_torch(torch_b)
+    torch_device = device_to_torch(device)
+    hidet_a = hidet.from_torch(torch_a).to(device=torch_device)
+    hidet_b = hidet.from_torch(torch_b).to(device=torch_device)
     torch_result: torch.Tensor = torch_func(torch_a, torch_b)
     hidet_result: hidet.Tensor = hidet_func(hidet_a, hidet_b)
     np.testing.assert_allclose(
@@ -209,13 +244,14 @@ def check_torch_binary_dynamic(
     b_shape: Sequence[Union[int, Tuple[str, int]]],
     torch_func,
     hidet_func,
-    device: str = 'all',
+    device: str = 'auto',
     dtype: Union[str, np.dtype] = np.float32,
     atol=0.0,
     rtol=0.0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_torch_binary_dynamic(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
 
@@ -244,20 +280,22 @@ def check_torch_ternary(
     c_shape: Sequence[int],
     torch_func,
     hidet_func,
-    device: str = 'all',
+    device: str = 'auto',
     dtype: str = 'float32',
     atol=0.0,
     rtol=0.0,
 ):
-    if device == 'all':
-        for dev in ['cuda', 'cpu']:
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
             check_torch_ternary(a_shape, b_shape, c_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
     import hidet
 
-    torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=device)
-    torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=device)
-    torch_c = torch.randn(*c_shape, dtype=getattr(torch, dtype)).to(device=device)
+    torch_device = device_to_torch(device)
+    torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=torch_device)
+    torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=torch_device)
+    torch_c = torch.randn(*c_shape, dtype=getattr(torch, dtype)).to(device=torch_device)
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
     hidet_c = hidet.from_torch(torch_c)

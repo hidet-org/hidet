@@ -1,7 +1,9 @@
+import pytest
 import hidet
 import torch
 
 
+@pytest.mark.requires_cuda
 def test_sub_f16x2():
     from hidet.lang import attrs
     from hidet.lang.types import uint32
@@ -29,6 +31,7 @@ def test_sub_f16x2():
     assert torch.allclose(c, a - b)
 
 
+@pytest.mark.requires_cuda
 def test_fma_f16x2():
     from hidet.lang import attrs
     from hidet.lang.types import uint32

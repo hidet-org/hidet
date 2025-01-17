@@ -43,7 +43,7 @@ from hidet.lang import attrs, script
 from hidet.lang.constructs.declare import shared_tensor
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_g2s_multicast():
     """
     Test global to smem bulk async copy to multiple thread blocks at once
@@ -107,7 +107,7 @@ def test_cp_async_bulk_g2s_multicast():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_g2s():
     """
     Test global to smem bulk async copy to single thread block
@@ -166,7 +166,7 @@ def test_cp_async_bulk_g2s():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_s2g():
     """
     Test smem to global bulk async copy
@@ -208,7 +208,7 @@ def test_cp_async_bulk_s2g():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_s2s():
     """
     Test smem thread block to smem cluster bulk async copy
@@ -266,7 +266,7 @@ def test_cp_async_bulk_s2s():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_tensor_g2s():
     """
     Test global to smem bulk async tensor copy to single thread block
@@ -348,7 +348,7 @@ def test_cp_async_bulk_tensor_g2s():
     hidet.cuda.synchronize()
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cp_async_bulk_tensor_s2g():
     """
     Test smem to global bulk async tensor copy

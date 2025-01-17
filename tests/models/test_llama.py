@@ -14,6 +14,8 @@ import pytest
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
+
+from hidet.testing import device_to_torch
 from hidet.testing.models.llama import get_compiled_model, generate, convert_model
 from hidet.runtime.storage import current_memory_pool
 from hidet.testing.torch_utils import Backend
@@ -146,16 +148,17 @@ class LlamaMLP(nn.Module):
 
 
 @pytest.mark.parametrize("dtype", ['bfloat16', 'float16'])
-def test_llama_issue419(dtype):
+def test_llama_issue419(dtype, device):
     # hidet.option.cache_dir("./llama")
     # hidet.option.debug_cache_tuning()
     if dtype == 'bfloat16':
         torch_type = torch.bfloat16
     elif dtype == 'float16':
         torch_type = torch.float16
-    model = LlamaMLP().cuda().to(torch_type)
+    torch_device = device_to_torch(device)
+    model = LlamaMLP().to(torch_device).to(torch_type)
 
-    x = torch.randn(1, 143, 4096, dtype=torch_type, device='cuda')
+    x = torch.randn(1, 143, 4096, dtype=torch_type, device=torch_device)
     with torch.inference_mode(True):
         y_true = model(x)
         backend = Backend(backend='hidet', mode='max-autotune', dtype=dtype)

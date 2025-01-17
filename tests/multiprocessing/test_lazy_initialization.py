@@ -15,6 +15,7 @@ import sys
 import subprocess
 
 
+@pytest.mark.requires_cuda
 def test_lazy_initialization():
     cur_dir = os.path.dirname(os.path.abspath(__file__))
     python_path = sys.executable

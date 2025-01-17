@@ -42,7 +42,9 @@ class TensorToModule(nn.Module):
         return self.w.to(device='cuda') * x.cuda()
 
 
-def test_tensor_cpu():
+def test_tensor_cpu(device):
+    if device != 'cuda':
+        pytest.skip("Skipping test for non-GPU device")
     model = TensorCpuModule()
     model_opt = torch.compile(model, backend='hidet', mode=None)
 
@@ -53,7 +55,9 @@ def test_tensor_cpu():
     model_opt(x_cuda)
 
 
-def test_tensor_cuda():
+def test_tensor_cuda(device):
+    if device != 'cuda':
+        pytest.skip("Skipping test for non-GPU device")
     model = TensorCudaModule()
     model_opt = torch.compile(model, backend='hidet', mode=None)
 
@@ -64,7 +68,9 @@ def test_tensor_cuda():
     model_opt(x_cpu)
 
 
-def test_tensor_to():
+def test_tensor_to(device):
+    if device != 'cuda':
+        pytest.skip("Skipping test for non-GPU device")
     model = TensorToModule()
     model_opt = torch.compile(model, backend='hidet', mode=None)
 

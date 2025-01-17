@@ -57,14 +57,9 @@ def test_attention(device):
             numpy.testing.assert_allclose(y_static.cpu().numpy(), y.cpu().numpy(), atol=2e-1, rtol=2e-1)
 
 
-@pytest.mark.parametrize('device', ['cuda'])
 @pytest.mark.parametrize('bs,h,w', [(1, 224, 224), (2, 224, 224), (1, 256, 256)])
 def test_resnet50(device, bs, h, w):
-    model = hidet.testing.models.resnet50()
-    if device == 'cuda':
-        model = model.cuda()
-    else:
-        model = model.cpu()
+    model = hidet.testing.models.resnet50().to(device=device)
     x = hidet.symbol(['bs', 3, 'h', 'w'], device=device)
     y = model(x)
     graph_static = hidet.trace_from(model(hidet.symbol([bs, 3, h, w], device=device)))

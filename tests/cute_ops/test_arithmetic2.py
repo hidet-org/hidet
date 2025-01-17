@@ -60,6 +60,7 @@ def initialize_tests():
     arithmetic_tests.append((memory_layout, tiled_copy, tiled_copy_r))
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("memory_layout,tiled_copy,tiled_copy_r", arithmetic_tests)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_mxn_1xn(memory_layout, tiled_copy, tiled_copy_r, dtype):

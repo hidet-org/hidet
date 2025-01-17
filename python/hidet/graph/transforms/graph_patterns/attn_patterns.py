@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import hidet.cuda
 from hidet.graph import ops
 from hidet.ir.dtypes import f16, f32
 from hidet.ir.expr import is_true
@@ -116,10 +117,11 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
 def attn_patterns():
     from hidet.option import cuda
 
-    cc = cuda.get_arch_pair()
-    # fmha requires sm75+
-    if cc >= (7, 5):
-        register_rewrite_rule(AttentionRewriteRule())
-        register_rewrite_rule(AttentionMaskAddRewriteRule())
-        register_rewrite_rule(ReorderMulScaleRewriteRule())
-        register_rewrite_rule(ReorderDivScaleRewriteRule())
+    if hidet.cuda.is_available():
+        cc = cuda.get_arch_pair()
+        # fmha requires sm75+
+        if cc >= (7, 5):
+            register_rewrite_rule(AttentionRewriteRule())
+            register_rewrite_rule(AttentionMaskAddRewriteRule())
+            register_rewrite_rule(ReorderMulScaleRewriteRule())
+            register_rewrite_rule(ReorderDivScaleRewriteRule())

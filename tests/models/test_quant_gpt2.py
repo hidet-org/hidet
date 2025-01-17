@@ -78,6 +78,7 @@ def get_graph(device: str, name='gpt2'):
     return graph
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize('model', ['gpt2'])
 def test_model_differences(model):
     # Original float32 model

@@ -22,13 +22,13 @@ def configure_hidet_options():
     hidet.option.save_lower_ir(True)
 
 
-def run_hidet_benchmark():
+def run_hidet_benchmark(device):
     """Run hidet benchmark with a sample model."""
     x_shape = [1, 3, 224, 224]
     w_shape = [64, 3, 3, 3]
 
-    x = hidet.symbol(x_shape, dtype='float16', device='cuda')
-    w = hidet.randn(w_shape, dtype='float16', device='cuda')
+    x = hidet.symbol(x_shape, dtype='float16', device=device)
+    w = hidet.randn(w_shape, dtype='float16', device=device)
 
     o = hidet.ops.conv2d(x, w)
     g = hidet.trace_from(o, inputs=[x, w])
@@ -51,14 +51,14 @@ def check_fuse_ir_candidates():
             assert num_candidate == num_fused_candidate
 
 
-def test_save_lower_ir():
+def test_save_lower_ir(device):
     """Main test for saving lower IR and benchmarking."""
     configure_hidet_options()
 
     with hidet.graph.PassContext() as ctx:
         ctx.set_reduce_precision('float16')
 
-        run_hidet_benchmark()
+        run_hidet_benchmark(device)
 
         check_fuse_ir_candidates()
 

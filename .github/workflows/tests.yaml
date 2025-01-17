@@ -146,16 +146,61 @@ jobs:
           rm -rf ~/.config/hidet
           python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
+  run-test-amdgpu:
+    if: |
+        (github.event.pull_request &&
+        (contains(github.event.pull_request.body, '$ hidet-ci amdgpu') ||
+        contains(github.event.pull_request.comments.*.body, '$ hidet-ci amdgpu')))
+    needs: [build-wheel]
+    runs-on:
+      # on self-hosted runner
+      [self-hosted, rocm]
+    container:
+      # see https://rocm.docs.amd.com/projects/install-on-linux/en/latest/how-to/docker.html#docker-access-gpus-in-container
+      # for running AMD GPU applications in Docker containers
+      image: rocm/dev-ubuntu-22.04
+      options: --device /dev/kfd --device /dev/dri --security-opt seccomp=unconfined
+    steps:
+      - name: Install dependencies via apt
+        run: |
+          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-wheel.outputs.wheel_name }}
+
+      - name: Setup Hidet from Wheel
+        run: |
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
+          pip install -r requirements-dev.txt
+          pip install ${{ needs.build-wheel.outputs.wheel_name }}
+
+      - name: List installed packages
+        run: |
+          pip list
+
+      - name: Run tests
+        run: |
+          rm -rf ~/.config/hidet
+          python -m pytest -v --durations=20 --clear-cache tests
+
   final-status-indicator:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     name: Pass All Functional Tests
-    needs: [run-test]
+    needs: [run-test, run-test-amdgpu]
     steps:
       - run: exit 1
         if: >-
           ${{
                contains(needs.*.result, 'failure')
             || contains(needs.*.result, 'cancelled')
-            || contains(needs.*.result, 'skipped')
           }}

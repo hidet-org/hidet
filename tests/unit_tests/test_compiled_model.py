@@ -14,7 +14,6 @@ import numpy.testing
 import hidet
 
 
-@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_load_save(device: str):
     # construct graph
     x = hidet.symbol([2, 3], device=device)

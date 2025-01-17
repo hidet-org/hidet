@@ -5,9 +5,9 @@ import pytest
 
 @pytest.mark.parametrize("size", [(32, 32)])
 @pytest.mark.parametrize("mode", ["max-autotune", "max-autotune-no-cudagraphs"])
-def test_default_stream(size, mode):
-    device = torch.device(0)
-
+def test_default_stream(size, mode, device):
+    if device != 'cuda':
+        pytest.skip("Only CUDA device is supported for this test")
     x = torch.rand(size=size, dtype=torch.float32).to(device)
     w = torch.rand(size=size, dtype=torch.float32).to(device)
 
@@ -24,9 +24,9 @@ def test_default_stream(size, mode):
 
 @pytest.mark.parametrize("size", [(32, 32)])
 @pytest.mark.parametrize("mode", ["max-autotune", "max-autotune-no-cudagraphs"])
-def test_new_torch_stream(size, mode):
-    device = torch.device(0)
-
+def test_new_torch_stream(size, mode, device):
+    if device != 'cuda':
+        pytest.skip("Only CUDA device is supported for this test")
     x = torch.rand(size=size, dtype=torch.float32).to(device)
     w = torch.rand(size=size, dtype=torch.float32).to(device)
     s = torch.cuda.Stream(device=device)

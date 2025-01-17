@@ -66,6 +66,7 @@ def check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op, dtype
     )
 
 
+@pytest.mark.requires_cuda
 def test_matmul_dynamic_fallback():
     a_shape = [("b", 16), ("s", 96), 256]
     b_shape = [256, 30522]
@@ -77,6 +78,7 @@ def test_matmul_dynamic_fallback():
     check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op)
 
 
+@pytest.mark.requires_cuda
 def test_matmul_dynamic():
     a_shape = [("b", 16), ("s", 96), 256]
     b_shape = [256, 30522]

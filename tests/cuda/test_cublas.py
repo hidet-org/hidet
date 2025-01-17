@@ -15,6 +15,7 @@ import hidet
 from hidet.cuda.cublas import cublasComputeType
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 @pytest.mark.parametrize('m, n, k', [[4, 4, 4], [128, 128, 128], [123, 234, 345]])
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
@@ -33,6 +34,7 @@ def test_cublas_gemm(m, n, k, dtype, compute_type, tol):
     hidet.utils.assert_close(actual=c, expected=a @ b, rtol=tol, atol=tol)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 @pytest.mark.parametrize('bs, m, n, k', [[3, 4, 4, 4], [4, 128, 128, 128], [5, 123, 234, 345]])
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
@@ -53,6 +55,7 @@ def test_cublas_strided_gemm(bs, m, n, k, dtype, compute_type, tol):
     hidet.utils.assert_close(actual=c, expected=a @ b, rtol=tol, atol=tol)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 @pytest.mark.parametrize('bs, m, n, k', [[3, 4, 4, 4], [4, 128, 128, 128], [5, 123, 234, 345]])
 @pytest.mark.parametrize(
     'dtype, compute_type, tol',
@@ -76,6 +79,7 @@ def test_cublas_batched_gemm(bs, m, n, k, dtype, compute_type, tol):
         hidet.utils.assert_close(actual=c[i], expected=a[i] @ b[i], rtol=tol, atol=tol)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 def test_cublas_library_gemm():
     from hidet.lang import attrs
     from hidet.lang.cuda import cublas
@@ -116,6 +120,7 @@ def test_cublas_library_gemm():
     hidet.utils.assert_close(actual=c, expected=a @ b, rtol=1e-5, atol=1e-5)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 def test_cublas_library_strided_gemm():
     from hidet.lang import attrs
     from hidet.lang.cuda import cublas

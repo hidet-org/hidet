@@ -21,7 +21,7 @@ from hidet.lang.constructs.declare import as_tensor_pointer
 from hidet.lang.cuda import blockDim, gridDim, blockIdx, threadIdx, this_cluster, atomic_add
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cluster_histogram():
     # +-------------------------------------------------------------------------------------------------------------------+
     # |                                                 Grid (4096 threads)                                               |
@@ -113,7 +113,7 @@ def test_cluster_histogram():
     assert not torch.any(bins[4096:].torch())
 
 
-@pytest.mark.hopper
+@pytest.mark.requires_cuda_hopper
 def test_cluster_divides_grid():
     # grid_dim % cluster_dim != 0
     with hidet.script_module() as script_module:

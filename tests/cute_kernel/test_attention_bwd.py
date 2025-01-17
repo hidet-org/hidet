@@ -1815,6 +1815,7 @@ def data(
 
 
 # we just test the compilation here, but not the correctness of the results.
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "batch_size,num_heads,num_heads_k,head_size,seqlen_q,seqlen_k,num_parallel_seqk_parts",
     [(1, 16, 16, 128, 4096, 4096, 8), (1, 16, 16, 128, 2048, 2048, 2), (1, 16, 16, 128, 1024, 1024, 4)],
@@ -1823,6 +1824,7 @@ def test_v3(batch_size, seqlen_q, num_heads, head_size, seqlen_k, num_heads_k, n
     flash_attention_v3_bwd(batch_size, seqlen_q, num_heads, head_size, seqlen_k, num_heads_k, num_parallel_seqk_parts)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "batch_size,num_heads,num_heads_k,head_size,seqlen_q,seqlen_k,num_parallel_seqk_parts",
     [(1, 16, 16, 128, 4096, 4096, 8), (1, 16, 16, 128, 2048, 2048, 2), (1, 16, 16, 128, 1024, 1024, 4)],
@@ -1831,6 +1833,7 @@ def test_v5(batch_size, seqlen_q, num_heads, head_size, seqlen_k, num_heads_k, n
     flash_attention_v3_bwd(batch_size, seqlen_q, num_heads, head_size, seqlen_k, num_heads_k, num_parallel_seqk_parts)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "batch_size,num_heads,num_heads_k,head_size,seqlen_q,seqlen_k,num_parallel_seqk_parts",
     [

@@ -11,6 +11,7 @@
 # limitations under the License.
 import pytest
 import torch
+from hidet.testing import device_to_torch
 from hidet.apps import PretrainedModel, hf
 from hidet.apps.image_classification.modeling.resnet.modeling import ResNetForImageClassification
 from hidet.option import get_option
@@ -29,36 +30,32 @@ def test_parse_dtype(model_name: str, dtype: str):
     assert PretrainedModel.parse_dtype(config) == dtype
 
 
-def test_copy_weights():
+def test_copy_weights(device):
+    config: ResNetConfig = hf.load_pretrained_config("microsoft/resnet-50")
 
-    with torch.device("cuda"):
-        config: ResNetConfig = hf.load_pretrained_config("microsoft/resnet-50")
+    torch_model = AutoModelForImageClassification.from_pretrained(
+        pretrained_model_name_or_path=config.name_or_path, torch_dtype=torch.float32
+    ).to(device=device_to_torch(device))
+    torch_model.eval()
+    hidet_model = ResNetForImageClassification(config)
+    hidet_model.to(dtype="float32", device=device)
+    PretrainedModel.copy_weights(torch_model, hidet_model)
 
-        torch_model = AutoModelForImageClassification.from_pretrained(
-            pretrained_model_name_or_path=config.name_or_path, torch_dtype=torch.float32
-        )
-        hidet_model = ResNetForImageClassification(config)
-        hidet_model.to(dtype="float32", device="cuda")
-        PretrainedModel.copy_weights(torch_model, hidet_model)
+    normalization_stage = (
+        hidet_model.resnet.encoder.stages._submodules["0"].layers._submodules["0"].layer._submodules["0"].normalization
+    )
+    weight_set = [
+        normalization_stage.weight,
+        normalization_stage.bias,
+        normalization_stage.running_mean,
+        normalization_stage.running_var,
+        hidet_model.classifier._submodules["1"].weight,
+        hidet_model.resnet.embedder.embedder.convolution.weight,
+    ]
 
-        normalization_stage = (
-            hidet_model.resnet.encoder.stages._submodules["0"]
-            .layers._submodules["0"]
-            .layer._submodules["0"]
-            .normalization
-        )
-        weight_set = [
-            normalization_stage.weight,
-            normalization_stage.bias,
-            normalization_stage.running_mean,
-            normalization_stage.running_var,
-            hidet_model.classifier._submodules["1"].weight,
-            hidet_model.resnet.embedder.embedder.convolution.weight,
-        ]
-
-        for weight in weight_set:
-            weight = weight.torch()
-            assert not torch.equal(weight, torch.zeros_like(weight))
+    for weight in weight_set:
+        weight = weight.torch()
+        assert not torch.equal(weight, torch.zeros_like(weight))
 
 
 if __name__ == "__main__":

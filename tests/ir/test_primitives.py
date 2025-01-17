@@ -22,6 +22,7 @@ from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.drivers import build_ir_module
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("load_bits", [128, 64, 32])
 def test_lds(load_bits, capfd):
     from hidet.ir.dtypes import u32
@@ -62,6 +63,7 @@ def test_lds(load_bits, capfd):
     assert captured.out == expected + "\n"
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("store_bits", [128, 64, 32])
 def test_sts(store_bits, capfd):
     from hidet.ir.dtypes import u32

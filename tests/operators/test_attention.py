@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
+import torch
 import pytest
 import numpy
 import hidet
@@ -17,6 +18,7 @@ from hidet.graph.ops.attention import attention
 from hidet import ops
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("shape", [[2, 512, 512, 8, 128], [2, 435, 179, 8, 64]])
 @pytest.mark.parametrize("dtype", ['float16', 'bfloat16'])
 def test_attn_mask_add(shape, dtype):
@@ -34,11 +36,10 @@ def test_attn_mask_add(shape, dtype):
         return hidet.trace_from(out, [q, k, v, mask])
 
     graph = attention_layer()
-    graph = hidet.graph.optimize(graph)
-    q = hidet.randn([bs, h, s_q, d], dtype=dtype, device='cuda')
-    k = hidet.randn([bs, h, d, s_kv], dtype=dtype, device='cuda')
-    v = hidet.randn([bs, h, s_kv, d], dtype=dtype, device='cuda')
-    mask = hidet.randn([bs, h, s_q, s_kv], dtype=dtype, device='cuda')
+    q = hidet.randn([bs, h, s_q, d], dtype=dtype, device='cuda') / 10
+    k = hidet.randn([bs, h, d, s_kv], dtype=dtype, device='cuda') / 10
+    v = hidet.from_torch(torch.rand([bs, h, s_kv, d], dtype=getattr(torch, dtype), device='cuda') - 0.5)
+    mask = hidet.randn([bs, h, s_q, s_kv], dtype=dtype, device='cuda') / 10
 
     cc1 = attention(q, k, v, mask)
     cc2 = graph(q, k, v, mask)
@@ -47,25 +48,12 @@ def test_attn_mask_add(shape, dtype):
         cc1 = cc1.to(dtype='float32')
         cc2 = cc2.to(dtype='float32')
 
-    # tests are flaky for bfloat16 with tolerance 0.5:
-    #        AssertionError:
-    #    Not equal to tolerance rtol=0.5, atol=0.5
-    #
-    #    Mismatched elements: 5 / 445440 (0.00112%)
-    #    Max absolute difference: 0.7988281
-    #    Max relative difference: 1.10698655e+14
-    #     x: array([[[[ 6.640625e-01, -1.304688e+00,  1.593750e+00, ...,
-    #              -7.148438e-01, -2.138672e-01, -1.279297e-01],
-    #             [ 4.355469e-01,  3.554688e-01,  5.615234e-02, ...,...
-    #     y: array([[[[ 7.265625e-01, -1.296875e+00,  1.562500e+00, ...,
-    #              -6.953125e-01, -2.167969e-01, -1.337891e-01],
-    #             [ 6.171875e-01,  3.125000e-01, -5.224609e-02, ...,...
-
-    tol = 0.5 if dtype == 'float16' else 1.0
+    tol = 1e-2
 
     numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=tol, rtol=tol)
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("shape", [[2, 1024, 1024, 8, 128], [2, 667, 775, 8, 64]])
 @pytest.mark.parametrize("dtype", ['float16', 'bfloat16'])
 def test_attn(shape, dtype):

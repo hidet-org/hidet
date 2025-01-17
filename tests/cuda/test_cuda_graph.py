@@ -27,6 +27,7 @@ def example_graph() -> Tuple[FlowGraph, Tensor]:
     return graph, hidet.randn_like(x)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 def test_flow_graph_cuda_graph():
     graph, x = example_graph()
     cuda_graph: CudaGraph = graph.cuda_graph()
@@ -35,6 +36,7 @@ def test_flow_graph_cuda_graph():
     numpy.testing.assert_allclose(actual=actual.cpu().numpy(), desired=expected.cpu().numpy(), atol=0.0, rtol=0.0)
 
 
+@pytest.mark.skipif(not hidet.cuda.is_available(), reason='CUDA is not available')
 def test_compiled_graph_cuda_graph():
     graph, x = example_graph()
     cuda_graph: CudaGraph = graph.build().cuda_graph(x)

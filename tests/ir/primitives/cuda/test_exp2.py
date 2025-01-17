@@ -15,6 +15,7 @@ import torch
 import hidet
 
 
+@pytest.mark.requires_cuda
 def test_exp2():
     from hidet.lang import attrs
     from hidet.ir.primitives.math import exp2
@@ -43,6 +44,7 @@ def test_exp2():
     np.testing.assert_equal(out.cpu().numpy(), groundtruth)
 
 
+@pytest.mark.requires_cuda
 def test_exp2_f16():
     from hidet.lang import attrs
     from hidet.ir.primitives.math import exp2

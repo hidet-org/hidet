@@ -110,6 +110,7 @@ def initialize_tests():
     ldsm_tests.append((memory_layout, ldgsts_tiled_copy, lds_tiled_copy))
 
 
+@pytest.mark.requires_cuda
 @pytest.mark.parametrize("memory_layout,ldgsts_tiled_copy,lds_tiled_copy", ldsm_tests)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_ldsm(memory_layout, ldgsts_tiled_copy, lds_tiled_copy, dtype):

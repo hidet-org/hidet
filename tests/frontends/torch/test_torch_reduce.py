@@ -15,80 +15,124 @@ from hidet.testing.torch_utils import check_module, FunctionalModule
 
 
 @pytest.mark.parametrize('shape', [[], [2], [2, 3], [2, 3, 4]])
-def test_maximum(shape):
+def test_maximum(shape, device):
     check_module(
         FunctionalModule(op=lambda x, y: torch.maximum(x, y)),
         args=[torch.randn(shape), torch.randn(shape)],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
 
 @pytest.mark.parametrize('shape', [[], [2], [2, 3], [2, 3, 4]])
-def test_minimum(shape):
+def test_minimum(shape, device):
     check_module(
         FunctionalModule(op=lambda x, y: torch.minimum(x, y)),
         args=[torch.randn(shape), torch.randn(shape)],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
 
 @pytest.mark.parametrize('shape', [[2], [2, 3], [2, 3, 4]])
-def test_max(shape):
-    check_module(FunctionalModule(op=lambda x: torch.max(x)), args=[torch.randn(shape)], atol=0, rtol=0)
+def test_max(shape, device):
+    check_module(FunctionalModule(op=lambda x: torch.max(x)), args=[torch.randn(shape)], atol=0, rtol=0, device=device)
     check_module(
-        FunctionalModule(op=lambda x, y: torch.max(x, y)), args=[torch.randn(shape), torch.randn(shape)], atol=0, rtol=0
+        FunctionalModule(op=lambda x, y: torch.max(x, y)),
+        args=[torch.randn(shape), torch.randn(shape)],
+        atol=0,
+        rtol=0,
+        device=device,
     )
-    check_module(FunctionalModule(op=lambda x, dim: torch.max(x, dim)), args=[torch.randn(shape), 0], atol=0, rtol=0)
+    check_module(
+        FunctionalModule(op=lambda x, dim: torch.max(x, dim)),
+        args=[torch.randn(shape), 0],
+        atol=0,
+        rtol=0,
+        device=device,
+    )
 
     # Do the same checks as above all over again, this time for torch.Tensor.max methods
-    check_module(FunctionalModule(op=lambda x: x.max()), args=[torch.randn(shape)], atol=0, rtol=0)
-    check_module(FunctionalModule(op=lambda x, dim: x.max(dim)), args=[torch.randn(shape), 0], atol=0, rtol=0)
+    check_module(FunctionalModule(op=lambda x: x.max()), args=[torch.randn(shape)], atol=0, rtol=0, device=device)
     check_module(
-        FunctionalModule(op=lambda x, y: x.max(y)), args=[torch.randn(shape), torch.randn(shape)], atol=0, rtol=0
+        FunctionalModule(op=lambda x, dim: x.max(dim)), args=[torch.randn(shape), 0], atol=0, rtol=0, device=device
+    )
+    check_module(
+        FunctionalModule(op=lambda x, y: x.max(y)),
+        args=[torch.randn(shape), torch.randn(shape)],
+        atol=0,
+        rtol=0,
+        device=device,
     )
 
 
 @pytest.mark.parametrize('shape', [[2], [2, 3], [2, 3, 4]])
-def test_min(shape):
-    check_module(FunctionalModule(op=lambda x: torch.min(x)), args=[torch.randn(shape)], atol=0, rtol=0)
+def test_min(shape, device):
+    check_module(FunctionalModule(op=lambda x: torch.min(x)), args=[torch.randn(shape)], atol=0, rtol=0, device=device)
     check_module(
         FunctionalModule(op=lambda x, y: torch.min(x, y)),
         args=[torch.randn(shape), torch.randn(shape)],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
-    check_module(FunctionalModule(op=lambda x, dim: torch.min(x, dim)), args=[torch.randn(shape), 0], atol=0, rtol=0)
+    check_module(
+        FunctionalModule(op=lambda x, dim: torch.min(x, dim)),
+        args=[torch.randn(shape), 0],
+        atol=0,
+        rtol=0,
+        device=device,
+    )
 
     # Doing the same checks as above again, this time for `torch.Tensor.min` method.
-    check_module(FunctionalModule(op=lambda x: x.min()), args=[torch.randn(shape)], atol=0, rtol=0)
-
-    check_module(FunctionalModule(op=lambda x, dim: x.min(dim)), args=[torch.randn(shape), 0], atol=0, rtol=0)
+    check_module(FunctionalModule(op=lambda x: x.min()), args=[torch.randn(shape)], atol=0, rtol=0, device=device)
 
     check_module(
-        FunctionalModule(op=lambda x, y: x.min(y)), args=[torch.randn(shape), torch.randn(shape)], atol=0, rtol=0
+        FunctionalModule(op=lambda x, dim: x.min(dim)), args=[torch.randn(shape), 0], atol=0, rtol=0, device=device
+    )
+
+    check_module(
+        FunctionalModule(op=lambda x, y: x.min(y)),
+        args=[torch.randn(shape), torch.randn(shape)],
+        atol=0,
+        rtol=0,
+        device=device,
     )
 
 
 @pytest.mark.parametrize('shape', [[2], [2, 3], [2, 3, 4]])
-def test_sum(shape):
+def test_sum(shape, device):
     # Similar idea as test_max and test_min
-    check_module(FunctionalModule(op=lambda x: torch.sum(x)), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
-
     check_module(
-        FunctionalModule(op=lambda x, dim: torch.sum(x, dim)), args=[torch.randn(shape), 0], atol=1e-5, rtol=1e-5
+        FunctionalModule(op=lambda x: torch.sum(x)), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5, device=device
     )
 
-    check_module(FunctionalModule(op=lambda x: x.sum()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
+    check_module(
+        FunctionalModule(op=lambda x, dim: torch.sum(x, dim)),
+        args=[torch.randn(shape), 0],
+        atol=1e-5,
+        rtol=1e-5,
+        device=device,
+    )
 
-    check_module(FunctionalModule(op=lambda x, dim: x.sum(dim)), args=[torch.randn(shape), 0], atol=1e-5, rtol=1e-5)
+    check_module(FunctionalModule(op=lambda x: x.sum()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5, device=device)
+
+    check_module(
+        FunctionalModule(op=lambda x, dim: x.sum(dim)),
+        args=[torch.randn(shape), 0],
+        atol=1e-5,
+        rtol=1e-5,
+        device=device,
+    )
 
     check_module(
         FunctionalModule(op=lambda x, dim: x.sum(dim)),
         args=[torch.randn(shape), list(range(len(shape)))],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
     check_module(
@@ -96,16 +140,23 @@ def test_sum(shape):
         args=[torch.randn(shape), None],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
 
 @pytest.mark.parametrize('shape', [[2], [2, 3], [2, 3, 4]])
-def test_mean(shape):
+def test_mean(shape, device):
     # Similar idea as test_sum
-    check_module(FunctionalModule(op=lambda x: torch.mean(x)), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
+    check_module(
+        FunctionalModule(op=lambda x: torch.mean(x)), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5, device=device
+    )
 
     check_module(
-        FunctionalModule(op=lambda x, dim: torch.mean(x, dim)), args=[torch.randn(shape), 0], atol=1e-5, rtol=1e-5
+        FunctionalModule(op=lambda x, dim: torch.mean(x, dim)),
+        args=[torch.randn(shape), 0],
+        atol=1e-5,
+        rtol=1e-5,
+        device=device,
     )
 
     check_module(
@@ -113,27 +164,49 @@ def test_mean(shape):
         args=[torch.randn(shape), list(range(len(shape)))],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
-    check_module(FunctionalModule(op=lambda x: x.mean()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5)
+    check_module(
+        FunctionalModule(op=lambda x: x.mean()), args=[torch.randn(shape)], atol=1e-5, rtol=1e-5, device=device
+    )
 
-    check_module(FunctionalModule(op=lambda x, dim: x.mean(dim)), args=[torch.randn(shape), 0], atol=1e-5, rtol=1e-5)
+    check_module(
+        FunctionalModule(op=lambda x, dim: x.mean(dim)),
+        args=[torch.randn(shape), 0],
+        atol=1e-5,
+        rtol=1e-5,
+        device=device,
+    )
 
     check_module(
         FunctionalModule(op=lambda x, dim: x.mean(dim)),
         args=[torch.randn(shape), list(range(len(shape)))],
         atol=1e-5,
         rtol=1e-5,
+        device=device,
     )
 
 
 @pytest.mark.parametrize(
     'shape, dim', [[[2, 4], -1], [[128, 3, 4], 0], [[128, 3, 4], 2], [[72, 5, 64], -1], [[67, 128, 233], 1]]
 )
-def test_torch_any(shape, dim):
-    check_module(FunctionalModule(op=lambda x: torch.any(x, dim=dim)), args=[torch.randn(shape) > 0], atol=0, rtol=0)
+def test_torch_any(shape, dim, device):
+    check_module(
+        FunctionalModule(op=lambda x: torch.any(x, dim=dim)),
+        args=[torch.randn(shape) > 0],
+        atol=0,
+        rtol=0,
+        device=device,
+    )
 
 
 @pytest.mark.parametrize('shape, dim', [[[2, 3], -1]])
-def test_all(shape, dim):
-    check_module(FunctionalModule(op=lambda x: torch.all(x, dim=dim)), args=[torch.randn(shape) > 0], atol=0, rtol=0)
+def test_all(shape, dim, device):
+    check_module(
+        FunctionalModule(op=lambda x: torch.all(x, dim=dim)),
+        args=[torch.randn(shape) > 0],
+        atol=0,
+        rtol=0,
+        device=device,
+    )
