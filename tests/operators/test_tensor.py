@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import numpy as np
 import pytest
 import numpy as np
 import torch
@@ -32,6 +33,20 @@ def test_from_dlpack(device):
 
     c[1:] = 1.0
     np.testing.assert_allclose(c.cpu().numpy(), d.cpu().numpy())
+
+    # round-trip for bool torch tensor
+    a = torch.empty(10, dtype=torch.bool, device=torch_device)
+    b = hidet.from_dlpack(a)
+    assert b.device.kind == device and b.dtype.name == 'bool'
+    c = b.torch()
+    assert a.device == c.device and a.dtype == c.dtype
+
+    # round-trip for bool numpy tensor
+    a = np.empty(shape=[10], dtype=np.bool)
+    b = hidet.from_dlpack(a)
+    assert b.device.kind == 'cpu' and b.dtype.name == 'bool'
+    c = b.numpy()
+    assert a.device == c.device and a.dtype == c.dtype
 
 
 def test_to_dlpack(device):

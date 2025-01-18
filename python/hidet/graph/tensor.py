@@ -1099,11 +1099,7 @@ class Tensor:
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
             return self.astype(dtypes.float32).numpy()
-        if self.dtype == dtypes.boolean:
-            # workaround for numpy not supporting exporting boolean to dlpack
-            return np.from_dlpack(self.to(dtype='uint8')).astype(np.bool_)
-        else:
-            return np.from_dlpack(self)
+        return np.from_dlpack(self)
 
     def torch(self):
         """
@@ -1115,10 +1111,6 @@ class Tensor:
             The torch tensor that shares the memory with the hidet tensor.
         """
         import torch
-
-        if self.dtype == dtypes.boolean:
-            # workaround for torch not supporting exporting boolean to dlpack
-            return torch.from_dlpack(self.to(dtype='uint8')).bool()
 
         return torch.from_dlpack(self)
 
@@ -1591,10 +1583,7 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
     if not nparray.flags['WRITEABLE']:
         # make a copy if the array is read-only
         nparray = nparray.copy()
-    if nparray.dtype == np.bool_:
-        return from_dlpack(nparray.astype(np.uint8)).to(dtype='bool')
-    else:
-        return from_dlpack(nparray)
+    return from_dlpack(nparray)
 
 
 def from_dlpack(dltensor) -> Tensor:
@@ -1640,13 +1629,7 @@ def from_torch(torch_tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
     if torch_tensor.requires_grad:
         torch_tensor = torch_tensor.detach()
-        # raise ValueError('Please first call .detach() on the pytorch tensor before converting it to hidet.')
-    assert isinstance(torch_tensor, torch.Tensor)
-    if torch_tensor.dtype == torch.bool:
-        # exporting torch.bool to dlpack is not supported by pytorch yet
-        return from_dlpack(torch_tensor.to(dtype=torch.uint8)).to(dtype='bool')
-    else:
-        return from_dlpack(torch_tensor)
+    return from_dlpack(torch_tensor)
 
 
 def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
