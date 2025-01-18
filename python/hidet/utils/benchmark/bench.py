@@ -15,8 +15,12 @@ from dataclasses import dataclass
 from scipy import stats
 import numpy as np
 import nvtx
+from tqdm import tqdm
 import hidet
 import hidet.cuda
+from hidet.utils import green
+from hidet.option import is_fix_gpu_frequency_for_tuning
+from .gpu_freq import GPUSetFrequencyForBenchmarking
 
 
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
@@ -71,7 +75,7 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
         return np.mean(times).item()
 
 
-def benchmark_func(run_func, *args, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
+def benchmark_func(run_func, *args, warmup=3, number=5, repeat=5, median=True) -> Union[List[float], float]:
     """Benchmark given function.
 
     The given function ``run_func`` will be executed :math:`warmup + repeat * number` times. Each :math:`number` times
@@ -84,6 +88,7 @@ def benchmark_func(run_func, *args, warmup=1, number=5, repeat=5, median=True) -
 
     warmup: int
         The number of warm-up executions.
+        Default `warmup=3` is good choose. In most cases 3 iterations for warmup is enough.
 
     number: int
         The number of executions to be grouped for measurement.
@@ -130,7 +135,7 @@ class CandidateData:
     in_game: bool = True
 
 
-def find_best_candidate(candidates: List[Callable[..., None]], *args):
+def _find_best_candidate(candidates: List[Callable[..., None]], pbar, *args):
     P_VALUE_THRESHOLD = 0.01
     num_candidates = len(candidates)
     candidates_data = [CandidateData(idx=idx) for idx, _ in enumerate(candidates)]
@@ -138,15 +143,16 @@ def find_best_candidate(candidates: List[Callable[..., None]], *args):
     for cur_repeat in repeats:
         for idx, cand in enumerate(candidates):
             if candidates_data[idx].in_game:
-                lats = benchmark_func(cand, *args, warmup=5, number=1, repeat=cur_repeat, median=False)
+                lats = benchmark_func(cand, *args, warmup=3, number=1, repeat=cur_repeat, median=False)
                 candidates_data[idx].latencies = lats
+                pbar.update(1)
 
         for cand in candidates_data:
             if cand.in_game:
                 cand.median = np.median(cand.latencies)
 
-        # We have samples for every cansidate.
-        # Start with candidate with minimum median. Likely it drop a lot of slower candidates.
+        # We have samples for every candidate.
+        # Start with candidate with minimum median. Likely it'll drop a lot of slower candidates.
         # Just optimisation. The next loop is enough for functionality
         min_lat_cand = min((cand for cand in candidates_data if cand.in_game), key=lambda cand: cand.median)
         min_idx = min_lat_cand.idx
@@ -189,6 +195,19 @@ def find_best_candidate(candidates: List[Callable[..., None]], *args):
     best_idx = best.idx
     latensies = [cand.median for cand in candidates_data]
     return (best_idx, latensies)
+
+
+def find_best_candidate(candidates: List[Callable[..., None]], name, *args):
+    desc = "Finding the best candidates for " + green(name)
+    for i in args:
+        desc += f" {tuple(i.shape)}"
+    if is_fix_gpu_frequency_for_tuning():
+        with GPUSetFrequencyForBenchmarking():
+            with tqdm(desc=desc, ncols=80) as pbar:
+                return _find_best_candidate(candidates, pbar, *args)
+    else:
+        with tqdm(desc=desc, ncols=80) as pbar:
+            return _find_best_candidate(candidates, pbar, *args)
 
 
 @dataclass

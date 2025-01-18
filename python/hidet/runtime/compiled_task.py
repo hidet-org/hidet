@@ -177,7 +177,7 @@ class CompiledTask:
         key = self._get_symbol_values()
         if key not in self.dispatch_table:
             if len(self.candidates) > 1:
-                best_idx, latencies = find_best_candidate(self.candidates, *inputs, *outputs)
+                best_idx, latencies = find_best_candidate(self.candidates, self.meta_data.name, *inputs, *outputs)
                 self.dispatch_table[key] = best_idx
 
                 # write a benchmark report

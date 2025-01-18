@@ -10,10 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
-from typing import Tuple, Optional
+import subprocess
+import warnings
+import logging
+from typing import Tuple, Optional, List
 from functools import lru_cache
 from cuda import cudart
 from cuda.cudart import cudaDeviceProp
+
+
+logger = logging.getLogger(__name__)
 
 
 class CudaDeviceContext:
@@ -179,3 +185,110 @@ def profiler_stop():
     """
     (err,) = cudart.cudaProfilerStop()
     assert err == 0, err
+
+
+def get_application_freqs(device_id: int) -> Tuple[int, int]:
+    """
+    Get the application clock frequencies of a CUDA device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the device to query.
+
+    Returns
+    -------
+    (sm_clock, mem_clock): Tuple[int, int]
+        The application clock frequencies of the device.
+    """
+    try:
+        # Query application clocks for the specified device
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=clocks.applications.gr,clocks.applications.mem",
+                "--format=csv,noheader,nounits",
+                f"--id={device_id}",
+            ],
+            text=True,
+        )
+        output = output.split(",")
+        output = [x.strip() for x in output]
+        assert len(output) == 2
+        if output[0].isdigit() and output[1].isdigit():
+            sm_clock, mem_clock = [int(x) for x in output]
+        else:
+            sm_clock, mem_clock = None, None
+        return sm_clock, mem_clock
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to retrieve application clock frequencies: {e}") from e
+    except ValueError as e:
+        raise RuntimeError(f"Failed to parse clock frequencies: {e}") from e
+    except FileNotFoundError as e:
+        raise RuntimeError(f"nvidia-smi not found: {e}") from e
+
+
+def set_application_freqs(device_id: int, sm_clock: int, mem_clock: int) -> None:
+    """
+    Set the application clock frequencies of a CUDA device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the device to configure.
+    sm_clock: int
+        The desired SM (Streaming Multiprocessor) clock frequency in MHz.
+    mem_clock: int
+        The desired memory clock frequency in MHz.
+
+    Raises
+    ------
+    RuntimeError
+        If setting the application clock frequencies fails.
+    """
+    warnings.simplefilter("once")
+    try:
+        # Set application clocks for the specified device
+        logger.info(
+            f"Setting application clocks for device {device_id}: "
+            f"SM clock = {sm_clock} MHz, Memory clock = {mem_clock} MHz"
+        )
+        subprocess.check_call(
+            ["sudo", "nvidia-smi", f"--applications-clocks={mem_clock},{sm_clock}", f"--id={device_id}"],
+            stdout=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError as e:
+        warnings.warn(f"Failed to set application clock frequencies: {e}")
+    except FileNotFoundError as e:
+        warnings.warn(f"Failed to set application clock frequencies: {e}")
+
+
+def get_supported_graphics_clocks(device_id: int) -> List[int]:
+    """
+    Get the supported graphics clock frequencies of a CUDA device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the device to query.
+
+    Returns
+    -------
+    List[int]
+        A list of supported graphics clock frequencies for the device.
+    """
+    try:
+        # Query supported graphics clock frequencies for the specified device
+        output = subprocess.check_output(
+            ["nvidia-smi", "--query-supported-clocks=gr", "--format=csv,noheader,nounits", f"--id={device_id}"],
+            text=True,
+        )
+        # Parse the output into a list of integers
+        clocks = [int(clock) for clock in output.splitlines()]
+        return clocks
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to retrieve supported graphics clocks: {e}") from e
+    except ValueError as e:
+        raise RuntimeError(f"Failed to parse supported clock frequencies: {e}") from e
+    except FileNotFoundError as e:
+        raise RuntimeError(f"nvidia-smi not found: {e}") from e

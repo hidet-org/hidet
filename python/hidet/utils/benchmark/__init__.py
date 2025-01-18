@@ -10,3 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .bench import Bench, BenchData, do_bench, benchmark_func
+from .gpu_freq import GPUSetFrequencyForBenchmarking

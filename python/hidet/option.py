@@ -178,6 +178,13 @@ def register_hidet_options():
         description='Deprecated option. Please use the `num_local_workers` option instead.',
     )
     register_option(
+        name='fix_gpu_frequency_for_tuning',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to fix the GPU frequency during tuning to avoid frequency throttling.',
+        choices=[True, False],
+    )
+    register_option(
         name='num_local_workers',
         type_hint='int',
         default_value=os.cpu_count(),
@@ -767,6 +774,30 @@ def get_parallel_tune() -> Tuple[int, float, int]:
     """
     warnings.warn('`parallel_tune` option is deprecated.' 'Please use the `num_local_workers` option instead.')
     return (get_num_local_workers(), 1.5, 32)
+
+
+def fix_gpu_frequency_for_tuning(enabled: bool = False):
+    """
+    Whether to fix the GPU frequency during tuning to avoid frequency throttling.
+
+    Parameters
+    ----------
+    enabled: bool
+        Whether to fix the GPU frequency during tuning to avoid frequency throttling.
+    """
+    OptionContext.current().set_option('fix_gpu_frequency_for_tuning', enabled)
+
+
+def is_fix_gpu_frequency_for_tuning() -> bool:
+    """
+    Get the option value of whether to fix the GPU frequency during tuning to avoid frequency throttling.
+
+    Returns
+    -------
+    ret: bool
+        Whether to fix the GPU frequency during tuning to avoid frequency throttling.
+    """
+    return OptionContext.current().get_option('fix_gpu_frequency_for_tuning')
 
 
 def num_local_workers(num_workers: Optional[int] = None):
