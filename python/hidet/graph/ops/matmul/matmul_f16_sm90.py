@@ -12,9 +12,8 @@
 from typing import List, Tuple, Union
 from functools import partial
 
-from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.dtypes import float16, u64
+from hidet.ir.dtypes import float16, u64, float32, bfloat16
 from hidet.ir.expr import if_then_else, Int, Expr, cast
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
@@ -39,8 +38,17 @@ class MatmulF16SM90Task(Task):
         acc_dtype: Union[DataType, str],
         parallel_k_parts: int = 1,
     ):
-        if not a.type.dtype == float16 or not b.type.dtype == float16:
-            raise ValueError('Both inputs must be float16 tensors')
+        if not a.type.dtype == b.type.dtype:
+            raise ValueError(f'Both inputs must have the same dtype, but got {a.type.dtype} and {b.type.dtype}')
+
+        if a.type.dtype.is_any_float16():
+            target_float_type = a.type.dtype
+        else:
+            raise ValueError(
+                f'Both inputs must be float16 or bfloat tensors, but got {a.type.dtype} and {b.type.dtype}'
+            )
+
+        self.target_float_type = target_float_type
 
         if len(a.shape) < 2 or len(b.shape) < 2:
             raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a.shape, b.shape))
@@ -80,14 +88,14 @@ class MatmulF16SM90Task(Task):
             )
 
         def outer_compute(k_part, *indices):
-            return float16(
+            return target_float_type(
                 reduce(shape=[k_part_extent], fcompute=partial(inner_compute, k_part, indices), reduce_type='sum')
             )
 
         c = compute(name='c', shape=c_shape, fcompute=outer_compute)
 
         super().__init__(
-            name='matmul_f16_sm90',
+            name=f'matmul_{target_float_type.short_name}_sm90',
             inputs=[a, b],
             outputs=[c],
             attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'is_a_shared': is_a_shared},
@@ -143,6 +151,7 @@ class MatmulF16SM90Task(Task):
         from hidet.ir.primitives.cuda.barrier import fence_view_async_shared
         from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
 
+        target_float_type = self.target_float_type
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
         a_shape: Tuple[Int, ...] = node_a.shape
@@ -154,9 +163,16 @@ class MatmulF16SM90Task(Task):
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
         acc_dtype = self.attrs['acc_dtype']
 
+        if target_float_type == bfloat16:
+            tune.check(acc_dtype == float32, 'bfloat16 only supports float32 accumulator')
+
         # schedule parameters
         mma_configs_f16 = {f"m64n{n}k16": WgmmaConfig.get(64, n, 16, "f16", "f16", "f16") for n in range(8, 257, 8)}
-        mma_configs_f32 = {f"m64n{n}k16": WgmmaConfig.get(64, n, 16, "f16", "f16", "f32") for n in range(8, 257, 8)}
+        mma_configs_f32 = (
+            {f"m64n{n}k16": WgmmaConfig.get(64, n, 16, "f16", "f16", "f32") for n in range(8, 257, 8)}
+            if target_float_type == float16
+            else {f"m64n{n}k16": WgmmaConfig.get(64, n, 16, "bf16", "bf16", "f32") for n in range(8, 257, 8)}
+        )
         if warp_group_n > 256:
             mma = 'm64n256k16'
         else:
@@ -164,7 +180,6 @@ class MatmulF16SM90Task(Task):
 
         tune.check(mma in mma_configs_f16 or mma in mma_configs_f32)
         mma_config = mma_configs_f16[mma] if acc_dtype == float16 else mma_configs_f32[mma]
-
         mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 64, warp_group_n, 16
 
         warp_group_count_m, warp_group_count_n, warp_group_count_k = (
@@ -197,14 +212,14 @@ class MatmulF16SM90Task(Task):
 
         if not self.attrs['is_a_shared']:
             smem_a_type = tensor_type(
-                'float16',
+                target_float_type.name,
                 shape=[block_m, block_k],
                 layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8),
             )
         else:
             if block_k % 64 == 0:
                 smem_a_type = tensor_type(
-                    'float16',
+                    target_float_type.name,
                     shape=[block_m, block_k],
                     layout=row_major(block_m // 8, block_k // 64)
                     * row_major(8, 8).swizzle(dim=1, regards_dim=0, log_step=0)
@@ -212,7 +227,7 @@ class MatmulF16SM90Task(Task):
                 )
             elif block_k % 32 == 0:
                 smem_a_type = tensor_type(
-                    'float16',
+                    target_float_type.name,
                     shape=[block_m, block_k],
                     layout=row_major(block_m // 8, block_k // 32)
                     * row_major(8, 4).swizzle(dim=1, regards_dim=0, log_step=1)
@@ -220,7 +235,7 @@ class MatmulF16SM90Task(Task):
                 )
             elif block_k % 16 == 0:
                 smem_a_type = tensor_type(
-                    'float16',
+                    target_float_type.name,
                     shape=[block_m, block_k],
                     layout=row_major(block_m // 8, block_k // 16)
                     * row_major(8, 2).swizzle(dim=1, regards_dim=0, log_step=2)
@@ -228,12 +243,14 @@ class MatmulF16SM90Task(Task):
                 )
             else:
                 smem_a_type = tensor_type(
-                    'float16', shape=[block_m, block_k], layout=row_major(block_m // 8, block_k // 8) * row_major(8, 8)
+                    target_float_type.name,
+                    shape=[block_m, block_k],
+                    layout=row_major(block_m // 8, block_k // 8) * row_major(8, 8),
                 )
 
         if block_n % 64 == 0:
             smem_b_type = tensor_type(
-                'float16',
+                target_float_type.name,
                 shape=[block_k, block_n],
                 layout=column_major(block_k // 8, block_n // 64)
                 * row_major(8, 8).swizzle(dim=1, regards_dim=0, log_step=0)
@@ -241,7 +258,7 @@ class MatmulF16SM90Task(Task):
             )
         elif block_n % 32 == 0:
             smem_b_type = tensor_type(
-                'float16',
+                target_float_type.name,
                 shape=[block_k, block_n],
                 layout=column_major(block_k // 8, block_n // 32)
                 * row_major(8, 4).swizzle(dim=1, regards_dim=0, log_step=1)
@@ -249,7 +266,7 @@ class MatmulF16SM90Task(Task):
             )
         elif block_n % 16 == 0:
             smem_b_type = tensor_type(
-                'float16',
+                target_float_type.name,
                 shape=[block_k, block_n],
                 layout=column_major(block_k // 8, block_n // 16)
                 * row_major(8, 2).swizzle(dim=1, regards_dim=0, log_step=2)
@@ -257,7 +274,9 @@ class MatmulF16SM90Task(Task):
             )
         else:
             smem_b_type = tensor_type(
-                'float16', shape=[block_k, block_n], layout=column_major(block_k // 8, block_n // 8) * row_major(8, 8)
+                target_float_type.name,
+                shape=[block_k, block_n],
+                layout=column_major(block_k // 8, block_n // 8) * row_major(8, 8),
             )
 
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -267,7 +286,7 @@ class MatmulF16SM90Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: float16[mma_config.a_elements]):
+            def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: target_float_type[mma_config.a_elements]):
                 warp_id_in_group, lane_id = (threadIdx.x // 32) % 4, threadIdx.x % 32
                 warp_group_id = threadIdx.x // 128
                 for wi, wj, wk in spatial(warp_group_count_m, warp_group_count_n, warp_group_count_k).on(warp_group_id):
@@ -306,7 +325,7 @@ class MatmulF16SM90Task(Task):
                 a_desc_template: u64 = make_wgmma_desc(128, block_k // 8 * 64 * 2, 0)
 
             @hidet.script
-            def load_smem_a(k0: int, a: float16[a_head + [m_size, k_size]], smem_a: smem_a_type):
+            def load_smem_a(k0: int, a: target_float_type[a_head + [m_size, k_size]], smem_a: smem_a_type):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 offset_m = blockIdx.x * block_m
                 offset_k = c_head_index[0] * k_part_extent + k0 * block_k
@@ -338,7 +357,7 @@ class MatmulF16SM90Task(Task):
                         )
 
             @hidet.script
-            def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
+            def load_smem_b(k0: int, b: target_float_type[b_head + [k_size, n_size]], smem_b: smem_b_type):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 offset_n = blockIdx.y * block_n
                 offset_k = c_head_index[0] * k_part_extent + k0 * block_k
@@ -369,9 +388,9 @@ class MatmulF16SM90Task(Task):
 
             @hidet.script
             def matmul_f16_kernel(
-                a: float16[a_head + [m_size, k_size]],
-                b: float16[b_head + [k_size, n_size]],
-                c: float16[c_head + [m_size, n_size]],
+                a: target_float_type[a_head + [m_size, k_size]],
+                b: target_float_type[b_head + [k_size, n_size]],
+                c: target_float_type[c_head + [m_size, n_size]],
             ):
                 # matrix multiplication, using mma instruction
                 attrs.cuda.grid_dim = grid_dim
@@ -380,15 +399,15 @@ class MatmulF16SM90Task(Task):
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
                 # smem_storage = dyn_smem_storage
                 smem_a = tensor_pointer(
-                    'float16', shape=[2, block_m, block_k], layout=row_major(2) + smem_a_type.layout
+                    target_float_type.name, shape=[2, block_m, block_k], layout=row_major(2) + smem_a_type.layout
                 )
                 smem_b = tensor_pointer(
-                    'float16', shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
+                    target_float_type.name, shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
                 )
-                smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
-                smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
+                smem_a = dynamic_shared_memory(byte_offset=0, dtype=target_float_type)
+                smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=target_float_type)
                 if not self.attrs['is_a_shared']:
-                    regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
+                    regs_a = register_tensor(target_float_type, [2, mma_count_m, mma_config.a_elements])
                 regs_c = register_tensor(acc_dtype, [mma_count_m, mma_count_n, mma_config.c_elements])
 
                 for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
@@ -461,7 +480,7 @@ class MatmulF16SM90Task(Task):
                                 delta_n = wj * warp_group_n + mj * mma_n + j
                                 in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
                                 if in_bound:
-                                    gmem_c[delta_m, delta_n] = float16(regs_c[mi, mj, p])
+                                    gmem_c[delta_m, delta_n] = target_float_type(regs_c[mi, mj, p])
                                 p += 1
                 else:
                     smem_c = tensor_pointer(acc_dtype, shape=[block_m, block_n])
@@ -488,7 +507,7 @@ class MatmulF16SM90Task(Task):
                             syncthreads()
                     for i, j in store_smem_c_map.on(threadIdx.x):
                         if offset_m + i < m_size and offset_n + j < n_size:
-                            gmem_c[i, j] = float16(smem_c[i, j])
+                            gmem_c[i, j] = target_float_type(smem_c[i, j])
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
@@ -518,7 +537,11 @@ def matmul_f16_sm90(
         a.shape[-1] % 2 != 0 or b.shape[-1] % 2 != 0
     ):
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
-    if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
-        raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
+    if a.dtype != b.dtype:
+        raise ValueError('a and b must have the same dtype, got {} and {}'.format(a.dtype, b.dtype))
+
+    if not a.dtype.is_any_float16() or not b.dtype.is_any_float16():
+        raise ValueError('matmul_f16_cute only supports float16 or bfloat16, got {} and {}'.format(a.dtype, b.dtype))
+
     acc_dtype = data_type(acc_dtype)
     return MatmulF16SM90Op(a, b, is_a_shared, acc_dtype, parallel_k_parts).outputs[0]
