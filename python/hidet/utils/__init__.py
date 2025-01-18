@@ -16,6 +16,7 @@ from . import netron
 from . import transformers_utils
 from . import structure
 from . import stack_limit
+from . import fault_handler
 
 from .py import prod, Timer, repeat_until_converge, COLORS, get_next_file_index, factorize, HidetProfiler, TableBuilder
 from .py import same_list, strict_zip, index_of, initialize, gcd, lcm, error_tolerance, green, red, cyan, bold, blue
