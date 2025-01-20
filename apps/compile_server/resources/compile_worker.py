@@ -9,6 +9,7 @@ from hashlib import sha256
 from filelock import FileLock
 import multiprocessing
 import gc
+import importlib
 
 logger = logging.Logger(__name__)
 
@@ -86,8 +87,8 @@ def compile_job(job_id: str):
 # Worker process function to handle compilation jobs using a specific version of the 'hidet' module.
 def worker_process(version, job_queue, result_queue, parent_pid):
     import ctypes
-    libc = ctypes.CDLL("libc.so.6") 
-    
+    libc = ctypes.CDLL("libc.so.6")
+
     sys.path.insert(0, os.path.join(version, 'python'))  # Ensure the version path is first in sys.path
     print(f"[{parent_pid}] Worker loaded hidet version from {version}", flush=True)
 
@@ -113,7 +114,7 @@ class CompilationWorkers:
     It is needed to avoid the overhead of loading the hidet module for every job.
     Every worker processes a compilation with a fixed version of hidet (fixed commit hash).
     One worker per version.
-    Only one worker is compiling at the same time. No concurrent compilation. 
+    Only one worker is compiling at the same time. No concurrent compilation.
     Concurrency compilation is processed on upper level.
     """
     def __init__(self, max_workers: int = 5):
@@ -134,14 +135,14 @@ class CompilationWorkers:
 
         # Create a new worker for the version
         job_queue = multiprocessing.Queue()
-        worker = multiprocessing.Process(target=worker_process, 
+        worker = multiprocessing.Process(target=worker_process,
                                          args=(version_path, job_queue, self.result_queue, os.getpid())
                                         )
         worker.start()
         self.workers[version_path] = (worker, job_queue)
         return self.workers[version_path]
 
-    
+
     def run_and_wait_job(self, job_id, version_path):
         # Run the job and wait until it is finished
         _, job_queue = self._get_or_create_worker(version_path)
