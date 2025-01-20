@@ -17,6 +17,20 @@ from filelock import FileLock
 
 from .compile_worker import CompilationWorkers
 
+'''
+The compilation server will launch as many Flask applications as there are vCPUs (using gunicorn). 
+Each Flask application (i.e., our compilation server process) will handle the requests, 
+and there will be at most vCPU number of requests being processed at the same time. 
+Each process will maintain a pool of compilation workers with max_workers=5 (i.e., independent processes),
+with a specific version of hidet that has been imported in every process. 
+The job will (try to) be dispatched to a worker with the same hidet version first. 
+If no such worker exists, then a new one will be created to replace an existing one.
+
+Increasing the `max_workers` in `CompilationWorkers` init will (potentially) consume more memory 
+(thanks to fork, this problem will not get severe) and create more processes (max_workers * vCPU in total). 
+Reducing the max_workers will reduce the opportunity to avoid importing hidet with the same version in nearby jobs.
+'''
+
 lock = threading.Lock()
 logger = logging.Logger(__name__)
 
@@ -161,8 +175,7 @@ class CompilationResource(Resource):
             with lock:  # Only one thread can access the following code at the same time
                 print('[{}] Start compiling: {}'.format(pid, job_id[:16]), flush=True)
                 start_time = time.time()
-                compilation_workers.submit_job(job_id, version_path)
-                compilation_workers.wait_all_jobs_finished()
+                compilation_workers.run_and_wait_job(job_id, version_path)
                 end_time = time.time()
 
             # respond to the client

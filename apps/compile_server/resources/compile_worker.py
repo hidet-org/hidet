@@ -86,8 +86,6 @@ def compile_job(job_id: str):
 # Worker process function to handle compilation jobs using a specific version of the 'hidet' module.
 def worker_process(version, job_queue, result_queue, parent_pid):
     sys.path.insert(0, os.path.join(version, 'python'))  # Ensure the version path is first in sys.path
-    hidet = importlib.import_module("hidet")  # Load the specific version
-    importlib.reload(hidet)  # Reload to ensure correct version
     print(f"[{parent_pid}] Worker loaded hidet version from {version}", flush=True)
 
     while True:
@@ -137,13 +135,12 @@ class CompilationWorkers:
         self.workers[version_path] = (worker, job_queue)
         return self.workers[version_path]
 
-    def submit_job(self, job_id, version_path):
+    
+    def run_and_wait_job(self, job_id, version_path):
+        # Run the job and wait until it is finished
         _, job_queue = self._get_or_create_worker(version_path)
         job_queue.put(job_id)
-
-    def wait_all_jobs_finished(self):
-        # multiprocessing.Queue.get() waits until a new item is available
-        self.result_queue.get()
+        self.result_queue.get()   # multiprocessing.Queue.get() waits until a new item is available
 
     def shutdown(self):
         for _, (worker, job_queue) in self.workers.items():
