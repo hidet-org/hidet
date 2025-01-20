@@ -167,3 +167,7 @@ class ScatterBaseOp(OpaqueOperator):
 
 def scatter_add_(input: Tensor, dim: int, index: Tensor, src: Tensor):
     return ScatterBaseOp(input, index, src, dim, 'sum', inplace=True).outputs[0]
+
+
+def scatter_(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str):
+    return ScatterBaseOp(input, index, src, dim, reduce, inplace=True).outputs[0]

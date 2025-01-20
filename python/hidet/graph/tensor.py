@@ -1293,7 +1293,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cpu') ->
 
 
 def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
-    """Create a tensor with uniformly distributed values.
+    """Create a tensor with normal (Gaussian) distributed values.
 
     Parameters
     ----------
@@ -1304,10 +1304,10 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
         The data type of element of the tensor.
 
     mean: float, default 0.0
-        The mean of the uniform distribution.
+        The mean of the normal distribution.
 
     stddev: float, default 1.0
-        The standard deviation of the uniform distribution.
+        The standard deviation of the normal distribution.
 
     device: Device or str, default 'cpu'
         The device of the new tensor is created on.

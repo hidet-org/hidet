@@ -171,7 +171,7 @@ class Operator:
         if hidet.option.get_execution_mode() == 'interpreter':
             try:
                 return self.run_torch()
-            except (NotImplementedError, ValueError, RuntimeError):
+            except (NotImplementedError, ValueError, RuntimeError, TypeError):
                 return self.compiled_task.run_async(self.inputs)
         else:
             return self.compiled_task.run_async(self.inputs)

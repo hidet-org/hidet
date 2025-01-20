@@ -76,6 +76,9 @@ def test_setitem_device_dtype_special(x_device, setvalue_device, x_dtype, setval
         [[4, 4, 4, 4], 1.0, (0, Ellipsis, 0)],
         [[10, 10], 1.0, (Ellipsis,)],
         [[1, 3, 28, 28, 85], 1.0, (Ellipsis, slice(2))],
+        [[3, 4], 1.0, ((0, 2), (1, 2))],
+        [[1, 4], 1.0, ((0, 0), (1, 3))],
+        [[3, 7, 24, 128], 1.0, ((0, 1, 0, 2, 0), (1, 5, 0, 3, 0), (22, 11, 5, 6, 7), (127, 27, 0, 10, 40))],
     ],
 )
 def test_setitem_with_scalar(a_shape, setvalue, indices, device):

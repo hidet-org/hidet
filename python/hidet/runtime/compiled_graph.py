@@ -15,6 +15,7 @@ import os
 import json
 from dataclasses import dataclass
 import tempfile
+import torch
 
 from tabulate import tabulate
 import numpy
@@ -117,6 +118,7 @@ class CompiledGraph:
         self.meta: GraphMetaData = meta
         self.graph_module: CompiledModule = graph_module
         self.weights: List[Tensor] = weights
+        self.weights_torch: List[torch.Tensor] = [w.torch() for w in weights]
         self.compiled_tasks: List[CompiledTask] = compiled_tasks
         self.graph_execution: GraphExecution = graph_execution
         self.graph_string: str = graph_string
@@ -296,7 +298,10 @@ class CompiledGraph:
                 outputs.append(inputs[self.graph_execution.inputs_index.index(exec_idx)])
             elif exec_idx in self.graph_execution.weights_index:
                 # the graph directly returns a weight tensor
-                outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
+                if output_to_torch_tensor:
+                    outputs.append(self.weights_torch[self.graph_execution.weights_index.index(exec_idx)])
+                else:
+                    outputs.append(self.weights[self.graph_execution.weights_index.index(exec_idx)])
             elif exec_idx in exec_idx_to_output_idx:
                 # the graph returns the same tensor multiple times
                 outputs.append(outputs[exec_idx_to_output_idx[exec_idx]])
@@ -513,8 +518,6 @@ class CompiledGraph:
                 raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
-            import torch
-
             with hidet.option.context():
                 hidet.option.execution_mode('compilaion')
                 inputs = []

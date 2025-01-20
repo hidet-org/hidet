@@ -374,8 +374,20 @@ def getitem(x: Tensor, index):
     return x[index]
 
 
+@register_method(torch.Tensor.item)
+def torch_tensor_item(x: Tensor):
+    assert len(x.shape) == 1 and x.shape[0] == 1, "item() only supports 1-element tensor"
+    return x[0]
+
+
 @register_function(operator.setitem)
 def setitem(x: Tensor, item, setvalue):
+    if isinstance(item, (list, tuple)) and all(isinstance(i, (list, tuple)) for i in item):
+        # ((1, 1, 5), (2, 3, 6)) -> ((1, 2), (1, 3), (5, 6))
+        items = tuple(zip(*item))
+        for i in items:
+            x = setitem(x, i, setvalue)
+        return x
 
     if isinstance(item, list):
         item = tuple(item)
@@ -1322,7 +1334,7 @@ def scaled_dot_product_attention(
 
 
 @register_function(torch.gather)
-@register_function(torch.Tensor.gather)
+@register_method(torch.Tensor.gather)
 def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
     if sparse_grad:
         warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
@@ -1952,6 +1964,15 @@ def torch_t(input: Tensor):
 def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) -> Tensor:
     assert 3 <= len(input.shape) <= 4, "torch.nn.functional.unfold accepts 3D or 4D tensor only"
     return ops.im2col(input, kernel_size, dilation, padding, stride)
+
+
+@register_method(torch.Tensor.scatter_)
+def torch_scatter_(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str = None) -> Tensor:
+    if reduce is None:
+        reduce = 'replace'
+    if reduce == 'add':
+        reduce = 'sum'
+    return ops.scatter_(input, dim, index, src, reduce)
 
 
 @register_method(torch.Tensor.scatter_add_)
