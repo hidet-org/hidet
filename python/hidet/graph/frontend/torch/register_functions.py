@@ -1272,7 +1272,13 @@ def mish(x: Tensor, inplace: bool = False):
 
 @register_function(torch.nn.functional.scaled_dot_product_attention)
 def scaled_dot_product_attention(
-    q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    attn_mask: Tensor = None,
+    dropout_p: float = 0.0,
+    is_causal: bool = False,
+    scale: float = None,
 ):
     from hidet import boolean, float32
 
@@ -1283,10 +1289,10 @@ def scaled_dot_product_attention(
         warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
 
     k_rank = len(k.shape)
+    if scale is None:
+        scale = 1 / math.sqrt(k.shape[-1])
     # transpose last 2 dimensions of k, and normalize by sqrt(head_dim)
-    k_transpose_scaled = ops.transpose(k, [i for i in range(k_rank - 2)] + [k_rank - 1, k_rank - 2]) / math.sqrt(
-        k.shape[-1]
-    )
+    k_transpose_scaled = ops.transpose(k, [i for i in range(k_rank - 2)] + [k_rank - 1, k_rank - 2]) * scale
 
     type_match = (
         q.dtype == k.dtype == v.dtype
