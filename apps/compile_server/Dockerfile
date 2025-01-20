@@ -1,6 +1,7 @@
 FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 COPY ./run.py /app/run.py
+COPY ./requirements.txt /app/requirements.txt
 WORKDIR /app
 
 ENV TZ=America/Toronto
@@ -16,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/bin/python3 /usr/bin/python \
     && python -m pip install --upgrade pip \
-    && python -m pip install filelock requests gunicorn flask cmake
+    && python -m pip install filelock requests gunicorn flask cmake \
+    && python -m pip install -r ./requirements.txt
 
 EXPOSE 3281
 

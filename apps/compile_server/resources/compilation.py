@@ -1,11 +1,9 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 import time
 import re
-import sys
 import os
 import traceback
 import threading
-import requests
 import subprocess
 import zipfile
 import logging
@@ -17,16 +15,32 @@ from flask_restful import Resource
 from hashlib import sha256
 from filelock import FileLock
 
+from .compile_worker import CompilationWorkers
+
+'''
+The compilation server will launch as many Flask applications as there are vCPUs (using gunicorn). 
+Each Flask application (i.e., our compilation server process) will handle the requests, 
+and there will be at most vCPU number of requests being processed at the same time. 
+Each process will maintain a pool of compilation workers with max_workers=5 (i.e., independent processes),
+with a specific version of hidet that has been imported in every process. 
+The job will (try to) be dispatched to a worker with the same hidet version first. 
+If no such worker exists, then a new one will be created to replace an existing one.
+
+Increasing the `max_workers` in `CompilationWorkers` init will (potentially) consume more memory 
+(thanks to fork, this problem will not get severe) and create more processes (max_workers * vCPU in total). 
+Reducing the max_workers will reduce the opportunity to avoid importing hidet with the same version in nearby jobs.
+'''
+
 lock = threading.Lock()
 logger = logging.Logger(__name__)
 
 pid = os.getpid()
-jobs_dir = os.path.join(os.getcwd(), 'jobs')
-repos_dir = os.path.join(os.getcwd(), 'repos')
-commits_dir = os.path.join(os.getcwd(), 'commits')
-results_dir = os.path.join(os.getcwd(), 'results')
+JOBS_DIR = os.path.join(os.getcwd(), 'jobs')
+REPOS_DIR = os.path.join(os.getcwd(), 'repos')
+COMMITS_DIR = os.path.join(os.getcwd(), 'commits')
+RESULTS_DIR = os.path.join(os.getcwd(), 'results')
 
-compile_script = os.path.join(os.path.dirname(__file__), 'compile_worker.py')
+compilation_workers = CompilationWorkers(max_workers=5)
 
 
 def should_update(repo_timestamp) -> bool:
@@ -39,10 +53,10 @@ def should_update(repo_timestamp) -> bool:
 
 
 def clone_github_repo(owner: str, repo: str, version: str) -> str:
-    repo_dir = os.path.join(repos_dir, "{}_{}".format(owner, repo))
-    repo_timestamp = os.path.join(repos_dir, "{}_{}_timestamp".format(owner, repo))
+    repo_dir = os.path.join(REPOS_DIR, "{}_{}".format(owner, repo))
+    repo_timestamp = os.path.join(REPOS_DIR, "{}_{}_timestamp".format(owner, repo))
     os.makedirs(repo_dir, exist_ok=True)
-    with FileLock(os.path.join(repos_dir, '{}_{}.lock'.format(owner, repo))):
+    with FileLock(os.path.join(REPOS_DIR, '{}_{}.lock'.format(owner, repo))):
         if not os.path.exists(os.path.join(repo_dir, '.git')):
             repo = git.Repo.clone_from(
                 url="https://github.com/{}/{}.git".format(owner, repo),
@@ -76,12 +90,12 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
             repo.git.checkout(version)
         commit_id = repo.head.commit.hexsha
 
-        commit_dir = os.path.join(commits_dir, commit_id)
+        commit_dir = os.path.join(COMMITS_DIR, commit_id)
         if os.path.exists(commit_dir):
             return commit_id
-        with FileLock(os.path.join(commits_dir, commit_id + '.lock')):
-            repo.git.archive(commit_id, format='zip', output=os.path.join(commits_dir, f'{commit_id}.zip'))
-            with zipfile.ZipFile(os.path.join(commits_dir, f'{commit_id}.zip'), 'r') as zip_ref:
+        with FileLock(os.path.join(COMMITS_DIR, commit_id + '.lock')):
+            repo.git.archive(commit_id, format='zip', output=os.path.join(COMMITS_DIR, f'{commit_id}.zip'))
+            with zipfile.ZipFile(os.path.join(COMMITS_DIR, f'{commit_id}.zip'), 'r') as zip_ref:
                 os.makedirs(commit_dir, exist_ok=True)
                 zip_ref.extractall(commit_dir)
             # build the hidet
@@ -139,8 +153,8 @@ class CompilationResource(Resource):
             }
 
             job_id: str = sha256(commit_id.encode() + workload).hexdigest()
-            job_path = os.path.join(jobs_dir, job_id + '.pickle')
-            job_response_path = os.path.join(jobs_dir, job_id + '.response')
+            job_path = os.path.join(JOBS_DIR, job_id + '.pickle')
+            job_response_path = os.path.join(JOBS_DIR, job_id + '.response')
 
             print('[{}] Received a job: {}'.format(pid, job_id[:16]))
 
@@ -151,22 +165,25 @@ class CompilationResource(Resource):
                     return pickle.load(f)
 
             # write the job to the disk
-            job_lock = os.path.join(jobs_dir, job_id + '.lock')
+            job_lock = os.path.join(JOBS_DIR, job_id + '.lock')
             with FileLock(job_lock):
                 if not os.path.exists(job_path):
                     with open(job_path, 'wb') as f:
                         pickle.dump(job, f)
 
+            version_path = os.path.join(COMMITS_DIR, commit_id)
             with lock:  # Only one thread can access the following code at the same time
-                print('[{}] Start compiling: {}'.format(pid, job_id[:16]))
-                ret = subprocess.run([sys.executable, compile_script, '--job_id', job_id])
+                print('[{}] Start compiling: {}'.format(pid, job_id[:16]), flush=True)
+                start_time = time.time()
+                compilation_workers.run_and_wait_job(job_id, version_path)
+                end_time = time.time()
 
             # respond to the client
-            response_path = os.path.join(jobs_dir, job_id + '.response')
+            response_path = os.path.join(JOBS_DIR, job_id + '.response')
             if not os.path.exists(response_path):
-                raise RuntimeError('Can not find the response file:\n{}{}'.format(ret.stderr, ret.stdout))
+                raise RuntimeError('Can not find the response file')
             else:
-                print('[{}] Finish compiling: {}'.format(pid, job_id[:16]))
+                print(f'[{pid}] Finish compiling: {job_id[:16]} in {end_time - start_time:.2f}s', flush=True)
                 with open(response_path, 'rb') as f:
                     response: Tuple[Dict, int] = pickle.load(f)
                     return response
