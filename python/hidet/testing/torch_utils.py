@@ -17,6 +17,7 @@ import torch.backends.cudnn
 from torch import nn
 
 import hidet
+from hidet.utils import gc_disabled
 
 
 class FunctionalModule(nn.Module):
@@ -124,7 +125,7 @@ class Backend:
 
 
 # Make benchmarking of given torch model
-def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
+def _bench_model(model, inputs, bench_iters, warmup_iters, true_outputs):
     for _ in range(warmup_iters):
         outs = model(*inputs)  # pylint:disable=unused-variable
     torch.cuda.empty_cache()
@@ -155,7 +156,12 @@ def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=No
     return latency
 
 
-def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
+def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=None):
+    with gc_disabled():
+        return _bench_model(model, inputs, bench_iters, warmup_iters, true_outputs)
+
+
+def _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_iters):
     END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     def one_iter(inputs):
@@ -195,6 +201,11 @@ def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, war
     latency = start.elapsed_time(end) / bench_iters
     token_per_second = num_tokens / latency * 1000.0
     return token_per_second, output_text
+
+
+def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
+    with gc_disabled():
+        return _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_iters)
 
 
 def device_to_torch(hidet_device: str) -> str:

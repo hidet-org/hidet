@@ -18,13 +18,13 @@ import nvtx
 from tqdm import tqdm
 import hidet
 import hidet.cuda
-from hidet.utils import green
+from hidet.utils import green, gc_disabled
 from hidet.option import is_fix_gpu_frequency_for_tuning
 from .gpu_freq import GPUSetFrequencyForBenchmarking
 
 
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
-def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
+def _do_bench(fn, warmup, rep, percentiles):
     """
     Benchmark the runtime of the provided function. By default, return the median runtime of :code:`fn` along with
     the 20-th and 80-th performance percentile.
@@ -75,7 +75,12 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
         return np.mean(times).item()
 
 
-def benchmark_func(run_func, *args, warmup=3, number=5, repeat=5, median=True) -> Union[List[float], float]:
+def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
+    with gc_disabled():
+        return _do_bench(fn, warmup, rep, percentiles)
+
+
+def _benchmark_func(run_func, *args, warmup, number, repeat, median) -> Union[List[float], float]:
     """Benchmark given function.
 
     The given function ``run_func`` will be executed :math:`warmup + repeat * number` times. Each :math:`number` times
@@ -125,6 +130,11 @@ def benchmark_func(run_func, *args, warmup=3, number=5, repeat=5, median=True) -
         return float(np.median(results))
     else:
         return results
+
+
+def benchmark_func(run_func, *args, warmup=3, number=5, repeat=5, median=True) -> Union[List[float], float]:
+    with gc_disabled():
+        return _benchmark_func(run_func, *args, warmup=warmup, number=number, repeat=repeat, median=median)
 
 
 @dataclass
@@ -203,10 +213,10 @@ def find_best_candidate(candidates: List[Callable[..., None]], name, *args):
         desc += f" {tuple(i.shape)}"
     if is_fix_gpu_frequency_for_tuning():
         with GPUSetFrequencyForBenchmarking():
-            with tqdm(desc=desc, ncols=80) as pbar:
+            with gc_disabled(), tqdm(desc=desc, ncols=80) as pbar:
                 return _find_best_candidate(candidates, pbar, *args)
     else:
-        with tqdm(desc=desc, ncols=80) as pbar:
+        with gc_disabled(), tqdm(desc=desc, ncols=80) as pbar:
             return _find_best_candidate(candidates, pbar, *args)
 
 
