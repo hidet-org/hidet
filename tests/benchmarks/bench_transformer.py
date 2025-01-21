@@ -98,19 +98,19 @@ def bench_causal_lm(model_name, bs, genlen, dtype, backend, mode, cache):
     Want to prepare to the interview. Could you describe in details what does CentML do?
     """
 
-    input_string_batch = [INPUT_STRING] * bs
+    input_string_batch = INPUT_STRING * bs
     inputs = tokenizer(input_string_batch, return_tensors='pt')['input_ids'].cuda()
     END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     with torch.no_grad(), torch.autocast("cuda"):
-        _, torch_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
+        _, torch_output = bench_gen_model(model, tokenizer, inputs, genlen=genlen)
         # Temporary workaround for gpt-j
         # gpt-j initializes tensors during the first forwasd pass
         # which causes recompilation during the second forward pass
         if model_name == 'EleutherAI/gpt-j-6B':
             model(inputs)
         model = comp_backend.compile(model)
-        latency, hidet_output = bench_gen_model(model, tokenizer, inputs, bs=bs, genlen=genlen)
+        latency, hidet_output = bench_gen_model(model, tokenizer, inputs, genlen=genlen)
         del model
 
     torch.testing.assert_close(hidet_output, torch_output, rtol=0, atol=0)

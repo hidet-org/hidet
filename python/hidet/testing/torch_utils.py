@@ -161,12 +161,13 @@ def bench_model(model, inputs, bench_iters=100, warmup_iters=10, true_outputs=No
         return _bench_model(model, inputs, bench_iters, warmup_iters, true_outputs)
 
 
-def _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_iters):
+def _bench_gen_model(model, tokenizer, inputs, genlen, bench_iters, warmup_iters):
+    assert genlen == 1  # This is really poor implementation. Will switch to vllm implementation
     END_OF_SENTENCE_ID = tokenizer.eos_token_id
 
     def one_iter(inputs):
         # text_output = ''
-        for i in range(genlen):
+        for _ in range(genlen):
             outputs = model(inputs)
             logits = outputs.logits
             last_token_logits = logits[:, -1, :]
@@ -177,15 +178,15 @@ def _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_i
             # predicted_text = tokenizer.decode(predicted_token_ids[0])
             # text_output += predicted_text + ' '
 
-            predicted_token_ids = torch.reshape(predicted_token_ids, (bs, 1))
+            predicted_token_ids = torch.reshape(predicted_token_ids, (1, 1))
             inputs = torch.cat([inputs, predicted_token_ids], dim=1)
 
         # print(text_output)
-        return (i + 1) * bs, inputs
+        return inputs
 
     # torch._dynamo.mark_dynamic(inputs, 0)  # pylint: disable=protected-access
     for _ in range(warmup_iters):
-        num_tokens, output_text = one_iter(inputs)
+        output_text = one_iter(inputs)
     torch.cuda.empty_cache()
 
     start = torch.cuda.Event(enable_timing=True)
@@ -193,19 +194,18 @@ def _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_i
     torch.cuda.synchronize()
     start.record()
     for _ in range(bench_iters):
-        num_tokens, output_text = one_iter(inputs)
+        output_text = one_iter(inputs)
     end.record()
     end.synchronize()
     torch.cuda.empty_cache()
 
     latency = start.elapsed_time(end) / bench_iters
-    token_per_second = num_tokens / latency * 1000.0
-    return token_per_second, output_text
+    return latency, output_text
 
 
 def bench_gen_model(model, tokenizer, inputs, bs=1, genlen=1, bench_iters=3, warmup_iters=1):
     with gc_disabled():
-        return _bench_gen_model(model, tokenizer, inputs, bs, genlen, bench_iters, warmup_iters)
+        return _bench_gen_model(model, tokenizer, inputs, genlen, bench_iters, warmup_iters)
 
 
 def device_to_torch(hidet_device: str) -> str:
