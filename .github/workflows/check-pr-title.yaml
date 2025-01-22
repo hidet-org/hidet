@@ -1,0 +1,38 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check PR Title Format
+        id: check-title
+        run: |
+          #!/bin/bash
+          MAX_TITLE_LENGTH=72
+          PR_TITLE="${{ github.event.pull_request.title }}"
+
+          # Ensure the title matches the format [Category] Title
+          if [[ ! "$PR_TITLE" =~ ^\[[^\]]+\]\ .+ ]]; then
+            echo "::error::PR title must be in the format '[Category] Title'."
+            exit 1
+          fi
+
+          # Ensure the title length is within the limit
+          if (( ${#PR_TITLE} > MAX_TITLE_LENGTH )); then
+            echo "::error::PR title exceeds the maximum length of $MAX_TITLE_LENGTH characters."
+            exit 1
+          fi
+
+          echo "PR title format and length are valid."
+
+      - name: Set status to success
+        if: success()
+        run: echo "Title check passed."
