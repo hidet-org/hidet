@@ -9,6 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+A matmul template that enables f16 tensorcore with CuTe dialect. All the operations in this kernel are
+written with the CuTe dialect. The kernel is designed to show the effectiveness of the CuTe dialect in
+writing matmul kernels, and it is enabled by default right now.
+"""
 from typing import Dict, List, Tuple, Union
 from functools import partial
 
@@ -52,8 +57,14 @@ from hidet.lang.constructs.declare import as_tensor_pointer
 from hidet.lang.mapping import spatial
 from hidet.utils.py import is_power_of_two
 
-
+# space 1 consists of all power-of-two tiles. space 1 extracts the important
+# tile sizes for compute-bound workloads in CUTLASS, and enumerates all
+# possible tile sizes ranging from 8 to 256 as long as the block size is a
+# power of two.
 _tiled_mma_space_1: List[TiledMma] = []
+# space 2 consists of all possible tiles, including those that are not a power
+# of two. space 2 contains all the tile sizes in space 1, but it also contains
+# tile sizes that are not a power of two.
 _tiled_mma_space_2: List[TiledMma] = []
 
 
@@ -111,6 +122,66 @@ def register_tiled_mma():
         else:
             _tiled_mma_space_2.append(tiled_mma)
 
+    # The following configurations are extracted from CUTLASS and cuBLAS. These configurations are
+    # tuned on A100 by NVIDIA internally, and they are expected to be efficient for compute-bound
+    # workloads. Basically, they use a basic tile size of 16x16, and repeating the basic tile along
+    # the M and N dimensions untill the block size (block_m, block_n) is reached. The kernel will
+    # issue two consecutive mma instructions (2 16x8x16), and we can use ldmatrix.x4 to load the
+    # both A and B operands in shared memory.
+    a = TensorLayout(((4, 8), (2, 2, 2)), ((32, 1), (16, 8, 128)))
+    b = TensorLayout(((4, 8), (2, 2)), ((16, 1), (8, 64)))
+    c = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 8)))
+    mma_atom = MmaAtom("warp", (16, 8, 16), a, b, c, c, (1, 2))
+    # 128x256
+    warp_in_threadblock = Level("warp", "thread_block", (2, 4), TensorLayout((2, 4)), (4, 4))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 256x128
+    warp_in_threadblock = Level("warp", "thread_block", (4, 2), TensorLayout((4, 2)), (4, 4))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 64x256
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (2, 8))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 256x64
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (8, 2))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 128x64
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (4, 2))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 64x128
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (2, 4))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 32x128
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (1, 4))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 32x64
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (1, 2))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 64x64
+    warp_in_threadblock = Level("warp", "thread_block", (2, 2), TensorLayout((2, 2)), (2, 2))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
+    # 32x16
+    warp_in_threadblock = Level("warp", "thread_block", (2, 1), TensorLayout((2, 1)), (1, 1))
+    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+    _tiled_mma_space_1.append(tiled_mma)
+
     compute_bound = [
         (256, 128),
         (128, 256),
@@ -119,37 +190,38 @@ def register_tiled_mma():
         (128, 128),
         (64, 128),
         (128, 64),
-        (128, 32),
-        (64, 32),
+        (32, 128),
+        (32, 64),
+        (64, 64),
+        (32, 16),
     ]
+    _blocks = compute_bound
 
-    for warp_m in [1, 2, 4]:
-        for warp_n in [1, 2, 4]:
-            for repeat_m in [1, 2, 3, 4, 6, 8, 12, 16]:
-                for repeat_n in [1, 2, 3, 4, 6, 8, 12, 16]:
-                    if warp_m == 2 and warp_n == 2 and repeat_m == 4 and repeat_n == 4:
-                        continue
-                    if warp_m * warp_n > 8:
-                        continue
-                    num_regs = repeat_m * repeat_n * 8 + 2 * repeat_m * 4 + 2 * repeat_n * 2
-                    if repeat_m * repeat_n < 2 or num_regs > 255:
-                        continue
-                    a = TensorLayout(((4, 8), (2, 2, 2)), ((32, 1), (16, 8, 128)))
-                    b = TensorLayout(((4, 8), (2, 2)), ((16, 1), (8, 64)))
-                    c = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 8)))
-                    mma_atom = MmaAtom("warp", (16, 8, 16), a, b, c, c, (1, 2))
-                    warp_in_threadblock = Level(
-                        "warp", "thread_block", (warp_m, warp_n), TensorLayout((warp_m, warp_n)), (repeat_m, repeat_n)
-                    )
-                    tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
-                    block_m = 16 * warp_m * repeat_m
-                    block_n = 16 * warp_n * repeat_n
-                    if warp_m * warp_n == 8 and (block_m, block_n) not in compute_bound[:2]:
-                        continue
-                    if (block_m, block_n) in compute_bound:
-                        _tiled_mma_space_1.append(tiled_mma)
-                    else:
-                        _tiled_mma_space_2.append(tiled_mma)
+    # We enumerate all possible tile sizes here. The warp shape is carefully chosen to avoid
+    # register spill, and this knowledge comes from CUTLASS and Triton.
+    for (warp_m, warp_n) in [(2, 2), (4, 2), (2, 4), (1, 4), (4, 1), (2, 1), (1, 2), (1, 1)]:
+        for repeat_m in [1, 2, 3, 4, 6, 8, 12, 16]:
+            for repeat_n in [1, 2, 3, 4, 6, 8, 12, 16]:
+                num_regs = repeat_m * repeat_n * 8 + 2 * repeat_m * 4 + 2 * repeat_n * 2
+                if num_regs > 255:
+                    continue
+                a = TensorLayout(((4, 8), (2, 2, 2)), ((32, 1), (16, 8, 128)))
+                b = TensorLayout(((4, 8), (2, 2)), ((16, 1), (8, 64)))
+                c = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 8)))
+                mma_atom = MmaAtom("warp", (16, 8, 16), a, b, c, c, (1, 2))
+                warp_in_threadblock = Level(
+                    "warp", "thread_block", (warp_m, warp_n), TensorLayout((warp_m, warp_n)), (repeat_m, repeat_n)
+                )
+                tiled_mma = TiledMma(mma_atom, [warp_in_threadblock])
+                block_m = 16 * warp_m * repeat_m
+                block_n = 16 * warp_n * repeat_n
+                if block_m > 256 or block_n > 256 or (block_m, block_n) in _blocks:
+                    continue
+                _blocks.append((block_m, block_n))
+                if is_power_of_two(block_m) and is_power_of_two(block_n):
+                    _tiled_mma_space_1.append(tiled_mma)
+                else:
+                    _tiled_mma_space_2.append(tiled_mma)
     _tiled_mma_space_2.extend(_tiled_mma_space_1)
 
 
@@ -166,12 +238,6 @@ def cast_bf16(x: Expr):
 
 
 class MatmulF16CuteTask(Task):
-    """
-    A matmul template that enables f16 tensorcore with CuTe dialect.
-    Currently, this is amost a copy-paste of matmul_f16.py with the only change of epilogue.
-    We will replace the rest parts with our CuTe dialect later.
-    """
-
     def __init__(
         self,
         a: TensorNode,
@@ -496,32 +562,14 @@ class MatmulF16CuteTask(Task):
                 msk_b = mask(auto_copy(), [n_size - pid_n * block_n, i32(block_k)])
 
                 k_tiles = block_k // inst_k
-                for ko in range(k_blocks - 1):
-                    copy(auto_copy((block_m, block_k)), txga[:, :, ko], txsa, msk_a)
-                    copy(auto_copy((block_n, block_k)), txgb[:, :, ko], txsb, msk_b)
-
-                    cp_async_wait_all()
-                    syncthreads()
-
-                    copy(auto_copy(), txSa[:, :, 0], txra[:, :, 0])
-                    copy(auto_copy(), txSb[:, :, 0], txrb[:, :, 0])
-
-                    for ki in grid(k_tiles, attrs="u+"):
-                        if ki < k_tiles:
-                            copy(auto_copy(), txSa[:, :, ki + 1], txra[:, :, (ki + 1) % 2])
-                            copy(auto_copy(), txSb[:, :, ki + 1], txrb[:, :, (ki + 1) % 2])
-
-                        mma(tiled_mma, tr_c, txra[:, :, ki % 2], txrb[:, :, ki % 2], tr_c)
-                    syncthreads()
-
-                if k_blocks >= 1:
-                    ko = k_blocks - 1
-                    if k_residue != block_k:
+                for ko in range(k_blocks):
+                    if k_residue != block_k and ko == k_blocks - 1:
                         copy(auto_copy((block_m, block_k)), txga[:, :, ko], txsa, msk_a_0)
                         copy(auto_copy((block_n, block_k)), txgb[:, :, ko], txsb, msk_b_0)
                     else:
                         copy(auto_copy((block_m, block_k)), txga[:, :, ko], txsa, msk_a)
                         copy(auto_copy((block_n, block_k)), txgb[:, :, ko], txsb, msk_b)
+
                     cp_async_wait_all()
                     syncthreads()
 
@@ -549,14 +597,24 @@ class MatmulF16CuteTask(Task):
         return script_module.ir_module()
 
     def _get_stages_heuristic(self, block_m, block_n, block_k, target_float_type):
-        _stages_dict: Dict[Tuple[int, int], int] = {(128, 256): 3, (256, 128): 3, (128, 128): 4}
+        _stages_dict: Dict[Tuple[int, int], int] = {
+            (128, 256): 3,
+            (256, 128): 3,
+            (64, 256): 4,
+            (256, 64): 4,
+            (128, 128): 4,
+            (64, 128): 4,
+            (128, 64): 4,
+            (128, 32): 4,
+            (32, 128): 4,
+        }
         stages = _stages_dict.get((block_m, block_n), None)
         if stages is not None:
             return stages
         else:
             maximum_smem_bytes = self._get_max_smem()
             stages = maximum_smem_bytes // ((block_m + block_n) * block_k * target_float_type.nbytes)
-            stages = max(2, min(stages, 6))
+            stages = max(2, min(stages, 11))
             return stages
 
     def matmul_multi_buffer(self, tiled_mma: TiledMma, block_k: int):

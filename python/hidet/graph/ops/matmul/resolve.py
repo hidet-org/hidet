@@ -222,6 +222,7 @@ class MatmulResolveRule(ResolveRule):
         elif hexcute_matmul == 'disable':
             matmul_f16_cute = matmul_f16_cute_stable
         else:
+            # Leave this to be implemented in the future
             raise NotImplementedError('The heuristic for hexcute_matmul is not implemented.')
 
         if op.task.has_symbolic_shape():

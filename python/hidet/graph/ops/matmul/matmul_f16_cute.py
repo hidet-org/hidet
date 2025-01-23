@@ -9,6 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+A matmul template that enables f16 tensorcore with CuTe dialect.
+The main part of this kernel is implemented with Hidet script, but we rewrite the epilogue with
+operations in CuTe dialect, which enables us to coalesce and vectorize the memory access in the
+epilogue.
+"""
 from typing import List, Tuple, Union
 from functools import partial
 
@@ -36,12 +42,6 @@ def cast_bf16(x: Expr):
 
 
 class MatmulF16CuteTask(Task):
-    """
-    A matmul template that enables f16 tensorcore with CuTe dialect.
-    Currently, this is amost a copy-paste of matmul_f16.py with the only change of epilogue.
-    We will replace the rest parts with our CuTe dialect later.
-    """
-
     def __init__(
         self,
         a: TensorNode,

@@ -325,7 +325,7 @@ def register_hidet_options():
     register_option(
         name='hexcute_matmul',
         type_hint='str',
-        default_value='disable',
+        default_value='enable',
         description="Whether to enable the hexcute matmul kernels. The valid values for this option can be"
         "'enable', 'disable', and 'auto'",
     )
@@ -989,7 +989,7 @@ def get_parallel_k() -> Union[str, int]:
     return OptionContext.current().get_option('parallel_k')
 
 
-def hexcute_matmul(strategy: str = "disable"):
+def hexcute_matmul(strategy: str = "enable"):
     """
     Whether to enable hexcute matmul kernels, such as the Hexcute matmul kernels.
 
