@@ -136,6 +136,41 @@ def create_model_transpose(params: str, dtype):
     return model, [x]
 
 
+# LINEAR
+class SimpleLinearModule(torch.nn.Module):
+    def __init__(self, in_f, out_f, dtype):
+        super(SimpleLinearModule, self).__init__()
+        self.model = torch.nn.Linear(in_f, out_f, dtype=dtype, device='cuda')
+
+    def forward(self, x):
+        # x: (m, in_features)
+        return self.model(x)  # (m, out_features)
+
+
+def create_model_linear_dynamic(shape, dtype):
+    return create_model_linear(shape, dtype, dynamic=True)
+
+
+def create_model_linear_static(shape, dtype):
+    return create_model_linear(shape, dtype, dynamic=False)
+
+
+def create_model_linear(shape: str, dtype, dynamic=True):
+    """
+    Benchmark linear layers.
+    Each shape is {m}x{in_features}x{out_features}.
+    We'll simulate a linear layer: (m, in_features) * (in_features, out_features) -> (m, out_features)
+    where m can be a dynamic dimension.
+    """
+    m, in_features, out_features = tuple(int(s) for s in shape.split('x'))
+
+    model = SimpleLinearModule(in_features, out_features, dtype).cuda()
+    example_inputs = torch.randn((m, in_features), device='cuda', dtype=dtype)
+    if dynamic:
+        torch._dynamo.mark_dynamic(example_inputs, 0)
+    return model, [example_inputs]
+
+
 # Main benchmark function for ops.
 # Calls bench_model
 def bench_op(operator, params, dtype, backend, mode):
