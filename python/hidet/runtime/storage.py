@@ -15,6 +15,7 @@ from typing import Callable, Dict, List, Optional, Union
 from collections import defaultdict
 import hidet.cuda
 from hidet.cuda.stream import Stream
+import hidet.hip
 from hidet.utils import green, exiting
 from hidet.utils.exiting import is_exiting
 from hidet.runtime.device import Device, instantiate_device
@@ -93,6 +94,48 @@ class CUDAHostMemoryAPI(MemoryAPI):
         raise NotImplementedError()
 
 
+class HipMemoryAPI(MemoryAPI):
+    def malloc(self, nbytes: int) -> int:
+        with hidet.hip.device(self.device.id):
+            # TODO: use malloc_async once it is supported
+            addr = hidet.hip.malloc(nbytes)
+        if addr == 0 and nbytes != 0:
+            # out of memory
+            return 0
+        else:
+            self.allocated += nbytes
+            self.peak_allocated = max(self.peak_allocated, self.allocated)
+            self.addr2nbytes[addr] = nbytes
+            return addr
+
+    def free(self, addr: int):
+        with hidet.hip.device(self.device.id):
+            # TODO: use free_async once it is supported
+            hidet.hip.free(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
+
+    def memory_info(self) -> (int, int):
+        return hidet.hip.memory_info()
+
+
+class HIPHostMemoryAPI(MemoryAPI):
+    def malloc(self, nbytes: int) -> int:
+        addr = hidet.hip.malloc_host(nbytes)
+        if addr == 0 and nbytes != 0:
+            return 0
+        self.allocated += nbytes
+        self.peak_allocated = max(self.peak_allocated, self.allocated)
+        self.addr2nbytes[addr] = nbytes
+        return addr
+
+    def free(self, addr: int):
+        hidet.hip.free_host(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
+
+    def memory_info(self) -> (int, int):
+        raise NotImplementedError()
+
+
 class CpuMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         from hidet.ffi import crt
@@ -155,7 +198,7 @@ class Storage:
         else:
             if not isinstance(device, Device):
                 raise TypeError('device must be Device or str, but got {}'.format(type(device)))
-        if device.is_cuda() and device.id is None:
+        if (device.is_cuda() or device.is_hip()) and device.id is None:
             device = hidet.runtime.device.instantiate_device(device)
         return current_memory_pool(device).malloc(num_bytes)
 
@@ -167,19 +210,35 @@ class Storage:
             return src
 
         dst: Storage = Storage.new(dst_device, src.num_bytes)
-        if src.device.is_cuda() and dst.device.is_cuda() and src.device.id != dst_device.id:
-            # peer to peer copy among cuda devices
-            if non_blocking:
-                hidet.cuda.memcpy_peer_async(dst.addr, dst_device.id, src.addr, src.device.id, src.num_bytes, stream)
+        if hidet.cuda.available():
+            if src.device.is_cuda() and dst.device.is_cuda() and src.device.id != dst_device.id:
+                # peer to peer copy among cuda devices
+                if non_blocking:
+                    hidet.cuda.memcpy_peer_async(
+                        dst.addr, dst_device.id, src.addr, src.device.id, src.num_bytes, stream
+                    )
+                else:
+                    hidet.cuda.memcpy_peer(dst.addr, dst_device.id, src.addr, src.device.id, src.num_bytes)
             else:
-                hidet.cuda.memcpy_peer(dst.addr, dst_device.id, src.addr, src.device.id, src.num_bytes)
-        else:
-            device = src.device if src.device.is_cuda() else dst_device
+                device = src.device if src.device.is_cuda() else dst_device
+                with device:
+                    if non_blocking:
+                        hidet.cuda.memcpy_async(dst.addr, src.addr, src.num_bytes, stream)
+                    else:
+                        hidet.cuda.memcpy(dst.addr, src.addr, src.num_bytes)
+        elif hidet.hip.available():
+            # Device is HIP. Note that for HIP, hidet.hip.memcpy manages both peer-to-peer copy and
+            # host-to-device/device-to-host copy. For peer-to-peer copy, the source device context should be used.
+            device = src.device if src.device.is_hip() else dst_device
             with device:
                 if non_blocking:
-                    hidet.cuda.memcpy_async(dst.addr, src.addr, src.num_bytes, stream)
+                    # TODO: usee memcpy_async once it is supported for HIP
+                    raise NotImplementedError('Asynchronous memcpy is not yet supported for HIP')
                 else:
-                    hidet.cuda.memcpy(dst.addr, src.addr, src.num_bytes)
+                    hidet.hip.memcpy(dst.addr, src.addr, src.num_bytes)
+        else:
+            raise NotImplementedError()
+
         return dst
 
     def cpu(self) -> Storage:
@@ -259,6 +318,22 @@ class Storage:
             The storage on the destination CUDA device.
         """
         return Storage._convert(self, Device('vcuda', dst_id), non_blocking=False)
+
+    def hip(self, dst_id: int) -> Storage:
+        """
+        Copy the storage to HIP device. If the storage is already on the device, return itself.
+
+        Parameters
+        ----------
+        dst_id: int
+            The id of the destination HIP device.
+
+        Returns
+        -------
+        ret: Storage
+            The storage on the destination HIP device.
+        """
+        return Storage._convert(self, Device('hip', dst_id), non_blocking=False)
 
     def copy(self) -> Storage:
         """
@@ -390,6 +465,17 @@ class DeviceMemoryPools:
                 elif device.is_cpu() or device.is_vcuda():
                     self.device2pool[device] = MemoryPool(
                         CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    )
+                else:
+                    raise ValueError('Unsupported device: {}'.format(device))
+            elif hidet.hip.available():
+                if device.is_hip():
+                    self.device2pool[device] = MemoryPool(
+                        HipMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
+                    )
+                elif device.is_cpu():
+                    self.device2pool[device] = MemoryPool(
+                        HIPHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
                     )
                 else:
                     raise ValueError('Unsupported device: {}'.format(device))

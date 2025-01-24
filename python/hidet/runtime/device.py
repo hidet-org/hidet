@@ -36,17 +36,24 @@ class Device:
         return hash((self.kind, self.id))
 
     def __enter__(self):
-        from hidet.cuda.device import current_device, set_device
+        import hidet.cuda
+        import hidet.hip
 
         if self.is_cuda():
-            setattr(self, '_prev_device', current_device())
-            set_device(self.id)
+            setattr(self, '_prev_device', hidet.cuda.current_device())
+            hidet.cuda.set_device(self.id)
+        elif self.is_hip():
+            setattr(self, '_prev_device', hidet.hip.current_device())
+            hidet.hip.set_device(self.id)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        from hidet.cuda.device import set_device
+        import hidet.cuda
+        import hidet.hip
 
         if self.is_cuda():
-            set_device(getattr(self, '_prev_device'))
+            hidet.cuda.set_device(getattr(self, '_prev_device'))
+        elif self.is_hip():
+            hidet.hip.set_device(getattr(self, '_prev_device'))
 
     def is_cpu(self) -> bool:
         return self.kind == 'cpu'
@@ -57,9 +64,14 @@ class Device:
     def is_vcuda(self) -> bool:
         return self.kind == 'vcuda'
 
+    def is_hip(self) -> bool:
+        return self.kind == 'hip'
+
     @property
     def target(self) -> str:
-        return 'cuda' if self.kind in ['cuda', 'vcuda'] else 'cpu'
+        if self.kind == 'vcuda':
+            return 'cuda'
+        return self.kind
 
 
 def device(device_type: str, device_index: Optional[int] = None):
@@ -77,8 +89,8 @@ def device(device_type: str, device_index: Optional[int] = None):
             raise ValueError(f'Invalid device_index: {device_index}')
         device_index = int(device_index)
 
-    if device_type not in ['cpu', 'cuda', 'vcuda']:
-        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" "cuda" or "vcuda"')
+    if device_type not in ['cpu', 'cuda', 'vcuda', 'hip']:
+        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" "cuda", "vcuda", or "hip"')
 
     if device_index is not None and not isinstance(device_index, int):
         raise ValueError(f'Invalid device_index: {device_index}, must be an integer')
@@ -91,8 +103,8 @@ def instantiate_device(dev) -> Device:
     Instantiate a device from a device string or a device object.
 
     This function will be used to get a concrete device object from a user given device string or device object. When a
-    device object is given, but it does not have a device index (in case of CUDA device), the device index will be set
-    to the current CUDA device.
+    device object is given, but it does not have a device index (in case of CUDA or HIP device), the device index will
+    be set to the current CUDA/HIP device.
 
     Parameters
     ----------
@@ -104,7 +116,8 @@ def instantiate_device(dev) -> Device:
     device: Device
         The instantiated device object.
     """
-    from hidet.cuda.device import current_device
+    import hidet.cuda
+    import hidet.hip
 
     if isinstance(dev, str):
         dev = device(dev)
@@ -120,7 +133,11 @@ def instantiate_device(dev) -> Device:
         return dev
     elif dev.kind in ['cuda', 'vcuda']:
         if dev.id is None:
-            dev.id = current_device()
+            dev.id = hidet.cuda.current_device()
+        return dev
+    elif dev.kind == 'hip':
+        if dev.id is None:
+            dev.id = hidet.hip.current_device()
         return dev
     else:
         assert False

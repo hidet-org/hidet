@@ -854,6 +854,8 @@ class Tensor:
                 tensor = tensor.cpu()
             elif device.is_cuda():
                 tensor = tensor.cuda(device)
+            elif device.is_hip():
+                tensor = tensor.hip(device)
             else:
                 raise ValueError('Cannot recognize device {}'.format(device))
         return tensor
@@ -905,6 +907,32 @@ class Tensor:
                 return Tensor(self.shape, self.dtype, device, self.storage.cuda(device.id), self.layout)
             else:
                 return transfer(self, device)
+
+    def hip(self, device=None):
+        """Create a copy of self tensor on hip device.
+
+        If the current tensor is already on hip device, self is returned.
+
+        Parameters
+        ----------
+        device: Device, optional
+            The target hip device. None indicates the current hip device.
+
+        Returns
+        -------
+        ret: Tensor
+            The new tensor or self.
+        """
+        if device is None:
+            device = 'hip'
+        device = instantiate_device(device)
+        if self.device == device:
+            return self
+        else:
+            if self.storage is not None:
+                return Tensor(self.shape, self.dtype, device, self.storage.hip(device.id), self.layout)
+            else:
+                raise NotImplementedError('Transferring from non-hip device to hip device is not supported yet.')
 
     def vcuda_(self):
         """Cast the tensor to vcuda device in place.
