@@ -1970,8 +1970,6 @@ def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) ->
 def torch_scatter_(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str = None) -> Tensor:
     if reduce is None:
         reduce = 'replace'
-    if reduce == 'add':
-        reduce = 'sum'
     return ops.scatter_(input, dim, index, src, reduce)
 
 

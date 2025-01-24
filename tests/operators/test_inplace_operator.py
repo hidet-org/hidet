@@ -70,35 +70,27 @@ def test_inplace_scatter_add(input_shape, index_shape, src_shape, dim):
     hidet.utils.assert_close(input_hidet, input_tensor)
 
 
-@pytest.mark.parametrize(
-    "input_shape,index_shape,src_shape,dim",
-    [[(22, 33), (11, 11), (11, 11), 0], [(257, 256), (128, 128), (128, 128), 1]],
-)
-# TODO: https://github.com/CentML/hidet/issues/706
-# @pytest.mark.parametrize("reduce", [None, 'add'])
-@pytest.mark.parametrize("reduce", ['add'])
-def test_inplace_scatter_(input_shape, index_shape, src_shape, dim, reduce):
-    input_tensor = torch.randint(0, 3, input_shape).to(dtype=torch.float32).cuda()
+@pytest.mark.requires_cuda
+def test_inplace_scatter():
+    src = torch.arange(1, 7).reshape((2, 3)).to(dtype=torch.float16).cuda()
+    index = torch.tensor([[0, 1, 2], [2, 1, 0]]).to(dtype=torch.int64).cuda()
+    input = torch.zeros(3, 5, dtype=src.dtype).to(dtype=torch.float16).cuda()
 
-    index_tensor = torch.randint(0, input_shape[dim], index_shape).cuda()
+    hidet_src = hidet.from_torch(src.clone())
+    hidet_index = hidet.from_torch(index.clone())
+    hidet_input = hidet.from_torch(input.clone())
 
-    src = torch.randint(0, 10, src_shape).to(dtype=torch.float32).cuda()
-
-    input_hidet = hidet.from_torch(input_tensor.clone())
-    index_hidet = hidet.from_torch(index_tensor.clone())
-    src_hidet = hidet.from_torch(src.clone())
-
-    if reduce is None:
-        output_torch = input_tensor.scatter_(dim, index_tensor, src)
-        output_hidet = hidet.ops.scatter_(input_hidet, dim, index_hidet, src_hidet, reduce='replace')
-    elif reduce == 'add':
-        output_torch = input_tensor.scatter_(dim, index_tensor, src, reduce=reduce)
-        output_hidet = hidet.ops.scatter_(input_hidet, dim, index_hidet, src_hidet, reduce='sum')
-    else:
-        assert False
+    output_torch = input.scatter_(0, index, src)
+    output_hidet = hidet.ops.scatter_(hidet_input, 0, hidet_index, hidet_src, reduce='replace')
 
     hidet.utils.assert_close(output_hidet, output_torch)
-    hidet.utils.assert_close(input_hidet, input_tensor)
+    hidet.utils.assert_close(hidet_input, input)
+
+    output_torch_add = input.scatter_(0, index, src, reduce='add')
+    output_hidet_add = hidet.ops.scatter_(hidet_input, 0, hidet_index, hidet_src, reduce='add')
+
+    hidet.utils.assert_close(output_hidet_add, output_torch_add)
+    hidet.utils.assert_close(hidet_input, input)
 
 
 if __name__ == '__main__':

@@ -125,7 +125,6 @@ def test_matmul_fp16(a_shape, b_shape):
     )
 
 
-@pytest.mark.requires_cuda
 @pytest.mark.requires_cuda_hopper
 @pytest.mark.parametrize(
     "a_shape, b_shape",
@@ -338,7 +337,6 @@ def test_matmul_bf16(a_shape, b_shape):
     np.testing.assert_allclose(c_hi.cpu().numpy(), c_correct.cpu().numpy(), atol=1e-1, rtol=1e-1)
 
 
-@pytest.mark.requires_cuda
 @pytest.mark.requires_cuda_hopper
 @pytest.mark.parametrize(
     "a_shape, b_shape",

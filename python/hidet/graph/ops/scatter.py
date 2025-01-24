@@ -38,11 +38,11 @@ def offset_helper(linear_idx: Expr, input_shape, input_stride):
 
 class ScatterBaseOp(OpaqueOperator):
     def __init__(self, input: Tensor, index: Tensor, src: Tensor, dim: int, fname: str, inplace: bool = False):
-        # fname can be one of: 'sum', 'prod', 'mean', 'amax', 'amin', 'replace'.
-        # In the interest of time, only 'sum' is supported by Hidet currently.
+        # fname can be one of: 'add', 'prod', 'mean', 'amax', 'amin', 'replace'.
+        # In the interest of time, only 'add' is supported by Hidet currently.
         # fname = 'replace' can be used to support `torch.scatter`.
 
-        if fname not in ['sum', 'replace']:
+        if fname not in ['add', 'replace']:
             raise ValueError(f"Scatter: fname {fname} is not supported by Hidet currently.")
 
         self.scatter_dim = dim
@@ -150,7 +150,7 @@ class ScatterBaseOp(OpaqueOperator):
 
                         if self.fname == 'replace':
                             out[input_tensor_offset] = src[index_tensor_offset]
-                        elif self.fname == 'sum':
+                        elif self.fname == 'add':
                             atomic_add(~out[input_tensor_offset], src[index_tensor_offset])
 
                     linear_idx += nthread_per_block
@@ -166,7 +166,7 @@ class ScatterBaseOp(OpaqueOperator):
 
 
 def scatter_add_(input: Tensor, dim: int, index: Tensor, src: Tensor):
-    return ScatterBaseOp(input, index, src, dim, 'sum', inplace=True).outputs[0]
+    return ScatterBaseOp(input, index, src, dim, 'add', inplace=True).outputs[0]
 
 
 def scatter_(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str):
