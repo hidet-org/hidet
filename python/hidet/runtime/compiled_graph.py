@@ -519,7 +519,7 @@ class CompiledGraph:
 
         def f_create_inputs() -> List[Tensor]:
             with hidet.option.context():
-                hidet.option.execution_mode('compilaion')
+                hidet.option.execution_mode('compilation')
                 inputs = []
                 for arg in args:
                     arg = hidet.from_torch(arg) if isinstance(arg, torch.Tensor) else arg

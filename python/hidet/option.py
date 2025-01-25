@@ -313,8 +313,8 @@ def register_hidet_options():
         name='execution_mode',
         type_hint='str',
         default_value='interpreter',
-        description="Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed",
-        choices=['symbolic', 'interpreter', 'compilaion'],
+        description="Use 'symbolic', 'interpreter', or 'compilation' mode for run() function in Operator allowed",
+        choices=['symbolic', 'interpreter', 'compilation'],
     )
     register_option(
         name='parallel_k',
@@ -932,26 +932,26 @@ def get_runtime_check() -> bool:
     return OptionContext.current().get_option('runtime_check')
 
 
-def execution_mode(kind: str = 'compilaion'):
+def execution_mode(kind: str = 'compilation'):
     """
-    Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
+    Use 'symbolic', 'interpreter', or 'compilation' mode for run() function in Operator allowed.
 
     Parameters
     ----------
     kind: str
-        Use 'symbolic', 'interpreter', or 'compilaion' mode for run() function in Operator allowed.
+        Use 'symbolic', 'interpreter', or 'compilation' mode for run() function in Operator allowed.
     """
     OptionContext.current().set_option('execution_mode', kind)
 
 
 def get_execution_mode() -> str:
     """
-    Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
+    Get which of 'symbolic', 'interpreter', 'compilation' mode to use for run() function in Operator allowed.
 
     Returns
     -------
     ret: str
-        Get which of 'symbolic', 'interpreter', 'compilaion' mode to use for run() function in Operator allowed.
+        Get which of 'symbolic', 'interpreter', 'compilation' mode to use for run() function in Operator allowed.
     """
     return OptionContext.current().get_option('execution_mode')
 

@@ -5,7 +5,7 @@ from hidet.testing import device_to_torch
 from hidet.testing.torch_utils import Backend
 
 
-def no_compilaion(*args, **kwargs):
+def no_compilation(*args, **kwargs):
     assert False, 'At this point must not be compilation, everything should be covered by dynamic shapes'
 
 
@@ -49,7 +49,7 @@ def test_dynamic_shape_w_mark_dynamic(operator, dtype, axis, device):
         assert torch.allclose(hidet_out, torch_out, rtol=1e-04, atol=1e-04)
 
         tmp = hidet.drivers.build_task
-        hidet.drivers.build_task = no_compilaion
+        hidet.drivers.build_task = no_compilation
 
         model_inputs2x = torch.randn(*[3, 16, 16, 3], dtype=dtype, device=torch_device)
         hidet_out = hidet_model(model_inputs2x)
@@ -92,7 +92,7 @@ def test_dynamic_shape_w_heuristic_mark(operator, dtype, axis, device):
         assert torch.allclose(hidet_out, torch_out, rtol=1e-04, atol=1e-04)
 
         tmp = hidet.drivers.build_task
-        hidet.drivers.build_task = no_compilaion
+        hidet.drivers.build_task = no_compilation
 
         model_inputs3x = torch.randn(*[5, 16, 16, 3], dtype=dtype, device=torch_device)
         hidet_out = hidet_model(model_inputs3x)
