@@ -13,6 +13,7 @@
 from typing import Optional
 from hidet.ir.expr import Var
 from hidet.lang.attrs import cuda
+from hidet.lang.attrs import hip
 
 
 """

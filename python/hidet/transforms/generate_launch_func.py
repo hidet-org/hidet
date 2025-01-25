@@ -62,6 +62,22 @@ def add_launch_func(ir_module: IRModule, kernel_func: Function):
                 cluster_dim=rewrite(_normalize_dim3(kernel_func.get_attr('cuda.cluster_dim', default=1)), param_remap),
                 block_dim=rewrite(_normalize_dim3(kernel_func.get_attr('cuda.block_dim')), param_remap),
                 shared_mem=shared_memory_bytes,
+                target='cuda',
+            )
+        elif kernel_func.kind == 'hip_kernel':
+            # FIXME: always zero for now
+            shared_memory_bytes: Expr = rewrite(
+                simplify(kernel_func.get_attr('hip.dynamic_smem_bytes', int32(0))), param_remap
+            )
+
+            fb += LaunchKernelStmt(
+                func_var,
+                params,
+                grid_dim=rewrite(_normalize_dim3(kernel_func.get_attr('hip.grid_dim')), param_remap),
+                cluster_dim=(int32.one, int32.one, int32.one),
+                block_dim=rewrite(_normalize_dim3(kernel_func.get_attr('hip.block_dim')), param_remap),
+                shared_mem=shared_memory_bytes,
+                target='hip',
             )
         elif kernel_func.kind == 'cpu_kernel':
             fb += func_var(*params)
@@ -78,7 +94,9 @@ class GenerateLaunchFuncPass(Pass):
             # the launch function has already existed
             return ir_module
         kernel_functions: Dict[str, Function] = {
-            name: func for name, func in ir_module.functions.items() if func.kind in ['cuda_kernel', 'cpu_kernel']
+            name: func
+            for name, func in ir_module.functions.items()
+            if func.kind in ['cuda_kernel', 'hip_kernel', 'cpu_kernel']
         }
         if len(kernel_functions) == 0:
             # no kernel function found in the module, do nothing

@@ -64,9 +64,11 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
                     stmt.func_var,
                     stmt.shared_mem_bytes,
                 )
-                sb += check_cuda_error()
+                if stmt.target == 'cuda':  # TODO: add error checking for hip/rocm
+                    sb += check_cuda_error()
             sb += stmt
-            sb += check_cuda_error()
+            if stmt.target == 'cuda':  # TODO: add error checking for hip/rocm
+                sb += check_cuda_error()
         return sb.finish()
 
 

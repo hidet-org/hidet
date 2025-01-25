@@ -125,7 +125,7 @@ class PruneUnusedFunctionRewriter(IRRewriter):
         unused_func_names: Set[str] = set()
         for node in call_graph.nodes:
             func: Function = node.func
-            if func.kind in ['public', 'cpu_kernel', 'cuda_kernel']:
+            if func.kind in ['public', 'cpu_kernel', 'cuda_kernel', 'hip_kernel']:
                 continue
             if len(node.callers) == 0:
                 unused_func_names.add(func.name)

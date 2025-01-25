@@ -334,7 +334,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         ):
             return stmt
         else:
-            return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, shared_mem_bytes)
+            return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, shared_mem_bytes, stmt.target)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         exprs = [self.visit(e) for e in stmt.exprs]

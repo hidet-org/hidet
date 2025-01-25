@@ -225,6 +225,8 @@ class DLManagedTensorContext:
         self.tensor = tensor
         if tensor.device.is_cuda():
             dl_device = DLDevice(DLDeviceType.kDLGPU, tensor.device.id)
+        elif tensor.device.is_hip():
+            dl_device = DLDevice(DLDeviceType.kDLROCM, tensor.device.id)
         else:
             dl_device = DLDevice(DLDeviceType.kDLCPU, 0)
         dl_tensor = DLTensor(
@@ -256,6 +258,8 @@ def to_dlpack(tensor: Tensor) -> ctypes.py_object:
 def to_dlpack_device(tensor: Tensor) -> Tuple[int, int]:
     if tensor.device.kind == 'cuda':
         return DLDeviceType.kDLGPU, 0
+    elif tensor.device.kind == 'hip':
+        return DLDeviceType.kDLROCM, 0
     elif tensor.device.kind == 'cpu':
         # here, we use kDLCPU instead of kDLCPUPinned, because we pytorch doesn't support kDLCPUPinned
         # technically, we can think kDLCPUPinned as a special case of kDLCPU

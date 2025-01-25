@@ -1473,7 +1473,13 @@ class PrologueEpilogueRewriter(IRRewriter):
             if func_name in self.func_records:
                 args = self.process_call(func_name, list(stmt.args))
                 return LaunchKernelStmt(
-                    stmt.func_var, args, stmt.grid_dim, stmt.cluster_dim, stmt.block_dim, stmt.shared_mem_bytes
+                    stmt.func_var,
+                    args,
+                    stmt.grid_dim,
+                    stmt.cluster_dim,
+                    stmt.block_dim,
+                    stmt.shared_mem_bytes,
+                    stmt.target,
                 )
         return super().visit_LaunchKernelStmt(stmt)
 

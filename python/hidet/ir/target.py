@@ -14,7 +14,7 @@ from typing import List, Dict
 
 
 class Target:
-    _supported_targets = ['cuda', 'cpu']
+    _supported_targets = ['cuda', 'hip', 'cpu']
 
     def __init__(self, name: str, flags: List[str], attrs: Dict[str, str]):
         if name not in self._supported_targets:
@@ -48,6 +48,9 @@ class Target:
         elif self.name == 'cuda':
             valid_flags = []
             valid_attrs = ['arch', 'cpu_arch']  # e.g., '--arch=sm_80', '--cpu_arch=x86-64'
+        elif self.name == 'hip':
+            valid_flags = []
+            valid_attrs = []
         else:
             raise ValueError('Cannot recognize target "{}".'.format(self.name))
         for flag in self.flags:

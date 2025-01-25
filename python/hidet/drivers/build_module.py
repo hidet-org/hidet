@@ -267,11 +267,14 @@ def should_skip_build(lib_path, output_kind, output_dir, force):
 
 def get_source_path(output_dir, target):
     if target.name == 'cuda':
-        return os.path.join(output_dir, 'source.cu')
+        src_path = os.path.join(output_dir, 'source.cu')
+    elif target.name == 'hip':
+        src_path = os.path.join(output_dir, 'source.hip.cpp')
     elif target.name == 'cpu':
-        return os.path.join(output_dir, 'source.cc')
+        src_path = os.path.join(output_dir, 'source.cc')
     else:
-        raise ValueError(f"Invalid target: {target}")
+        raise ValueError(f'Invalid target: {target}')
+    return src_path
 
 
 def lower_ir_module(ir_module, output_dir, target):

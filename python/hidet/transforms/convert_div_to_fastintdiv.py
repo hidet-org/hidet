@@ -133,7 +133,13 @@ class GenerateMagicVarsRewriter(IRRewriter):
         if self.magic_vars:
             stmt.args = stmt.args + [item for sublist in list(self.magic_vars.values()) for item in sublist]
             return LaunchKernelStmt(
-                stmt.func_var, stmt.args, stmt.grid_dim, stmt.cluster_dim, stmt.block_dim, stmt.shared_mem_bytes
+                stmt.func_var,
+                stmt.args,
+                stmt.grid_dim,
+                stmt.cluster_dim,
+                stmt.block_dim,
+                stmt.shared_mem_bytes,
+                stmt.target,
             )
         else:
             return stmt

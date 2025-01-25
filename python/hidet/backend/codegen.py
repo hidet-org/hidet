@@ -584,14 +584,26 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         assert isinstance(stmt.func_var, Var)
-        return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
-            self.canonize_funcname(stmt.func_var.name),
-            self(stmt.grid_dim),
-            self(stmt.block_dim),
-            self(stmt.shared_mem_bytes),
-            Text("(cudaStream_t)get_cuda_stream()"),
-            self(stmt.args),
-        )
+        if stmt.target == 'cuda':
+            return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
+                self.canonize_funcname(stmt.func_var.name),
+                self(stmt.grid_dim),
+                self(stmt.block_dim),
+                self(stmt.shared_mem_bytes),
+                Text("(cudaStream_t)get_cuda_stream()"),
+                self(stmt.args),
+            )
+        elif stmt.target == 'hip':
+            return NewLine() + Text('hipLaunchKernelGGL({}, dim3({}), dim3({}), {}, {}, {});').format(
+                self.canonize_funcname(stmt.func_var.name),
+                self(stmt.grid_dim),
+                self(stmt.block_dim),
+                self(stmt.shared_mem_bytes),
+                Text('0'),  # stream where the kenrel should execute, value of 0 corresponds to the NULL stream
+                self(stmt.args),
+            )
+        else:
+            raise ValueError('Unsupported target {}'.format(stmt.target))
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
@@ -798,6 +810,80 @@ class CUDACodegen(Codegen):
         return doc
 
 
+class HIPCodegen(Codegen):
+    def require_headers(self) -> Doc:
+        doc = Doc()
+        doc += Text('#include <stdint.h>') + NewLine()
+        doc += Text('#include "hip/hip_runtime.h"') + NewLine()
+        doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
+        # TODO: use hip runtime here when available
+        # doc += Text('#include <hidet/runtime/hip/complex.h>') + NewLine()
+        # doc += Text('#include <hidet/runtime/hip/context.h>') + NewLine()
+        doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
+
+        doc += NewLine()
+        return doc
+
+    def visit_Function(self, func: Function) -> Doc:
+        self.namer.clear()
+
+        doc = NewLine()
+
+        # ret
+        if func.kind == 'hip_kernel':
+            doc += 'static __global__ '
+        elif func.kind == 'hip_internal':
+            doc += 'static __device__ __forceinline__ '
+        elif func.kind == 'cpu_kernel':
+            doc += 'static '
+        elif func.kind == 'cpu_internal':
+            doc += 'static __forceinline__ '
+        elif func.kind == 'public':
+            if self.ir_module.namespace == '':
+                doc += 'DLL '
+        else:
+            raise ValueError(f'Unknown function kind: {func.kind}')
+
+        doc += self(func.ret_type)
+
+        # launch bound for grid worker
+        if func.kind == 'hip_kernel':
+            block_dim = func.attrs['hip.block_dim']
+            if isinstance(block_dim, list):
+                block_dim = prod(block_dim)
+            if isinstance(block_dim, (Constant, int)):
+                if 'hip.min_blocks' in func.attrs:
+                    min_blocks = func.attrs['hip.min_blocks']
+                    if isinstance(min_blocks, (Constant, int)):
+                        # https://sep5.readthedocs.io/en/latest/Programming_Guides/HIP-GUIDE.html#device-side-dynamic-global-memory-allocation
+                        doc += f' __launch_bounds__({block_dim}, {(min_blocks*block_dim)/32})'
+                    else:
+                        doc += f' __launch_bounds__({block_dim})'
+                else:
+                    doc += f' __launch_bounds__({block_dim})'
+
+        # func name
+        canonized_func_name = self.canonize_funcname(func.name)
+        doc += ' ' + canonized_func_name
+
+        # parameters
+        doc += '('
+        param_docs = []
+        for param in func.params:
+            param_docs.append(self.param_declare(param))
+        doc += doc_join(param_docs, Text(', '))
+        doc += ') {'
+
+        # body
+        doc += self(func.body).indent()
+
+        doc += NewLine() + '}'
+
+        return doc
+
+
 class CPUCodegen(Codegen):
     def require_headers(self) -> Doc:
         doc = Doc()
@@ -867,6 +953,8 @@ def codegen(ir_module: Union[IRModule, Sequence[IRModule]], src_out_path: str, t
 
     if target.name == 'cuda':
         gen = CUDACodegen()
+    elif target.name == 'hip':
+        gen = HIPCodegen()
     elif target.name == 'cpu':
         gen = CPUCodegen()
     else:

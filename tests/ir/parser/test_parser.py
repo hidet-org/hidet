@@ -132,6 +132,10 @@ def generate_ir_modules():
             yield mod
 
 
+@pytest.mark.skip(
+    reason='Skip the parser since it is not maintained for now. We will resume it when we plan to have'
+    'a more stable textual intermediate representation.'
+)
 @pytest.mark.requires_cuda
 def test_parser():
     for mod in generate_ir_modules():

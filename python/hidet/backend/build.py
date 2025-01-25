@@ -197,6 +197,77 @@ class NVCC(SourceCompiler):
         self.run_compile_command(" ".join(command), src_path, out_lib_path)
 
 
+class HIPCC(SourceCompiler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hipcc_path: str = self._resolve_hipcc_path()  # e.g., /opt/rocm/bin/hipcc
+        self.include_dirs: List[str] = get_include_dirs()
+        self.library_dirs: List[str] = [os.path.dirname(library_paths['hidet_runtime'])]
+
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def _resolve_hipcc_path():
+        path: Optional[str] = shutil.which('hipcc')
+        if path is not None:
+            return path
+        try_dirs = ['/opt/rocm/bin/', '/usr/bin']
+        for try_dir in try_dirs:
+            path = os.path.join(try_dir, 'hipcc')
+            if os.path.exists(path):
+                return path
+        raise FileNotFoundError('Can not find hipcc compiler.')
+
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        target: Target,
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libs: Sequence[str] = (),
+        object_files: Sequence[str] = (),
+    ) -> None:
+        if len(object_files) > 0 and out_lib_path.endswith('.o'):
+            raise ValueError('Can not compile multiple objects into a single object file.')
+
+        os.environ['HIP_PLATFORM'] = 'amd'
+
+        # The following command compiles the hip source code to a shared library
+        # See https://sep5.readthedocs.io/en/latest/Programming_Guides/HIP-GUIDE.html#hip-guide,
+        # and command `hipcc --help` for more information about hipcc compilation.
+        command = [
+            # the path to hipcc compiler
+            self.hipcc_path,
+            # the included directories.
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
+            # the library directories.
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
+            *['-l{}'.format(library) for library in linking_libs],
+            # optimize host side code via -O3
+            '-O3',
+            # (in host compiler) compile into position independent code.
+            '-Xcompiler -fPIC',
+            # use c++11 standard
+            '-std=c++11',
+            # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
+            '-lhidet_runtime',
+            # allow constexpr function to be called from device code.
+            # '--expt-relaxed-constexpr',
+            # generate shared library (lib.so).
+            '--shared' if out_lib_path.endswith('.so') else '',
+            # the linking objects.
+            ' '.join(object_files),
+            # the source path.
+            src_path,
+            # the output library path.
+            '-o',
+            out_lib_path,
+        ]
+        print(" ".join(command), src_path, out_lib_path)
+
+        self.run_compile_command(" ".join(command), src_path, out_lib_path)
+
+
 class GCC(SourceCompiler):
     def __init__(self):
         super().__init__()
@@ -308,6 +379,9 @@ def compile_source(
         if not hidet.cuda.available():
             raise RuntimeError('CUDA is not available.')
         compiler = NVCC()
+    elif target.name == 'hip':
+        # TODO: check if HIP is available
+        compiler = HIPCC()
     elif target.name == 'cpu':
         compiler = GCC()
     else:

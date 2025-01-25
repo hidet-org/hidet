@@ -266,6 +266,8 @@ class CompiledModule:
             src_path = os.path.join(self.module_dir, 'source.cc')
         elif os.path.exists(os.path.join(self.module_dir, 'source.cu')):
             src_path = os.path.join(self.module_dir, 'source.cu')
+        elif os.path.exists(os.path.join(self.module_dir, 'source.hip.cpp')):
+            src_path = os.path.join(self.module_dir, 'source.hip.cpp')
         else:
             src_path = None
 

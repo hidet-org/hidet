@@ -105,6 +105,8 @@ class ResolveGenericPrimitiveFuncPass(FunctionPass):
         func_kind_to_device = {
             'cuda_kernel': 'cuda',
             'cuda_internal': 'cuda',
+            'hip_kernel': 'hip',
+            'hip_internal': 'hip',
             'cpu_kernel': 'cpu',
             'cpu_internal': 'cpu',
             'public': 'cpu',

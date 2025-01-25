@@ -113,6 +113,8 @@ class IRModule(Node):
 
         if any(func.kind in ['cuda_kernel', 'cuda_internal'] for func in self.functions.values()):
             target = 'cuda'
+        elif any(func.kind in ['hip_kernel', 'hip_internal'] for func in self.functions.values()):
+            target = 'hip'
         else:
             target = 'cpu'
 

@@ -548,7 +548,7 @@ class Tensor:
         """
         from .impl.dlpack import to_dlpack
 
-        if stream is not None:
+        if stream is not None and self.device.is_cuda():
             if stream == 0:
                 raise ValueError(f"Stream({stream}) is not allowed due to its ambiguity.")
             elif stream == 1:
@@ -564,6 +564,14 @@ class Tensor:
                 event = hidet.cuda.Event()
                 event.record(provider_stream)
                 consumer_stream.wait_event(event)
+        elif stream is not None and self.device.is_hip():
+            consumer_stream = hidet.hip.ExternalStream(stream)
+            provider_stream = hidet.hip.current_stream()
+            if consumer_stream != provider_stream:
+                event = hidet.hip.Event()
+                event.record(provider_stream)
+                consumer_stream.wait_event(event)
+
         return to_dlpack(self)
 
     def __dlpack_device__(self) -> Tuple[int, int]:

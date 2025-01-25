@@ -71,4 +71,5 @@ class CudaAutoScheduler(AutoScheduler):
             grid_dim=grid_dim,
             cluster_dim=func.get_attr('cluster_dim', default=1),
             block_dim=block_dim,
+            target='cuda',
         )

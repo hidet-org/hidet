@@ -321,6 +321,8 @@ class SeqStmt(Stmt):
 
 
 class LaunchKernelStmt(Stmt):
+    _supported_targets = ['cuda', 'hip', 'cpu']
+
     def __init__(
         self,
         func_var: Var,
@@ -329,13 +331,18 @@ class LaunchKernelStmt(Stmt):
         cluster_dim: Tuple[Expr, Expr, Expr],
         block_dim: Tuple[Expr, Expr, Expr],
         shared_mem: Expr,
+        target: str,
     ):
+        if target not in self._supported_targets:
+            raise ValueError(f'Unsupported target: {target}')
+
         self.func_var: Var = func_var
         self.args: List[Expr] = list(args)
         self.grid_dim: Tuple[Expr, Expr, Expr] = grid_dim
         self.cluster_dim: Tuple[Expr, Expr, Expr] = cluster_dim
         self.block_dim: Tuple[Expr, Expr, Expr] = block_dim
         self.shared_mem_bytes: Expr = shared_mem
+        self.target: str = target
 
         assert func_var.name is not None
 
@@ -408,6 +415,7 @@ def launch_kernel(
     block_dim: Union[Sequence[Int], Int],
     cluster_dim: Union[Sequence[Int], Int] = 1,
     shared_mem: Optional[Int] = 0,
+    target: str = None,
 ) -> LaunchKernelStmt:
     launch_config: List[Tuple[Expr, Expr, Expr]] = []
     for dims in [grid_dim, cluster_dim, block_dim]:
@@ -420,4 +428,4 @@ def launch_kernel(
             dims.append(1)
         launch_config.append(convert(dims))
     grid_dim, cluster_dim, block_dim = launch_config
-    return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, convert(shared_mem))
+    return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, convert(shared_mem), target=target)
