@@ -16,6 +16,8 @@ import hidet
 import torch
 from hidet import ops
 from hidet.graph.tensor import asarray
+from torch import nn
+from hidet.testing.torch_utils import Backend, bench_model
 
 
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
@@ -88,3 +90,130 @@ def test_matmul_dynamic():
     hidet_op = lambda a, b, bias: hidet.ops.cast(hidet.ops.matmul(a, b), "float32")
 
     check_matmul_dynamic(a_shape, b_shape, bias_shape, torch_op, hidet_op)
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize("hexcute_matmul", ["enable", "disable"])
+def test_matmul_relu_1(hexcute_matmul: bool):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear1 = nn.Linear(4096, 6144)
+
+        def forward(self, x):
+            y = self.linear1(x)
+            y = torch.relu(y)
+            y = y + 1
+            return y
+
+    with hidet.option.context():
+        hidet.option.hexcute_matmul(hexcute_matmul)
+        hidet.option.cache_dir("./111")
+        # hidet.option.save_lower_ir(True)
+        # hidet.option.debug_cache_tuning()
+        backend = Backend(backend='hidet', mode='max-autotune-no-cudagraphs', dtype=torch.bfloat16)
+        model = Model().cuda().to(torch.bfloat16).eval()
+
+        with torch.inference_mode(True):
+            compiled_model = backend.compile(model)
+
+            input = torch.randn(8, 4096, dtype=torch.bfloat16, device='cuda')
+            torch._dynamo.mark_dynamic(input, 0)
+            compiled_model(input)
+
+            j = 1024
+            input = torch.randn(j, 4096, dtype=torch.bfloat16, device='cuda')
+            y1 = compiled_model(input)
+            y2 = model(input)
+            np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+            np.testing.assert_allclose(
+                actual=y1.to(torch.float32).cpu().numpy(), desired=y2.to(torch.float32).cpu().numpy(), rtol=5e-2
+            )
+
+            lat = bench_model(compiled_model, [input])
+            print(lat)
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize("hexcute_matmul", ["enable", "disable"])
+def test_matmul_matmul_add(hexcute_matmul: bool):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear1 = nn.Linear(4096, 6144)
+            self.linear2 = nn.Linear(6144, 4096)
+
+        def forward(self, x):
+            y = self.linear1(x)
+            y = torch.relu(y)
+            y = self.linear2(y)
+            y = torch.relu(y + x)
+            return y
+
+    with hidet.option.context():
+        hidet.option.hexcute_matmul(hexcute_matmul)
+        # hidet.option.cache_dir("./222")
+        # hidet.option.save_lower_ir(True)
+        # hidet.option.debug_cache_tuning()
+        backend = Backend(backend='hidet', mode='default', dtype=torch.bfloat16)
+        model = Model().cuda().to(torch.bfloat16).eval()
+
+        with torch.inference_mode(True):
+            weight1 = torch.randint(low=0, high=3, size=(6144, 4096), dtype=torch.bfloat16, device='cuda') / 4096
+            weight2 = torch.randint(low=0, high=3, size=(4096, 6144), dtype=torch.bfloat16, device='cuda') / 6144
+            model.linear1.weight.copy_(weight1)
+            model.linear2.weight.copy_(weight2)
+            compiled_model = backend.compile(model)
+
+            input = torch.randn(8, 4096, dtype=torch.bfloat16, device='cuda')
+            torch._dynamo.mark_dynamic(input, 0)
+            compiled_model(input)
+
+            j = 1
+            input = torch.randint(low=-3, high=3, size=(j, 4096), dtype=torch.bfloat16, device='cuda')
+            y1 = compiled_model(input)
+            y2 = model(input)
+            np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+            np.testing.assert_allclose(
+                actual=y1.to(torch.float32).cpu().numpy(), desired=y2.to(torch.float32).cpu().numpy(), rtol=5e-2
+            )
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize("hexcute_matmul", ["enable", "disable"])
+def test_matmul_add_scalar(hexcute_matmul: bool):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear1 = nn.Linear(4096, 6144)
+
+        def forward(self, x):
+            y = self.linear1(x)
+            y = torch.relu(y)
+            s = x.sum(0).sum(0)
+            y = y + s
+            return y
+
+    with hidet.option.context():
+        hidet.option.hexcute_matmul(hexcute_matmul)
+        # hidet.option.cache_dir("./333")
+        # hidet.option.save_lower_ir(True)
+        # hidet.option.debug_cache_tuning()
+        backend = Backend(backend='hidet', mode='default', dtype=torch.bfloat16)
+        model = Model().cuda().to(torch.bfloat16).eval()
+
+        with torch.inference_mode(True):
+            compiled_model = backend.compile(model)
+
+            input = torch.randn(8, 4096, dtype=torch.bfloat16, device='cuda')
+            torch._dynamo.mark_dynamic(input, 0)
+            compiled_model(input)
+
+            j = 1
+            input = torch.randn(j, 4096, dtype=torch.bfloat16, device='cuda')
+            y1 = compiled_model(input)
+            y2 = model(input)
+            np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+            np.testing.assert_allclose(
+                actual=y1.to(torch.float32).cpu().numpy(), desired=y2.to(torch.float32).cpu().numpy(), rtol=5e-2
+            )

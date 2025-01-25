@@ -70,9 +70,12 @@ def unflatten(a, profile):
 
 def signum(a):
     assert is_integer(a)
-    if isinstance(a, Expr):
+    # Here, we make an assumption that the dynamic shapes are positive integers
+    # It seems to be safe because we don't have negative shapes in CuTe now.
+    if not is_constant(a):
         return 1
     else:
+        a = int(a) if isinstance(a, Constant) else a
         return (0 < a) - (a < 0)
 
 
@@ -183,7 +186,11 @@ def shape_min(a, b):
             return shape_min(a, product(b))
         else:
             assert is_integer(b)
-            if any(isinstance(v, Expr) for v in [a, b]):
+            # special case to simplify expression for dynamic shapes
+            # we assume the dynamic shapes are greater and equal to 1
+            if is_constant(a) and a == 1 or is_constant(b) and b == 1:
+                return 1
+            elif any(isinstance(v, Expr) for v in [a, b]):
                 return if_then_else(a > b, b, a)
             else:
                 return min(a, b)
@@ -219,8 +226,19 @@ def shape_div(a, b):
         else:
             assert is_integer(b)
             # dynamic case, we waive the divisibility check in this branch
-            if any(not is_constant(v) for v in [a, b]):
+            if not is_constant(a) and not is_constant(b):
                 return if_then_else(a // b != 0, a // b, signum(a) * signum(b))
+            elif not is_constant(a) and is_constant(b):
+                if b == 1:
+                    return a
+                else:
+                    return if_then_else(a // b != 0, a // b, signum(a) * signum(b))
+            elif is_constant(a) and not is_constant(b):
+                # we assume b is not equal to 0 in the dynamic case
+                if a == 1:
+                    return signum(a) * signum(b)
+                else:
+                    return if_then_else(a // b != 0, a // b, signum(a) * signum(b))
             else:
                 assert a % b == 0 or b % a == 0
                 if a % b == 0:
