@@ -1,5 +1,5 @@
 import ctypes
-from ctypes import Structure, c_uint, c_int, c_char, c_void_p, c_size_t, POINTER, byref
+from ctypes import Structure, c_uint, c_int, c_char, c_void_p, c_size_t, POINTER, byref, c_float
 from typing import Tuple
 
 
@@ -111,9 +111,17 @@ _hipMalloc = libamdhip.hipMalloc
 _hipMalloc.argtypes = [POINTER(c_void_p), c_size_t]
 _hipMalloc.restype = c_int
 
+_hipMallocAsync = libamdhip.hipMallocAsync
+_hipMallocAsync.argtypes = [POINTER(c_void_p), c_size_t, c_void_p]
+_hipMallocAsync.restype = c_int
+
 _hipFree = libamdhip.hipFree
 _hipFree.argtypes = [c_void_p]
 _hipFree.restype = c_int
+
+_hipFreeAsync = libamdhip.hipFreeAsync
+_hipFreeAsync.argtypes = [c_void_p, c_void_p]
+_hipFreeAsync.restype = c_int
 
 _hipHostMalloc = libamdhip.hipHostMalloc
 _hipHostMalloc.argtypes = [POINTER(c_void_p), c_size_t, c_uint]
@@ -126,6 +134,10 @@ _hipHostFree.restype = c_int
 _hipMemset = libamdhip.hipMemset
 _hipMemset.argtypes = [c_void_p, c_int, c_size_t]
 _hipMemset.restype = c_int
+
+_hipMemsetAsync = libamdhip.hipMemsetAsync
+_hipMemsetAsync.argtypes = [c_void_p, c_int, c_size_t, c_void_p]
+_hipMemsetAsync.restype = c_int
 
 _hipMemcpyHtoD = libamdhip.hipMemcpyHtoD
 _hipMemcpyHtoD.argtypes = [c_void_p, c_void_p, c_size_t]
@@ -147,6 +159,10 @@ _hipMemcpy = libamdhip.hipMemcpy
 _hipMemcpy.argtypes = [c_void_p, c_void_p, c_size_t, c_int]
 _hipMemcpy.restype = c_int
 
+_hipMemcpyAsync = libamdhip.hipMemcpyAsync
+_hipMemcpyAsync.argtypes = [c_void_p, c_void_p, c_size_t, c_int, c_void_p]
+_hipMemcpyAsync.restype = c_int
+
 _hipGetDeviceCount = libamdhip.hipGetDeviceCount
 _hipGetDeviceCount.argtypes = [POINTER(c_int)]
 _hipGetDeviceCount.restype = c_int
@@ -165,6 +181,45 @@ _hipGetDevice.restype = c_int
 
 _hipDeviceSynchronize = libamdhip.hipDeviceSynchronize
 _hipDeviceSynchronize.restype = c_int
+
+# hipEventCreateWithFlags takes in two args, the first is of type hip_Event*
+# hip_Event itself is a pointer to struct ihip_Event, so we pass in a POINTER to a void* as the first argument.
+# The second arg is the flag, which is unsigned int.
+_hipEventCreateWithFlags = libamdhip.hipEventCreateWithFlags
+_hipEventCreateWithFlags.argtypes = [POINTER(c_void_p), c_uint]
+_hipEventCreateWithFlags.restype = c_int
+
+_hipEventDestroy = libamdhip.hipEventDestroy
+_hipEventDestroy.argtypes = [c_void_p]
+_hipEventDestroy.restype = c_int
+
+_hipEventElapsedTime = libamdhip.hipEventElapsedTime
+_hipEventElapsedTime.argtypes = [POINTER(c_float), c_void_p, c_void_p]
+_hipEventElapsedTime.restype = c_int
+
+_hipEventRecord = libamdhip.hipEventRecord
+_hipEventRecord.argtypes = [c_void_p, c_void_p]
+_hipEventRecord.restype = c_int
+
+_hipEventSynchronize = libamdhip.hipEventSynchronize
+_hipEventSynchronize.argtypes = [c_void_p]
+_hipEventSynchronize.restype = c_int
+
+_hipStreamCreateWithPriority = libamdhip.hipStreamCreateWithPriority
+_hipStreamCreateWithPriority.argtypes = [POINTER(c_void_p), c_uint, c_int]
+_hipStreamCreateWithPriority.restype = c_int
+
+_hipStreamDestroy = libamdhip.hipStreamDestroy
+_hipStreamDestroy.argtypes = [c_void_p]
+_hipStreamDestroy.restype = c_int
+
+_hipStreamSynchronize = libamdhip.hipStreamSynchronize
+_hipStreamSynchronize.argtypes = [c_void_p]
+_hipStreamSynchronize.restype = c_int
+
+_hipStreamWaitEvent = libamdhip.hipStreamWaitEvent
+_hipStreamWaitEvent.argtypes = [c_void_p, c_void_p, c_uint]
+_hipStreamWaitEvent.restype = c_int
 
 
 def error_msg(func_name, error):
@@ -209,6 +264,29 @@ def hip_malloc(num_bytes: int) -> int:
     return error, ret.value
 
 
+def hip_malloc_async(num_bytes: int, stream: int) -> int:
+    """
+    Allocate memory on the current device asynchronously.
+
+    Parameters
+    ----------
+    num_bytes: int
+        The number of bytes to allocate.
+
+    stream: int
+        The stream to use for the allocation.
+
+    Returns
+    -------
+    addr: int
+        The address of the allocated memory. When the allocation failed due to insufficient memory, 0 is returned.
+    """
+    ret = c_void_p()
+    stream_ptr = c_void_p(stream)
+    error = _hipMallocAsync(byref(ret), num_bytes, stream_ptr)
+    return error, ret.value
+
+
 def hip_free(addr: int) -> None:
     """
     Free memory on the current hip device.
@@ -221,6 +299,25 @@ def hip_free(addr: int) -> None:
     """
     ptr = c_void_p(addr)
     error = _hipFree(ptr)
+    return error
+
+
+def hip_free_async(addr: int, stream: int) -> None:
+    """
+    Free memory on the current hip device asynchronously.
+
+    Parameters
+    ----------
+    addr: int
+        The address of the memory to free. This must be the address of memory allocated with :func:`malloc` or
+        :func:`malloc_async`.
+
+    stream: int
+        The stream to use for the allocation.
+    """
+    ptr = c_void_p(addr)
+    stream_ptr = c_void_p(stream)
+    error = _hipFreeAsync(ptr, stream_ptr)
     return error
 
 
@@ -274,6 +371,30 @@ def hip_memset(addr: int, value: int, num_bytes: int) -> None:
     """
     ptr = c_void_p(addr)
     error = _hipMemset(ptr, value, num_bytes)
+    return error
+
+
+def hip_memset_async(addr: int, value: int, num_bytes: int, stream: int) -> None:
+    """
+    Set the gpu memory to given value asynchronously.
+
+    Parameters
+    ----------
+    addr: int
+        The start address of the memory region to set.
+
+    value: int
+        The byte value to set the memory region to.
+
+    num_bytes: int
+        The number of bytes to set.
+
+    stream: int
+        The stream to use for the memset.
+    """
+    ptr = c_void_p(addr)
+    stream_ptr = c_void_p(stream)
+    error = _hipMemsetAsync(ptr, value, num_bytes, stream_ptr)
     return error
 
 
@@ -337,6 +458,30 @@ def hip_memcpy(dst: int, src: int, num_bytes: int) -> None:
     """
     dst_ptr, src_ptr = c_void_p(dst), c_void_p(src)
     error = _hipMemcpy(dst_ptr, src_ptr, num_bytes, _hipMemcpyDefault)
+    return error
+
+
+def hip_memcpy_async(dst: int, src: int, num_bytes: int, stream: int) -> None:
+    """
+    Copy gpu memory from one location to another asynchronously.
+
+    Parameters
+    ----------
+    dst: int
+        The destination address.
+
+    src: int
+        The source address.
+
+    num_bytes: int
+        The number of bytes to copy.
+
+    stream: int
+        The stream to use for the memcpy.
+    """
+    dst_ptr, src_ptr = c_void_p(dst), c_void_p(src)
+    stream_ptr = c_void_p(stream)
+    error = _hipMemcpyAsync(dst_ptr, src_ptr, num_bytes, _hipMemcpyDefault, stream_ptr)
     return error
 
 
@@ -413,4 +558,92 @@ def hip_device_synchronize():
     This function blocks until the device has completed all preceding requested tasks.
     """
     error = _hipDeviceSynchronize()
+    return error
+
+
+### =============================================================== ###
+
+### ========================== EVENTS ============================ ###
+def hip_event_create_with_flags(flags):
+    """
+    Create a HIP event with the given flags.
+    """
+    event = c_void_p()
+    error = _hipEventCreateWithFlags(byref(event), flags)
+    return error, event.value
+
+
+def hip_event_destroy(event):
+    """
+    Destroys a HIP event.
+    """
+    ptr = c_void_p(event)
+    error = _hipEventDestroy(ptr)
+    return error
+
+
+def hip_event_elapsed_time(start, stop):
+    """
+    Finds the elapsed time between two events.
+    """
+    ptr_start, ptr_stop = c_void_p(start), c_void_p(stop)
+    res = c_float()
+    error = _hipEventElapsedTime(byref(res), ptr_start, ptr_stop)
+    return error, res.value
+
+
+def hip_event_record(event, stream):
+    """
+    Records the event in the specified stream
+    """
+    ptr_event, ptr_stream = c_void_p(event), c_void_p(stream)
+    error = _hipEventRecord(ptr_event, ptr_stream)
+    return error
+
+
+def hip_event_synchronize(event):
+    """
+    Wait for an event to complete.
+    This function will block until the event is ready, waiting for all previous work in the stream specified when event
+    was recorded with hip_event_record(). If hip_event_record() has not been called on event, this function returns
+    immediately.
+    """
+    ptr = c_void_p(event)
+    error = _hipEventSynchronize(ptr)
+    return error
+
+
+### =============================================================== ###
+
+### ========================== STREAMS ============================ ###
+def hip_stream_create_with_priority(flags, priority):
+    """
+    Create a HIP stream with the given flags and priority.
+    """
+    stream = c_void_p()
+    error = _hipStreamCreateWithPriority(byref(stream), flags, priority)
+    return error, stream.value
+
+
+def hip_stream_destroy(stream):
+    """
+    Destroys a HIP stream
+    """
+    ptr = c_void_p(stream)
+    error = _hipStreamDestroy(ptr)
+    return error
+
+
+def hip_stream_synchronize(stream):
+    """
+    Blocks host until all commands in stream is complete
+    """
+    ptr = c_void_p(stream)
+    error = _hipStreamSynchronize(ptr)
+    return error
+
+
+def hip_stream_wait_event(stream, event, flag):
+    stream_ptr, event_ptr = c_void_p(stream), c_void_p(event)
+    error = _hipStreamWaitEvent(stream_ptr, event_ptr, flag)
     return error

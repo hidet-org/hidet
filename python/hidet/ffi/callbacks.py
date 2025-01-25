@@ -73,6 +73,30 @@ def cuda_memset(addr: int, value: int, nbytes: int) -> None:
     return hidet.cuda.memset(addr, value, nbytes)
 
 
+@register_runtime_callback(restype=c_uint64, argtypes=[c_uint64])
+def allocate_hip_storage(nbytes: int) -> int:
+    # pylint: disable=import-outside-toplevel
+    from hidet.runtime.storage import Storage
+
+    storage = Storage.new('hip', nbytes)
+    runtime_allocated_storages[storage.addr] = storage
+    return storage.addr
+
+
+@register_runtime_callback(restype=None, argtypes=[c_uint64])
+def free_hip_storage(addr: int) -> None:
+    if addr == 0:
+        return
+    if addr not in runtime_allocated_storages:
+        raise ValueError('Runtime trying to free a storage that has not been allocated.')
+    del runtime_allocated_storages[addr]
+
+
+@register_runtime_callback(restype=None, argtypes=[c_uint64, c_int32, c_uint64])
+def hip_memset(addr: int, value: int, nbytes: int) -> None:
+    return hidet.hip.memset(addr, value, nbytes)
+
+
 @register_runtime_callback(restype=c_uint64, argtypes=[])
 def get_torch_stream():
     return torch.cuda.current_stream().cuda_stream

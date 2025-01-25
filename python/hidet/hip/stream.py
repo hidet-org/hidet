@@ -11,12 +11,24 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
 from __future__ import annotations
-from typing import Union, Optional, Dict
-from cuda import cudart
-from cuda.cudart import cudaStream_t
+from typing import Optional, Dict
 from hidet.utils import exiting
+
+from .ffi import (
+    error_msg,
+    hip_stream_create_with_priority,
+    hip_stream_destroy,
+    hip_stream_synchronize,
+    hip_stream_wait_event,
+)
 from .event import Event
-from .device import CudaDeviceContext, current_device
+from .device import HipDeviceContext, current_device
+
+# Stream flags are defined inside the HIP Runtime API Reference "hip_runtime_api.h":
+# define 	hipStreamDefault   0x00
+# define 	hipStreamNonBlocking   0x01
+hipStreamDefault = 0
+hipStreamNonBlocking = 1
 
 
 def _get_device_id(device) -> int:
@@ -41,7 +53,7 @@ def _get_device_id(device) -> int:
         from hidet.runtime.device import Device
 
         if isinstance(device, Device):
-            assert device.is_cuda(), "device must be a CUDA device"
+            assert device.is_hip(), "device must be a HIP device"
             if device.id is not None:
                 return device.id
             else:
@@ -52,7 +64,7 @@ def _get_device_id(device) -> int:
 
 class Stream:
     """
-    A CUDA stream.
+    A HIP stream.
 
     Parameters
     ----------
@@ -65,16 +77,16 @@ class Stream:
         to complete before beginning execution.
 
     priority: int
-        The priority of the stream. The priority is a hint to the CUDA driver that it can use to reorder
+        The priority of the stream. The priority is a hint to the HIP driver that it can use to reorder
         operations in the stream relative to other streams. The priority can be 0 (default priority) and
         -1 (high priority). By default, all streams are created with priority 0.
     """
 
     def __init__(self, device=None, blocking: bool = False, priority: int = 0, **kwargs):
-        from hidet import cuda
+        from hidet import hip
 
         self._device_id: int
-        self._handle: cudaStream_t
+        self._handle: int  # hipStream_t represented as a void* in C
         self._external: bool
         if 'handle' in kwargs:
             self._device_id = _get_device_id(device)
@@ -82,10 +94,10 @@ class Stream:
             self._external = True
         else:
             self._device_id = _get_device_id(device)
-            with cuda.device(self._device_id):
-                flags = cudart.cudaStreamNonBlocking if not blocking else cudart.cudaStreamDefault
-                err, handle = cudart.cudaStreamCreateWithPriority(flags, priority)
-                assert err == 0, err
+            with hip.device(self._device_id):
+                flags = hipStreamNonBlocking if not blocking else hipStreamDefault
+                error, handle = hip_stream_create_with_priority(flags, priority)
+                assert error == 0, error_msg("hip_stream_create_with_priority", error)
                 self._handle = handle
             self._external = False
 
@@ -104,8 +116,8 @@ class Stream:
         if is_exiting():
             return
         if not self._external:
-            (err,) = cudart.cudaStreamDestroy(self._handle)
-            assert err == 0, err
+            error = hip_stream_destroy(self._handle)
+            assert error == 0, error_msg("hip_stream_destroy", error)
 
     def device_id(self) -> int:
         """
@@ -118,13 +130,13 @@ class Stream:
         """
         return self._device_id
 
-    def handle(self) -> cudaStream_t:
+    def handle(self) -> int:
         """
         Get the handle of the stream.
 
         Returns
         -------
-        handle: cudaStream_t
+        handle: int (which represents a hipStream_t, of type void* in C)
             The handle of the stream.
         """
         return self._handle
@@ -133,9 +145,8 @@ class Stream:
         """
         Block the current host thread until the stream completes all operations.
         """
-        (err,) = cudart.cudaStreamSynchronize(self._handle)
-        if err != 0:
-            raise RuntimeError("cudaStreamSynchronize failed with error: {}".format(err.name))
+        error = hip_stream_synchronize(self._handle)
+        assert error == 0, error_msg("hip_stream_synchronize", error)
 
     def wait_event(self, event: Event) -> None:
         """
@@ -147,24 +158,23 @@ class Stream:
         event: Event
             The event to wait for.
         """
-        (err,) = cudart.cudaStreamWaitEvent(self._handle, event.handle(), 0)
-        assert err == 0, err
+        error = hip_stream_wait_event(self._handle, event.handle(), 0)
+        assert error == 0, error_msg("hip_stream_wait_event", error)
 
 
 class ExternalStream(Stream):
     """
-    An external CUDA stream created from a handle.
+    An external HIP stream created from a handle.
 
     Parameters
     ----------
-    handle: int or cudaStream_t
-        The handle of the stream.
+    handle: int - The handle of the stream.
 
     device_id: int, optional
         The device ID of the stream. If None, the current device will be used.
     """
 
-    def __init__(self, handle: Union[cudaStream_t, int], device_id: Optional[int] = None):
+    def __init__(self, handle: int, device_id: Optional[int] = None):
         super().__init__(handle=handle, device=device_id)
 
 
@@ -173,7 +183,7 @@ _current_streams: Dict[int, Stream] = {}
 
 class StreamContext:
     def __init__(self, stream: Stream):  # pylint: disable=redefined-outer-name
-        self.device_context = CudaDeviceContext(stream.device_id())
+        self.device_context = HipDeviceContext(stream.device_id())
         self.device: int = stream.device_id()
         self.stream: Stream = stream
         self.prev_stream: Optional[Stream] = None
@@ -185,14 +195,14 @@ class StreamContext:
         self.prev_stream = current_streams[self.device]
         current_streams[self.device] = self.stream
         self.device_context.__enter__()
-        runtime_api.set_current_cuda_stream(self.stream)
+        runtime_api.set_current_hip_stream(self.stream)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         from hidet.ffi import runtime_api
 
         current_streams = _current_streams
         current_streams[self.device] = self.prev_stream
-        runtime_api.set_current_cuda_stream(self.prev_stream)
+        runtime_api.set_current_hip_stream(self.prev_stream)
         self.device_context.__exit__(exc_type, exc_val, exc_tb)
 
 
@@ -211,7 +221,8 @@ def current_stream(device=None) -> Stream:
         The current stream.
     """
     device_id = _get_device_id(device)
-    _current_streams[device_id] = ExternalStream(handle=0, device_id=device_id)
+    if device_id not in _current_streams:
+        _current_streams[device_id] = ExternalStream(handle=0, device_id=device_id)
     return _current_streams[_get_device_id(device)]
 
 
@@ -245,8 +256,8 @@ def stream(s: Stream) -> StreamContext:
     Examples
     --------
     >>> import hidet
-    >>> stream = hidet.cuda.Stream()
-    >>> with hidet.cuda.stream(stream):
-    >>>    ... # all hidet cuda kernels will be executed in the stream
+    >>> stream = hidet.hip.Stream()
+    >>> with hidet.hip.stream(stream):
+    >>>    ... # all hidet hip kernels will be executed in the stream
     """
     return StreamContext(s)

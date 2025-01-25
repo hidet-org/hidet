@@ -17,11 +17,15 @@ from .array import Array
 
 
 class RuntimeAPI:
-    _set_current_stream = get_func('set_cuda_stream', [c_void_p], None)
-    _get_current_stream = get_func('get_cuda_stream', [], c_void_p)
+    _set_current_cuda_stream = get_func('set_cuda_stream', [c_void_p], None)
+    _get_current_cuda_stream = get_func('get_cuda_stream', [], c_void_p)
     _register_callback = get_func('register_callback', [c_char_p, c_void_p], None)
     _allocate_cuda_storage = get_func('allocate_cuda_storage', [c_uint64], c_uint64)
     _free_cuda_storage = get_func('free_cuda_storage', [c_uint64], None)
+    _set_current_hip_stream = get_func('set_hip_stream', [c_void_p], None)
+    _get_current_hip_stream = get_func('get_hip_stream', [], c_void_p)
+    _allocate_hip_storage = get_func('allocate_hip_storage', [c_uint64], c_uint64)
+    _free_hip_storage = get_func('free_hip_storage', [c_uint64], None)
     _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
@@ -31,12 +35,12 @@ class RuntimeAPI:
     _use_torch_cuda_stream = get_func('use_torch_cuda_stream', [c_bool], None)
 
     @staticmethod
-    def set_current_stream(stream: Union[Stream, int]) -> None:
-        RuntimeAPI._set_current_stream(c_void_p(int(stream)))
+    def set_current_cuda_stream(stream: Union[Stream, int]) -> None:
+        RuntimeAPI._set_current_cuda_stream(c_void_p(int(stream)))
 
     @staticmethod
-    def get_current_stream() -> Union[int, None]:
-        p = RuntimeAPI._get_current_stream()
+    def get_current_cuda_stream() -> Union[int, None]:
+        p = RuntimeAPI._get_current_cuda_stream()
         return p if p else None
 
     @staticmethod
@@ -51,6 +55,23 @@ class RuntimeAPI:
     @staticmethod
     def free_cuda_storage(addr: int) -> None:
         return RuntimeAPI._free_cuda_storage(addr)
+
+    @staticmethod
+    def set_current_hip_stream(stream: Union[Stream, int]) -> None:
+        RuntimeAPI._set_current_hip_stream(c_void_p(int(stream)))
+
+    @staticmethod
+    def get_current_hip_stream() -> int:
+        p = RuntimeAPI._get_current_hip_stream()
+        return p.value
+
+    @staticmethod
+    def allocate_hip_storage(nbytes: int) -> int:
+        return RuntimeAPI._allocate_hip_storage(nbytes)
+
+    @staticmethod
+    def free_hip_storage(addr: int) -> None:
+        return RuntimeAPI._free_hip_storage(addr)
 
     @staticmethod
     def reset_symbol_table() -> None:

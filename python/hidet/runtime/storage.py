@@ -97,8 +97,7 @@ class CUDAHostMemoryAPI(MemoryAPI):
 class HipMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         with hidet.hip.device(self.device.id):
-            # TODO: use malloc_async once it is supported
-            addr = hidet.hip.malloc(nbytes)
+            addr = hidet.hip.malloc_async(nbytes)
         if addr == 0 and nbytes != 0:
             # out of memory
             return 0
@@ -110,8 +109,7 @@ class HipMemoryAPI(MemoryAPI):
 
     def free(self, addr: int):
         with hidet.hip.device(self.device.id):
-            # TODO: use free_async once it is supported
-            hidet.hip.free(addr)
+            hidet.hip.free_async(addr)
         self.allocated -= self.addr2nbytes.pop(addr)
 
     def memory_info(self) -> (int, int):
@@ -232,8 +230,7 @@ class Storage:
             device = src.device if src.device.is_hip() else dst_device
             with device:
                 if non_blocking:
-                    # TODO: usee memcpy_async once it is supported for HIP
-                    raise NotImplementedError('Asynchronous memcpy is not yet supported for HIP')
+                    hidet.hip.memcpy_async(dst.addr, src.addr, src.num_bytes, stream)
                 else:
                     hidet.hip.memcpy(dst.addr, src.addr, src.num_bytes)
         else:

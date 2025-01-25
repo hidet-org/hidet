@@ -10,19 +10,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
-from typing import Tuple
+from typing import Tuple, Optional, Union
 from .ffi import (
     error_msg,
     hip_memory_info,
     hip_malloc,
+    hip_malloc_async,
     hip_free,
+    hip_free_async,
     hip_malloc_host,
     hip_free_host,
     hip_memset,
+    hip_memset_async,
     hip_memcpy_device_to_host,
     hip_memcpy_host_to_device,
     hip_memcpy,
+    hip_memcpy_async,
 )
+
+from .stream import Stream, current_stream
 
 
 def memory_info() -> Tuple[int, int]:
@@ -70,6 +76,49 @@ def free(addr: int) -> None:
     """
     error = hip_free(addr)
     assert error == 0, error_msg("free", error)
+
+
+def malloc_async(num_bytes: int, stream: Optional[Union[Stream, int]] = None) -> int:
+    """
+    Allocate memory on the current hip device asynchronously.
+
+    Parameters
+    ----------
+    num_bytes: int
+        The number of bytes to allocate.
+
+    stream: Optional[Union[Stream, int]]
+        The stream to use for the allocation. If None, the current stream is used.
+
+    Returns
+    -------
+    addr: int
+        The address of the allocated memory.
+    """
+    if stream is None:
+        stream = current_stream()
+    error, ret = hip_malloc_async(num_bytes, int(stream))
+    assert error == 0, error_msg("malloc_async", error)
+    return ret
+
+
+def free_async(addr: int, stream: Optional[Union[Stream, int]] = None) -> None:
+    """
+    Free memory on the current hip device asynchronously.
+
+    Parameters
+    ----------
+    addr: int
+        The address of the memory to free. This must be the address of memory allocated with :func:`malloc` or
+        :func:`malloc_async`.
+
+    stream: Union[Stream, int], optional
+        The stream to use for the free. If None, the current stream is used.
+    """
+    if stream is None:
+        stream = current_stream()
+    error = hip_free_async(addr, int(stream))
+    assert error == 0, error_msg("free_async", error)
 
 
 def malloc_host(num_bytes: int) -> int:
@@ -121,6 +170,30 @@ def memset(addr: int, value: int, num_bytes: int) -> None:
     """
     error = hip_memset(addr, value, num_bytes)
     assert error == 0, error_msg("memset", error)
+
+
+def memset_async(addr: int, value: int, num_bytes: int, stream: Optional[Union[Stream, int]] = None) -> None:
+    """
+    Set the gpu memory to given value asynchronously.
+
+    Parameters
+    ----------
+    addr: int
+        The start address of the memory region to set.
+
+    value: int
+        The byte value to set the memory region to.
+
+    num_bytes: int
+        The number of bytes to set.
+
+    stream: Union[Stream, int], optional
+        The stream to use for the memset. If None, the current stream is used.
+    """
+    if stream is None:
+        stream = current_stream()
+    error = hip_memset_async(addr, value, num_bytes, int(stream))
+    assert error == 0, error_msg("memset_async", error)
 
 
 def memcpy_host_to_device(dst: int, src: int, num_bytes: int) -> None:
@@ -180,3 +253,27 @@ def memcpy(dst: int, src: int, num_bytes: int) -> None:
 
     error = hip_memcpy(dst, src, num_bytes)
     assert error == 0, error_msg("memcpy", error)
+
+
+def memcpy_async(dst: int, src: int, num_bytes: int, stream: Optional[Union[Stream, int]] = None) -> None:
+    """
+    Copy gpu memory from one location to another asynchronously.
+
+    Parameters
+    ----------
+    dst: int
+        The destination address.
+
+    src: int
+        The source address.
+
+    num_bytes: int
+        The number of bytes to copy.
+
+    stream: Union[Stream, int], optional
+        The stream to use for the memcpy. If None, the current stream is used.
+    """
+    if stream is None:
+        stream = current_stream()
+    error = hip_memcpy_async(dst, src, num_bytes, int(stream))
+    assert error == 0, error_msg("memcpy_async", error)

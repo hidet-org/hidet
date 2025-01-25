@@ -21,6 +21,7 @@ add_library(hidet_runtime SHARED
         src/hidet/runtime/cuda/cublas.cpp
         src/hidet/runtime/cuda/cudnn.cpp
         src/hidet/runtime/cuda/cuda.cpp
+        src/hidet/runtime/hip/context.cpp
         src/hidet/runtime/cpu/context.cpp
         src/hidet/runtime/callbacks.cpp
         src/hidet/runtime/logging.cpp

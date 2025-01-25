@@ -9,25 +9,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <cstdint>
+#pragma once
+#include <hidet/runtime/callbacks.h>
 #include <hidet/runtime/common.h>
+#include <hidet/runtime/context.h>
 
-DLL void register_callback(const char *name, void *func_ptr);
+struct HipContext: BaseContext {
+    /* The hip stream the kernels will be launched on. */
+    void *stream = nullptr;
 
-DLL uint64_t allocate_cuda_storage(uint64_t nbytes);
+    /**
+     * Get the instance of hip context.
+     */
+    static HipContext *global();
+};
 
-DLL void free_cuda_storage(uint64_t ptr);
+/**
+ * Set the hip stream of hip context.
+ */
+DLL void set_hip_stream(void *stream);
 
-DLL uint64_t allocate_cpu_storage(uint64_t nbytes);
+/**
+ * Get the hip stream of hip context.
+ */
+DLL void *get_hip_stream();
 
-DLL void free_cpu_storage(uint64_t ptr);
-
-DLL void cuda_memset(uint64_t ptr, int value, uint64_t nbytes);
-
-DLL uint64_t allocate_hip_storage(uint64_t nbytes);
-
-DLL void free_hip_storage(uint64_t ptr);
-
-DLL void hip_memset(uint64_t ptr, int value, uint64_t nbytes);
-
-DLL uint64_t get_torch_stream();
+/**
+ * Request a workspace.
+ */
+DLL void *request_hip_workspace(size_t nbytes, bool require_clean);

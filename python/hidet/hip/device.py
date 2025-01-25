@@ -65,7 +65,7 @@ def device_count() -> int:
     count: int
         The number of available HIP devices.
     """
-    ret, error = hip_device_count()
+    error, ret = hip_device_count()
     assert error == 0, error_msg("device_count", error)
     return ret
 
