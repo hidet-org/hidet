@@ -65,7 +65,6 @@ def add_launch_func(ir_module: IRModule, kernel_func: Function):
                 target='cuda',
             )
         elif kernel_func.kind == 'hip_kernel':
-            # FIXME: always zero for now
             shared_memory_bytes: Expr = rewrite(
                 simplify(kernel_func.get_attr('hip.dynamic_smem_bytes', int32(0))), param_remap
             )

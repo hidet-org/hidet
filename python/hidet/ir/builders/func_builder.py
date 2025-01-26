@@ -43,16 +43,17 @@ class FunctionBuilder(StmtBuilder):
         self.attrs: Dict[str] = attrs if attrs else {}
         self.label = label
 
+        device = 'cuda' if kind in ('cuda_internal', 'cuda_kernel') else 'hip'
         if grid_dim is not None:
-            self.attrs['cuda.grid_dim'] = grid_dim
+            self.attrs[f'{device}.grid_dim'] = grid_dim
         if cluster_dim is not None:
-            self.attrs['cuda.cluster_dim'] = cluster_dim
+            self.attrs[f'{device}.cluster_dim'] = cluster_dim
         if block_dim is not None:
-            self.attrs['cuda.block_dim'] = block_dim
+            self.attrs[f'{device}.block_dim'] = block_dim
         if dynamic_smem_bytes:
-            self.attrs['cuda.dynamic_smem_bytes'] = dynamic_smem_bytes
+            self.attrs[f'{device}.dynamic_smem_bytes'] = dynamic_smem_bytes
         if min_blocks:
-            self.attrs['cuda.min_blocks'] = min_blocks
+            self.attrs[f'{device}.min_blocks'] = min_blocks
 
     def __enter__(self):
         return self

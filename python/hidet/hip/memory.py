@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
-from typing import Tuple, Optional, Union
+from typing import Tuple, Union, Optional
 from .ffi import (
     error_msg,
     hip_memory_info,
@@ -27,7 +27,6 @@ from .ffi import (
     hip_memcpy,
     hip_memcpy_async,
 )
-
 from .stream import Stream, current_stream
 
 
@@ -40,9 +39,9 @@ def memory_info() -> Tuple[int, int]:
     (free, total): Tuple[int, int]
         The free and total memory on the current device in bytes.
     """
-    error, free_, total = hip_memory_info()
+    error, _free, total = hip_memory_info()
     assert error == 0, error_msg("memory_info", error)
-    return free_, total
+    return _free, total
 
 
 def malloc(num_bytes: int) -> int:
@@ -236,8 +235,8 @@ def memcpy_device_to_host(dst: int, src: int, num_bytes: int) -> None:
 
 def memcpy(dst: int, src: int, num_bytes: int) -> None:
     """
-    Copy data from src to dst. Uses hipMemcpyDefault to automatically determine the type of copy (DtoH, HtoD, DtoD, or
-    HtoH).
+    Copy data from src to dst. Uses hipMemcpyDefault to automatically determine the
+        type of copy (DtoH, HtoD, DtoD, or HtoH).
 
     Parameters
     ----------

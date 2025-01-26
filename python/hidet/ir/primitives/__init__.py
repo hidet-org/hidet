@@ -38,3 +38,5 @@ from .cuda import lds64, lds32, lds16, lds8
 from .cuda import sts64, sts32, sts16, sts8
 from .cuda import active_mask, set_kernel_max_dynamic_smem_bytes
 from .cuda import cvt, cvtv
+
+from . import hip

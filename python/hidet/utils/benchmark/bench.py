@@ -41,21 +41,39 @@ def _do_bench(fn, warmup, rep, percentiles):
 
     # Estimate the runtime of the function
 
+    cuda_available = hidet.cuda.available()
+    hip_available = hidet.hip.available()
+
+    if not cuda_available and not hip_available:
+        raise RuntimeError("No GPU found")
+
+    def sync():
+        if cuda_available:
+            hidet.cuda.synchronize()
+        else:
+            hidet.hip.synchronize()
+
+    def create_event():
+        if cuda_available:
+            return hidet.cuda.Event(enable_timing=True)
+        else:
+            return hidet.hip.Event(enable_timing=True)
+
     fn()
-    hidet.cuda.synchronize()
-    start_event = hidet.cuda.Event(enable_timing=True)
-    end_event = hidet.cuda.Event(enable_timing=True)
+    sync()
+    start_event = create_event()
+    end_event = create_event()
     start_event.record()
     for _ in range(5):
         fn()
     end_event.record()
-    hidet.cuda.synchronize()
+    sync()
     estimate_ms = end_event.elapsed_time(start_event) / 5
     n_warmup = max(1, int(warmup / estimate_ms))
     n_repeat = max(1, int(rep / estimate_ms))
 
-    start_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
-    end_event = [hidet.cuda.Event(enable_timing=True) for i in range(n_repeat)]
+    start_event = [create_event() for i in range(n_repeat)]
+    end_event = [create_event() for i in range(n_repeat)]
 
     # Warm-up
     for _ in range(n_warmup):
@@ -66,7 +84,7 @@ def _do_bench(fn, warmup, rep, percentiles):
         fn()
         end_event[i].record()
     # Record clocks
-    hidet.cuda.synchronize()
+    sync()
     times = np.array([e.elapsed_time(s) for s, e in zip(start_event, end_event)])
     if percentiles:
         percentiles = np.quantile(times, percentiles)

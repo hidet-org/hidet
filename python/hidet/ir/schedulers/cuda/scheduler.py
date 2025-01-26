@@ -20,7 +20,12 @@ from hidet.utils import prod
 from hidet.ir.schedulers.base import AutoScheduler, ComputeExprLower
 
 
-class CudaAutoScheduler(AutoScheduler):
+class GpuAutoScheduler(AutoScheduler):
+    def __init__(self, target: str = 'cuda'):
+        super().__init__()
+        assert target in ['cuda', 'hip']
+        self.target = target
+
     def schedule_grid_compute(self, node: GridCompute, tensor_map: Dict[TensorNode, Var]) -> Stmt:
         # pylint: disable=unnecessary-comprehension, import-outside-toplevel
         from hidet.ir.primitives.cuda import threadIdx, blockIdx
@@ -45,7 +50,9 @@ class CudaAutoScheduler(AutoScheduler):
         else:
             name = f'compute_{node.name}'
 
-        with FunctionBuilder(name=name, kind='cuda_kernel', grid_dim=grid_dim, block_dim=block_dim) as fb:
+        kind = f'{self.target}_kernel'
+
+        with FunctionBuilder(name=name, kind=kind, grid_dim=grid_dim, block_dim=block_dim) as fb:
             # set function parameters
             fb.extend_params(params)
 
@@ -71,5 +78,5 @@ class CudaAutoScheduler(AutoScheduler):
             grid_dim=grid_dim,
             cluster_dim=func.get_attr('cluster_dim', default=1),
             block_dim=block_dim,
-            target='cuda',
+            target=self.target,
         )

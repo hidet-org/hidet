@@ -132,6 +132,8 @@ class Operator:
             return 'cuda'
         if self.device.kind in ["cuda", "vcuda"]:
             return "cuda"
+        elif self.device.kind in ["hip"]:
+            return "hip"
         elif self.device.kind == "cpu":
             return "cpu"
         else:

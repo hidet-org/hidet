@@ -412,6 +412,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     'cuda.dynamic_smem_bytes',
                     'hip.block_dim',
                     'hip.grid_dim',
+                    'hip.dynamic_smem_bytes',
                 ]:
                     if isinstance(rhs, (tuple, list)):
                         rhs = [simplify(v) for v in rhs]
@@ -1004,6 +1005,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     block_dim=func.attrs['cuda.block_dim'],
                     shared_mem=func.attrs.get('cuda.dynamic_smem_bytes', 0),
                     target='cuda',
+                )
+            elif func.kind == 'hip_kernel':
+                return ir.stmt.launch_kernel(
+                    func_var=func_var,
+                    args=args,
+                    grid_dim=func.attrs['hip.grid_dim'],
+                    block_dim=func.attrs['hip.block_dim'],
+                    shared_mem=func.attrs.get('hip.dynamic_smem_bytes', 0),
+                    target='hip',
                 )
             else:
                 return func_var(*args)

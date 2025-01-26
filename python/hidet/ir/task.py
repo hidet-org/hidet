@@ -277,20 +277,20 @@ class Task(Node):
         return build_task(self, target=target, load=load)
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
-        from hidet.ir.schedulers import CudaAutoScheduler, CpuAutoScheduler
+        from hidet.ir.schedulers import GpuAutoScheduler, CpuAutoScheduler
 
         if isinstance(target, str):
             target = Target.from_string(target)
 
         implement_target, scheduler = {
-            'cuda': (self.implement_cuda, CudaAutoScheduler),
-            'cpu': (self.implement_cpu, CpuAutoScheduler),
+            'cuda': (self.implement_cuda, GpuAutoScheduler('cuda')),
+            'hip': (self.implement_cuda, GpuAutoScheduler('hip')),
+            'cpu': (self.implement_cpu, CpuAutoScheduler()),
         }[target.name]
 
         ir_modules: Union[IRModule, List[IRModule]] = implement_target(working_dir)
         if ir_modules is NotImplemented:
-            auto_scheduler = scheduler()
-            ir_modules = [auto_scheduler.schedule_task(self, target.name)]
+            ir_modules = [scheduler.schedule_task(self, target.name)]
         elif isinstance(ir_modules, IRModule):
             ir_modules = [ir_modules]
         elif isinstance(ir_modules, (list, tuple)) and all(isinstance(x, IRModule) for x in ir_modules):
@@ -306,6 +306,9 @@ class Task(Node):
         return ir_modules
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        return NotImplemented
+
+    def implement_hip(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:

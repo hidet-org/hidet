@@ -428,4 +428,4 @@ def launch_kernel(
             dims.append(1)
         launch_config.append(convert(dims))
     grid_dim, cluster_dim, block_dim = launch_config
-    return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, convert(shared_mem), target=target)
+    return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, convert(shared_mem), target)

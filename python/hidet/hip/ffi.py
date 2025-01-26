@@ -261,6 +261,8 @@ def hip_malloc(num_bytes: int) -> int:
     """
     ret = c_void_p()
     error = _hipMalloc(byref(ret), num_bytes)
+    if ret.value is None:  # keep this consistent with cuda api
+        return error, 0
     return error, ret.value
 
 
@@ -284,6 +286,8 @@ def hip_malloc_async(num_bytes: int, stream: int) -> int:
     ret = c_void_p()
     stream_ptr = c_void_p(stream)
     error = _hipMallocAsync(byref(ret), num_bytes, stream_ptr)
+    if ret.value is None:  # keep this consistent with cuda api
+        return error, 0
     return error, ret.value
 
 
@@ -337,6 +341,8 @@ def hip_malloc_host(num_bytes: int) -> int:
     """
     ret = c_void_p()
     error = _hipHostMalloc(byref(ret), num_bytes, 0)  # flag == 0: hipHostMallocDefault
+    if ret.value is None:  # keep this consistent with cuda api
+        return error, 0
     return error, ret.value
 
 

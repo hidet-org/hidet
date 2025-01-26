@@ -133,8 +133,9 @@ class CompiledGraph:
         self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
-        self.cuda_workspace: Optional[Storage] = None
         self.cpu_workspace: Optional[Storage] = None
+        self.cuda_workspace: Optional[Storage] = None
+        self.hip_workspace: Optional[Storage] = None
 
         if len(self.weights) == len(graph_execution.weights_index):
             # the weights are already loaded, initialize the graph directly
@@ -341,9 +342,9 @@ class CompiledGraph:
 
     def _prepare_workspace(self):
         if self.is_dynamic:
-            buffer = Array(i64, 2)
+            buffer = Array(i64, 3)
             self._get_workspace_size(buffer)
-            required_cpu_workspace, required_cuda_workspace = list(buffer)
+            required_cpu_workspace, required_cuda_workspace, required_hip_workspace = list(buffer)
         else:
             required_cpu_workspace = self.cpu_space_size
             required_cuda_workspace = self.cuda_space_size
@@ -359,6 +360,12 @@ class CompiledGraph:
         if global_cuda_workspace is None:
             global_cuda_workspace = Storage.new('cuda', required_cuda_workspace)
         self._set_workspace(1, global_cuda_workspace.addr)
+
+        if hidet.hip.available() and (
+            self.hip_workspace is None or self.hip_workspace.num_bytes < required_hip_workspace
+        ):
+            self.hip_workspace = Storage.new('hip', required_hip_workspace)
+            self._set_workspace(2, self.hip_workspace.addr)
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...], output_to_torch_tensor):
         # create output tensors

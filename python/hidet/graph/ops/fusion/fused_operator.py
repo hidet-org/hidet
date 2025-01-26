@@ -100,7 +100,7 @@ class FusedTask(Task):
         return inputs, outputs
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
-        from hidet.ir.schedulers import CpuAutoScheduler, CudaAutoScheduler
+        from hidet.ir.schedulers import CpuAutoScheduler, GpuAutoScheduler
         from .apply_prologue_epilogue import apply_prologue_epilogue_batch
 
         if isinstance(target, str):
@@ -116,8 +116,13 @@ class FusedTask(Task):
         elif target.name == 'cuda':
             anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
             if anchor_modules is NotImplemented:
-                auto_scheduler = CudaAutoScheduler()
+                auto_scheduler = GpuAutoScheduler('cuda')
                 return [auto_scheduler.schedule_task(self, 'cuda')]
+        elif target.name == 'hip':
+            anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_hip(working_dir)
+            if anchor_modules is NotImplemented:
+                auto_scheduler = GpuAutoScheduler('hip')
+                return [auto_scheduler.schedule_task(self, 'hip')]
         else:
             raise ValueError('unsupported target: {}'.format(target))
 

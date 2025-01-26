@@ -172,6 +172,7 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
     with hidet.script_module() as script_module:
         cpu_workspace = script_module.define_global_var('cpu_workspace', byte_p)
         cuda_workspace = script_module.define_global_var('cuda_workspace', byte_p)
+        hip_workspace = script_module.define_global_var('hip_workspace', byte_p)
         weights = script_module.define_global_var('weights', void_p[len(graph_weights)])
 
         @hidet.script
@@ -190,14 +191,15 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
                     for dim_idx, dim in meta.each(enumerate(graph.outputs[idx].shape)):
                         dims[dim_idx] = dim
 
-        def get_workspace_size_impl(cpu_size: Var, cuda_size: Var):
+        def get_workspace_size_impl(cpu_size: Var, cuda_size: Var, hip_size: Var):
             sb = hidet.ir.builders.StmtBuilder()
             usage_count = graph.usage_count
             tensor_ptr: Dict[Tensor, Var] = {x: var(x.op.name.lower(), int64) for x in graph_intermediates}
             cpu_idx = 0  # memory planner index
             cuda_idx = 1
-            device2idx = {'cpu': cpu_idx, 'cuda': cuda_idx}
-            for idx in [cpu_idx, cuda_idx]:
+            hip_idx = 2
+            device2idx = {'cpu': cpu_idx, 'cuda': cuda_idx, 'hip': hip_idx}
+            for idx in [cpu_idx, cuda_idx, hip_idx]:
                 sb += memory_planner_init(idx)
             for node in graph_nodes:
                 for output_idx, y in enumerate(node.outputs):
@@ -211,6 +213,7 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
                         sb += DeclareStmt(tensor_ptr[y], init=init_addr)
                 sb += AssignStmt(cpu_size, primitives.max(cpu_size, memory_planner_used(cpu_idx)))
                 sb += AssignStmt(cuda_size, primitives.max(cuda_size, memory_planner_used(cuda_idx)))
+                sb += AssignStmt(hip_size, primitives.max(hip_size, memory_planner_used(hip_idx)))
                 for x in node.inputs:
                     usage_count[x] -= 1
                     if usage_count[x] == 0 and x in graph_intermediates:
@@ -218,25 +221,29 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
             return sb.finish()
 
         @hidet.script
-        def get_workspace_size(sizes: int64[2]):
+        def get_workspace_size(sizes: int64[3]):
             attrs.func_kind = 'public'
 
             cpu_size = int64(0)
             cuda_size = int64(0)
-            get_workspace_size_impl(cpu_size, cuda_size)
+            hip_size = int64(0)
+            get_workspace_size_impl(cpu_size, cuda_size, hip_size)
             sizes[0] = cpu_size
             sizes[1] = cuda_size
+            sizes[2] = hip_size
 
         @hidet.script
         def set_workspace(idx: int32, space: void_p):
             attrs.func_kind = 'public'
 
-            assert 0 <= idx < 2, "Invalid workspace index"
+            assert 0 <= idx < 3, "Invalid workspace index"
 
             if idx == 0:
                 AssignStmt(cpu_workspace, space)
-            else:
+            elif idx == 1:
                 AssignStmt(cuda_workspace, space)
+            else:
+                AssignStmt(hip_workspace, space)
 
         def launch_impl(inputs: List[Var], outputs: List[Var], p_kernels: Var):
             intermediate_vars = [var(x.op.name.lower(), int64) for x in graph_intermediates]
@@ -259,7 +266,7 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
             sb = hidet.ir.builders.StmtBuilder()
             sb += memory_planner_init(0)
             sb += memory_planner_init(1)
-            d2i = {'cpu': 0, 'cuda': 1}
+            d2i = {'cpu': 0, 'cuda': 1, 'hip': 2}
 
             # Apply share_map optimization
             t_mapping.process_share_map(graph_nodes)
