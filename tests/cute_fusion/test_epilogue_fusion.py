@@ -143,7 +143,7 @@ def main():
         problem = [dim, 768, 320]
         if dims != (0, 2, 1, 3):
             continue
-        torch_time, hidet_time = test_epilogue_fusion(dim0, dim3, dims, problem)
+        torch_time, hidet_time = test_epilogue_fusion(dim0, dim3, dims, problem, 'bfloat16')
         records.append([problem, dim0, dim3, dims, torch_time, hidet_time, (torch_time / hidet_time - 1.0) * 100.0])
 
     with open("results.txt", "w") as f:

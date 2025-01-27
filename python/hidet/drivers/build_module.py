@@ -23,7 +23,7 @@ from hidet.ir.module import IRModule
 from hidet.ir.type import FuncType
 from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
-from hidet.utils.multiprocess import parallel_imap, get_parallel_num_workers
+from hidet.utils.multiprocess import parallel_imap_2ndlevel, get_parallel_num_workers
 from hidet.utils.stack_limit import set_stack_limit
 from hidet.utils.folder_lock import FolderLock
 
@@ -240,7 +240,9 @@ def build_ir_module_batch(
 
     jobs = [(group, output_dir) for group, output_dir in zip(ir_modules_list, output_dirs[: len(ir_modules_list)])]
 
-    for _ in tqdm(parallel_imap(build_job, jobs, is_remote_allowed=True), desc="Compiling", total=len(jobs), ncols=80):
+    for _ in tqdm(
+        parallel_imap_2ndlevel(build_job, jobs, is_remote_allowed=True), desc="Compiling", total=len(jobs), ncols=80
+    ):
         pass
 
     return output_dirs[: len(ir_modules_list)]

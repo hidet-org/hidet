@@ -1920,7 +1920,7 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, target: 
 def apply_prologue_epilogue_batch(
     anchor_modules: List[IRModule], fused_task: FusedTask, target: Target, working_dir: str
 ) -> List[IRModule]:
-    from hidet.utils.multiprocess import parallel_imap
+    from hidet.utils.multiprocess import parallel_imap_2ndlevel
     from tqdm import tqdm
 
     def _apply_prologue_epilogue_batch(args):
@@ -1932,6 +1932,11 @@ def apply_prologue_epilogue_batch(
 
     jobs = [(m, fused_task, target, working_dir) for m in anchor_modules]
     fused_modules: List[IRModule] = list(
-        tqdm(parallel_imap(_apply_prologue_epilogue_batch, jobs), desc='Appling fusing', total=len(jobs), ncols=80)
+        tqdm(
+            parallel_imap_2ndlevel(_apply_prologue_epilogue_batch, jobs),
+            desc='Appling fusing',
+            total=len(jobs),
+            ncols=80,
+        )
     )
     return fused_modules

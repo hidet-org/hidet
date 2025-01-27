@@ -17,7 +17,7 @@ from tqdm import tqdm
 import hidet.option
 from hidet.ir.module import IRModule
 from hidet.utils import prod
-from hidet.utils.multiprocess import parallel_imap
+from hidet.utils.multiprocess import parallel_imap_2ndlevel
 
 
 Choice = TypeVar('Choice')
@@ -144,7 +144,7 @@ def extract_ir_modules(template_func) -> List[IRModule]:
     lazy_initialize_cuda()
     ir_modules = list(
         tqdm(
-            parallel_imap(_extract_ir_modules, kwargs_list),
+            parallel_imap_2ndlevel(_extract_ir_modules, kwargs_list),
             desc='Generating Hidet IR',
             total=len(kwargs_list),
             ncols=80,

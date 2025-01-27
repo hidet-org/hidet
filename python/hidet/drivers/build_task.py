@@ -28,7 +28,7 @@ from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.runtime.compiled_module import compiled_module_exists
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, load_compiled_task, compiled_task_cache
 from hidet.runtime.device import Device
-from hidet.utils.multiprocess import parallel_imap
+from hidet.utils.multiprocess import parallel_imap_1stlevel
 from hidet.utils.py import cyan, green
 
 logger = logging.Logger(__name__)
@@ -339,7 +339,9 @@ def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
 
     if option.get_option('parallel_build') and len(jobs) > 1:
         lazy_initialize_cuda()
-        status_list = list(tqdm(parallel_imap(build_job, jobs), desc='Parallel build', total=len(jobs), ncols=80))
+        status_list = list(
+            tqdm(parallel_imap_1stlevel(build_job, jobs), desc='Parallel build', total=len(jobs), ncols=80)
+        )
     else:
         status_list = list(map(build_job, jobs))
     if not all(status for status, msg in status_list) and option.get_option('parallel_build'):
