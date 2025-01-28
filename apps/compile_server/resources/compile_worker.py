@@ -8,7 +8,7 @@ import pickle
 from hashlib import sha256
 from filelock import FileLock
 import multiprocessing
-import importlib
+import gc
 
 logger = logging.Logger(__name__)
 
@@ -99,6 +99,7 @@ def worker_process(version, job_queue, result_queue, parent_pid):
         print(f"[{parent_pid}] Worker processing job {job_id[:16]} with hidet version {version}", flush=True)
         compile_job(job_id)
         result_queue.put((job_id, 'DONE'))
+        gc.collect()   # Collect garbage to free memory
 
 
 class CompilationWorkers:
