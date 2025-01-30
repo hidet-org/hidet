@@ -11,7 +11,6 @@
 # limitations under the License.
 from typing import Dict
 from ctypes import CFUNCTYPE, c_uint64, c_int32
-import torch.cuda
 import hidet.cuda
 from hidet.ffi.runtime_api import runtime_api
 
@@ -99,4 +98,6 @@ def hip_memset(addr: int, value: int, nbytes: int) -> None:
 
 @register_runtime_callback(restype=c_uint64, argtypes=[])
 def get_torch_stream():
+    import torch.cuda
+
     return torch.cuda.current_stream().cuda_stream

@@ -15,7 +15,6 @@ import os
 import json
 from dataclasses import dataclass
 import tempfile
-import torch
 
 from tabulate import tabulate
 import numpy
@@ -105,6 +104,7 @@ class CompiledGraph:
         graph_execution: GraphExecution,
         graph_string: str,
     ):
+        import torch
         from hidet.graph.tensor import Tensor
 
         # graph module functions
@@ -509,6 +509,7 @@ class CompiledGraph:
         cuda_graph: hidet.cuda.graph.CudaGraph
             The CUDA graph.
         """
+        import torch
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
         from hidet.graph.tensor import Tensor
 
