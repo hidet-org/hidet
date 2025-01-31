@@ -198,7 +198,7 @@ def allow_in_graph_registered_funcs_only():
         return
 
     from torch._dynamo import variables, disallow_in_graph
-    from torch._dynamo.trace_rules import lookup, _allowed_callable_ids
+    from torch._dynamo.trace_rules import lookup, lookup_callable, _allowed_callable_ids
 
     def warmup_dissallow():
         for module_name, module in sys.modules.items():
@@ -206,6 +206,8 @@ def allow_in_graph_registered_funcs_only():
                 continue
             for obj in vars(module).values():
                 if not callable(obj):
+                    continue
+                if lookup_callable(obj) != variables.TorchInGraphFunctionVariable:
                     continue
                 if lookup(obj) != variables.TorchInGraphFunctionVariable:
                     continue
@@ -221,6 +223,8 @@ def allow_in_graph_registered_funcs_only():
             continue
         for obj in vars(module).values():
             if not callable(obj):
+                continue
+            if lookup_callable(obj) != variables.TorchInGraphFunctionVariable:
                 continue
             if lookup(obj) != variables.TorchInGraphFunctionVariable:
                 continue
