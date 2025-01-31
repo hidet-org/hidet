@@ -85,6 +85,9 @@ def compile_job(job_id: str):
 
 # Worker process function to handle compilation jobs using a specific version of the 'hidet' module.
 def worker_process(version, job_queue, result_queue, parent_pid):
+    import ctypes
+    libc = ctypes.CDLL("libc.so.6") 
+    
     sys.path.insert(0, os.path.join(version, 'python'))  # Ensure the version path is first in sys.path
     print(f"[{parent_pid}] Worker loaded hidet version from {version}", flush=True)
 
@@ -99,7 +102,9 @@ def worker_process(version, job_queue, result_queue, parent_pid):
         print(f"[{parent_pid}] Worker processing job {job_id[:16]} with hidet version {version}", flush=True)
         compile_job(job_id)
         result_queue.put((job_id, 'DONE'))
+        #Clear memory after compilation
         gc.collect()   # Collect garbage to free memory
+        libc.malloc_trim(0)  # Force return memory to OS
 
 
 class CompilationWorkers:
