@@ -16,21 +16,43 @@ operations in CuTe dialect, which enables us to coalesce and vectorize the memor
 epilogue.
 """
 from typing import List, Tuple, Union
-from functools import partial
 
+from hidet.ir.cute import auto_copy, auto_layout
+from hidet.ir.cute.ops import make_tensor, fill, mask
+from hidet.ir.primitives.runtime import request_cuda_workspace
 from hidet.ir.type import DataType, data_type
 from hidet.ir.dtypes import float16, float32, bfloat16
-from hidet.ir.expr import if_then_else, Int, Expr, cast
+from hidet.ir.expr import Int, Expr, is_constant
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.task import Task
-from hidet.ir.compute import compute, reduce
-from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
+
+from hidet.graph.ops.utils import input_like, can_mutually_broadcast
 from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices
+
+from hidet.option import get_parallel_k
+
+
+def get_parallel_k_candidates(level: int):
+    parallel_k_option = get_parallel_k()
+
+    if isinstance(parallel_k_option, int):
+        candidates = [parallel_k_option]
+    elif parallel_k_option == 'default':
+        candidates = [0]
+    elif parallel_k_option == 'disabled':
+        candidates = [1]
+    elif parallel_k_option == 'search':
+        candidates_map = {0: [1], 1: [1, 2], 2: [1, 2, 4, 8]}
+        candidates = candidates_map[level]
+    else:
+        raise ValueError(f'Unsupported parallel_k_option: {parallel_k_option}')
+    for candidate in candidates:
+        yield candidate
 
 
 def cast_fp16(x: Expr):
@@ -42,14 +64,15 @@ def cast_bf16(x: Expr):
 
 
 class MatmulF16CuteTask(Task):
-    def __init__(
-        self,
-        a: TensorNode,
-        b: TensorNode,
-        acc_dtype: Union[DataType, str],
-        parallel_k_parts: int = 1,
-        transpose_b: bool = False,
-    ):
+    """
+    A matmul template that enables f16 tensorcore with CuTe dialect.
+    Currently, this is amost a copy-paste of matmul_f16.py with the only change of epilogue.
+    We will replace the rest parts with our CuTe dialect later.
+    """
+
+    def __init__(self, a: TensorNode, b: TensorNode, acc_dtype: Union[DataType, str], transpose_b: bool = False):
+        from hidet.ir.compute import cops
+
         self.transpose_b = transpose_b
 
         if not a.type.dtype == b.type.dtype:
@@ -92,52 +115,15 @@ class MatmulF16CuteTask(Task):
             ),
         )
 
-        a_shape = a.shape
-        b_shape = b.shape
-        k_size = a.shape[-1]
-        if not transpose_b:
-            c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
-        else:
-            c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-2]]
-
-        k_part_extent = cdiv(k_size, parallel_k_parts)
-
         acc_dtype = data_type(acc_dtype)
 
-        def inner_compute(k_part, indices, k):
-            if not transpose_b:
-                return if_then_else(
-                    k_part * k_part_extent + k < k_size,
-                    cast(
-                        a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
-                        * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
-                        acc_dtype,
-                    ),
-                    acc_dtype(0.0),
-                )
-            else:
-                return if_then_else(
-                    k_part * k_part_extent + k < k_size,
-                    cast(
-                        a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
-                        * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [indices[-1], k]],
-                        acc_dtype,
-                    ),
-                    acc_dtype(0.0),
-                )
-
-        def outer_compute(k_part, *indices):
-            return target_float_type(
-                reduce(shape=[k_part_extent], fcompute=partial(inner_compute, k_part, indices), reduce_type='sum')
-            )
-
-        c = compute(name='c', shape=c_shape, fcompute=outer_compute)
+        c = cops.matmul(a, b, tb=transpose_b)
 
         super().__init__(
             name=f'matmul_{target_float_type.short_name}_pk_cute_transpose_b_{transpose_b}',
             inputs=[a, b],
             outputs=[c],
-            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'transpose_b': transpose_b},
+            attributes={'acc_dtype': acc_dtype, 'transpose_b': transpose_b},
         )
 
     def allow_prologue(self) -> bool:
@@ -168,6 +154,7 @@ class MatmulF16CuteTask(Task):
         warp_n=[16, 32, 48, 64],
         warp_k=[8, 16, 32, 64],
         mma=['m16n8k16'],
+        parallel_k_parts=get_parallel_k_candidates,
         use_cublas=[True, False],
     )
     @tune.space(
@@ -179,6 +166,7 @@ class MatmulF16CuteTask(Task):
         warp_n=[64],
         warp_k=[16],
         mma=['m16n8k16'],
+        parallel_k_parts=get_parallel_k_candidates,
         use_cublas=[True, False],
     )
     def schedule(
@@ -190,6 +178,7 @@ class MatmulF16CuteTask(Task):
         warp_n=64,
         warp_k=16,
         mma: str = 'm16n8k16',
+        parallel_k_parts=1,
         use_cublas=False,
     ) -> IRModule:
         # pylint: disable=unused-variable
@@ -209,22 +198,38 @@ class MatmulF16CuteTask(Task):
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: Tuple[Int, ...] = node_a.shape
-        b_shape: Tuple[Int, ...] = node_b.shape
-        c_shape: Tuple[Int, ...] = node_c.shape
+        a_shape: List[Expr] = node_a.shape
+        b_shape: List[Expr] = node_b.shape
+        c_shape: List[Expr] = node_c.shape
 
         if not transpose_b:
             m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         else:
             m_size, n_size, k_size = a_shape[-2], b_shape[-2], a_shape[-1]
 
-        a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
-        k_parts = self.attrs['parallel_k_parts']
-        k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
+        c_head_non_parallel_k = list(c_shape[:-2])
+
+        if self.has_symbolic_shape():
+            tune.check(parallel_k_parts == 1, 'parallel_k_parts must be 1 with symbolic shape')
+
+        if parallel_k_parts == 0:
+            # Hack: 0 is used to indicate that the `default` parallel_k strategy will be used
+            batch_size = prod(c_shape[:-2])
+            if is_constant(batch_size, m_size):
+                estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
+                estimate_concurrent_blocks = 80 * 5
+                max_k_parts = cdiv(k_size, 64)
+                k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
+                parallel_k_parts = k_parts
+
+        assert parallel_k_parts > 0, 'parallel_k_parts must be greater than 0'
+        parallel_c_shape = [parallel_k_parts] + c_shape
+        a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(parallel_c_shape[:-2])
+        c_head_matmul = c_head if parallel_k_parts > 1 else c_head_non_parallel_k
+        k_part_extent = cdiv(cdiv(k_size, parallel_k_parts), 8) * 8
         acc_dtype = self.attrs['acc_dtype']
 
         if use_cublas:
-
             from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
             from hidet.cuda.cublas import cublasComputeType
 
@@ -245,8 +250,7 @@ class MatmulF16CuteTask(Task):
                 and mma == 'm16n8k16'
             )
             tune.check(schedule_filter)
-            # Don't know how to convert the matmuls with parallel_k opt to batched matmul, so we disable it here.
-            tune.check(k_parts == 1)
+            tune.check(parallel_k_parts == 1)
             return get_cublas_matmul_schedule(
                 a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type, transpose_b=transpose_b
             )
@@ -530,7 +534,7 @@ class MatmulF16CuteTask(Task):
             @hidet.script
             def store_c_reg2gmem(
                 regs_c: acc_dtype[mma_count_m, mma_count_n, mma_config.c_elements],
-                c: target_float_type[c_head + [m_size, n_size]],
+                c: target_float_type[c_head_matmul + [m_size, n_size]],
             ):
                 t_regs_c = tensor_view(regs_c, mma_layout, "register")
                 if fp16_acc:
@@ -539,8 +543,19 @@ class MatmulF16CuteTask(Task):
                     cvt_t_regs_c = rearrange(arithmetic(t_regs_c, op=cast_func), store_c_layout, "register")
                 extents = [m_size - blockIdx.x * block_m, n_size - blockIdx.y * block_n]
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
-                c_head_index = spatial(*c_head).map(blockIdx.z)
-                collective_store(copy_c, cvt_t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
+
+                if parallel_k_parts > 1:
+                    c_head_index = spatial(*c_head).map(blockIdx.z)
+                    txrcvt = partition_src(cvt_t_regs_c, copy_c)
+                    tg_c = tensor_view(
+                        c[c_head_index][offset_m:, offset_n:], TensorLayout((block_m, block_n), (n_size, 1)), "global"
+                    )
+                    txgc = partition_dst(tg_c, copy_c)
+                    mask_c = mask(copy_c, extents)
+                    copy(copy_c, txrcvt, txgc, mask_c)
+                else:
+                    c_head_index = spatial(*c_head_non_parallel_k).map(blockIdx.z)
+                    collective_store(copy_c, cvt_t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
 
             alignment = self.get_alignment(int(n_size))
             tasks = block_m * (block_n // alignment)
@@ -564,7 +579,9 @@ class MatmulF16CuteTask(Task):
             smem_layout = TensorLayout((block_m, block_n), (block_n, 1))
 
             @hidet.script
-            def store_c_smem2gmem(smem_c: acc_dtype[block_m, block_n], c: target_float_type[c_head + [m_size, n_size]]):
+            def store_c_smem2gmem(
+                smem_c: acc_dtype[block_m, block_n], c: target_float_type[c_head_matmul + [m_size, n_size]]
+            ):
                 regs_c = register_tensor(acc_dtype, [store_c_layout.val_layout().size()])
                 t_regs_c = tensor_view(regs_c, store_c_layout, "register")
                 t_smem_c = tensor_view(smem_c, smem_layout, "shared", volatile=True)
@@ -574,19 +591,36 @@ class MatmulF16CuteTask(Task):
                 syncthreads()
                 extents = [m_size - blockIdx.x * block_m, n_size - blockIdx.y * block_n]
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
-                c_head_index = spatial(*c_head).map(blockIdx.z)
-                if fp16_acc:
-                    collective_store(tiled_copy, t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
+                if parallel_k_parts == 1:
+                    c_head_index = spatial(*c_head_non_parallel_k).map(blockIdx.z)
+                    if fp16_acc:
+                        collective_store(tiled_copy, t_regs_c, c, c_head_index + [offset_m, offset_n], extents)
+                    else:
+                        collective_store(
+                            tiled_copy,
+                            arithmetic(t_regs_c, op=cast_func),
+                            c,
+                            c_head_index + [offset_m, offset_n],
+                            extents,
+                        )
                 else:
-                    collective_store(
-                        tiled_copy, arithmetic(t_regs_c, op=cast_func), c, c_head_index + [offset_m, offset_n], extents
+                    c_head_index = spatial(*c_head).map(blockIdx.z)
+                    tg_c = tensor_view(
+                        c[c_head_index][offset_m:, offset_n:], TensorLayout((block_m, block_n), (n_size, 1)), "global"
                     )
+                    if fp16_acc:
+                        txrcvt = partition_src(t_regs_c, tiled_copy)
+                    else:
+                        txrcvt = partition_src(arithmetic(t_regs_c, op=cast_func), tiled_copy)
+                    txgc = partition_dst(tg_c, tiled_copy)
+                    mask_c = mask(tiled_copy, extents)
+                    copy(tiled_copy, txrcvt, txgc, mask_c)
 
             @hidet.script
             def matmul_f16_kernel(
                 a: target_float_type[a_head + [m_size, k_size]],
                 b_ptr: ~target_float_type,
-                c: target_float_type[c_head + [m_size, n_size]],
+                c: target_float_type[c_head_matmul + [m_size, n_size]],
             ):
                 # matrix multiplication, using mma instruction
                 attrs.cuda.grid_dim = grid_dim
@@ -671,6 +705,69 @@ class MatmulF16CuteTask(Task):
                             syncthreads()
                     store_c_smem2gmem(smem_c, c)
 
+            nonempty_c_head: bool = len(c_head_non_parallel_k) > 0
+
+            @hidet.script
+            def reduce(temp_c_buffer: target_float_type[parallel_c_shape], c: target_float_type[c_shape]):
+
+                attrs.cuda.grid_dim = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head_non_parallel_k)
+                attrs.cuda.block_dim = threads
+                attrs.cuda.dynamic_shared_memory = 0
+
+                bidx = blockIdx.x
+                bidy = blockIdx.y
+                bidz = blockIdx.z
+
+                tensor_sum = make_tensor(target_float_type, store_c_layout, "register")
+                fill(tensor_sum, 0.0)
+
+                for i in range(parallel_k_parts):
+                    partial_sum = make_tensor(target_float_type, auto_layout, "register")
+                    if nonempty_c_head:
+                        temp = temp_c_buffer[i, bidz, bidx * block_m :, bidy * block_n :]
+                    else:
+                        temp = temp_c_buffer[i, bidx * block_m :, bidy * block_n :]
+                    tensor_temp = tensor_view(temp, TensorLayout((block_m, block_n), (n_size, 1)), "global")
+                    txgtmp = partition_src(tensor_temp, auto_copy())
+                    txrpsum = partition_dst(partial_sum, auto_copy())
+                    extents = [m_size - bidx * block_m, n_size - bidy * block_n]
+                    mask_tmp = mask(auto_copy(), extents)
+                    copy(auto_copy((block_m, block_n)), txgtmp, txrpsum, mask_tmp)
+                    tensor_sum = tensor_sum + partial_sum
+
+                extents = [m_size - bidx * block_m, n_size - bidy * block_n]
+                if parallel_k_parts > 1:
+                    if nonempty_c_head:
+                        offsets = [bidz, bidx * block_m, bidy * block_n]
+                    else:
+                        offsets = [bidx * block_m, bidy * block_n]
+                    collective_store(tiled_copy, tensor_sum, c, offsets, extents)
+                else:
+
+                    if nonempty_c_head:
+                        cc = c[bidz, bidx * block_m :, bidy * block_n :]
+                    else:
+                        cc = c[bidx * block_m :, bidy * block_n :]
+
+                    tensor_c = tensor_view(cc, TensorLayout((block_m, block_n), (n_size, 1)), "global")
+                    mask_c = mask(tiled_copy, extents)
+                    txgc = partition_dst(tensor_c, tiled_copy)
+                    txrsum = partition_src(tensor_sum, tiled_copy)
+                    copy(tiled_copy, txrsum, txgc, mask_c)
+
+            @hidet.script
+            def launch(a: target_float_type[a_shape], b: target_float_type[b_shape], c: target_float_type[c_shape]):
+                attrs.func_kind = "public"
+                if parallel_k_parts > 1:
+                    temp_c_buffer_void = request_cuda_workspace(
+                        prod(parallel_c_shape) * float16.nbytes, require_clean=True
+                    )
+                    temp_c_buffer = as_tensor_pointer(temp_c_buffer_void, target_float_type, parallel_c_shape)
+                    matmul_f16_kernel(a, b, temp_c_buffer)
+                    reduce(temp_c_buffer, c)
+                else:
+                    matmul_f16_kernel(a, b, c)
+
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
 
@@ -686,7 +783,7 @@ class MatmulF16CuteOp(Operator):
         super().__init__(
             inputs=[a, b],
             attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'transpose_b': transpose_b},
-            task=MatmulF16CuteTask(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, parallel_k_parts, transpose_b),
+            task=MatmulF16CuteTask(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, transpose_b),
         )
 
 

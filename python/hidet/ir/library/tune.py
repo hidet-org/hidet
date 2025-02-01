@@ -44,6 +44,10 @@ class TuningSpace:
 
         sub_keys = list(self.spaces[level].keys())
         sub_spaces = list(self.spaces[level].values())
+
+        sub_spaces = [s(level) if callable(s) else s for s in sub_spaces]
+        sub_spaces = [list(s) for s in sub_spaces]
+
         space_size = prod([len(s) for s in sub_spaces])
         if space_size > self.MAX_SPACE_SIZE:
             raise ValueError(
@@ -61,7 +65,7 @@ class TuningSpace:
                     kwargs[key] = value
             yield kwargs
 
-    def add_sub_space(self, level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice]]]]):
+    def add_sub_space(self, level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice],]]]):
         if level in self.spaces:
             raise ValueError(f'Level {level} is already defined.')
         if level == 0:
@@ -69,7 +73,8 @@ class TuningSpace:
 
         self.spaces[level] = {}
         for names, choices in name_choice_dict.items():
-            choices = list(choices)
+            if not callable(choices):
+                choices = list(choices)
             names = [name.strip() for name in names.split(',')]
             for name in names:
                 if name in self.existing_names:

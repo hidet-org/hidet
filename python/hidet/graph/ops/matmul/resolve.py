@@ -17,7 +17,7 @@ from hidet.ir.expr import is_constant
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.utils.py import gcd, factorize, prod, cdiv
+from hidet.utils.py import gcd, factorize
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
@@ -214,7 +214,6 @@ class MatmulResolveRule(ResolveRule):
         if hidet.option.cuda.get_arch_pair() < (8, 0):
             return None
 
-        parallel_k = hidet.option.get_parallel_k()
         hexcute_matmul = hidet.option.get_hexcute_matmul()
         if hexcute_matmul == 'enable':
             from .matmul_f16_cute_experimental import matmul_f16_cute as matmul_f16_cute_experimental
@@ -226,47 +225,10 @@ class MatmulResolveRule(ResolveRule):
             # Leave this to be implemented in the future
             raise NotImplementedError('The heuristic for hexcute_matmul is not implemented.')
 
-        if op.task.has_symbolic_shape():
-            k_parts = 1
-        elif isinstance(parallel_k, str):
-            if parallel_k == 'default':
-                batch_size, m_size, n_size, k_size = prod(c.shape[:-2]), c.shape[-2], c.shape[-1], a.shape[-1]
-                if is_constant(batch_size, m_size):
-                    estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
-                    estimate_concurrent_blocks = 80 * 5
-                    max_k_parts = cdiv(k_size, 64)
-                    k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
-                else:
-                    k_parts = 1
-            elif parallel_k == 'disabled':
-                k_parts = 1
-            elif parallel_k == 'search':
-                candidates = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16]
-                aa = hidet.symbol_like(a)
-                bb = hidet.symbol_like(b)
-                latencies: List[float] = []
-                print('Searching the best parallel_k for {} x {} among {}'.format(a.shape, b.shape, candidates))
-                for candidate in candidates:
-                    cc = matmul_f16_cute(aa, bb, parallel_k_parts=candidate, transpose_b=transpose_b)
-                    graph = hidet.trace_from([cc], [aa, bb])
-                    graph: hidet.FlowGraph = hidet.graph.optimize(graph)
-                    latency: float = graph.latency()
-                    latencies.append(latency)
-                best_idx = min(range(len(candidates)), key=lambda i: latencies[i])
-                print(
-                    'Results: {{{}}},'.format(
-                        ', '.join('{}: {:.1f}'.format(a, b * 1000) for a, b in zip(candidates, latencies))
-                    ),
-                    'Picked {} with {:.1f} micro-seconds'.format(candidates[best_idx], latencies[best_idx] * 1000),
-                )
-                k_parts = candidates[best_idx]
-            else:
-                raise ValueError(f'invalid parallel_k: {parallel_k}')
-        elif isinstance(parallel_k, int):
-            k_parts = min(max(parallel_k, 1), 32)
+        if hexcute_matmul == 'enable':
+            c = matmul_f16_cute(a, b, transpose_b=transpose_b).sum(0)
         else:
-            raise ValueError(f'invalid parallel_k: {parallel_k}')
-        c = matmul_f16_cute(a, b, parallel_k_parts=k_parts, transpose_b=transpose_b).sum(0)
+            c = matmul_f16_cute(a, b, transpose_b=transpose_b)
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
