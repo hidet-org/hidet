@@ -223,11 +223,8 @@ class MatmulF16CuteTask(Task):
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
         acc_dtype = self.attrs['acc_dtype']
 
-        if transpose_b:
-            # TODO: Is there a way to support cuBLAS with B transposed?
-            tune.check(not use_cublas, 'Cublas does not support transpose_b')
-
         if use_cublas:
+
             from hidet.graph.ops.utils.schedule_utils import get_cublas_matmul_schedule
             from hidet.cuda.cublas import cublasComputeType
 
@@ -250,7 +247,9 @@ class MatmulF16CuteTask(Task):
             tune.check(schedule_filter)
             # Don't know how to convert the matmuls with parallel_k opt to batched matmul, so we disable it here.
             tune.check(k_parts == 1)
-            return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type)
+            return get_cublas_matmul_schedule(
+                a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type, transpose_b=transpose_b
+            )
 
         # schedule parameters
 

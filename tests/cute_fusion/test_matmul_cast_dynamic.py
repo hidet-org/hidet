@@ -108,7 +108,6 @@ def test_matmul_relu_1(hexcute_matmul: bool):
 
     with hidet.option.context():
         hidet.option.hexcute_matmul(hexcute_matmul)
-        hidet.option.cache_dir("./111")
         # hidet.option.save_lower_ir(True)
         # hidet.option.debug_cache_tuning()
         backend = Backend(backend='hidet', mode='max-autotune-no-cudagraphs', dtype=torch.bfloat16)

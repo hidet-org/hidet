@@ -166,7 +166,9 @@ def resolve_cublas_compute_type(
         )
 
 
-def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_shape: List[Expr]):
+def convert_to_cublas_strided_gemm(
+    a_shape: List[Expr], b_shape: List[Expr], c_shape: List[Expr], transpose_b: bool = False
+):
     a_rank: int = len(a_shape)
     b_rank: int = len(b_shape)
 
@@ -174,7 +176,7 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
     if a_rank == 1:
         bs = prod(b_shape[:-2])
         m = 1
-        n = b_shape[-1]
+        n = b_shape[-1] if not transpose_b else b_shape[-2]
         k = a_shape[0]
         stride_a = 0
         stride_b = b_shape[-2] * b_shape[-1]
@@ -191,7 +193,7 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
         if is_true(prod(a_shape[:-2]) == 1):
             bs = prod(b_shape[:-2])
             m = a_shape[-2]
-            n = b_shape[-1]
+            n = b_shape[-1] if not transpose_b else b_shape[-2]
             k = a_shape[-1]
             stride_a = 0
             stride_b = b_shape[-2] * b_shape[-1]
@@ -199,7 +201,7 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
         elif is_true(prod(b_shape[:-2]) == 1):
             bs = prod(a_shape[:-2])
             m = a_shape[-2]
-            n = b_shape[-1]
+            n = b_shape[-1] if not transpose_b else b_shape[-2]
             k = a_shape[-1]
             stride_a = a_shape[-2] * a_shape[-1]
             stride_b = 0
@@ -207,7 +209,7 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
         elif all(is_true(a == b) for a, b in zip(a_shape[:-2], b_shape[:-2])):
             bs = prod(a_shape[:-2])
             m = a_shape[-2]
-            n = b_shape[-1]
+            n = b_shape[-1] if not transpose_b else b_shape[-2]
             k = a_shape[-1]
             stride_a = a_shape[-2] * a_shape[-1]
             stride_b = b_shape[-2] * b_shape[-1]
@@ -220,7 +222,14 @@ def convert_to_cublas_strided_gemm(a_shape: List[Expr], b_shape: List[Expr], c_s
 
 
 def get_cublas_matmul_schedule(
-    a_shape, b_shape, c_shape, a_dtype, b_dtype, c_dtype, compute_type: Optional[Union[cublasComputeType, int]] = None
+    a_shape,
+    b_shape,
+    c_shape,
+    a_dtype,
+    b_dtype,
+    c_dtype,
+    compute_type: Optional[Union[cublasComputeType, int]] = None,
+    transpose_b: bool = False,
 ):
     import hidet
     from hidet.lang.cuda import cublas
@@ -228,7 +237,9 @@ def get_cublas_matmul_schedule(
     from hidet.ir.library import tune
 
     try:
-        bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(a_shape, b_shape, c_shape)
+        bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(
+            a_shape, b_shape, c_shape, transpose_b=transpose_b
+        )
         compute_type: cublasComputeType = resolve_cublas_compute_type(a_dtype, b_dtype, compute_type)
     except NotImplementedError:
         # Unable to resolve cublas params, skip using cublas
@@ -252,7 +263,7 @@ def get_cublas_matmul_schedule(
                 stride_b,
                 stride_c,
                 False,
-                False,
+                transpose_b,
                 compute_type,
             )
 

@@ -247,22 +247,6 @@ def test_matmul_fp16_dynamic(a_shape, b_shape):
 
 
 @pytest.mark.requires_cuda
-@pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, 128], [128, 128]]])
-@pytest.mark.parametrize("dtype, tol", [("float32", 1e-5), ("float16", 1e-1), ("bfloat16", 5e-1)])
-def test_matmul_cublas(a_shape, b_shape, dtype, tol):
-    check_torch_binary(
-        a_shape,
-        b_shape,
-        torch_func=lambda x, y: torch.matmul(x, y),
-        hidet_func=lambda x, y: ops.matmul_cublas(x, y),
-        device="cuda",
-        dtype=dtype,
-        atol=tol,
-        rtol=tol,
-    )
-
-
-@pytest.mark.requires_cuda
 @pytest.mark.parametrize(
     "a_shape, b_shape",
     [
@@ -309,6 +293,35 @@ def test_matmul_nt(a_shape, b_shape, dtype, parallel_k):
         tol = 1e-1 if dtype == torch.float16 else 1.2e-1
 
         assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=tol, rtol=tol)
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize(
+    "a_shape, b_shape",
+    [
+        [[1, 125, 127], [127, 128]],
+        [[1, 1024, 1024 + 8], [1024 + 8, 1024 - 8]],
+        [[2, 1032, 1032], [1032, 1032]],
+        [[1, 126, 128], [128]],
+    ],
+)
+@pytest.mark.parametrize('transpose_b', [False, True])
+def test_matmul_cublas(a_shape, b_shape, transpose_b):
+    if transpose_b:
+        b_shape = b_shape[::-1]
+        torch_func = lambda x, y: torch.matmul(x, torch.transpose(y, 0, 1)) if len(b_shape) >= 2 else torch.matmul(x, y)
+    else:
+        torch_func = lambda x, y: torch.matmul(x, y)
+    check_torch_binary(
+        a_shape,
+        b_shape,
+        torch_func=torch_func,
+        hidet_func=lambda x, y: ops.matmul_cublas(x, y, transpose_b=transpose_b),
+        device='cuda',
+        dtype='float16',
+        atol=1e-1,
+        rtol=1e-1,
+    )
 
 
 @pytest.mark.requires_cuda

@@ -281,12 +281,12 @@ DLL void hidet_cublas_strided_gemm(int b, int m, int n, int k, int ta, int tb, i
         set_alpha_beta(&p_alpha, &p_beta, cublasComputeType_t(compute_type), cudaDataType_t(tc));
 
         CHECK_CUBLAS(cublasGemmStridedBatchedEx(
-            CublasContext::current_handle(), trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
-            trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
+            CublasContext::current_handle(), trans_b ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N,
+            trans_a ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N, n, m, k, p_alpha,
             // b^t
             ptr_b, cudaDataType(tb),
-            n,   // ldb
-            sb,  // strideB
+            trans_b ? k : n,  // ldb
+            sb,               // strideB
             // a^t
             ptr_a, cudaDataType(ta),
             k,   // lda

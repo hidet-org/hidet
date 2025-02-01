@@ -21,7 +21,13 @@ from ..utils.schedule_utils import convert_to_cublas_strided_gemm, resolve_cubla
 
 
 class CublasMatmulTask(Task):
-    def __init__(self, a: TensorInput, b: TensorInput, compute_type: Optional[Union[int, cublasComputeType]] = None):
+    def __init__(
+        self,
+        a: TensorInput,
+        b: TensorInput,
+        compute_type: Optional[Union[int, cublasComputeType]] = None,
+        transpose_b: bool = False,
+    ):
         from hidet.ir.compute import cops
 
         # check
@@ -30,9 +36,12 @@ class CublasMatmulTask(Task):
 
         self.compute_type: cublasComputeType = resolve_cublas_compute_type(a.type.dtype, a.type.dtype, compute_type)
 
-        c = cops.matmul(a, b, allow_1d=True)
+        c = cops.matmul(a, b, allow_1d=True, tb=transpose_b)
         super().__init__(
-            name='cublas_matmul', inputs=[a, b], outputs=[c], attributes={'compute_type': self.compute_type}
+            name='cublas_matmul',
+            inputs=[a, b],
+            outputs=[c],
+            attributes={'compute_type': self.compute_type, 'transpose_b': transpose_b},
         )
 
     def implement_cuda(self, working_dir: str) -> IRModule:
@@ -45,10 +54,14 @@ class CublasMatmulTask(Task):
         b_shape = list(self.inputs[1].type.shape)
         c_shape = list(self.outputs[0].type.shape)
 
+        transpose_b = self.attrs['transpose_b']
+        bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(
+            a_shape, b_shape, c_shape, transpose_b
+        )
+
         with hidet.script_module() as script_module:
 
             def generate(a: Expr, b: Expr, c: Expr) -> Expr:
-                bs, m, n, k, stride_a, stride_b, stride_c = convert_to_cublas_strided_gemm(a_shape, b_shape, c_shape)
                 return cublas.strided_gemm(
                     bs,
                     m,
@@ -64,7 +77,7 @@ class CublasMatmulTask(Task):
                     stride_b,
                     stride_c,
                     False,
-                    False,
+                    transpose_b,
                     self.compute_type,
                 )
 
@@ -78,10 +91,10 @@ class CublasMatmulTask(Task):
 
 
 class CublasMatmulOp(Operator):
-    def __init__(self, a: Tensor, b: Tensor):
-        task = CublasMatmulTask(input_like(a, 'a'), input_like(b, 'b'))
-        super().__init__(inputs=[a, b], attributes={}, task=task)
+    def __init__(self, a: Tensor, b: Tensor, transpose_b):
+        task = CublasMatmulTask(input_like(a, 'a'), input_like(b, 'b'), transpose_b=transpose_b)
+        super().__init__(inputs=[a, b], attributes={'transpose_b': transpose_b}, task=task)
 
 
-def matmul_cublas(a: Tensor, b: Tensor) -> Tensor:
-    return CublasMatmulOp(a, b).outputs[0]
+def matmul_cublas(a: Tensor, b: Tensor, transpose_b: bool = False) -> Tensor:
+    return CublasMatmulOp(a, b, transpose_b).outputs[0]

@@ -416,8 +416,6 @@ class MatmulF16CuteTask(Task):
 
         if use_cublas:
             transpose_b = self.attrs['transpose_b']
-            # TODO: Is there a way to support cuBLAS with B transposed?
-            tune.check(not transpose_b, 'Cublas does not support transpose_b')
             tune.check(multi_stage)
             k_parts = self.attrs['parallel_k_parts']
             # Don't know how to convert the matmuls with parallel_k opt to batched matmul, so we disable it here.
@@ -449,7 +447,9 @@ class MatmulF16CuteTask(Task):
         a_shape: Tuple[Int, ...] = node_a.shape
         b_shape: Tuple[Int, ...] = node_b.shape
         c_shape: Tuple[Int, ...] = node_c.shape
-        return get_cublas_matmul_schedule(a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type)
+        return get_cublas_matmul_schedule(
+            a_shape, b_shape, c_shape, dtype, dtype, dtype, compute_type, transpose_b=self.transpose_b
+        )
 
     def matmul_single_buffer(self, tiled_mma: TiledMma, block_k: int):
         acc_dtype = self.attrs['acc_dtype']
