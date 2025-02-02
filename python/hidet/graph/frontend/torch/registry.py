@@ -207,9 +207,16 @@ def allow_in_graph_registered_funcs_only():
             for obj in vars(module).values():
                 if not callable(obj):
                     continue
-                if lookup_callable(obj) != variables.TorchInGraphFunctionVariable:
+                # This check is required to following `lookup()` call.
+                # It get the __name__ attribute without checking if it exists.
+                if not hasattr(obj, '__name__'):
                     continue
-                if lookup(obj) != variables.TorchInGraphFunctionVariable:
+                # This check is duplication from `torch._dynamo.disallow_in_graph`
+                # We can(and should) process callables those can be disallowed in graph
+                if (
+                    lookup_callable(obj) != variables.TorchInGraphFunctionVariable
+                    and lookup(obj) != variables.TorchInGraphFunctionVariable
+                ):
                     continue
                 if obj in Registry.registered_functions:
                     continue
@@ -224,9 +231,16 @@ def allow_in_graph_registered_funcs_only():
         for obj in vars(module).values():
             if not callable(obj):
                 continue
-            if lookup_callable(obj) != variables.TorchInGraphFunctionVariable:
+            # This check is required to following `lookup()` call.
+            # It get the __name__ attribute without checking if it exists.
+            if not hasattr(obj, '__name__'):
                 continue
-            if lookup(obj) != variables.TorchInGraphFunctionVariable:
+            # This check is duplication from `torch._dynamo.disallow_in_graph`
+            # We can(and should) process callables those can be disallowed in graph
+            if (
+                lookup_callable(obj) != variables.TorchInGraphFunctionVariable
+                and lookup(obj) != variables.TorchInGraphFunctionVariable
+            ):
                 continue
             if obj in Registry.registered_functions:
                 continue
