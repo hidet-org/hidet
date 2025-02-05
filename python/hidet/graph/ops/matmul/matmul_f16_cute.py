@@ -775,20 +775,16 @@ class MatmulF16CuteTask(Task):
 
 
 class MatmulF16CuteOp(Operator):
-    def __init__(
-        self, a: Tensor, b: Tensor, acc_dtype: Union[DataType, str], parallel_k_parts=1, transpose_b: bool = False
-    ):
-        if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
-            raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
+    def __init__(self, a: Tensor, b: Tensor, acc_dtype: Union[DataType, str], transpose_b: bool = False):
         super().__init__(
             inputs=[a, b],
-            attributes={'acc_dtype': acc_dtype, 'parallel_k_parts': parallel_k_parts, 'transpose_b': transpose_b},
+            attributes={'acc_dtype': acc_dtype, 'transpose_b': transpose_b},
             task=MatmulF16CuteTask(input_like(a, 'a'), input_like(b, 'b'), acc_dtype, transpose_b),
         )
 
 
 def matmul_f16_cute(
-    a: Tensor, b: Tensor, parallel_k_parts=1, acc_dtype: Union[DataType, str] = "float32", transpose_b: bool = False
+    a: Tensor, b: Tensor, acc_dtype: Union[DataType, str] = "float32", transpose_b: bool = False
 ) -> Tensor:
     if len(a.shape) < 2 or len(b.shape) < 2:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
@@ -804,4 +800,4 @@ def matmul_f16_cute(
         raise ValueError('matmul_f16_cute only supports float16 or bfloat16, got {} and {}'.format(a.dtype, b.dtype))
 
     acc_dtype = data_type(acc_dtype)
-    return MatmulF16CuteOp(a, b, acc_dtype, parallel_k_parts, transpose_b).outputs[0]
+    return MatmulF16CuteOp(a, b, acc_dtype, transpose_b).outputs[0]

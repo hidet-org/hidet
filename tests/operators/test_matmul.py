@@ -221,7 +221,7 @@ def test_matmul_fp16_cute(a_shape, b_shape):
         a_shape,
         b_shape,
         torch_func=lambda x, y: torch.matmul(x / k, y),
-        hidet_func=lambda x, y: ops.squeeze(matmul_f16(x / k, y), 0),
+        hidet_func=lambda x, y: matmul_f16(x / k, y),
         device='cuda',
         dtype='float16',
         atol=1e-2,
@@ -264,8 +264,9 @@ def test_matmul_nt(a_shape, b_shape, dtype, parallel_k):
 
     with hidet.option.context():
         hidet.option.parallel_k(parallel_k)
-        a = torch.randn(*a_shape, dtype=dtype, device='cuda')
-        b = torch.randn(*b_shape, dtype=dtype, device='cuda')
+        a = torch.randint(low=-3, high=3, size=a_shape, dtype=dtype, device='cuda') / 5
+        b = torch.randint(low=-3, high=3, size=b_shape, dtype=dtype, device='cuda')
+
         c_correct = torch.matmul(a, torch.transpose(b, 0, 1))
         ahi = hidet.from_torch(a)
         bhi = hidet.from_torch(b)
@@ -276,23 +277,7 @@ def test_matmul_nt(a_shape, b_shape, dtype, parallel_k):
         graph_opt = hidet.graph.optimize(graph)
         c_hi = graph_opt(ahi, bhi)
 
-        # With atol = 1e-1 and rtol = 1e-1,
-        # for the case of a_shape = [1, 128, 132], b_shape = [128, 132], dtype = torch.bfloat16, parallel_k = 2
-        # the following error is repeatedly encounter in the CI tests:
-        # E           Not equal to tolerance rtol=0.1, atol=0.1
-        # E
-        # E           Mismatched elements: 1 / 16384 (0.0061%)
-        # E           Max absolute difference among violations: 0.10229492
-        # E           Max relative difference among violations: 4.5053763
-        # E            ACTUAL: array([[[  0.34375 , -35.5     ,  -3.125   , ...,   5.875   ,
-        # E                    -23.      , -19.875   ],
-        # E                   [ 13.9375  , -16.      , -11.375   , ...,   9.1875  ,...
-        # E            DESIRED: array([[[  0.357422, -35.5     ,  -3.09375 , ...,   5.875   ,
-        # E                    -23.      , -19.875   ],
-        # E                   [ 13.875   , -16.      , -11.375   , ...,   9.1875  ,...
-        tol = 1e-1 if dtype == torch.float16 else 1.2e-1
-
-        assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=tol, rtol=tol)
+        assert_torch_allclose(c_hi.cpu(), c_correct.cpu(), atol=1e-2, rtol=1e-2)
 
 
 @pytest.mark.requires_cuda

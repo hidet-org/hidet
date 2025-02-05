@@ -225,10 +225,7 @@ class MatmulResolveRule(ResolveRule):
             # Leave this to be implemented in the future
             raise NotImplementedError('The heuristic for hexcute_matmul is not implemented.')
 
-        if hexcute_matmul == 'enable':
-            c = matmul_f16_cute(a, b, transpose_b=transpose_b).sum(0)
-        else:
-            c = matmul_f16_cute(a, b, transpose_b=transpose_b)
+        c = matmul_f16_cute(a, b, transpose_b=transpose_b)
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
