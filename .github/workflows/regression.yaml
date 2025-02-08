@@ -46,13 +46,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-      
-      #- name: Upload run configs
-      #  uses: actions/upload-artifact@v3
-      #  with:
-      #    name: run_configs
-      #    path: run_configs.json
-      #    retention-days: 1
 
   run_tests:
     needs: start_instances
@@ -85,12 +78,6 @@ jobs:
           path: models
           ref: ci
 
-      #- name: Download run configs
-      #  uses: actions/download-artifact@v3
-      #  with:
-      #    name: run_configs
-      #    path: ./mount
-
       # Put run_configs.json in shared folder. Intup and output of tests is saved in it. 
       - name: Copy run_config.json
         run: cp hidet/tests/benchmarks/run_configs.json ./mount
@@ -121,7 +108,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Upload run configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: run_configs_${{ matrix.hw_configs }}
           path: ./mount/run_configs.json
@@ -149,7 +136,7 @@ jobs:
         run: pip install mysql-connector-python
 
       - name: Download run configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Run main Python script
         run: python ./.github/scripts/upload_results.py
