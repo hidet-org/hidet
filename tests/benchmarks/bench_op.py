@@ -90,7 +90,7 @@ def bench_attn_mask_add(params: str, *args, **kwargs) -> float:
     q_shape = [bs, nhead, seqlen, hdim]
     k_shape = [bs, nhead, hdim, seqlen]
     v_shape = [bs, nhead, seqlen, hdim]
-    mask_shape = [1, 1, 1, seqlen]
+    mask_shape = [1, 1, seqlen, seqlen]
     q = hidet.symbol(q_shape, dtype='float16', device='cuda')
     k = hidet.symbol(k_shape, dtype='float16', device='cuda')
     v = hidet.symbol(v_shape, dtype='float16', device='cuda')
