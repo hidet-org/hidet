@@ -17,7 +17,7 @@ jobs:
         run: |
           #!/bin/bash
           MAX_TITLE_LENGTH=72
-          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_TITLE='${{ github.event.pull_request.title }}'
 
           # Ensure the title matches the format [Category] Title
           if [[ ! "$PR_TITLE" =~ ^\[[^\]]+\]\ .+ ]]; then
