@@ -96,29 +96,28 @@ def _wrapped_func(job_index):
     return func(job)
 
 
-semaphore_local_compilation = multiprocessing.Semaphore(1)
-semaphore_remote_compilation = multiprocessing.Semaphore(1)
+semaphore_local_compilation = multiprocessing.Semaphore(2)
+semaphore_remote_compilation = multiprocessing.Semaphore(3)
 
 
 def parallel_imap_2ndlevel(func: Callable, jobs: Sequence[Any], is_remote_allowed: bool = False) -> Iterable[Any]:
+    jobs_num = len(jobs)
+    assert jobs_num > 0
+    num_workers = get_parallel_num_workers(is_remote_allowed)
+    num_workers = min(num_workers, jobs_num)
+
+    # num_workers == 1 or len(jobs) == 1
+    if num_workers == 1:
+        for job in jobs:
+            yield func(job)
+        return
+
     if is_remote_allowed and compile_server.enabled():
         semaphore = semaphore_remote_compilation
     else:
         semaphore = semaphore_local_compilation
 
     with semaphore:
-        jobs_num = len(jobs)
-        assert jobs_num > 0
-
-        num_workers = get_parallel_num_workers(is_remote_allowed)
-        num_workers = min(num_workers, jobs_num)
-
-        # num_workers == 1 or len(jobs) == 1
-        if num_workers == 1:
-            for job in jobs:
-                yield func(job)
-            return
-
         global _job_queue
 
         if _job_queue is not None:

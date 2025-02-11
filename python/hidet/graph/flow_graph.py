@@ -19,7 +19,6 @@ import pickle
 import hidet.graph.operator
 import hidet.cuda
 from hidet.cuda.graph import CudaGraphCreationError
-from hidet import option
 from hidet.ir.expr import is_constant
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
@@ -213,28 +212,16 @@ class FlowGraph:
 
     def _build_nodes(self):
         tasks: List[Tuple[Task, str]] = []
-        tunable_tasks: List[Tuple[Task, str]] = []
         task_keys = set()
-        search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
             if node._compiled_task is None:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue
                 task_keys.add(task_key)
-                if search_space == 0 or all(
-                    method not in node.task.__class__.__dict__
-                    for method in ['implement_cuda', 'implement_cpu', 'implement']
-                ):
-                    tasks.append((node.task, node.build_target))
-                else:
-                    tunable_tasks.append((node.task, node.build_target))
+                tasks.append((node.task, node.build_target))
 
         hidet.drivers.build_task_batch(tasks)
-
-        with option.context():
-            hidet.option.parallel_build(False)
-            hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.
