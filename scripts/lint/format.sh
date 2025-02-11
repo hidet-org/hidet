@@ -10,8 +10,7 @@ cd $SCRIPT_DIR
 # Function to format Python files
 format_python() {
     # run black formatter for python
-    python -m black --skip-string-normalization --skip-magic-trailing-comma --line-length 120 ../../python/hidet ../../tests
-    python -m black --skip-string-normalization --skip-magic-trailing-comma --line-length 100 ../../gallery
+    python ./_format.py
 }
 
 # Function to format C++ files
