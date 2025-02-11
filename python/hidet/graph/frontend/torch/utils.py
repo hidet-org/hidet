@@ -126,9 +126,11 @@ def device_from_torch(torch_device) -> Device:
     if torch_device.type == 'cpu':
         return Device('cpu')
     elif torch_device.type == 'cuda':
-        return Device('cuda', torch_device.index)
-    else:
-        raise NotImplementedError(f'unsupported torch device {torch_device}')
+        if torch.version.hip:
+            return Device('hip', torch_device.index)
+        elif torch.version.cuda:
+            return Device('cuda', torch_device.index)
+    raise NotImplementedError(f'unsupported torch device {torch_device}')
 
 
 def symbol_like_torch(tensor) -> Tensor:

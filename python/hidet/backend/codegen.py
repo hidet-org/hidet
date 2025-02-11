@@ -818,9 +818,11 @@ class HIPCodegen(Codegen):
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
-        # TODO: use hip runtime here when available
+        # TODO: add this header if necessary
         # doc += Text('#include <hidet/runtime/hip/complex.h>') + NewLine()
-        # doc += Text('#include <hidet/runtime/hip/context.h>') + NewLine()
+        if self.require_fp16:
+            doc += Text('#include <hip/hip_fp16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/hip/context.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
 
         doc += NewLine()

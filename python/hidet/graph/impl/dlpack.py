@@ -182,6 +182,8 @@ def from_dlpack_capsule(dltensor) -> Tensor:
             assert device_id == 0
         elif device_type == DLDeviceType.kDLGPU:
             device = Device('cuda', device_id)
+        elif device_type == DLDeviceType.kDLROCM:
+            device = Device('hip', device_id)
         else:
             raise ValueError('from_dlpack: currently, hidet only supports only CPU and GPU tensors.')
 

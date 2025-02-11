@@ -22,7 +22,7 @@ from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, Compute
 from hidet.ir.tools import IRPrinter, collect, rewrite, infer_type, simplify, collect_free_vars
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
-from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
+from hidet.ir.primitives.runtime import request_cuda_workspace, request_hip_workspace, request_cpu_workspace
 from hidet.ir.dtypes import uint8, int64
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
@@ -185,6 +185,8 @@ class AutoScheduler:
             buffer = Var('buffer', tensor_pointer_type(dtype='uint8', shape=[buffer_bytes]))
             if device == 'cuda':
                 space_ptr: Expr = request_cuda_workspace(nbytes=buffer_bytes, require_clean=False)
+            elif device == 'hip':
+                space_ptr: Expr = request_hip_workspace(nbytes=buffer_bytes, require_clean=False)
             elif device == 'cpu':
                 space_ptr: Expr = request_cpu_workspace(nbytes=buffer_bytes, require_clean=False)
             else:

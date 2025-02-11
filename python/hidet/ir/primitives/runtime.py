@@ -29,6 +29,11 @@ def register_functions():
         codegen_name='request_cuda_workspace',
     )
     register_primitive_function(
+        name='request_hip_workspace',
+        func_or_type=FuncType([int64, boolean], void_p),
+        codegen_name='request_hip_workspace',
+    )
+    register_primitive_function(
         name='request_cpu_workspace',
         func_or_type=FuncType([int64, boolean], void_p),
         codegen_name='request_cpu_workspace',
@@ -69,6 +74,10 @@ def get_cuda_stream() -> void_p:
 
 def request_cuda_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr] = False) -> void_p:
     return call_primitive_func('request_cuda_workspace', [nbytes, require_clean])
+
+
+def request_hip_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr] = False) -> void_p:
+    return call_primitive_func('request_hip_workspace', [nbytes, require_clean])
 
 
 def request_cpu_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr] = False) -> void_p:
