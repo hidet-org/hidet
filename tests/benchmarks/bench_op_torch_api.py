@@ -140,7 +140,7 @@ def create_model_transpose(params: str, dtype):
 class SimpleLinearModule(torch.nn.Module):
     def __init__(self, in_f, out_f, dtype):
         super(SimpleLinearModule, self).__init__()
-        self.model = torch.nn.Linear(in_f, out_f, dtype=dtype, device='cuda')
+        self.model = torch.nn.Linear(in_f, out_f, bias=False, dtype=dtype, device='cuda')
 
     def forward(self, x):
         # x: (m, in_features)
