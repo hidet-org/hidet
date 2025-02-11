@@ -9,7 +9,6 @@ from hashlib import sha256
 from filelock import FileLock
 import multiprocessing
 import gc
-import importlib
 
 logger = logging.Logger(__name__)
 
