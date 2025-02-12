@@ -332,6 +332,22 @@ class Storage:
         """
         return Storage._convert(self, Device('hip', dst_id), non_blocking=False)
 
+    def vhip(self, dst_id: int) -> Storage:
+        """
+        Copy the storage to HIP device. If the storage is already on the device, return itself.
+
+        Parameters
+        ----------
+        dst_id: int
+            The id of the destination HIP device.
+
+        Returns
+        -------
+        ret: Storage
+            The storage on the destination HIP device.
+        """
+        return Storage._convert(self, Device('vhip', dst_id), non_blocking=False)
+
     def copy(self) -> Storage:
         """
         Copy the storage to the same device. If the storage is already on the device, return itself.
@@ -470,7 +486,7 @@ class DeviceMemoryPools:
                     self.device2pool[device] = MemoryPool(
                         HipMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
                     )
-                elif device.is_cpu():
+                elif device.is_cpu() or device.is_vhip():
                     self.device2pool[device] = MemoryPool(
                         HIPHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
                     )

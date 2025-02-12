@@ -232,6 +232,11 @@ class HIPCC(SourceCompiler):
 
         os.environ['HIP_PLATFORM'] = 'amd'
 
+        if 'arch' in target.attrs:
+            arch = target.attrs['arch']
+        else:
+            arch = hidet.option.hip.get_arch()
+
         # The following command compiles the hip source code to a shared library
         # See https://sep5.readthedocs.io/en/latest/Programming_Guides/HIP-GUIDE.html#hip-guide,
         # and command `hipcc --help` for more information about hipcc compilation.
@@ -251,10 +256,13 @@ class HIPCC(SourceCompiler):
             '-std=c++11',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
+            '-funroll-loops',
+            '-ffast-math',
+            '--offload-arch={}'.format(arch),
             # allow constexpr function to be called from device code.
             # '--expt-relaxed-constexpr',
             # generate shared library (lib.so).
-            '--shared' if out_lib_path.endswith('.so') else '',
+            '--shared' if out_lib_path.endswith('.so') else '-c',
             # the linking objects.
             ' '.join(object_files),
             # the source path.
@@ -380,7 +388,8 @@ def compile_source(
             raise RuntimeError('CUDA is not available.')
         compiler = NVCC()
     elif target.name == 'hip':
-        # TODO: check if HIP is available
+        if not hidet.hip.available():
+            raise RuntimeError('HIP is not available.')
         compiler = HIPCC()
     elif target.name == 'cpu':
         compiler = GCC()

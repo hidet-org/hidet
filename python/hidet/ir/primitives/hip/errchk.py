@@ -9,7 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from hidet.ir.stmt import BlackBoxStmt
 
-from . import math
-from .errchk import check_hip_error
-from .vars import threadIdx, blockIdx, blockDim, gridDim
+
+def check_hip_error():
+    stmt = BlackBoxStmt(
+        r'''{hipError_t err = hipGetLastError(); if (err != hipSuccess) LOG(ERROR) << "HIP error: " << '''
+        r'''hipGetErrorString(err) << "\n";}'''
+    )
+    return stmt

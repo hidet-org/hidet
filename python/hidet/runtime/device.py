@@ -67,10 +67,15 @@ class Device:
     def is_hip(self) -> bool:
         return self.kind == 'hip'
 
+    def is_vhip(self) -> bool:
+        return self.kind == 'vhip'
+
     @property
     def target(self) -> str:
         if self.kind == 'vcuda':
             return 'cuda'
+        elif self.kind == 'vhip':
+            return 'hip'
         return self.kind
 
 
@@ -89,8 +94,8 @@ def device(device_type: str, device_index: Optional[int] = None):
             raise ValueError(f'Invalid device_index: {device_index}')
         device_index = int(device_index)
 
-    if device_type not in ['cpu', 'cuda', 'vcuda', 'hip']:
-        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" "cuda", "vcuda", or "hip"')
+    if device_type not in ['cpu', 'cuda', 'vcuda', 'hip', 'vhip']:
+        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" "cuda", "vcuda", "hip" or "vhip"')
 
     if device_index is not None and not isinstance(device_index, int):
         raise ValueError(f'Invalid device_index: {device_index}, must be an integer')
@@ -135,7 +140,7 @@ def instantiate_device(dev) -> Device:
         if dev.id is None:
             dev.id = hidet.cuda.current_device()
         return dev
-    elif dev.kind == 'hip':
+    elif dev.kind in ['hip', 'vhip']:
         if dev.id is None:
             dev.id = hidet.hip.current_device()
         return dev

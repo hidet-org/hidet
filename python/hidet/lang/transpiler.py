@@ -531,6 +531,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         self, func_def, 'CUDA kernel expects to have both attrs.cuda.grid_dim and attrs.cuda.block_dim.'
                     )
                 func_kind = 'cuda_kernel'
+            elif 'hip.grid_dim' in func_attrs or 'hip.block_dim' in func_attrs:
+                if not all(name in func_attrs for name in ['hip.grid_dim', 'hip.block_dim']):
+                    raise HidetProgramError(
+                        self, func_def, 'HIP kernel expects to have both attrs.hip.grid_dim and attrs.hip.block_dim.'
+                    )
+                func_kind = 'hip_kernel'
             else:
                 func_kind = 'cuda_internal'
             func_name = func_attrs.get('func_name', func_def.name)

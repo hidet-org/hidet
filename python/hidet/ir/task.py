@@ -284,7 +284,7 @@ class Task(Node):
 
         implement_target, scheduler = {
             'cuda': (self.implement_cuda, GpuAutoScheduler('cuda')),
-            'hip': (self.implement_cuda, GpuAutoScheduler('hip')),
+            'hip': (self.implement_hip, GpuAutoScheduler('hip')),
             'cpu': (self.implement_cpu, CpuAutoScheduler()),
         }[target.name]
 

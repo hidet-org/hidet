@@ -15,6 +15,7 @@ from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives import printf
 from hidet.ir.primitives.cuda import check_cuda_error
+from hidet.ir.primitives.hip import check_hip_error
 from hidet.ir.stmt import LaunchKernelStmt, AssertStmt
 from hidet.ir.func import Function
 from hidet.transforms.base import Pass, FunctionPass
@@ -57,18 +58,31 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
             conditions = prod(stmt.cluster_dim) > 8
             with sb.if_then(conditions):
                 sb += AssertStmt(False, "At most 8 thread blocks in a cluster")
+
             with sb.if_then(stmt.shared_mem_bytes > 49152):
                 # if the shared memory is larger than 48KB, we should call cudaFuncSetAttribute
-                sb += BlackBoxStmt(
-                    "cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});",
-                    stmt.func_var,
-                    stmt.shared_mem_bytes,
-                )
-                if stmt.target == 'cuda':  # TODO: add error checking for hip/rocm
+                if stmt.target == 'cuda':
+                    sb += BlackBoxStmt(
+                        "cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});",
+                        stmt.func_var,
+                        stmt.shared_mem_bytes,
+                    )
+
                     sb += check_cuda_error()
+                # TODO: check if we need to set this
+                # elif stmt.target == 'hip':
+                #     sb += BlackBoxStmt(
+                #         "hipFuncSetAttribute((void*) {}, hipFuncAttributeMaxDynamicSharedMemorySize, {});",
+                #         stmt.func_var,
+                #         stmt.shared_mem_bytes,
+                #     )
+
+                #     sb += check_hip_error()
             sb += stmt
-            if stmt.target == 'cuda':  # TODO: add error checking for hip/rocm
+            if stmt.target == 'cuda':
                 sb += check_cuda_error()
+            elif stmt.target == 'hip':
+                sb += check_hip_error()
         return sb.finish()
 
 

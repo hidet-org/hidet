@@ -21,3 +21,6 @@ grid_dim: Dim3 = 1
 
 # The block dimension of a hip kernel, specifying the number of threads per block
 block_dim: Dim3 = 1
+
+# The dynamic shared memory size of a hip kernel, in bytes
+dynamic_smem_bytes: int = 0

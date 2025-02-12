@@ -298,6 +298,12 @@ def register_hidet_options():
         description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). "auto" for auto-detect.',
     )
     register_option(
+        name='hip.arch',
+        type_hint='str',
+        default_value='auto',
+        description='The HIP GCN architecture to compile the kernels for (e.g., "gfx1100"). "auto" for auto-detect.',
+    )
+    register_option(
         name='cuda.cpu_arch',
         type_hint='str',
         default_value='auto',
@@ -1164,6 +1170,62 @@ class cpu:
             end = out.find('\n', begin)
             arch = out[begin:end].strip()
         return arch
+
+
+class hip:
+    @staticmethod
+    def arch(arch: str = 'auto'):
+        """
+        Set the HIP architecture to use when building HIP kernels.
+
+        Parameters
+        ----------
+        arch: Optional[str]
+            The hip GCN architecture, e.g., 'gfx1100', etc. "auto" means
+            using the architecture of the first HIP GPU on the current machine. Default "auto".
+        """
+        OptionContext.current().set_option('hip.arch', arch)
+
+    @staticmethod
+    def get_arch() -> str:
+        """
+        Get the HIP architecture to use when building HIP kernels.
+
+        Returns
+        -------
+        ret: str
+            The hip GCN architecture, e.g., 'gfx1100', etc.
+        """
+        arch: Optional[str] = OptionContext.current().get_option('hip.arch')
+        if arch == "auto":
+
+            major, minor = hip.get_arch_pair()
+
+            # TODO: cannot get properties.gcnArch properly
+            if major == 11 and minor == 0:
+                arch = 'gfx1100'
+            elif major == 9 and minor == 0:
+                arch = 'gfx90a'
+            else:
+                raise NotImplementedError(f'hip arch {major}.{minor} not supported')
+
+        return arch
+
+    @staticmethod
+    def get_arch_pair() -> Tuple[int, int]:
+        """
+        Get the HIP architecture to use when building HIP kernels, with major and minor version as a tuple.
+
+        Returns
+        -------
+        ret: Tuple[int, int]
+            The HIP architecture, e.g., (3, 5), (7, 0), (8, 0), etc.
+        """
+        import hidet.hip
+
+        # get the architecture of the first CUDA GPU
+        properties = hidet.hip.properties(0)
+        return properties.major, properties.minor
 
 
 class compile_server:

@@ -135,6 +135,13 @@ class Module(Generic[R]):
             self._parameters[name] = parameter.cuda()
         return self
 
+    def hip(self) -> Module:
+        for name, submodule in self._submodules.items():
+            submodule.hip()
+        for name, parameter in self._parameters.items():
+            self._parameters[name] = parameter.hip()
+        return self
+
     def to(self, dtype=None, device=None) -> Module:
         for name, submodule in self._submodules.items():
             submodule.to(dtype, device)

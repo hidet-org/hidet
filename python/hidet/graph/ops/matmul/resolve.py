@@ -26,9 +26,12 @@ from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
 
 
-def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size) -> int:
+def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size, device='cuda') -> int:
     estimate_thread_blocks = batch_size * ((m_size + 63) // 64) * ((n_size + 63) // 64)
-    num_multi_processors = hidet.cuda.properties().multiProcessorCount
+    if device == 'cuda':
+        num_multi_processors = hidet.cuda.properties().multiProcessorCount
+    elif device == 'hip':
+        num_multi_processors = hidet.hip.properties().multiProcessorCount
     # we hope to run multiple waves of thread blocks (e.g., 5)
     if estimate_thread_blocks * 8 <= num_multi_processors * 5:
         nparts = 8
@@ -42,7 +45,7 @@ def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size) -> int:
 
 
 @lru_cache(maxsize=1024)
-def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k_size) -> int:
+def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k_size, device='cuda') -> int:
     nparts_candidates = [nparts for nparts in factorize(k_size) if nparts <= 16]
     best_nparts = None
     best_nparts_latency = 1e9
@@ -54,8 +57,8 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
         )
     )
     for nparts in nparts_candidates:
-        a = hidet.symbol([batch_size, m_size, k_size], dtype=dtype, device='cuda')
-        b = hidet.symbol([batch_size, k_size, n_size], dtype=dtype, device='cuda')
+        a = hidet.symbol([batch_size, m_size, k_size], dtype=dtype, device=device)
+        b = hidet.symbol([batch_size, k_size, n_size], dtype=dtype, device=device)
         # to [batch_size * nparts, m_size, k_size // nparts]
         aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
         # to [batch_size * nparts, k_size // nparts, n_size]
@@ -100,11 +103,13 @@ class MatmulResolveRule(ResolveRule):
         if any(not isinstance(v, int) for v in a.shape + b.shape):
             nparts = 1
         else:
+            device = a.device.kind
+            assert device in ['cuda', 'hip']
             batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
             if parallel_k == 'default':
-                nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
+                nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size, device)
             elif parallel_k == 'search':
-                nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
+                nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size, device)
             elif parallel_k == 'disabled':
                 nparts = 1
             elif isinstance(parallel_k, int):
@@ -184,6 +189,8 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
+        if not hidet.cuda.available():
+            return None
         if op.attrs['require_prologue']:
             return None
         # if op.task.has_symbolic_shape():
@@ -230,9 +237,6 @@ class MatmulResolveRule(ResolveRule):
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         if op.device.is_cpu():
-            return None
-        # TODO: support amd gpu
-        if not hidet.cuda.available():
             return None
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:

@@ -251,9 +251,23 @@ class PassContext:
             When given, will always enable or disable this instrument.
             If no argument is given, the compiler will decide to enable this with some heuristics
         """
-        from .instruments import ConvertGraphToVCuda  # pylint: disable=import-outside-toplevel
+        from .instruments import ConvertGraphToVGPU  # pylint: disable=import-outside-toplevel
 
-        self.instruments.append(ConvertGraphToVCuda(enable))
+        self.instruments.append(ConvertGraphToVGPU(enable, target='cuda'))
+
+    def reduce_hip_compile_mem(self, enable: Optional[bool] = None):
+        """
+        Reduce HIP memory used during compilation by using vhip tensors, might incur compile time cost
+
+        Parameters
+        ----------
+        enable: Optional[bool]
+            When given, will always enable or disable this instrument.
+            If no argument is given, the compiler will decide to enable this with some heuristics
+        """
+        from .instruments import ConvertGraphToVGPU  # pylint: disable=import-outside-toplevel
+
+        self.instruments.append(ConvertGraphToVGPU(enable, target='hip'))
 
     def allow_source_graph_removal(self, allow: Optional[bool] = True):
         self.configs['allow_source_graph_removal'] = allow

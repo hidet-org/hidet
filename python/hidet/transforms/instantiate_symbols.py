@@ -90,7 +90,14 @@ class InstantiateSymbolsRewriter(IRRewriter):
                 symbol_values = [get_symbol_value(symbol.name) for symbol in ordered_symbols]
                 if len(symbol_params) > 0:
                     body = LetStmt(bind_vars=symbol_params, bind_values=symbol_values, body=body)
-            elif func.kind in ['cuda_kernel', 'cuda_internal', 'cpu_kernel', 'cpu_internal']:
+            elif func.kind in [
+                'cuda_kernel',
+                'cuda_internal',
+                'cpu_kernel',
+                'cpu_internal',
+                'hip_kernel',
+                'hip_internal',
+            ]:
                 # for kernel functions, we just pass via the parameters
                 params = params + symbol_params
             else:

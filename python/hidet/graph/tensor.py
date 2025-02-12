@@ -981,6 +981,45 @@ class Tensor:
             self._storage = self.storage.cuda(self.device.id)
         self._device = Device('cuda', self.device.id)
 
+    def vhip_(self):
+        """Cast the tensor to vhip device in place.
+
+        If the current tensor is already on vhip device, nothing is performed
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+
+        if self.device.is_vhip():
+            return
+        if not self.device.is_hip():
+            raise ValueError("Tensor must be on cuda device, got {}".format(self.device))
+        # if the tensor has no storage, there is no need to cast
+        if self.storage is not None:
+            self._storage = self.storage.vhip(self.device.id)
+        self._device = Device('vhip', self.device.id)
+
+    def hip_(self):
+        """Cast the tensor from vhip device in place.
+
+        If the current tensor is already on cuda device, nothing is performed
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+        if self.device.is_hip():
+            return
+        if not self.device.is_vhip():
+            raise ValueError("Tensor must be on vhip device, got {}".format(self.device))
+
+        if self.storage is not None:
+            self._storage = self.storage.hip(self.device.id)
+        self._device = Device('hip', self.device.id)
+
     def copy(self) -> Tensor:
         """Create a copy of current tensor.
 

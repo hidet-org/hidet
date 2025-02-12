@@ -519,6 +519,54 @@ class FlowGraph:
                 if outp.device.is_vcuda():
                     outp.cuda_()
 
+    def vhip_(self) -> None:
+        """
+        casts the flow graph object to vhip device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_hip():
+                raise ValueError("Inputs must be on hip device")
+            x.vhip_()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_hip():
+                    dev = Device('vhip', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                if inp.device.is_hip():
+                    inp.vhip_()
+            for outp in node.outputs:
+                if outp.device.is_hip():
+                    outp.vhip_()
+
+    def hip_(self) -> None:
+        """
+        casts the flow graph object from vhip device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_vhip():
+                raise ValueError("Inputs must be on vhip device")
+            x.hip_()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_vhip():
+                    dev = Device('hip', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                if inp.device.is_vhip():
+                    inp.hip_()
+            for outp in node.outputs:
+                if outp.device.is_vhip():
+                    outp.hip_()
+
 
 def trace_from(
     tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None, weight_tensors=None
