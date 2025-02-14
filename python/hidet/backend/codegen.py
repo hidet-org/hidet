@@ -76,6 +76,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = '{}'.format(float(value))
         elif dtype == dtypes.float32:
             ret = '{}f'.format(float(value))
+        elif dtype == dtypes.float32x1:
+            ret = '{}f'.format(float(value[0]))
         elif dtype == dtypes.float16:
             ret = '(half){}f'.format(float(value))
         elif dtype == dtypes.tfloat32:
@@ -100,6 +102,12 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = 'uint8_t({})'.format(int(value))
         elif dtype == dtypes.float16x2:
             ret = 'half2({}, {})'.format(float(value[0]), float(value[0]))
+        elif dtype == dtypes.float32x2:
+            ret = 'float2({}f, {}f)'.format(float(value[0]), float(value[0]))
+        elif dtype == dtypes.float32x4:
+            ret = 'float4({}f, {}f, {}f, {}f)'.format(
+                float(value[0]), float(value[1]), float(value[2]), float(value[3])
+            )
         elif dtype == dtypes.int8x4:
             ret = 'make_char4({}, {}, {}, {})'.format(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
         elif dtype.is_complex():
@@ -644,9 +652,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
             'float16x2': 'half2',
+            'float32x1': 'float',
             'float32x2': 'float2',
-            'float32x4': '__m128',
-            'float32x8': '__m256',
+            'float32x4': 'float4',
+            'float32x8': 'float8',
             'int8x4': 'char4',
             'uint8x4': 'uint4',
             'int4bx8': 'uint32_t',
@@ -892,7 +901,9 @@ class CPUCodegen(Codegen):
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
         if self.require_immintrin:
-            doc += Text('#include <immintrin.h>') + NewLine()
+            # cpu does not have defined vector types, we redirect to this file
+            # to rename vector types to be the same as cuda, eg. __m128 -> float4
+            doc += Text('#include <hidet/runtime/cpu/vector_types.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()

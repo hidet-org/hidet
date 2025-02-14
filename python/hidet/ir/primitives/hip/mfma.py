@@ -20,6 +20,7 @@ from hidet.ir.type import PointerType, data_type
 from hidet.ir.expr import Var, Expr
 from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.builders import FunctionBuilder
+from hidet.ir.layout import DataLayout, local_layout, row_major
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.func import call_primitive_func
 
@@ -39,6 +40,9 @@ class MfmaConfig:
         a_load_map: TaskMapping,
         b_load_map: TaskMapping,
         c_store_map: TaskMapping,
+        regs_a_layout: DataLayout = None,
+        regs_b_layout: DataLayout = None,
+        regs_c_layout: DataLayout = None,
         blocks: int = 1,
         abid: int = 0,
         blgp: int = 0,
@@ -51,6 +55,10 @@ class MfmaConfig:
         self.a_load_map: TaskMapping = a_load_map
         self.b_load_map: TaskMapping = b_load_map
         self.c_store_map: TaskMapping = c_store_map
+        self.regs_a_layout: DataLayout = regs_a_layout
+        self.regs_b_layout: DataLayout = regs_b_layout
+        self.regs_c_layout: DataLayout = regs_c_layout
+
         self.blocks: int = blocks
         self.abid: int = abid
         self.blgp: int = blgp
@@ -79,6 +87,9 @@ class MfmaConfig:
             a_load_map=col_spatial(32, 2),
             b_load_map=row_spatial(2, 32),
             c_store_map=col_repeat(4, 1) * row_spatial(2, 1) * col_repeat(4, 1) * row_spatial(1, 32),
+            regs_a_layout=local_layout(32, 2),
+            regs_b_layout=local_layout(2, 32),
+            regs_c_layout=row_major(4, 1) * local_layout(2, 1) * row_major(4, 1) * local_layout(1, 32),
         )
 
     @staticmethod
@@ -92,6 +103,9 @@ class MfmaConfig:
             a_load_map=col_spatial(16, 4),
             b_load_map=row_spatial(4, 16),
             c_store_map=row_spatial(4, 1) * col_repeat(4, 1) * row_spatial(1, 16),
+            regs_a_layout=local_layout(16, 4),
+            regs_b_layout=local_layout(4, 16),
+            regs_c_layout=local_layout(4, 1) * row_major(4, 1) * local_layout(1, 16),
         )
 
     @staticmethod

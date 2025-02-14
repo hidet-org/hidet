@@ -9,7 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.layout import DataLayout, StridesLayout, LocalLayout, ComposedLayout, SwizzleLayout, ConcatLayout
+from hidet.ir.layout import (
+    DataLayout,
+    StridesLayout,
+    LocalLayout,
+    ComposedLayout,
+    SwizzleLayout,
+    ConcatLayout,
+    PermuteLayout,
+    ReshapeLayout,
+)
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
@@ -27,6 +36,10 @@ class LayoutFunctor(BaseFunctor):
                 return self.visit_SwizzleLayout(node)
             elif isinstance(node, ConcatLayout):
                 return self.visit_ConcatLayout(node)
+            elif isinstance(node, PermuteLayout):
+                return self.visit_PermuteLayout(node)
+            elif isinstance(node, ReshapeLayout):
+                return self.visit_ReshapeLayout(node)
             else:
                 raise ValueError('Can not recognize layout {}'.format(node))
         else:
@@ -45,6 +58,12 @@ class LayoutFunctor(BaseFunctor):
         raise NotImplementedError()
 
     def visit_ConcatLayout(self, layout: ConcatLayout):
+        raise NotImplementedError()
+
+    def visit_PermuteLayout(self, layout: PermuteLayout):
+        raise NotImplementedError()
+
+    def visit_ReshapeLayout(self, layout: ReshapeLayout):
         raise NotImplementedError()
 
 
@@ -69,6 +88,14 @@ class LayoutVisitor(BaseVisitor, LayoutFunctor):
     def visit_ConcatLayout(self, layout: ConcatLayout):
         self.visit(layout.lhs)
         self.visit(layout.rhs)
+
+    def visit_PermuteLayout(self, layout: PermuteLayout):
+        self.visit(layout.base)
+        self.visit(layout.perm)
+
+    def visit_ReshapeLayout(self, layout: ReshapeLayout):
+        self.visit(layout.base)
+        self.visit(layout.shape)
 
 
 class LayoutRewriter(BaseRewriter, LayoutFunctor):
@@ -101,6 +128,20 @@ class LayoutRewriter(BaseRewriter, LayoutFunctor):
             return layout
         else:
             return SwizzleLayout(base, layout.dim, layout.regards_dim, layout.log_step)
+
+    def visit_PermuteLayout(self, layout: PermuteLayout):
+        base = self.visit(layout.base)
+        if base is layout.base:
+            return layout
+        else:
+            return PermuteLayout(base, layout.perm)
+
+    def visit_ReshapeLayout(self, layout: ReshapeLayout):
+        base = self.visit(layout.base)
+        if base is layout.base:
+            return layout
+        else:
+            return ReshapeLayout(base, layout.shape)
 
     def visit_ConcatLayout(self, layout: ConcatLayout):
         lhs = self.visit(layout.lhs)

@@ -85,6 +85,9 @@ i8x4 = int8x4
 uint8x4 = VectorType(uint8, 4)
 u8x4 = uint8x4
 
+float32x1 = VectorType(float32, 1)
+f32x1 = float32x1
+
 float32x2 = VectorType(float32, 2)
 f32x2 = float32x2
 
@@ -114,6 +117,7 @@ bfloat16x2 = VectorType(bfloat16, 2)
 
 def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
     table = {
+        (float32, 1): float32x1,
         (float32, 2): float32x2,
         (float32, 4): float32x4,
         (float32, 8): float32x8,

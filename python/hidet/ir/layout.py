@@ -133,6 +133,12 @@ class DataLayout(Node):
     def swizzle(self, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
         return SwizzleLayout(base=self, dim=dim, regards_dim=regards_dim, log_step=log_step)
 
+    def permute(self, perm: Sequence[int]):
+        return PermuteLayout(base=self, perm=perm)
+
+    def reshape(self, shape: Sequence[Int]):
+        return ReshapeLayout(base=self, shape=shape)
+
     def local(self, *shape: Int):
         if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
             shape = shape[0]
@@ -272,6 +278,50 @@ class SwizzleLayout(DataLayout):
 
     def global2cond(self, *args: Int) -> Bool:
         return self.base.global2cond(*args)
+
+
+class PermuteLayout(DataLayout):
+    def __init__(self, base: DataLayout, perm: Sequence[int]):
+        assert len(base.shape) == len(perm)
+        perm_lst = [i for i in perm]
+        perm_lst.sort()
+        assert perm_lst == list(range(len(perm)))
+
+        self.base: DataLayout = base
+        self.perm: List[int] = list(perm)
+        self.perm_shape = [self.base.shape[i] for i in perm]
+        super().__init__(shape=self.perm_shape, size=self.base.size)
+
+    def global2local(self, *args: Int) -> Int:
+        assert len(args) == len(self.shape)
+        permuted_args = [args[i] for i in self.perm]
+        return self.base.global2local(*permuted_args)
+
+    def global2cond(self, *args: Int) -> Bool:
+        permuted_args = [args[i] for i in self.perm]
+        return self.base.global2cond(*permuted_args)
+
+
+class ReshapeLayout(DataLayout):
+    def __init__(self, base: DataLayout, shape: Sequence[Int]):
+        super().__init__(shape=shape, size=base.size)
+        assert prod(shape) == base.size
+        self.base = base
+        self.stride = [prod(shape[i:]) for i in range(1, len(shape))] + [1]
+        self.base_stride = [prod(base.shape[i:]) for i in range(1, len(base.shape))] + [1]
+
+    def to_linear_index(self, args: List[Int]) -> Int:
+        assert len(args) == len(self.shape)
+        return sum(v * s for v, s in zip(args, self.stride))
+
+    def to_base_index(self, lin_index: Int) -> List[Int]:
+        return [(lin_index // st) % sh for st, sh in zip(self.base_stride, self.base.shape)]
+
+    def global2local(self, *args: Int) -> Int:
+        return self.base.global2local(*self.to_base_index(self.to_linear_index(args)))
+
+    def global2cond(self, *args: Int) -> Bool:
+        return self.base.global2cond(*self.to_base_index(self.to_linear_index(args)))
 
 
 class ComposedLayout(DataLayout):

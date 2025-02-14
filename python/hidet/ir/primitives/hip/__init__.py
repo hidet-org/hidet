@@ -12,6 +12,7 @@
 
 from . import math
 from . import mfma
+from . import lds_sync
 
 from .errchk import check_hip_error
 from .vars import threadIdx, blockIdx, blockDim, gridDim

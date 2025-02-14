@@ -34,7 +34,16 @@ from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForMappingStmt, WhileStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt, ContinueStmt
-from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLayout, ComposedLayout, RowMajorLayout
+from hidet.ir.layout import (
+    StridesLayout,
+    ConcatLayout,
+    LocalLayout,
+    SwizzleLayout,
+    ComposedLayout,
+    RowMajorLayout,
+    PermuteLayout,
+    ReshapeLayout,
+)
 from hidet.ir.layout import ColumnMajorLayout
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
 from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
@@ -651,6 +660,12 @@ class IRPrinter(IRFunctor):
         if layout.log_step != 0:
             items.append(Text('log_step=') + self(layout.log_step))
         return Text('swizzle(') + doc_join(items, ', ') + ')'
+
+    def visit_PermuteLayout(self, layout: PermuteLayout):
+        return Text('permute(') + self(layout.base) + ', ' + self(layout.perm) + ')'
+
+    def visit_ReshapeLayout(self, layout: ReshapeLayout):
+        return Text('reshape(') + self(layout.base) + ', ' + self(layout.shape) + ')'
 
     def visit_LocalLayout(self, layout: LocalLayout):
         return Text('local(') + self(layout.shape) + ')'

@@ -19,6 +19,7 @@ from .floats import f8e4m3, f8e5m2, f16, f32, f64, bf16, tf32
 from .boolean import boolean
 from .vector import (
     float16x2,
+    float32x1,
     float32x2,
     float32x4,
     float32x8,
@@ -54,6 +55,7 @@ name2dtype = {
     'bool': boolean,
     'complex64': complex64,
     'complex128': complex128,
+    'float32x1': float32x1,
     'float32x2': float32x2,
     'float32x4': float32x4,
     'float32x8': float32x8,

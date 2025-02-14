@@ -14,15 +14,18 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant, cast
-from hidet.ir.layout import StridesLayout, strided_layout, row_major, column_major, local_layout
+from hidet.ir.layout import DataLayout, StridesLayout, strided_layout, row_major, column_major, local_layout
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type, TensorType, DataType, void_p
-from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
+from hidet.lang import i32, boolean, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute
 from hidet.graph.ops.utils import input_like, schedule_utils
 from hidet.ir.library import tune
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
+from hidet.ir.primitives.hip.mfma import MfmaConfig, mfma_sync
+from hidet.ir.primitives.hip.lds_sync import lds_sync
+from hidet.ir.dtypes.vector import vectorize
 
 
 class BatchMatmulTask(Task):
@@ -34,6 +37,7 @@ class BatchMatmulTask(Task):
         self.k_size = k_size
         self.n_size = n_size
         self.mma: str = mma
+        self.implement_device_type: str = 'cuda' if hidet.cuda.available() else 'hip'
         c = compute(
             name='c',
             shape=[batch_size, m_size, n_size],
@@ -49,6 +53,7 @@ class BatchMatmulTask(Task):
         )
 
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        self.implement_device_type = 'cuda'
         if self.inputs[0].type.dtype.nbytes > 4:
             raise ValueError('Only support data type <= 4 bytes for now')
         if self.mma == 'simt':
@@ -65,49 +70,23 @@ class BatchMatmulTask(Task):
 
     # pylint: disable=inconsistent-return-statements
     def implement_hip(self, working_dir: str) -> List[IRModule]:
+        self.implement_device_type = 'hip'
         if self.inputs[0].type.dtype.nbytes > 4:
             raise ValueError('Only support data type <= 4 bytes for now')
         if self.mma == 'simt':
             capability = hidet.hip.capability()
-            if capability.warpSize == 32:
-
-                @tune.space(
-                    2,
-                    block_warps_k=[4, 8],
-                    block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
-                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
-                    warp_mid=[
+            if capability.warpSize in (32, 64):
+                if capability.warpSize == 32:
+                    warp_mid = [
                         spatial(4, 8),
                         spatial(2, 16),
                         spatial(16, 2),
                         spatial(1, 32),
                         spatial(32, 1),
                         spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
-                    ],
-                    warp_inner=[(4, 4)],
-                )
-                @tune.space(
-                    1,
-                    block_warps_k=[8],
-                    block_warps=[(1, 1), (1, 2), (2, 2), (2, 4)],
-                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
-                    warp_mid=[spatial(4, 8)],
-                    warp_inner=[(4, 4), (4, 8), (8, 4)],
-                )
-                def schedule(
-                    block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
-                ) -> IRModule:
-                    return self.schedule_simt_amd(block_warps_k, block_warps, warp_outer, warp_mid, warp_inner)
-
-                return tune.extract_ir_modules(schedule)
-            elif capability.warpSize == 64:
-
-                @tune.space(
-                    2,
-                    block_warps_k=[4, 8],
-                    block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
-                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
-                    warp_mid=[
+                    ]
+                else:
+                    warp_mid = [
                         spatial(8, 8),
                         spatial(4, 16),
                         spatial(16, 4),
@@ -115,7 +94,14 @@ class BatchMatmulTask(Task):
                         spatial(32, 2),
                         spatial(4, 1) * spatial(1, 8) * spatial(2, 1),
                         spatial(2, 1) * spatial(1, 8) * spatial(4, 1),
-                    ],
+                    ]
+
+                @tune.space(
+                    2,
+                    block_warps_k=[4, 8],
+                    block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
+                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
+                    warp_mid=warp_mid,
                     warp_inner=[(4, 4)],
                 )
                 @tune.space(
@@ -123,18 +109,56 @@ class BatchMatmulTask(Task):
                     block_warps_k=[8],
                     block_warps=[(1, 1), (1, 2), (2, 2), (2, 4)],
                     warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
-                    warp_mid=[spatial(4, 8)],
+                    warp_mid=[spatial(4, 8)] if capability.warpSize == 32 else [spatial(8, 8)],
                     warp_inner=[(4, 4), (4, 8), (8, 4)],
                 )
                 def schedule(
-                    block_warps_k=8, block_warps=(2, 2), warp_outer=(2, 2), warp_mid=spatial(8, 8), warp_inner=(4, 4)
+                    block_warps_k=8,
+                    block_warps=(4, 2),
+                    warp_outer=(2, 2),
+                    warp_mid=spatial(4, 8) if capability.warpSize == 32 else spatial(8, 8),
+                    warp_inner=(4, 4),
                 ) -> IRModule:
                     return self.schedule_simt_amd(block_warps_k, block_warps, warp_outer, warp_mid, warp_inner)
 
                 return tune.extract_ir_modules(schedule)
+            else:
+                raise ValueError('Only support warp size 32, 64 for now, got {}'.format(capability.warpSize))
 
+        elif self.mma.startswith('mma') and hidet.hip.capability().gcnArchName == 'gfx90a':
+            if hidet.option.get_search_space() == 0:
+                smem_a_layout = row_major(2, 1) * row_major(32, 32).swizzle(1).reshape([64, 16])
+                smem_b_layout = row_major(4, 1) * row_major(4, 4).swizzle(1) * row_major(1, 16)
+                return self.schedule_mma_amd_gfx90a(
+                    MfmaConfig.v_mfma_f32_16x16x4f32(), smem_a_layout, smem_b_layout, spatial(2, 2), vec_load_global=1
+                )
+            # TODO: minimize search space for option 1
+            elif hidet.option.get_search_space() in (1, 2):
+                irms = []
+                inst = MfmaConfig.v_mfma_f32_16x16x4f32()
+                configs = BatchMatmulTask.mfma_generate_configs(inst.m, inst.n, inst.k)
+
+                for config in configs:
+                    try:
+                        irm = self.schedule_mma_amd_gfx90a(*config)
+                    except AssertionError:
+                        continue
+                    irms.append(irm)
+
+                return irms
+            else:
+                raise ValueError('Invalid search space {}'.format(hidet.option.get_search_space()))
         elif self.mma.startswith('mma'):
-            raise ValueError('mma is not supported on hip yet')
+            raise RuntimeError(
+                'mma is only supported on gfx90a for now, got {}'.format(hidet.hip.capability().gcnArchName)
+            )
+
+    def allow_prologue(self) -> bool:
+        # use vectorized loading for mma, thus no prologue
+        if hidet.hip.available() and self.implement_device_type == 'hip':
+            if self.mma.startswith('mma') and hidet.hip.capability().gcnArchName == 'gfx90a':
+                return False
+        return True
 
     @tune.space(
         2,
@@ -668,7 +692,7 @@ class BatchMatmulTask(Task):
                         regs_c[i, j] += regs_a[buffer_idx, i, k] * regs_b[buffer_idx, k, j]
 
             @hidet.script
-            def batch_matmul_kernel(
+            def batch_matmul_simt_kernel(
                 a: dtype[bs, m_size, k_size], b: dtype[bs, k_size, n_size], c: dtype[bs, m_size, n_size]
             ):
                 attrs.func_kind = 'hip_kernel'
@@ -744,6 +768,274 @@ class BatchMatmulTask(Task):
                         copy_a_s2r(smem_a, regs_a, last_k % 2, (k_frag + 1) % 2, k_frag + 1)
                         copy_b_s2r(smem_b, regs_b, last_k % 2, (k_frag + 1) % 2, k_frag + 1)
                     mma(regs_a, regs_b, regs_c, k_frag % 2)
+
+                # Store results from regs_c into C
+                copy_c_r2g(regs_c, c, offset_m, offset_n)
+
+        ir_module = module.ir_module()
+        return ir_module
+
+    @staticmethod
+    def mfma_generate_configs(mma_m, mma_n, mma_k):
+        for block_m in [128, 64]:
+            for block_n in [128, 64]:
+                for block_k in [32, 16]:
+                    for warp_map in [spatial(2, 2), spatial(2, 1), spatial(1, 2), spatial(1, 1)]:
+                        for vec_load_global in [1, 2, 4]:
+                            assert 1024 // block_k <= block_m
+
+                            smem_a_layout = row_major(block_m // (1024 // block_k), 1) * row_major(32, 32).swizzle(
+                                1
+                            ).reshape([1024 // block_k, block_k])
+                            mid_swizzle = block_n // mma_n
+                            assert block_k % mid_swizzle == 0
+                            smem_b_layout = (
+                                row_major(block_k // mid_swizzle, 1)
+                                * row_major(mid_swizzle, mid_swizzle).swizzle(1)
+                                * row_major(1, mma_n)
+                            )
+                            # pylint: disable=line-too-long
+                            yield MfmaConfig.v_mfma_f32_16x16x4f32(), smem_a_layout, smem_b_layout, warp_map, vec_load_global
+
+    def schedule_mma_amd_gfx90a(
+        self,
+        inst: MfmaConfig,
+        smem_a_layout: DataLayout,
+        smem_b_layout: DataLayout,
+        warp_outer_mapping: TaskMapping,
+        vec_load_global: int = 1,
+    ) -> IRModule:
+
+        task = self
+        assert len(smem_a_layout.shape) == 2
+        assert len(smem_b_layout.shape) == 2
+        assert smem_a_layout.shape[1] == smem_b_layout.shape[0]
+
+        warp_m, warp_n = warp_outer_mapping.task_shape
+
+        block_m, block_k = smem_a_layout.shape
+        _, block_n = smem_b_layout.shape
+
+        warp_size = 64
+        warps = warp_m * warp_n
+        threads = warps * warp_size
+
+        used_smem_bytes_per_block = (block_m + block_n) * block_k * task.inputs[0].type.dtype.nbytes
+
+        bs = task.attrs['batch_size']
+        m_size = task.attrs['m_size']
+        n_size = task.attrs['n_size']
+        k_size = task.attrs['k_size']
+
+        tiles_m = (m_size + block_m - 1) // block_m
+        tiles_n = (n_size + block_n - 1) // block_n
+        tiles_k = (k_size + block_k - 1) // block_k
+
+        dtype = task.inputs[0].type.dtype
+        capability = hidet.hip.capability()
+
+        tune.check(warp_size == capability.warpSize)
+        tune.check(used_smem_bytes_per_block <= capability.sharedMemPerBlock)
+        # tune.check(used_num_regs_per_thread * block_size <= hidet.hip.capability().regsPerBlock)
+
+        vectype = vectorize(dtype, vec_load_global)
+
+        with hidet.script_module() as module:
+
+            assert block_k % vec_load_global == 0 and block_n % vec_load_global == 0
+            assert threads % (block_k // vec_load_global) == 0 and threads % (block_n // vec_load_global) == 0
+
+            lines_a = threads // (block_k // vec_load_global)
+            a_g2r_mapping = spatial(lines_a, block_k // vec_load_global) * repeat(max(1, block_m // lines_a), 1)
+            regs_a_ldg_layout = local_layout(lines_a, block_k // vec_load_global) * row_major(
+                max(1, block_m // lines_a), vec_load_global
+            )
+
+            @hidet.script
+            def vec_read(dst: ~vectype, src: ~vectype, inbounds: boolean):
+                attrs.func_kind = 'hip_internal'
+                if inbounds:
+                    cast(dst, ~vectype)[0] = cast(src, ~vectype)[0]
+                else:
+                    cast(dst, ~vectype)[0] = vectype.zero
+
+            @hidet.script
+            def copy_a_g2r(
+                a: dtype[bs, m_size, k_size],
+                regs_a_ldg: TensorType(dtype=dtype, layout=regs_a_ldg_layout),
+                offset_m: i32,
+                offset_k: i32,
+            ):
+                attrs.func_kind = 'hip_internal'
+                gmem_a = a[blockIdx.y, offset_m:, offset_k:]
+                for i, k in a_g2r_mapping.on(threadIdx.x):
+                    inbounds = offset_m + i < m_size and offset_k + k < k_size
+                    vec_read(
+                        cast(~regs_a_ldg[i, k * vec_load_global], ~vectype),
+                        cast(~gmem_a[i, k * vec_load_global], ~vectype),
+                        inbounds,
+                    )
+
+            @hidet.script
+            def copy_a_r2s(
+                regs_a_ldg: TensorType(dtype=dtype, layout=regs_a_ldg_layout),
+                smem_a: TensorType(dtype=dtype, layout=smem_a_layout),
+            ):
+                attrs.func_kind = 'hip_internal'
+                for i, k in a_g2r_mapping.on(threadIdx.x):
+                    for vl in range(vec_load_global):
+                        smem_a[i, k * vec_load_global + vl] = regs_a_ldg[i, k * vec_load_global + vl]
+
+            lines_b = threads // (block_n // vec_load_global)
+            b_g2r_mapping = spatial(lines_b, block_n // vec_load_global) * repeat(max(1, block_k // lines_b), 1)
+            regs_b_ldg_layout = local_layout(lines_b, block_n // vec_load_global) * row_major(
+                max(1, block_k // lines_b), vec_load_global
+            )
+
+            @hidet.script
+            def copy_b_g2r(
+                b: dtype[bs, k_size, n_size],
+                regs_b_ldg: TensorType(dtype=dtype, layout=regs_b_ldg_layout),
+                offset_k: i32,
+                offset_n: i32,
+            ):
+                attrs.func_kind = 'hip_internal'
+                gmem_b = b[blockIdx.y, offset_k:, offset_n:]
+                for k, j in b_g2r_mapping.on(threadIdx.x):
+                    inbounds = offset_n + j < n_size and offset_k + k < k_size
+                    vec_read(
+                        cast(~regs_b_ldg[k, j * vec_load_global], ~vectype),
+                        cast(~gmem_b[k, j * vec_load_global], ~vectype),
+                        inbounds,
+                    )
+
+            @hidet.script
+            def copy_b_r2s(
+                regs_b_ldg: TensorType(dtype=dtype, layout=regs_b_ldg_layout),
+                smem_b: TensorType(dtype=dtype, layout=smem_b_layout),
+            ):
+                attrs.func_kind = 'hip_internal'
+                for k, j in b_g2r_mapping.on(threadIdx.x):
+                    for vl in range(vec_load_global):
+                        smem_b[k, j * vec_load_global + vl] = regs_b_ldg[k, j * vec_load_global + vl]
+
+            assert block_m % (warp_m * inst.m) == 0 and block_n % (warp_n * inst.n) == 0
+            rep_m = block_m // (warp_m * inst.m)
+            block_regs_mma_a_mapping = repeat(rep_m, 1) * inst.a_load_map
+            block_regs_mma_a_layout = local_layout(warp_m, 1) * row_major(rep_m, 1) * inst.regs_a_layout
+
+            rep_n = block_n // (warp_n * inst.n)
+            block_regs_mma_b_mapping = repeat(1, rep_n) * inst.b_load_map
+            block_regs_mma_b_layout = local_layout(1, warp_n) * row_major(1, rep_n) * inst.regs_b_layout
+
+            block_c_store_map = warp_outer_mapping * repeat(rep_m, rep_n) * inst.c_store_map
+            block_regs_mma_c_layout = local_layout(warp_m, warp_n) * row_major(rep_m, rep_n) * inst.regs_c_layout
+
+            # each warp handles a_tile[warp_tile_m, block_k] * b_tile[block_k, warp_tile_n]
+            warp_tile_m = rep_m * inst.m
+            warp_tile_n = rep_n * inst.n
+            warp_tile_k = inst.k
+            warp_map = warp_outer_mapping
+
+            @hidet.script
+            def copy_c_r2g(
+                regs_c: TensorType(dtype=dtype, layout=block_regs_mma_c_layout),
+                c: dtype[bs, m_size, n_size],
+                offset_m: i32,
+                offset_n: i32,
+            ):
+                attrs.func_kind = 'hip_internal'
+
+                gmem_c = c[blockIdx.y, offset_m:, offset_n:]
+                for i, j in block_c_store_map.on(threadIdx.x):
+                    if offset_m + i < m_size and offset_n + j < n_size:
+                        gmem_c.write([i, j], regs_c[i, j], protected=False)
+
+            @hidet.script
+            def block_gemm(
+                smem_a: TensorType(dtype=dtype, layout=smem_a_layout),
+                smem_b: TensorType(dtype=dtype, layout=smem_b_layout),
+                regs_c: TensorType(dtype=dtype, layout=block_regs_mma_c_layout),
+            ):
+                attrs.func_kind = 'hip_internal'
+                lane = threadIdx.x % warp_size
+                warp = threadIdx.x // warp_size
+                regs_a = register_tensor(dtype, layout=block_regs_mma_a_layout)
+                regs_b = register_tensor(dtype, layout=block_regs_mma_b_layout)
+
+                for ki in range(block_k // warp_tile_k):
+                    for im, jn in warp_map.on(warp):
+                        for i, k in block_regs_mma_a_mapping.on(lane):
+                            regs_a[i + im * warp_tile_m, k] = smem_a[i + im * warp_tile_m, k + ki * warp_tile_k]
+
+                    for im, jn in warp_map.on(warp):
+                        for k, n in block_regs_mma_b_mapping.on(lane):
+                            regs_b[k, n + jn * warp_tile_n] = smem_b[k + ki * warp_tile_k, n + jn * warp_tile_n]
+
+                    for im, jn in (warp_map * repeat(rep_m, rep_n)).on(warp):
+                        wm = im * inst.m
+                        wn = jn * inst.n
+                        mfma_sync(inst, ~regs_a[wm, 0], ~regs_b[0, wn], ~regs_c[wm, wn])
+
+            @hidet.script
+            def mma(
+                regs_a: TensorType(dtype=dtype, layout=block_regs_mma_a_layout),
+                regs_b: TensorType(dtype=dtype, layout=block_regs_mma_b_layout),
+                regs_c: TensorType(dtype=dtype, layout=block_regs_mma_c_layout),
+            ):
+                attrs.func_kind = 'hip_internal'
+                for im, jn in warp_map.on(threadIdx.x / warp_size):
+                    mfma_sync(
+                        inst,
+                        ~regs_a[im * warp_tile_m, 0],
+                        ~regs_b[0, jn * warp_tile_n],
+                        ~regs_c[im * warp_tile_m, jn * warp_tile_n],
+                    )
+
+            @hidet.script
+            def batch_matmul_mma_kernel(
+                a: dtype[bs, m_size, k_size], b: dtype[bs, k_size, n_size], c: dtype[bs, m_size, n_size]
+            ):
+                attrs.func_kind = 'hip_kernel'
+
+                attrs.hip.grid_dim = (tiles_n * tiles_m, bs)
+                attrs.hip.block_dim = warps * warp_size
+                # attrs.hip.dynamic_smem_bytes = cuda_dynamic_smem_bytes
+                # attrs.cuda.min_blocks = min_thread_blocks
+
+                offset_m, offset_n = (blockIdx.x // tiles_n) * block_m, (blockIdx.x % tiles_n) * block_n
+
+                smem = shared_tensor('int8', shape=[used_smem_bytes_per_block])
+
+                smem_a = tensor_pointer(dtype, layout=smem_a_layout, init=cast(~smem[0], ~dtype))
+                smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
+                smem_b = tensor_pointer(dtype, layout=smem_b_layout, init=cast(~smem[smem_a_bytes], ~dtype))
+
+                regs_c = register_tensor(dtype, layout=block_regs_mma_c_layout)
+                regs_a_ldg = register_tensor(dtype, layout=regs_a_ldg_layout)
+                regs_b_ldg = register_tensor(dtype, layout=regs_b_ldg_layout)
+
+                for i, j in block_c_store_map.on(threadIdx.x):
+                    regs_c[i, j] = 0.0
+
+                copy_a_g2r(a, regs_a_ldg, offset_m, 0)
+                copy_b_g2r(b, regs_b_ldg, 0, offset_n)
+                copy_a_r2s(regs_a_ldg, smem_a)
+                copy_b_r2s(regs_b_ldg, smem_b)
+                lds_sync()
+
+                for kb in range(tiles_k - 1):
+                    offset_k = (kb + 1) * block_k
+                    copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
+                    lds_sync()
+                    copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
+                    block_gemm(smem_a, smem_b, regs_c)
+                    lds_sync()
+
+                    copy_a_r2s(regs_a_ldg, smem_a)
+                    copy_b_r2s(regs_b_ldg, smem_b)
+                lds_sync()
+                block_gemm(smem_a, smem_b, regs_c)
 
                 # Store results from regs_c into C
                 copy_c_r2g(regs_c, c, offset_m, offset_n)
