@@ -53,6 +53,7 @@ from .transform import (
     im2col,
     as_strided,
     flip,
+    view,
 )
 from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather, index_select, triu, tril
 from .transform import permute_dims, meshgrid, repeat_interleave

@@ -133,6 +133,28 @@ class ReshapeTask(Task):
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
 
+class ViewTask(Task):
+    def __init__(self, x: TensorNode, dtype: DataType, shape: Sequence[Union[int, Expr]]):
+        out = compute(name='view', shape=shape, fcompute=lambda *indices: dtype(0.0))
+        super().__init__(
+            name='view', inputs=[x], outputs=[out], attributes={'dtype': dtype, 'shape': shape}, share_map={0: 0}
+        )
+
+    def implement(self, target, working_dir):
+        import hidet
+        from hidet.lang import script, attrs
+        from hidet.lang.types import void_p
+
+        with hidet.script_module() as script_module:
+
+            @script
+            def launch(x: void_p, y: void_p):
+                attrs.func_kind = 'public'
+
+        module = script_module.ir_module()
+        return [module]
+
+
 class RearrangeTask(Task):
     def __init__(self, x: TensorNode, plan: List[List[int]]):
         x_shape = x.shape
@@ -513,6 +535,13 @@ class ReshapeOp(Operator):
         return [from_torch(torch.reshape(x_torch, tuple(shape)).contiguous())]
 
 
+class ViewOp(Operator):
+    def __init__(self, x: Tensor, dtype: DataType, shape: Sequence[Union[int, Expr]]):
+        super().__init__(
+            inputs=[x], attributes={'dtype': dtype, 'shape': shape}, task=ViewTask(input_like(x, 'x'), dtype, shape)
+        )
+
+
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
         super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
@@ -869,6 +898,34 @@ def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     if len(dims) == 0:
         return x
     return UnsqueezeOp(x, dims).outputs[0]
+
+
+def view(
+    x: Tensor, dtype: Optional[Union[str, DataType]] = None, shape: Optional[List[Union[int, Expr]]] = None
+) -> Tensor:
+    if dtype is None:
+        dtype: DataType = x.dtype
+    if isinstance(dtype, str):
+        dtype: DataType = data_type(dtype)
+
+    if shape is None:
+        shape = x.shape
+        if dtype.nbytes != x.dtype.nbytes:  # scale last dimension proportionally
+            if len(x.shape) <= 0:
+                raise ValueError('Tensor dimensionality must be greater than 0')
+            if dtype.nbytes > x.dtype.nbytes and x.shape[-1] % (dtype.nbytes // x.dtype.nbytes) != 0:
+                raise ValueError('Tensor last dimension must be divisible by the scale factor')
+            if not (x.dtype.nbytes % dtype.nbytes == 0 or dtype.nbytes % x.dtype.nbytes == 0):
+                raise ValueError('Tensor data type sizes must be multiples of each other')
+
+            shape = list(shape)
+            shape[-1] = shape[-1] * x.dtype.nbytes // dtype.nbytes
+            shape = tuple(shape)
+
+    if prod(shape) * dtype.nbytes != prod(x.shape) * x.dtype.nbytes:
+        raise ValueError('Invalid shape provided. The underlying data size must remain the same after view operation')
+
+    return ViewOp(x, dtype, shape).outputs[0]
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:

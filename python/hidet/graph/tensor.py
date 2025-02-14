@@ -755,6 +755,37 @@ class Tensor:
 
         return unsqueeze(self, dims)
 
+    def view(
+        self, dtype: Optional[Union[str, DataType]] = None, shape: Optional[List[Union[int, Expr]]] = None
+    ) -> Tensor:
+        """Reinterpret/view the self tensor with a different `dtype` and/or `shape`,
+        without any data copying or casting.
+
+        If the element size of `dtype` is different than `self.dtype`, the size of the last dimension of the new tensor
+        will be scaled proportionally. For example, if `dtype.nbytes==2` and `self.dtype.nbytes==4`, the size of the
+        last dimension of the new tensor will be doubled. For this to be possible, `len(self.shape)` must be greater
+        than 0.
+
+        Additionally, if `dtype.nbytes`>`self.dtype.nbytes`, `self.shape[-1]`
+        must be divisible by the ratio between the two element sizes.
+
+        Parameters
+        ----------
+        dtype: Union[str, DataType], optional
+            The target data type to convert to. None indicates unchanged.
+        shape: Sequence[int], optional
+            The target shape to convert to. None indicates unchanged.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor with the new data type and shape.
+
+        """
+        from .ops import view
+
+        return view(self, dtype, shape)
+
     def rearrange(self, plan: List[List[int]]):
         """Create a rearranged tensor.
 

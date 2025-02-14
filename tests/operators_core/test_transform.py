@@ -88,6 +88,34 @@ def test_flatten(shape, start_dim: int, end_dim: Optional[int], device):
 
 
 @pytest.mark.parametrize(
+    "dtype, shape, new_dtype",
+    [['int8', [2, 3, 4], 'uint8'], ['float32', [1, 8], 'float16'], ['int8', [2, 3, 8], 'float32']],
+)
+def test_view_dtype(dtype, shape, new_dtype, device):
+    check_transform_torch(
+        shape, lambda x: x.view(getattr(torch, new_dtype)), lambda x: x.view(dtype=new_dtype), device, dtype
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype, shape, new_shape", [['int8', [2, 3, 4, 5, 9], [9, 5, 3, 4, 2]], ['float32', [1, 8], [2, 4]]]
+)
+def test_view_shape(dtype, shape, new_shape, device):
+    check_transform_torch(shape, lambda x: x.view(new_shape), lambda x: x.view(shape=new_shape), device, dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype, shape, new_dtype, new_shape",
+    [['float32', [2, 6, 10], 'float16', [6, 2, 20]], ['int8', [1, 10], 'int16', [1, 5]]],
+)
+def test_view(dtype, shape, new_dtype, new_shape, device):
+    data = torch.asarray(np.array(np.random.randn(*shape)).astype(dtype))
+    hidet_result = hi.asarray(data).to(device=device).view(new_dtype, new_shape).cpu().numpy()
+    torch_result = data.view(dtype=getattr(torch, new_dtype)).view(new_shape)
+    np.testing.assert_allclose(actual=hidet_result, desired=torch_result.cpu().numpy(), atol=0, rtol=0)
+
+
+@pytest.mark.parametrize(
     "shape, axes",
     [[[33, 44, 55], [0, 1, 2]], [[33, 44, 55], [0, 2, 1]], [[33, 44, 55], [2, 1, 0]], [[33, 44, 55], [1, 2, 0]]],
 )
