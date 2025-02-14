@@ -9,12 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
+from typing import List, Tuple
 import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant, cast
 from hidet.ir.layout import StridesLayout, strided_layout, row_major, column_major, local_layout
+from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
@@ -68,9 +69,70 @@ class BatchMatmulTask(Task):
             raise ValueError('Only support data type <= 4 bytes for now')
         if self.mma == 'simt':
             capability = hidet.hip.capability()
-            if capability.warpSize != 32:
-                raise ValueError('Only support warp size 32 for now')
-            return tune.extract_ir_modules(self.schedule_simt_amd)
+            if capability.warpSize == 32:
+
+                @tune.space(
+                    2,
+                    block_warps_k=[4, 8],
+                    block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
+                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
+                    warp_mid=[
+                        spatial(4, 8),
+                        spatial(2, 16),
+                        spatial(16, 2),
+                        spatial(1, 32),
+                        spatial(32, 1),
+                        spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
+                    ],
+                    warp_inner=[(4, 4)],
+                )
+                @tune.space(
+                    1,
+                    block_warps_k=[8],
+                    block_warps=[(1, 1), (1, 2), (2, 2), (2, 4)],
+                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
+                    warp_mid=[spatial(4, 8)],
+                    warp_inner=[(4, 4), (4, 8), (8, 4)],
+                )
+                def schedule(
+                    block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
+                ) -> IRModule:
+                    return self.schedule_simt_amd(block_warps_k, block_warps, warp_outer, warp_mid, warp_inner)
+
+                return tune.extract_ir_modules(schedule)
+            elif capability.warpSize == 64:
+
+                @tune.space(
+                    2,
+                    block_warps_k=[4, 8],
+                    block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
+                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
+                    warp_mid=[
+                        spatial(8, 8),
+                        spatial(4, 16),
+                        spatial(16, 4),
+                        spatial(2, 32),
+                        spatial(32, 2),
+                        spatial(4, 1) * spatial(1, 8) * spatial(2, 1),
+                        spatial(2, 1) * spatial(1, 8) * spatial(4, 1),
+                    ],
+                    warp_inner=[(4, 4)],
+                )
+                @tune.space(
+                    1,
+                    block_warps_k=[8],
+                    block_warps=[(1, 1), (1, 2), (2, 2), (2, 4)],
+                    warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
+                    warp_mid=[spatial(4, 8)],
+                    warp_inner=[(4, 4), (4, 8), (8, 4)],
+                )
+                def schedule(
+                    block_warps_k=8, block_warps=(2, 2), warp_outer=(2, 2), warp_mid=spatial(8, 8), warp_inner=(4, 4)
+                ) -> IRModule:
+                    return self.schedule_simt_amd(block_warps_k, block_warps, warp_outer, warp_mid, warp_inner)
+
+                return tune.extract_ir_modules(schedule)
+
         elif self.mma.startswith('mma'):
             raise ValueError('mma is not supported on hip yet')
 
@@ -218,7 +280,7 @@ class BatchMatmulTask(Task):
         tune.check(warp_size % block_k == 0)
         tune.check(block_shape[0] % (block_size // block_k) == 0 and block_shape[1] % (block_size // block_k) == 0)
         tune.check(used_smem_bytes_per_block <= max_smem_bytes_per_block)
-        tune.check(used_num_regs_per_thread * block_size <= hidet.cuda.capability().regsPerBlock)
+        # tune.check(used_num_regs_per_thread * block_size <= hidet.cuda.capability().regsPerBlock)
         use_dynamic_smem = used_smem_bytes_per_block > 48 * 1024
         min_thread_blocks = resident_blocks
         cuda_dynamic_smem_bytes = used_smem_bytes_per_block if use_dynamic_smem else 0
@@ -404,31 +466,13 @@ class BatchMatmulTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(
-        2,
-        block_warps_k=[4, 8],
-        block_warps=[(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
-        warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
-        warp_mid=[
-            spatial(4, 8),
-            spatial(2, 16),
-            spatial(16, 2),
-            spatial(1, 32),
-            spatial(32, 1),
-            spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
-        ],
-        warp_inner=[(4, 4)],
-    )
-    @tune.space(
-        1,
-        block_warps_k=[8],
-        block_warps=[(1, 1), (1, 2), (2, 2), (2, 4)],
-        warp_outer=[(1, 1), (1, 2), (2, 1), (2, 2)],
-        warp_mid=[spatial(4, 8)],
-        warp_inner=[(4, 4), (4, 8), (8, 4)],
-    )
     def schedule_simt_amd(
-        self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
+        self,
+        block_warps_k: int,
+        block_warps: Tuple[int, int],
+        warp_outer: Tuple[int, int],
+        warp_mid: TaskMapping,
+        warp_inner: Tuple[int, int],
     ) -> IRModule:
         task = self
         dtype = task.inputs[0].type.dtype
@@ -444,7 +488,7 @@ class BatchMatmulTask(Task):
         block_k = block_warps_k * warp_k
         warp_mid_shape = warp_mid_layout.task_shape
         block_shape = block_layout.task_shape
-        warp_size = 32
+        warp_size = warp_mid.num_workers
         block_size = block_layout.num_workers
 
         lines = block_size // block_k
@@ -506,13 +550,13 @@ class BatchMatmulTask(Task):
         )
         used_num_regs_per_thread = (used_num_regs_per_thread + 7) // 8 * 8
 
-        tune.check(warp_mid.num_workers == 32)
+        tune.check(warp_size == capability.warpSize)
         tune.check(block_warps_k % 2 == 0)
         tune.check(block_k <= warp_size)
         tune.check(warp_size % block_k == 0)
         tune.check(block_shape[0] % (block_size // block_k) == 0 and block_shape[1] % (block_size // block_k) == 0)
         tune.check(used_smem_bytes_per_block <= capability.sharedMemPerBlock)
-        tune.check(used_num_regs_per_thread * block_size <= hidet.hip.capability().regsPerBlock)
+        tune.check(used_num_regs_per_thread * block_size <= capability.regsPerBlock)
 
         with hidet.script_module() as module:
 
