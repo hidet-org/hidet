@@ -11,23 +11,8 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
 
+from hip import hip
 from hidet.utils import exiting
-from .ffi import (
-    error_msg,
-    hip_event_create_with_flags,
-    hip_event_destroy,
-    hip_event_elapsed_time,
-    hip_event_record,
-    hip_event_synchronize,
-)
-
-# Event flags are defined inside the HIP Runtime API Reference "hip_runtime_api.h":
-# define hipEventDefault   0x0
-# define hipEventBlockingSync   0x1
-# define hipEventDisableTiming   0x2
-# define hipEventInterprocess   0x4
-hipEventDefault = 0
-hipEventDisableTiming = 2
 
 
 class Event:
@@ -50,17 +35,17 @@ class Event:
 
         self._handle: int  # hipEvent_t represented as a void* in C
         if not enable_timing:
-            flags = hipEventDisableTiming
+            flags = hip.hipEventDisableTiming
         else:
-            flags = hipEventDefault
-        error, self._handle = hip_event_create_with_flags(flags)
-        assert error == 0, error_msg("hip_event_create", error)
+            flags = hip.hipEventDefault
+        err, self._handle = hip.hipEventCreateWithFlags(flags)
+        assert err == 0, str(err)
 
     def __del__(self, is_exiting=exiting.is_exiting):
         if is_exiting():
             return
-        error = hip_event_destroy(self._handle)
-        assert error == 0, error_msg("hip_event_destroy", error)
+        (err,) = hip.hipEventDestroy(self._handle)
+        assert err == 0, str(err)
 
     def handle(self) -> int:
         """
@@ -90,8 +75,8 @@ class Event:
         # pylint: disable=protected-access
         if not self._enable_timing or not start_event._enable_timing:
             raise RuntimeError("Event does not have timing enabled")
-        error, elapsed_time = hip_event_elapsed_time(start_event._handle, self._handle)
-        assert error == 0, error_msg("hip_event_elapsed_time", error)
+        err, elapsed_time = hip.hipEventElapsedTime(start_event._handle, self._handle)
+        assert err == 0, str(err)
         return elapsed_time
 
     def record(self, stream=None):
@@ -117,8 +102,8 @@ class Event:
             stream = current_stream()
         if not isinstance(stream, Stream):
             raise TypeError("stream must be a Stream")
-        error = hip_event_record(self._handle, stream.handle())
-        assert error == 0, error_msg("hip_event_record", error)
+        (err,) = hip.hipEventRecord(self._handle, stream.handle())
+        assert err == 0, str(err)
 
     def synchronize(self):
         """
@@ -127,5 +112,5 @@ class Event:
         """
         if not self._blocking:
             raise RuntimeError("Event does not have blocking enabled")
-        error = hip_event_synchronize(self._handle)
-        assert error == 0, error_msg("hip_event_synchronize", error)
+        (err,) = hip.hipEventSynchronize(self._handle)
+        assert err == 0, str(err)

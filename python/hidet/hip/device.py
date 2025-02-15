@@ -14,15 +14,8 @@ from typing import Tuple, Optional
 from functools import lru_cache
 import ctypes.util
 
-from .ffi import (
-    error_msg,
-    hipDeviceProp_t,
-    hip_device_count,
-    hip_device_properties,
-    hip_set_device,
-    hip_current_device,
-    hip_device_synchronize,
-)
+from hip import hip
+from hip.hip import hipDeviceProp_t
 
 
 class HipDeviceContext:
@@ -65,8 +58,8 @@ def device_count() -> int:
     count: int
         The number of available HIP devices.
     """
-    error, ret = hip_device_count()
-    assert error == 0, error_msg("device_count", error)
+    err, ret = hip.hipGetDeviceCount()
+    assert err == 0, str(err)
     return ret
 
 
@@ -85,8 +78,9 @@ def properties(device_id: int = 0) -> hipDeviceProp_t:
     prop: hipDeviceProp_t
         The properties of the device.
     """
-    error, prop = hip_device_properties(device_id)
-    assert error == 0, error_msg("properties", error)
+    prop = hipDeviceProp_t()
+    (err,) = hip.hipGetDeviceProperties(prop, device_id)
+    assert err == 0, str(err)
     return prop
 
 
@@ -99,8 +93,8 @@ def set_device(device_id: int):
     device_id: int
         The ID of the HIP device.
     """
-    error = hip_set_device(device_id)
-    assert error == 0, error_msg("set_device", error)
+    (err,) = hip.hipSetDevice(device_id)
+    assert err == 0, str(err)
 
 
 def current_device() -> int:
@@ -112,8 +106,8 @@ def current_device() -> int:
     device_id: int
         The ID of the HIP device.
     """
-    error, device_id = hip_current_device()
-    assert error == 0, error_msg("get_device", error)
+    err, device_id = hip.hipGetDevice()
+    assert err == 0, str(err)
     return device_id
 
 
@@ -160,5 +154,5 @@ def synchronize():
 
     This function blocks until the device has completed all preceding requested tasks.
     """
-    error = hip_device_synchronize()
-    assert error == 0, error_msg("synchronize", error)
+    (err,) = hip.hipDeviceSynchronize()
+    assert err == 0, str(err)

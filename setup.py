@@ -35,6 +35,7 @@ setup(
         "requests",
         "filelock",
         "cuda-python>=11.6.1",
+        "hip-python-fork",  # todo: switch to `hip-python` when AMD team claim back the name on PyPI (see #732)
         "lark",
         "tomlkit", 
         "scipy",

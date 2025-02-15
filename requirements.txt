@@ -45,3 +45,6 @@ scipy
 
 # for torch runtime api dependency
 torch>=2.3.0
+
+# for hip-python
+hip-python-fork

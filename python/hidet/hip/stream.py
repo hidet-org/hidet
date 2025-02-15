@@ -12,23 +12,10 @@
 # pylint: disable=no-name-in-module, c-extension-no-member
 from __future__ import annotations
 from typing import Optional, Dict
+from hip import hip
 from hidet.utils import exiting
-
-from .ffi import (
-    error_msg,
-    hip_stream_create_with_priority,
-    hip_stream_destroy,
-    hip_stream_synchronize,
-    hip_stream_wait_event,
-)
 from .event import Event
 from .device import HipDeviceContext, current_device
-
-# Stream flags are defined inside the HIP Runtime API Reference "hip_runtime_api.h":
-# define 	hipStreamDefault   0x00
-# define 	hipStreamNonBlocking   0x01
-hipStreamDefault = 0
-hipStreamNonBlocking = 1
 
 
 def _get_device_id(device) -> int:
@@ -83,7 +70,7 @@ class Stream:
     """
 
     def __init__(self, device=None, blocking: bool = False, priority: int = 0, **kwargs):
-        from hidet import hip
+        import hidet
 
         self._device_id: int
         self._handle: int  # hipStream_t represented as a void* in C
@@ -94,10 +81,10 @@ class Stream:
             self._external = True
         else:
             self._device_id = _get_device_id(device)
-            with hip.device(self._device_id):
-                flags = hipStreamNonBlocking if not blocking else hipStreamDefault
-                error, handle = hip_stream_create_with_priority(flags, priority)
-                assert error == 0, error_msg("hip_stream_create_with_priority", error)
+            with hidet.hip.device(self._device_id):
+                flags = hip.hipStreamNonBlocking if not blocking else hip.hipStreamDefault
+                err, handle = hip.hipStreamCreateWithPriority(flags, priority)
+                assert err == 0, str(err)
                 self._handle = handle
             self._external = False
 
@@ -116,8 +103,8 @@ class Stream:
         if is_exiting():
             return
         if not self._external:
-            error = hip_stream_destroy(self._handle)
-            assert error == 0, error_msg("hip_stream_destroy", error)
+            (err,) = hip.hipStreamDestroy(self._handle)
+            assert err == 0, str(err)
 
     def device_id(self) -> int:
         """
@@ -145,8 +132,8 @@ class Stream:
         """
         Block the current host thread until the stream completes all operations.
         """
-        error = hip_stream_synchronize(self._handle)
-        assert error == 0, error_msg("hip_stream_synchronize", error)
+        (err,) = hip.hipStreamSynchronize(self._handle)
+        assert err == 0, str(err)
 
     def wait_event(self, event: Event) -> None:
         """
@@ -158,8 +145,8 @@ class Stream:
         event: Event
             The event to wait for.
         """
-        error = hip_stream_wait_event(self._handle, event.handle(), 0)
-        assert error == 0, error_msg("hip_stream_wait_event", error)
+        (err,) = hip.hipStreamWaitEvent(self._handle, event.handle(), 0)
+        assert err == 0, str(err)
 
 
 class ExternalStream(Stream):
