@@ -100,8 +100,23 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
             ret = 'uint8_t({})'.format(int(value))
+        elif dtype == dtypes.float16x1:
+            ret = 'half({}f)'.format(float(value[0]))
         elif dtype == dtypes.float16x2:
             ret = 'half2({}, {})'.format(float(value[0]), float(value[0]))
+        elif dtype == dtypes.float16x4:
+            ret = 'half4({}, {}, {}, {})'.format(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+        elif dtype == dtypes.float16x8:
+            ret = 'half8({}, {}, {}, {}, {}, {}, {}, {})'.format(
+                float(value[0]),
+                float(value[1]),
+                float(value[2]),
+                float(value[3]),
+                float(value[4]),
+                float(value[5]),
+                float(value[6]),
+                float(value[7]),
+            )
         elif dtype == dtypes.float32x2:
             ret = 'float2({}f, {}f)'.format(float(value[0]), float(value[0]))
         elif dtype == dtypes.float32x4:
@@ -651,7 +666,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float16x1': 'half',
             'float16x2': 'half2',
+            'float16x4': 'half4',
+            'float16x8': 'half8',
             'float32x1': 'float',
             'float32x2': 'float2',
             'float32x4': 'float4',
@@ -830,7 +848,7 @@ class HIPCodegen(Codegen):
         # TODO: add this header if necessary
         # doc += Text('#include <hidet/runtime/hip/complex.h>') + NewLine()
         if self.require_fp16:
-            doc += Text('#include <hip/hip_fp16.h>') + NewLine()
+            doc += Text('#include <hidet/runtime/hip/f16_utils.h>') + NewLine()
         doc += Text('#include <hidet/runtime/hip/context.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
 

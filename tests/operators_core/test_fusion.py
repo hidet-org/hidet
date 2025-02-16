@@ -15,12 +15,13 @@ import hidet
 from hidet.graph.ops.fusion.fused_operator import fused_operator
 
 
+@pytest.mark.requires_cuda
 def test_fusion(device):
     def model() -> hidet.FlowGraph:
         a = hidet.symbol([1, 3, 4], device=device)
         b = hidet.symbol([1, 4, 5], device=device)
         c = hidet.symbol([1, 3, 5], device=device)
-        d = hidet.ops.batch_matmul(a, b) + c
+        d = hidet.ops.cuda_batch_matmul(a, b) + c
         return hidet.trace_from(d, [a, b, c])
 
     graph = model()
@@ -55,6 +56,7 @@ def test_fusion_v2(device):
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy())
 
 
+@pytest.mark.requires_cuda
 def test_fusion_cublas_matmul(device):
     bs, m, n, k = 2, 1024, 1024, 1024
     a = hidet.symbol(shape=[bs, m, k], dtype='float32', device=device)
@@ -68,7 +70,7 @@ def test_fusion_cublas_matmul(device):
         return compiled
 
     graph_2 = optimize_and_build(hidet.ops.matmul_cublas)
-    graph_1 = optimize_and_build(hidet.ops.batch_matmul)
+    graph_1 = optimize_and_build(hidet.ops.cuda_batch_matmul)
 
     a = hidet.randn_like(a)
 

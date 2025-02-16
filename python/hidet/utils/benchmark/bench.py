@@ -367,7 +367,6 @@ class Bench:
         """
         for i in self.x_vals:
             for name, fn in self.bench_fns:
-
                 if name not in self.bench_data:
                     self.bench_data[name] = ([], [], [])
                 t_min, t_avg, t_max = self.bench_data[name]

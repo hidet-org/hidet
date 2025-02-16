@@ -42,7 +42,7 @@ from hidet.transforms.task_mapping_bound_check import task_mapping_bound_check
 
 # from hidet.graph.ops.softmax import SoftmaxTask
 from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Task
-from hidet.graph.ops.matmul.batch_matmul import BatchMatmulTask
+from hidet.graph.ops.matmul.cuda_batch_matmul import BatchMatmulTask
 from hidet.graph.ops.softmax import SoftmaxTask
 from hidet.graph.ops.attention.attention import AttnTask
 from hidet.graph.ops.utils import input_like, tensor_input

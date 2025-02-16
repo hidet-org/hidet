@@ -97,8 +97,17 @@ f32x4 = float32x4
 float32x8 = VectorType(float32, 8)
 f32x8 = float32x8
 
+float16x1 = VectorType(float16, 1)
+f16x1 = float16x1
+
 float16x2 = VectorType(float16, 2)
 f16x2 = float16x2
+
+float16x4 = VectorType(float16, 4)
+f16x4 = float16x4
+
+float16x8 = VectorType(float16, 8)
+f16x8 = float16x8
 
 int4bx2 = VectorType(int4b, 2)
 i4x2 = int4bx2
@@ -121,7 +130,10 @@ def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
         (float32, 2): float32x2,
         (float32, 4): float32x4,
         (float32, 8): float32x8,
+        (float16, 1): float16x1,
         (float16, 2): float16x2,
+        (float16, 4): float16x4,
+        (float16, 8): float16x8,
         (int8, 4): int8x4,
         (uint8, 4): uint8x4,
         (boolean, 4): int8x4,

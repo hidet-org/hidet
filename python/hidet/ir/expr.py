@@ -455,7 +455,7 @@ class Cast(Expr):
         self.expr: Expr = expr
         self.target_type: BaseType = target_type
 
-        assert isinstance(target_type, BaseType)
+        assert isinstance(target_type, BaseType), f"target_type {target_type} is not a BaseType"
 
 
 class Constant(Expr):

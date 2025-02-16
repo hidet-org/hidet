@@ -1198,7 +1198,6 @@ class hip:
         """
         arch: Optional[str] = OptionContext.current().get_option('hip.arch')
         if arch == "auto":
-
             major, minor = hip.get_arch_pair()
 
             # TODO: cannot get properties.gcnArch properly

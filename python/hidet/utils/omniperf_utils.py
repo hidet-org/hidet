@@ -72,8 +72,9 @@ def omniperf_run(omniperf_path, func, *args, **kwargs) -> OmniperfReport:
     os.mkdir(omniperf_data_dir)
     print(f"chmod +x {launch_file}")
     subprocess.run(f"chmod +x {launch_file}", shell=True)
-    print(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}")
+    print(f"prerunning {launch_file}")
     subprocess.run(launch_file, shell=True)
+    print(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}")
     subprocess.run(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}", shell=True)
 
     return OmniperfReport(omniperf_data_dir, omniperf_path)

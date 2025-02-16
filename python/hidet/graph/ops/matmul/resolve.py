@@ -20,7 +20,8 @@ from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.utils.py import gcd, factorize
 
 from .matmul import MatmulOp
-from .batch_matmul import batch_matmul
+from .cuda_batch_matmul import cuda_batch_matmul
+from .hip_batch_matmul import hip_batch_matmul
 from .matmul_f16_cute import matmul_f16_cute as matmul_f16_cute_stable
 from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
@@ -63,7 +64,7 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
         aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
         # to [batch_size * nparts, k_size // nparts, n_size]
         bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])
-        cc = batch_matmul(aa, bb, mma=mma)
+        cc = cuda_batch_matmul(aa, bb, mma=mma)
         c = cc.reshape([batch_size, nparts, m_size, n_size]).sum(1)
 
         graph: hidet.FlowGraph = hidet.trace_from(c, [a, b])
@@ -116,6 +117,14 @@ class MatmulResolveRule(ResolveRule):
                 nparts = gcd(parallel_k, k_size)
             else:
                 raise ValueError(f'invalid parallel_k: {parallel_k}')
+
+        def batch_matmul(a: Tensor, b: Tensor, mma: str) -> Tensor:
+            if a.device.is_cuda():
+                return cuda_batch_matmul(a, b, mma=mma)
+            elif a.device.is_hip():
+                return hip_batch_matmul(a, b, mma=mma)
+            else:
+                raise ValueError(f'invalid device: {a.device}')
 
         if nparts == 1:
             c = batch_matmul(a, b, mma=mma)

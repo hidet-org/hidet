@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .matmul import matmul, MatmulOp, MatmulTask, matmul_nt
-from .batch_matmul import batch_matmul, BatchMatmulOp, BatchMatmulTask
+from .cuda_batch_matmul import cuda_batch_matmul, CudaBatchMatmulOp, BatchMatmulTask
 from .matmul_cublas import matmul_cublas
 from . import resolve
 

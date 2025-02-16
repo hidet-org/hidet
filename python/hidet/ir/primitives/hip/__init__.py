@@ -12,6 +12,7 @@
 
 from . import math
 from . import mfma
+from . import buffer_addr
 from . import lds_sync
 
 from .errchk import check_hip_error

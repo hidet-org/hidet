@@ -82,5 +82,5 @@ def test_mma(config: MmaConfig):
     b = hidet.randint(3, shape=[1, k, n]).to(data_type(config.input_dtype).name).cuda()
     c = hidet.empty([1, m, n], dtype=data_type(config.output_dtype).name)
     func(a, b, c)
-    c_desire = hidet.ops.batch_matmul(a, b)
+    c_desire = hidet.ops.cuda_batch_matmul(a, b)
     np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c_desire.cpu().numpy())

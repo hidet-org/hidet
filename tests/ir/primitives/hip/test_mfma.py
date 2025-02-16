@@ -46,7 +46,6 @@ def test_mfma_tensor_core(config: MfmaConfig):
         def test_matmul(
             a: ab_dtype[config.m, config.k], b: ab_dtype[config.k, config.n], c: c_dtype[config.m, config.n]
         ):
-
             attrs.hip.block_dim = 64
             attrs.hip.grid_dim = 1
 

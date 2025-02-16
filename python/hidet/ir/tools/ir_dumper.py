@@ -180,7 +180,6 @@ class IRDumper(IRFunctor):
             self.module_headers.append(self.format_attr_dict(name, d))
             return self.format_attr_name(name)
         else:
-
             if self.attr_table[name] == d:
                 return self.format_attr_name(name)
             i = 1

@@ -44,6 +44,8 @@ def malloc(num_bytes: int) -> int:
     addr: int
         The address of the allocated memory.
     """
+    if num_bytes == 0:
+        return 0
     err, ret = hip.hipMalloc(num_bytes)
     assert err == 0, str(err)
     return int(ret)
@@ -59,6 +61,8 @@ def free(addr: int) -> None:
         The address of the memory to free. This must be the address of memory allocated with :func:`malloc` or
         :func:`malloc_async`.
     """
+    if addr == 0:
+        return
     (err,) = hip.hipFree(addr)
     assert err == 0, str(err)
 
@@ -82,6 +86,8 @@ def malloc_async(num_bytes: int, stream: Optional[Union[Stream, hipStream_t, int
     """
     if stream is None:
         stream = current_stream()
+    if num_bytes == 0:
+        return 0
     err, ret = hip.hipMallocAsync(num_bytes, int(stream))
     assert err == 0, str(err)
     return int(ret)
@@ -102,6 +108,8 @@ def free_async(addr: int, stream: Optional[Union[Stream, hipStream_t, int]] = No
     """
     if stream is None:
         stream = current_stream()
+    if addr == 0:
+        return
     (err,) = hip.hipFreeAsync(addr, int(stream))
     assert err == 0, str(err)
 
@@ -120,6 +128,8 @@ def malloc_host(num_bytes: int) -> int:
     addr: int
         The address of the allocated memory.
     """
+    if num_bytes == 0:
+        return 0
     err, ret = hip.hipMallocHost(num_bytes)
     assert err == 0, str(err)
     return int(ret)
@@ -134,6 +144,8 @@ def free_host(addr: int) -> None:
     addr: int
         The address of the memory to free. This must be the address of memory allocated with :func:`malloc_host`.
     """
+    if addr == 0:
+        return
     (err,) = hip.hipFreeHost(addr)
     assert err == 0, str(err)
 

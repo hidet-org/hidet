@@ -256,6 +256,7 @@ class HIPCC(SourceCompiler):
             '-std=c++11',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
+            '-Wno-unused-command-line-argument',
             '-funroll-loops',
             '-ffast-math',
             '--offload-arch={}'.format(arch),
@@ -271,7 +272,6 @@ class HIPCC(SourceCompiler):
             '-o',
             out_lib_path,
         ]
-        print(" ".join(command), src_path, out_lib_path)
 
         self.run_compile_command(" ".join(command), src_path, out_lib_path)
 

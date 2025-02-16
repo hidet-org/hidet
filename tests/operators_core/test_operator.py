@@ -21,7 +21,7 @@ def test_profile_config():
     b = hidet.randn([1, 10, 10], device='cuda')
     hidet.option.search_space(1)
     hidet.option.bench_config(1, 1, 1)
-    c = hidet.ops.batch_matmul(a, b)
+    c = hidet.ops.cuda_batch_matmul(a, b)
     hidet.option.search_space(0)
 
 
