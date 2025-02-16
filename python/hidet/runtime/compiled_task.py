@@ -191,7 +191,7 @@ class CompiledTask:
                 headers.extend(['latency', 'rank'])
                 sorted_indices = sorted(range(len(latencies)), key=lambda i: latencies[i])
                 for idx, line in enumerate(candidate_lines):
-                    line.extend(['{:.3f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
+                    line.extend(['{:.6f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
                 candidate_lines.sort(key=lambda l: l[-1])
                 with open(report_path, 'w') as f:
                     f.write(tabulate.tabulate(candidate_lines, headers=headers, tablefmt='plain'))

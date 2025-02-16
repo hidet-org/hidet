@@ -23,7 +23,6 @@ from hidet.ir.expr import is_constant
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
 from hidet.graph.operator import Operator, SymbolVar
-from hidet.utils.benchmark import do_bench
 
 logger = logging.getLogger(__name__)
 
@@ -464,6 +463,7 @@ class FlowGraph:
         ret: Union[float, List[float]]
             The measured latency in milliseconds.
         """
+        from hidet.utils.benchmark import do_bench
 
         if dummy_inputs is None:
             dummy_inputs = self.dummy_inputs()

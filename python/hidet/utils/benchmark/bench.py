@@ -10,18 +10,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Callable, Tuple, Any, Dict, Union
-import time
 from dataclasses import dataclass
 from scipy import stats
 import numpy as np
-import nvtx
 from tqdm import tqdm
 import hidet
 import hidet.cuda
 from hidet.utils import green, gc_disabled
 from hidet.option import is_fix_gpu_frequency_for_tuning
 from .gpu_freq import GPUSetFrequencyForBenchmarking
+from .utils import create_event, sync, get_empty_kernel_cpu_time_ns, _benchmark_func_internal
+from .utils import get_event_time_accuracy_ms, get_cuda_event_duration
 
+# Number of repetitions between time measurements for benchmarking
+DEFAULT_NUMBER_FOR_MEASUREMENTS = 5
 
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
 def _do_bench(fn, warmup, rep, percentiles):
@@ -46,18 +48,6 @@ def _do_bench(fn, warmup, rep, percentiles):
 
     if not cuda_available and not hip_available:
         raise RuntimeError("No GPU found")
-
-    def sync():
-        if cuda_available:
-            hidet.cuda.synchronize()
-        else:
-            hidet.hip.synchronize()
-
-    def create_event():
-        if cuda_available:
-            return hidet.cuda.Event(enable_timing=True)
-        else:
-            return hidet.hip.Event(enable_timing=True)
 
     fn()
     sync()
@@ -98,6 +88,54 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
         return _do_bench(fn, warmup, rep, percentiles)
 
 
+# Find the `number` of iterations and `delay` for best accuracy of benchmarking
+# of the given function with given arguments.
+# `number` is the number of iterations to be grouped for measurement.
+#          Number of function calls between time measurements with events.
+# `delay`  is the delay in the beginning of measurement to allow a big number of API calls
+#          to be asynchronously sent to the device. Delay is required to avoid "measuring" CPU overheads.
+def find_number_and_delay_4_benchmark(run_func, *args):
+    # Make the first time estimation.
+    # Use `number=1`.
+    # Use delay equal to the "CPU time of empty kernel" multiplied by 2.
+    # This delay must be enough because empty kernel bench and `fn` bench do exactly the same API calls (by design).
+    empty_kernel_cpu_time_ns = get_empty_kernel_cpu_time_ns(number=1)
+    delay = empty_kernel_cpu_time_ns * 2
+    times = _benchmark_func_internal(run_func, *args, repeat=5, number=1, delay=delay)
+    time_ms = np.min(times)
+    # Drop the overhead of event calls
+    time_ms = time_ms - get_cuda_event_duration()
+    time_ms = max(1e-3, time_ms)
+
+    # The first estimation of time is good if the function is not small.
+    # If the function is small, the first estimation is not accurate.
+    # Timer resolution (`get_event_time_accuracy_ms()`) typically is 1us or 0.5us.
+    # If function execution time is, for example, 5us, the inaccuracy is too high.
+    # Have to increase the number of iterations to get more accurate time.
+    # Initial number of iterations is 100 multiplied by the timer resolution.
+    number = 100 * get_event_time_accuracy_ms() / time_ms
+    number = max(1, int(np.ceil(number)))
+
+    # The next loop is solving the following problem:
+    # Delay can't be bigger than 1ms (this is a CUDA limitation).
+    # If with the current `number` CPU time for empty kernel is too big (more than 750us),
+    # we decrease the `number`.
+    while True:
+        empty_kernel_cpu_time_ns = get_empty_kernel_cpu_time_ns(number=number)
+        if number <= 1:
+            break
+        if empty_kernel_cpu_time_ns < 750000:
+            break
+        number = int(number * 0.75)
+
+    # Calculate the delay for the new `number`. Delay can't be bigger than 1ms (CUDA limitation).
+    delay = empty_kernel_cpu_time_ns * 2 - 10**6 * time_ms * number
+    delay = max(0, int(delay))
+    delay = min(1000000, delay)
+
+    return number, delay
+
+
 def _benchmark_func(run_func, *args, warmup, number, repeat, median) -> Union[List[float], float]:
     """Benchmark given function.
 
@@ -129,28 +167,33 @@ def _benchmark_func(run_func, *args, warmup, number, repeat, median) -> Union[Li
         - When median == False, the latency of each repeat is returned, as a list of floats.
     """
 
-    results = []
-    with nvtx.annotate('warmup'):
-        for _ in range(warmup):
-            run_func(*args)
-            hidet.cuda.synchronize()
-
-    for i in range(repeat):
-        with nvtx.annotate(f'repeat {i}'):
-            hidet.cuda.synchronize()
-            start_time = time.time_ns()
-            for _ in range(number):
-                run_func(*args)
-            hidet.cuda.synchronize()
-            end_time = time.time_ns()
-        results.append((end_time - start_time) / 10**6 / number)
-    if median:
-        return float(np.median(results))
+    # The first step.
+    # Find number and delay those provide the best accuracy for benchmarking
+    if number is None:
+        if hidet.cuda.available():
+            # This inerface is available only for CUDA
+            number, delay = find_number_and_delay_4_benchmark(run_func, *args)
+        else:
+            number = DEFAULT_NUMBER_FOR_MEASUREMENTS
+            delay = 0
     else:
-        return results
+        delay = 0
+
+    # Have warmed up in `find_number_and_delay_4_benchmark`
+    warmup = 0
+
+    times = _benchmark_func_internal(run_func, *args, repeat=warmup + repeat, number=number, delay=delay)
+    times = times[warmup:]
+
+    if median:
+        return float(np.median(times))
+    else:
+        return times
 
 
-def benchmark_func(run_func, *args, warmup=3, number=5, repeat=5, median=True) -> Union[List[float], float]:
+def benchmark_func(
+    run_func, *args, warmup=3, number=DEFAULT_NUMBER_FOR_MEASUREMENTS, repeat=5, median=True
+) -> Union[List[float], float]:
     with gc_disabled():
         return _benchmark_func(run_func, *args, warmup=warmup, number=number, repeat=repeat, median=median)
 
@@ -171,7 +214,7 @@ def _find_best_candidate(candidates: List[Callable[..., None]], pbar, *args):
     for cur_repeat in repeats:
         for idx, cand in enumerate(candidates):
             if candidates_data[idx].in_game:
-                lats = benchmark_func(cand, *args, warmup=3, number=1, repeat=cur_repeat, median=False)
+                lats = benchmark_func(cand, *args, warmup=3, number=None, repeat=cur_repeat, median=False)
                 candidates_data[idx].latencies = lats
                 pbar.update(1)
 

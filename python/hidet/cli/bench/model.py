@@ -12,7 +12,6 @@
 # pylint: disable=ungrouped-imports, no-name-in-module
 from typing import List, Any, Optional
 import click
-from hidet.testing import benchmark_func
 import hidet
 
 
@@ -115,6 +114,8 @@ class BenchModel:
         click.echo(table_str)
 
     def bench_with_backend(self, backend: str, mode=None, warmup=3, number=10, repeat=10):
+        from hidet.utils.benchmark import benchmark_func
+
         try:
             import torch.backends.cudnn  # pylint: disable=redefined-outer-name
             import torch.backends.cuda
