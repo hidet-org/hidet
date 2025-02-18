@@ -11,6 +11,8 @@
 # limitations under the License.
 from . import float16
 from . import bfloat16
+from . import float8e4m3
+from . import float8e5m2
 from . import float32
 from . import float64
 from . import int64

@@ -1202,6 +1202,8 @@ class Transpiler:
         torch.double: hidet.float64,
         torch.float16: hidet.float16,
         torch.bfloat16: hidet.bfloat16,
+        torch.float8_e4m3fn: hidet.float8_e4m3,
+        torch.float8_e5m2: hidet.float8_e5m2,
         torch.half: hidet.float16,
         torch.uint8: hidet.uint8,
         torch.int8: hidet.int8,

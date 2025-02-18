@@ -51,5 +51,6 @@ from .tools import infer_type
 
 from .utils import index_serialize, index_deserialize
 
-from .dtypes import float32, tfloat32, bfloat16, float16, int64, int32, int16, int8, uint64, uint32, uint16, uint8
+from .dtypes import float32, tfloat32, bfloat16, float16, float8_e4m3, float8_e5m2
+from .dtypes import int64, int32, int16, int8, uint64, uint32, uint16, uint8
 from .dtypes import float32x4, float16x2, boolean

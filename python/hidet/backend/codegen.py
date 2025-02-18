@@ -84,6 +84,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = '(float){}f'.format(float(value))
         elif dtype == dtypes.bfloat16:
             ret = '(bfloat16_t){}f'.format(float(value))
+        elif dtype == dtypes.float8_e4m3:
+            ret = '(float8_e4m3){}f'.format(float(value))
+        elif dtype == dtypes.float8_e5m2:
+            ret = '(float8_e5m2){}f'.format(float(value))
         elif dtype == dtypes.int64:
             ret = 'int64_t({}ll)'.format(int(value))
         elif dtype == dtypes.int32:
@@ -748,7 +752,14 @@ class CUDACodegen(Codegen):
         if self.require_bf16:
             doc += Text('#include <cuda_bf16.h>') + NewLine()
         if self.require_fp8:
-            doc += Text('#include <hidet/runtime/cuda/float8.h>') + NewLine()
+            doc += (
+                Text('#include <hidet/runtime/cuda/float8_e4m3.h>')
+                + NewLine()
+                + Text('#include <hidet/runtime/cuda/float8_e5m2.h>')
+                + NewLine()
+                + Text('#include <cuda_fp8.h>')
+                + NewLine()
+            )
         if self.require_cooperative_groups:
             doc += Text('#include <cooperative_groups.h>') + NewLine()
         doc += Text('#include <cudaTypedefs.h>') + NewLine()

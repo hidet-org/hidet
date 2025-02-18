@@ -31,6 +31,8 @@ _type_dict = {
     dtypes.float32: cudaDataType.CUDA_R_32F,
     dtypes.float64: cudaDataType.CUDA_R_64F,
     dtypes.bfloat16: cudaDataType.CUDA_R_16BF,
+    dtypes.float8_e4m3: cudaDataType.CUDA_R_8F_E4M3,
+    dtypes.float8_e5m2: cudaDataType.CUDA_R_8F_E5M2,
 }
 
 

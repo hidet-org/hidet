@@ -1217,6 +1217,10 @@ class Tensor:
             The torch tensor that shares the memory with the hidet tensor.
         """
         import torch
+        from .frontend.torch.utils import dtype_to_torch
+
+        if self.dtype in [hidet.float8_e4m3, hidet.float8_e5m2]:
+            return self.view('uint8').torch().view(dtype_to_torch(self.dtype))
 
         return torch.from_dlpack(self)
 
@@ -1730,11 +1734,14 @@ def from_torch(torch_tensor):
         The created hidet tensor.
     """
     import torch
+    from .frontend.torch.utils import dtype_from_torch
 
     if not isinstance(torch_tensor, torch.Tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
     if torch_tensor.requires_grad:
         torch_tensor = torch_tensor.detach()
+    if torch_tensor.dtype in [torch.float8_e4m3fn, torch.float8_e5m2]:  #
+        return from_torch(torch_tensor.view(torch.uint8)).view(dtype_from_torch(torch_tensor.dtype))
     return from_dlpack(torch_tensor)
 
 
