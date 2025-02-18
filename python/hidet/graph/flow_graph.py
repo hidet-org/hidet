@@ -19,6 +19,7 @@ import pickle
 import hidet.graph.operator
 import hidet.cuda
 from hidet.cuda.graph import CudaGraphCreationError
+from hidet.hip.graph import HipGraphCreationError
 from hidet.ir.expr import is_constant
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
@@ -441,6 +442,35 @@ class FlowGraph:
             return self.forward(inputs)
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
+
+    def hip_graph(self):
+        """Create a HipGraph from FlowGraph.
+
+        Returns
+        -------
+        ret: hidet.hip.graph.HipGraph
+            The created hip graph.
+        """
+        from hidet.hip.graph import HipGraph
+
+        for x in self.inputs:
+            if not x.device.is_hip():
+                raise HipGraphCreationError(
+                    'FlowGraph.hip_graph() only supports hip inputs, got {}'.format(x.signature())
+                )
+            for d in x.shape:
+                if not isinstance(d, int):
+                    raise HipGraphCreationError(
+                        'FlowGraph.hip_graph() only supports inputs with static shape, got {}'.format(x.signature())
+                    )
+
+        def f_create_inputs() -> List[Tensor]:
+            return self.dummy_inputs()
+
+        def f_run(inputs: List[Tensor]) -> List[Tensor]:
+            return self.forward(inputs)
+
+        return HipGraph(f_create_inputs, f_run, ref_objs=[self])
 
     def latency(
         self, warmup=25, repeat=100, dummy_inputs: Optional[Sequence[Tensor]] = None

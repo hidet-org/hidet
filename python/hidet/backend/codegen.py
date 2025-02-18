@@ -626,7 +626,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 self(stmt.grid_dim),
                 self(stmt.block_dim),
                 self(stmt.shared_mem_bytes),
-                Text('0'),  # stream where the kenrel should execute, value of 0 corresponds to the NULL stream
+                Text("(hipStream_t)get_hip_stream()"),
                 self(stmt.args),
             )
         else:

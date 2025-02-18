@@ -543,6 +543,54 @@ class CompiledGraph:
 
         return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 
+    def hip_graph(self):
+        """
+        Create a HIP graph for this compiled graph.
+
+        Returns
+        -------
+        hip_graph: hidet.hip.graph.HipGraph
+            The HIP graph.
+        """
+        import warnings
+        from hidet.hip.graph import HipGraph, HipGraphCreationError
+        from hidet.graph.tensor import Tensor, randn, zeros, empty
+
+        for x in self.meta.inputs + self.meta.outputs:
+            if x.device == 'cpu':
+                raise HipGraphCreationError(f'Cannot create HIP graph for a model with CPU inputs:\n {x}')
+            for d in x.shape:
+                if not isinstance(d, int):
+                    raise HipGraphCreationError(f'Cannot create HIP graph for a model with dynamic inputs:\n {x}')
+        if any(device == 'cpu' for device in self.graph_execution.tensor_device):
+            raise HipGraphCreationError('Cannot create HIP graph for a model with CPU tensors.')
+        for ctask in self.compiled_tasks:
+            if len(ctask.meta_data.symbols) > 0:
+                raise HipGraphCreationError('Cannot create HIP graph for a model with dynamic symbols.')
+
+        def f_create_inputs() -> List[Tensor]:
+            dummy_inputs = []
+            for meta_input in self.meta.inputs:
+                dtype = hidet.ir.data_type(meta_input.dtype)
+                if dtype.is_float():
+                    inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                elif dtype.is_integer():
+                    inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                else:
+                    warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                    inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                dummy_inputs.append(inp)
+
+            return dummy_inputs
+
+        def f_run(inputs: List[Tensor]) -> List[Tensor]:
+            return self.run_async(inputs)
+
+        # clear the workspace to avoid the storage being captured by the HIP graph.
+        self.hip_workspace = None
+
+        return HipGraph(f_create_inputs, f_run, ref_objs=[self])
+
     def save(self, path: str, save_dispatch_table: bool = False):
         """
         Save the compiled graph to disk.
