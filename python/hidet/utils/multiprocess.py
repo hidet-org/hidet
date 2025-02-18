@@ -36,16 +36,7 @@ def get_parallel_num_workers(is_remote_allowed: bool) -> int:
 # The reason why we have two levels is that we have to control how many processes are spawned in the second level
 # to prevent overload of the system.
 
-
-# 1ST LEVEV PARALLELISATION IMPLEMENTATION
-_global_func = None
-
-# We need it to be able to process local functions.
-# Parallel function should be pickable but local functions are not pickable.
-def _wrapper(*args, **kwargs):
-    return _global_func(*args, **kwargs)
-
-
+# 1ST LEVEL PARALLELIZATION IMPLEMENTATION
 def parallel_imap_1stlevel(func: Callable, jobs: Sequence[Any], is_remote_allowed: bool = False) -> Iterable[Any]:
     jobs_num = len(jobs)
     assert jobs_num > 0
@@ -53,23 +44,15 @@ def parallel_imap_1stlevel(func: Callable, jobs: Sequence[Any], is_remote_allowe
     num_workers = get_parallel_num_workers(is_remote_allowed)
     num_workers = min(num_workers, jobs_num)
 
-    # num_workers == 1 or len(jobs) == 1
     if num_workers == 1:
         for job in jobs:
             yield func(job)
         return
 
-    global _global_func
-    if _global_func is not None:
-        raise RuntimeError('Cannot call parallel_imap_1stlevel recursively.')
-    _global_func = func
-
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        submited_jobs = [executor.submit(_wrapper, job) for job in jobs]
-        for complited_job in as_completed(submited_jobs):
-            yield complited_job.result()
-
-    _global_func = None
+        submitted_jobs = [executor.submit(func, job) for job in jobs]
+        for completed_job in as_completed(submitted_jobs):
+            yield completed_job.result()
 
 
 # 2ND LEVEV PARALLELISATION IMPLEMENTATION

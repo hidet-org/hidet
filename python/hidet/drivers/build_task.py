@@ -321,29 +321,30 @@ def write_task_files(task, task_string, task_dir):
         f.write(hidet.__version__)
 
 
+def _build_job(args):
+    try:
+        task, target = args
+        task.build(target, load=False)
+        return True, 'Success'
+    except (Exception,):  # pylint: disable=broad-except
+        import traceback
+
+        if option.get_option('parallel_build'):
+            return False, traceback.format_exc()
+        else:
+            raise
+
+
 def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
     jobs = [(task, target) for task, target in task_target_pairs]
-
-    def build_job(args):
-        try:
-            task, target = args
-            task.build(target, load=False)
-            return True, 'Success'
-        except (Exception,):  # pylint: disable=broad-except
-            import traceback
-
-            if option.get_option('parallel_build'):
-                return False, traceback.format_exc()
-            else:
-                raise
 
     if option.get_option('parallel_build') and len(jobs) > 1:
         lazy_initialize_cuda()
         status_list = list(
-            tqdm(parallel_imap_1stlevel(build_job, jobs), desc='Parallel build', total=len(jobs), ncols=80)
+            tqdm(parallel_imap_1stlevel(_build_job, jobs), desc='Parallel build', total=len(jobs), ncols=80)
         )
     else:
-        status_list = list(map(build_job, jobs))
+        status_list = list(map(_build_job, jobs))
     if not all(status for status, msg in status_list) and option.get_option('parallel_build'):
         msg = ['Failed to build {} tasks:'.format(sum(1 for s, msg in status_list if not s))]
         for (task, target), (status, job_msg) in zip(task_target_pairs, status_list):
