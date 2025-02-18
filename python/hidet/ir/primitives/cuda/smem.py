@@ -33,6 +33,8 @@ def register_functions():
         'float32',
         'tfloat32',
         'bfloat16',
+        'float8_e4m3',
+        'float8_e5m2',
         'bool',
         'int4b',
         'uint4b',

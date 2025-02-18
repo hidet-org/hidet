@@ -107,6 +107,13 @@ class test_layout(DataLayout):
         return self.base.global2cond(*args)
 
 
+def get_acc_tolerance(dtype: str) -> float:
+    if dtype in ["f8e4m3", "f8e5m2"]:
+        return (1e-3, 1e-3)  # f8 requires greater tolerance
+    else:
+        return (1e-7, 0)
+
+
 def matmul_wgmma_tensor_core(
     config: WgmmaConfig,
     is_a_shared: bool,
@@ -365,7 +372,6 @@ def test_wgmma(
     desc_template_dict["SW128_tp"] = make_wgmma_desc(2048, 1024, 1)
 
     m, n, k = config.m, config.n, config.k
-    print(f"m: {m}, n: {n}, k: {k}")
 
     dtype_dict = {
         "f32": torch.float32,
@@ -375,10 +381,16 @@ def test_wgmma(
         "i8": torch.int8,
         "u8": torch.uint8,
         "i32": torch.int32,
+        "f8e4m3": torch.float8_e4m3fn,
+        "f8e5m2": torch.float8_e5m2,
     }
 
-    a_cpu = torch.randint(3, (1, m, k), dtype=dtype_dict[config.a_input_dtype])
-    b_cpu = torch.randint(3, (1, k, n), dtype=dtype_dict[config.b_input_dtype])
+    if config.a_input_dtype in ["f8e4m3", "f8e5m2"]:
+        a_cpu = torch.randint(3, (1, m, k), dtype=torch.uint8).view(dtype_dict[config.a_input_dtype])
+        b_cpu = torch.randint(3, (1, k, n), dtype=torch.uint8).view(dtype_dict[config.b_input_dtype])
+    else:
+        a_cpu = torch.randint(3, (1, m, k), dtype=dtype_dict[config.a_input_dtype])
+        b_cpu = torch.randint(3, (1, k, n), dtype=dtype_dict[config.b_input_dtype])
 
     a_layout_dict = {}
     b_layout_dict = {}
@@ -449,15 +461,16 @@ def test_wgmma(
 
     func = ir_module.build()
     if config.a_input_dtype in ["tf32"]:
-        c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="mma")
+        c_desire = hidet.ops.cuda_batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="mma")
     else:
-        c_desire = hidet.ops.batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="simt")
+        c_desire = hidet.ops.cuda_batch_matmul(a if scale_a == 1 else -a, b if scale_b == 1 else -b, mma="simt")
 
     input_a = a_1d if is_a_shared else a
 
     if scale_d == 1:
         # test if c is accumulated correctly
         c = hidet.ones([1, m, n], dtype=data_type(config.output_dtype).name).cuda()
+        print(f'c: {c.dtype}, c_desired: {c_desire.dtype}')
         func(input_a, b_1d, c)
         np.testing.assert_allclose(
             actual=c.cpu().numpy(),
@@ -466,4 +479,6 @@ def test_wgmma(
     else:
         c = hidet.zeros([1, m, n], dtype=data_type(config.output_dtype).name).cuda()
         func(input_a, b_1d, c)
-        np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c_desire.cpu().numpy())
+        print(f'c_desire_dtype: {c_desire.dtype}')
+        rtol, atol = get_acc_tolerance(config.a_input_dtype)
+        np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c_desire.cpu().numpy(), rtol=rtol, atol=atol)

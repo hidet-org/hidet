@@ -16,7 +16,7 @@ Please refer to the following section in PTX manual for the details of MMA instr
 from typing import Dict, Tuple
 from itertools import product
 
-from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat, col_repeat
+from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
 from hidet.ir.type import PointerType, data_type
 from hidet.ir.expr import Expr, cast
@@ -27,6 +27,14 @@ from hidet.ir.primitives.cuda.funcs import call_cuda
 from hidet.lang import uint64, attrs, script, u64
 
 NUM_THREADS = 128  # num threads per warp group
+ptx_dtype_names: Dict[str, str] = {
+    "f8e4m3": "e4m3",
+    "f8e5m2": "e5m2",
+    "i32": "s32",
+    "i8": "s8",
+    "i16": "s16",
+    "i64": "s64",
+}
 
 
 def num_regs(short_dtype: str, num_elements: int) -> int:
@@ -65,10 +73,17 @@ class WgmmaConfig:
             self.m,
             self.n,
             self.k,
-            self.output_dtype.replace('i', 's'),
-            self.a_input_dtype.replace('i', 's'),
-            self.b_input_dtype.replace('i', 's'),
+            self.get_ptx_dtype_name(self.output_dtype),
+            self.get_ptx_dtype_name(self.a_input_dtype),
+            self.get_ptx_dtype_name(self.b_input_dtype),
         )
+
+    @staticmethod
+    def get_ptx_dtype_name(dtype: str) -> str:
+        if dtype in ptx_dtype_names:
+            return ptx_dtype_names[dtype]
+        else:
+            return dtype
 
     @staticmethod
     def get(m: int, n: int, k: int, a_input_dtype: str, b_input_dtype: str, output_dtype: str):
@@ -148,6 +163,31 @@ def register_wgmma_configs():
                                 'a',
                             ),  # The arch should be sm_90a only. Currently, get_arch returns sm_90,
                             # and in the build process, it converts to sm_90a.
+                        )
+                    }
+                )
+    # f8e4m3, f8e5m2
+    for input_dtype in ["f8e4m3", "f8e5m2"]:
+        for output_dtype in ["f32", "f16"]:
+            for n_value in range(8, 257, 8):
+                wgmma_configs.update(
+                    {
+                        f"m64n{n_value}k32_{output_dtype}_{input_dtype}_{input_dtype}": WgmmaConfig(
+                            m=64,
+                            n=n_value,
+                            k=32,
+                            a_input_dtype=input_dtype,
+                            b_input_dtype=input_dtype,
+                            output_dtype=output_dtype,
+                            a_load_map=col_spatial(4, 1)
+                            * col_repeat(2, 2, attrs="u+u+")
+                            * row_spatial(8, 4)
+                            * row_repeat(1, 4, attrs="u+u+"),
+                            c_store_map=row_spatial(4, 1)
+                            * col_repeat(2, n_values // 8, attrs="u+u+")
+                            * row_spatial(8, 4)
+                            * row_repeat(1, 2, attrs="u+u+"),
+                            required_arch=(9, 0, 'a'),
                         )
                     }
                 )

@@ -23,6 +23,7 @@ from hidet.ir.func import Function
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
+from .wgmma import ptx_dtype_names
 
 
 def num_regs(short_dtype: str, num_elements: int) -> int:
@@ -51,8 +52,21 @@ class MmaConfig:
 
     def inst_name(self) -> str:
         return 'mma.sync.aligned.m{}n{}k{}.row.col.{}.{}.{}.{}'.format(
-            self.m, self.n, self.k, self.output_dtype, self.input_dtype, self.input_dtype, self.output_dtype
+            self.m,
+            self.n,
+            self.k,
+            self.get_ptx_dtype_name(self.output_dtype),
+            self.get_ptx_dtype_name(self.input_dtype),
+            self.get_ptx_dtype_name(self.input_dtype),
+            self.get_ptx_dtype_name(self.output_dtype),
         )
+
+    @staticmethod
+    def get_ptx_dtype_name(dtype: str) -> str:
+        if dtype in ptx_dtype_names:
+            return ptx_dtype_names[dtype]
+        else:
+            return dtype
 
     @staticmethod
     def m16n8k8_f16_f16():
@@ -97,6 +111,38 @@ class MmaConfig:
     @staticmethod
     def m16n8k32_i8_i32():
         return mma_configs['m16n8k32_i8_i32']
+
+    @staticmethod
+    def m16n8k16_f8e4m3_f16():
+        return mma_configs['m16n8k16_f8e4m3_f16']
+
+    @staticmethod
+    def m16n8k16_f8e4m3_f32():
+        return mma_configs['m16n8k16_f8e4m3_f32']
+
+    @staticmethod
+    def m16n8k16_f8e5m2_f16():
+        return mma_configs['m16n8k16_f8e5m2_f16']
+
+    @staticmethod
+    def m16n8k16_f8e5m2_f32():
+        return mma_configs['m16n8k16_f8e5m2_f32']
+
+    @staticmethod
+    def m16n8k32_f8e4m3_f16():
+        return mma_configs['m16n8k32_f8e4m3_f16']
+
+    @staticmethod
+    def m16n8k32_f8e4m3_f32():
+        return mma_configs['m16n8k32_f8e4m3_f32']
+
+    @staticmethod
+    def m16n8k32_f8e5m2_f16():
+        return mma_configs['m16n8k32_f8e5m2_f16']
+
+    @staticmethod
+    def m16n8k32_f8e5m2_f32():
+        return mma_configs['m16n8k32_f8e5m2_f32']
 
     @staticmethod
     def all():
@@ -144,6 +190,7 @@ def register_mma_configs():
     # TODO: maybe add {.satfinite} identifier. But probably not necessary
     # Since the output dtype is s32, which I assume to be int32, and the maximum K dimension is 32,
     # so the maximum possible value is 32 * 255 * 255, well below the maximum representable value for int 32.
+    # TODO: mma tests for int8, uint8, f8e4m3, f8e5m2 currently do not work
     for input_type in ['int8', 'uint8']:
         mma_configs.update(
             {
@@ -209,6 +256,35 @@ def register_mma_configs():
             ),
         }
     )
+    # f8e4m3, f8e5m2
+    for output_dtype in ['f32', 'f16']:
+        for input_dtype in ['f8e4m3', 'f8e5m2']:
+            mma_configs.update(
+                {
+                    f'm16n8k16_{input_dtype}_{output_dtype}': MmaConfig(
+                        m=16,
+                        n=8,
+                        k=16,
+                        input_dtype=input_dtype,
+                        output_dtype=output_dtype,
+                        a_load_map=col_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                        b_load_map=col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                        c_store_map=col_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                        required_arch=(8, 0),
+                    ),
+                    f'm16n8k32_{input_dtype}_{output_dtype}': MmaConfig(
+                        m=16,
+                        n=8,
+                        k=32,
+                        input_dtype=input_dtype,
+                        output_dtype=output_dtype,
+                        a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                        b_load_map=col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                        c_store_map=col_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                        required_arch=(8, 0),
+                    ),
+                }
+            )
     # tf32
     mma_configs.update(
         {

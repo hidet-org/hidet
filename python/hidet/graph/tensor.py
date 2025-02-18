@@ -1202,7 +1202,7 @@ class Tensor:
         """
         if self.device.kind != 'cpu':
             raise RuntimeError('Cannot convert a tensor on {} to numpy array.'.format(self.device))
-        if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
+        if self.dtype in [dtypes.bfloat16, dtypes.tfloat32, dtypes.float8_e4m3, dtypes.float8_e5m2]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
             return self.astype(dtypes.float32).numpy()
         return np.from_dlpack(self)
