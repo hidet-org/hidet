@@ -14,7 +14,7 @@ on:
           - arc-l4
           - arc-a10
           - arc-h100
-        description: 'Runner group to run tests. (arc-l4, arc-a10, arc-h100)'
+        description: "Runner group to run tests. (arc-l4, arc-a10, arc-h100)"
         required: false
         default: arc-l4
 
@@ -23,6 +23,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  build-docs:
+    runs-on:
+      group: ${{ inputs.runner_group || 'arc-l4' }}
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build docs
+        id: build_step
+        uses: ./.github/actions/build-docs
 
   build-wheel:
     outputs:
@@ -50,50 +63,11 @@ jobs:
           retention-days: 3
           if-no-files-found: "error"
 
-  build-docs:
-    runs-on:
-      group: ${{ inputs.runner_group || 'arc-l4' }}
-    container:
-      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
-      options: --gpus all
-    steps:
-      - name: Install dependencies via apt
-        run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
-
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v1.13
-        with:
-          cmake-version: '3.19.x'
-
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
-  
-      - name: List installed packages
-        run: |
-          pip list
-
-      - name: Install docs dependencies
-        run: |
-          pip install -r docs/requirements.txt
-
-      - name: Build docs
-        run: |
-          cd docs; make clean; make html
-
   list-test-dirs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-
       - name: Checkout Hidet
         uses: actions/checkout@v4
 
@@ -105,7 +79,7 @@ jobs:
       - id: set-matrix
         run: |
           python .github/scripts/set_test_matrix.py
-          
+
   run-test:
     needs: [list-test-dirs, build-wheel]
     strategy:
@@ -136,7 +110,7 @@ jobs:
         run: |
           pip install -r requirements-dev.txt
           pip install ${{ needs.build-wheel.outputs.wheel_name }}
-  
+
       - name: List installed packages
         run: |
           pip list
@@ -148,9 +122,9 @@ jobs:
 
   run-test-amdgpu:
     if: |
-        (github.event.pull_request &&
-        (contains(github.event.pull_request.body, '$ hidet-ci amdgpu') ||
-        contains(github.event.pull_request.comments.*.body, '$ hidet-ci amdgpu')))
+      (github.event.pull_request &&
+      (contains(github.event.pull_request.body, '$ hidet-ci amdgpu') ||
+      contains(github.event.pull_request.comments.*.body, '$ hidet-ci amdgpu')))
     needs: [build-wheel]
     runs-on:
       # on self-hosted runner

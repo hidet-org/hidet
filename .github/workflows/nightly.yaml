@@ -1,0 +1,31 @@
+name: Nightly Workflow
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run every day at midnight
+  workflow_dispatch:
+    inputs:
+      runner_group:
+        type: choice
+        options:
+          - arc-l4
+          - arc-a10
+          - arc-h100
+        description: "Runner group to run tests. (arc-l4, arc-a10, arc-h100)"
+        required: false
+        default: arc-l4
+
+jobs:
+    build-docs:
+        runs-on:
+          group: ${{ inputs.runner_group || 'arc-l4' }}
+        container:
+          image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+          options: --gpus all
+        steps:
+          - name: Build and deploy nightly docs
+            uses: ./.github/actions/build-docs
+            with:
+                docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
+                version: "nightly"
+                update_docs: true

@@ -41,7 +41,7 @@ author = 'Hidet Team'
 copyright = '2023, Hidet Authors'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = "0.6.0.dev"
 
 
 # -- General configuration ---------------------------------------------------

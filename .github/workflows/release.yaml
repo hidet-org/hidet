@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI and Deploy Docs
 
 on:
   release:
@@ -96,36 +96,12 @@ jobs:
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
-      - name: Install dependencies via apt
-        run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
-
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build and deploy release docs
+        uses: ./.github/actions/build-docs
         with:
-          python-version: "3.9"
-
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v1.13
-        with:
-          cmake-version: '3.19.x'
-
-      - name: Setup Hidet
-        uses: ./.github/actions/setup-hidet
-  
-      - name: List installed packages
-        run: |
-          pip list
-
-      - name: Install docs dependencies
-        run: |
-          pip install -r docs/requirements.txt
-
-      - name: Build docs
-        run: |
-          cd docs; make clean; make html
+          docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
+          version: "v$(grep -oP \"release\\s*=\\s*'\\K[^']+\" ./source/conf.py)"
+          update_docs: true
 
   publish:
     name: Publish to PyPI

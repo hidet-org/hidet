@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Update the version string in setup.py and python/hidet/version.py
+Update the version string in setup.py, python/hidet/version.py, and docs/source/conf.py.
 
 Usage
 -----
@@ -59,6 +59,23 @@ def update_version_py(version_py, version):
     with open(version_py, "w") as f:
         f.writelines(lines)
 
+def update_conf_py(conf_py, version):
+    print("Updating version in {} to {}".format(conf_py, version))
+    
+    with open(conf_py, "r") as f:
+        lines = f.readlines()
+    
+    count = 0
+    for i, line in enumerate(lines):
+        if line.startswith("release = "):
+            lines[i] = 'release = "{}"\n'.format(version)
+            count += 1
+    if count != 1:
+        raise RuntimeError('The occurrence of "release = " in conf.py is not 1')
+
+    with open(conf_py, "w") as f:
+        f.writelines(lines)
+
 
 def check_version(version: str):
     patterns = [
@@ -84,13 +101,18 @@ def main():
     version_py = os.path.realpath(
         os.path.join(root_dir, "python", "hidet", "version.py")
     )
+    conf_py = os.path.realpath(
+        os.path.join(root_dir, "docs", "source", "conf.py")
+    )
     if not os.path.exists(setup_py) or not os.path.isfile(setup_py):
         raise FileNotFoundError(setup_py)
     if not os.path.exists(version_py) or not os.path.isfile(version_py):
         raise FileNotFoundError(version_py)
+    if not os.path.exists(conf_py) or not os.path.isfile(conf_py):
+        raise FileNotFoundError(conf_py)
     update_setup_py(setup_py, version)
     update_version_py(version_py, version)
-
+    update_conf_py(conf_py, version)
 
 if __name__ == "__main__":
     main()

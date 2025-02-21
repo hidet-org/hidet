@@ -33,6 +33,7 @@ cd build; cmake $ROOT_DIR; make -j4; cd ..
 cp $ROOT_DIR/setup.py ./setup.py
 cp $ROOT_DIR/MANIFEST.in ./MANIFEST.in
 cp $ROOT_DIR/README.md ./README.md
+cp -r $ROOT_DIR/docs ./
 cp -r $ROOT_DIR/python ./
 cp -r $ROOT_DIR/include ./python/hidet
 cp -r $CURRENT_SCRIPT_DIR/build/lib ./python/hidet
