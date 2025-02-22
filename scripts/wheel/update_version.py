@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Update the version string in setup.py, python/hidet/version.py, and docs/source/conf.py.
+Update the version string in pyproject.toml, python/hidet/version.py, and docs/source/conf.py.
 
 Usage
 -----
@@ -19,26 +19,26 @@ parser.add_argument(
     "--root",
     type=str,
     default="./",
-    help="root directory of the project, under which setup.py is located. Default: ./",
+    help="root directory of the project, under which pyproject.toml is located. Default: ./",
 )
 parser.add_argument("--version", type=str, required=True, help="Version to update to (e.g., 0.2.3 or 0.2.3.dev).")
 
 
-def update_setup_py(setup_py, version):
-    print("Updating version in {} to {}".format(setup_py, version))
+def update_pyproject_toml(pyproject, version):
+    print("Updating version in {} to {}".format(pyproject, version))
 
-    with open(setup_py, "r") as f:
+    with open(pyproject, "r") as f:
         lines = f.readlines()
 
     count = 0
     for i, line in enumerate(lines):
-        if line.startswith('    version="'):
-            lines[i] = '    version="{}",\n'.format(version)
+        if line.startswith('version = "'):
+            lines[i] = 'version = "{}"\n'.format(version)
             count += 1
     if count != 1:
-        raise RuntimeError("The occurrence of version= in setup.py is not 1")
+        raise RuntimeError("The occurrence of version= in pyproject.toml is not 1")
 
-    with open(setup_py, "w") as f:
+    with open(pyproject, "w") as f:
         f.writelines(lines)
 
 
@@ -95,22 +95,22 @@ def main():
 
     check_version(version)
 
-    # Update version in setup.py
+    # Update version in pyproject.toml, version.py, and conf.py
     root_dir = os.path.abspath(os.path.expanduser(args.root))
-    setup_py = os.path.realpath(os.path.join(root_dir, "setup.py"))
+    pyproject_toml = os.path.realpath(os.path.join(root_dir, "pyproject.toml"))
     version_py = os.path.realpath(
         os.path.join(root_dir, "python", "hidet", "version.py")
     )
     conf_py = os.path.realpath(
         os.path.join(root_dir, "docs", "source", "conf.py")
     )
-    if not os.path.exists(setup_py) or not os.path.isfile(setup_py):
-        raise FileNotFoundError(setup_py)
+    if not os.path.exists(pyproject_toml) or not os.path.isfile(pyproject_toml):
+        raise FileNotFoundError(pyproject_toml)
     if not os.path.exists(version_py) or not os.path.isfile(version_py):
         raise FileNotFoundError(version_py)
     if not os.path.exists(conf_py) or not os.path.isfile(conf_py):
         raise FileNotFoundError(conf_py)
-    update_setup_py(setup_py, version)
+    update_pyproject_toml(pyproject_toml, version)
     update_version_py(version_py, version)
     update_conf_py(conf_py, version)
 

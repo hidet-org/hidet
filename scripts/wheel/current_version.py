@@ -17,7 +17,7 @@ parser.add_argument(
     "--root",
     type=str,
     default="./",
-    help="root directory of the project, under which setup.py is located. Default: ./",
+    help="root directory of the project, under which pyproject.toml is located. Default: ./",
 )
 parser.add_argument(
     "--nightly",

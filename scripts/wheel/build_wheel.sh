@@ -30,7 +30,7 @@ rm -rf build; mkdir build;
 cd build; cmake $ROOT_DIR; make -j4; cd ..
 
 # copy the built libraries and headers to python module
-cp $ROOT_DIR/setup.py ./setup.py
+cp $ROOT_DIR/pyproject.toml ./pyproject.toml
 cp $ROOT_DIR/MANIFEST.in ./MANIFEST.in
 cp $ROOT_DIR/README.md ./README.md
 cp -r $ROOT_DIR/docs ./
@@ -51,7 +51,7 @@ cd built_wheel; pip3 wheel --no-deps ..; cd ..
 # remove all intermediate directories
 rm -rf ./python
 rm -rf ./build
-rm ./setup.py
+rm ./pyproject.toml
 rm ./MANIFEST.in
 rm ./README.md
 

@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hidet"
+version = "0.6.0.dev"
+description = "Hidet: a compilation-based DNN inference framework."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.9"
+license = { text = "Apache-2.0"}
+keywords = ["Deep Learning", "Machine Learning", "Neural Network", "Inference", "Compiler"]
+authors = [
+  { name = "CentML Inc." }
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Operating System :: POSIX :: Linux"
+]
+dependencies = [
+  "numpy>=1.23",
+  "psutil",
+  "tabulate",
+  "pytest",
+  "tqdm",
+  "nvtx",
+  "astunparse",
+  "click",
+  "packaging",
+  "requests",
+  "filelock",
+  "cuda-python>=11.6.1",
+  "hip-python-fork",
+  "lark",
+  "tomlkit",
+  "scipy"
+]
+
+[project.optional-dependencies]
+torch = ["torch>=2.3.0"]
+
+[project.urls]
+Homepage = "https://github.com/hidet-org/hidet"
+Documentation = "https://hidet.org"
+
+[project.scripts]
+hidet = "hidet.cli.main:main"
+
+[project.entry-points.torch_dynamo_backends]
+hidet = "hidet.graph.frontend.torch.dynamo_backends:hidet_backend"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages]
+find = { where = ["python"] }
+
+[tool.setuptools.package-dir]
+"" = "python"
