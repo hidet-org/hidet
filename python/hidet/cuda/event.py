@@ -98,12 +98,19 @@ class Event:
             The stream where the event is recorded.
         """
         from hidet.cuda.stream import Stream, current_stream
+        from hidet.option import is_use_torch_stream
 
         if stream is None:
-            stream = current_stream()
-        if not isinstance(stream, Stream):
-            raise TypeError("stream must be a Stream")
-        (err,) = cudart.cudaEventRecord(self._handle, stream.handle())
+            if is_use_torch_stream():
+                import torch.cuda
+
+                stream_handle = torch.cuda.current_stream().cuda_stream
+            else:
+                stream_handle = current_stream().handle()
+        else:
+            assert isinstance(stream, Stream)  # stream must be a Stream
+            stream_handle = stream.handle()
+        (err,) = cudart.cudaEventRecord(self._handle, stream_handle)
         assert err == 0, err
 
     def synchronize(self):

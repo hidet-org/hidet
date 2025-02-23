@@ -257,7 +257,7 @@ def check_in_memory_cache(target, space_level, task_string, load):
     return None
 
 
-def prepare_cache_paths(op_cache_dir, config_str, task):
+def prepare_cache_paths(op_cache_dir, config_str, task: Task):
     """Prepare paths for the task cache."""
     task_hash = task.calculate_hash()
     task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
