@@ -1220,7 +1220,11 @@ class Tensor:
         from .frontend.torch.utils import dtype_to_torch
 
         if self.dtype in [hidet.float8_e4m3, hidet.float8_e5m2]:
-            return self.view('uint8').torch().view(dtype_to_torch(self.dtype))
+            old_dtype = self.dtype
+            self._dtype = hidet.uint8
+            res = self.torch().view(dtype_to_torch(old_dtype))
+            self._dtype = old_dtype
+            return res
 
         return torch.from_dlpack(self)
 
