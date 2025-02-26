@@ -19,8 +19,21 @@ CudaContext *CudaContext::global() {
     return &instance;
 }
 
+static size_t _next_power_of_two(size_t n) {
+    /* returns the least power of two that is greater or equal to n */
+    size_t result = 1;
+    while (result < n) {
+        result = result << 1;
+    }
+    return result;
+}
+
 static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
     if (nbytes > workspace.allocated_nbytes) {
+        // make sure that we allocate in bytes that is a power-of-two
+        nbytes = _next_power_of_two(nbytes);
+
+        // free previous workspace, allocate a new one, and initialize it to zero
         if (workspace.base) {
             free_cuda_storage(reinterpret_cast<uint64_t>(workspace.base));
         }
@@ -28,8 +41,10 @@ static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
         if (workspace.base == nullptr) {
             LOG(ERROR) << "allocate workspace failed.";
         }
-
         cuda_memset(reinterpret_cast<uint64_t>(workspace.base), 0, nbytes);
+
+        // update the allocated workspace size
+        workspace.allocated_nbytes = nbytes;
     }
 }
 
