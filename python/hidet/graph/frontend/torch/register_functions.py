@@ -646,6 +646,7 @@ def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Op
 @register_function(torch.floor_divide)
 @register_method(torch.Tensor.floor_divide)
 @register_method(torch.Tensor.floor_divide_)
+@register_function(operator.floordiv)
 def floor_divide(x: Union[Tensor, Number], y: Union[Tensor, Number]):
     return div(x, y, rounding_mode='floor')
 

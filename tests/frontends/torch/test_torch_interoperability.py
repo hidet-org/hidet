@@ -49,9 +49,11 @@ def test_torch_div(input1, input2, device):
     func = FunctionalModule(op=lambda x, y: torch.div(x, y))
     func_floor = FunctionalModule(op=lambda x, y: torch.div(x, y, rounding_mode='floor'))
     func_floor_divice = FunctionalModule(op=lambda x, y: torch.floor_divide(x, y))
+    func_op_floordiv = FunctionalModule(op=lambda x, y: x // y)
     check_module(func, args=[input1, input2], atol=1e-5, rtol=1e-5, device=device)
     check_module(func_floor, args=[input1, input2], atol=1e-5, rtol=1e-5, device=device)
     check_module(func_floor_divice, args=[input1, input2], atol=1e-5, rtol=1e-5, device=device)
+    check_module(func_op_floordiv, args=[input1, input2], atol=1e-5, rtol=1e-5, device=device)
 
 
 @pytest.mark.parametrize('shape,expanded_shape', [([2, 1], [2, 11]), ([2, 3, 4], [2, 3, 4]), ([1], [6])])
