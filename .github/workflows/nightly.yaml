@@ -17,15 +17,18 @@ on:
 
 jobs:
     build-docs:
-        runs-on:
-          group: ${{ inputs.runner_group || 'arc-l4' }}
-        container:
-          image: nvidia/cuda:12.6.2-devel-ubuntu22.04
-          options: --gpus all
-        steps:
-          - name: Build and deploy nightly docs
-            uses: ./.github/actions/build-docs
-            with:
-                docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
-                version: "nightly"
-                update_docs: true
+      runs-on:
+        group: ${{ inputs.runner_group || 'arc-l4' }}
+      container:
+        image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+        options: --gpus all
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v4
+          
+        - name: Build and deploy nightly docs
+          uses: ./.github/actions/build-docs
+          with:
+            docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
+            version: "nightly"
+            update_docs: true

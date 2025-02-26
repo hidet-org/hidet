@@ -92,15 +92,24 @@ jobs:
           python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
 
   build-docs:
-    runs-on: arc-runner-set
+    name: Build and Deploy Docs
+    runs-on:
+      group: 'arc-l4'
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Build and deploy release docs
         uses: ./.github/actions/build-docs
         with:
           docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
-          version: "v$(grep -oP \"release\\s*=\\s*'\\K[^']+\" ./source/conf.py)"
+          version: ${{ steps.get_version.outputs.VERSION }}
           update_docs: true
 
   publish:
