@@ -335,6 +335,19 @@ def register_hidet_options():
         description="Whether to enable the hexcute matmul kernels. The valid values for this option can be"
         "'enable', 'disable', and 'auto'",
     )
+    register_option(
+        name='internal.dispatch_table.split_points',
+        type_hint='List[int]',
+        default_value=None,
+        description="Select the spliting point of the intervals during dynamic dispatch table construction",
+    )
+    register_option(
+        name='internal.dispatch_table.candidate_selection_method',
+        type_hint='str',
+        default_value='find_best_candidate',
+        description="Select the mode to select candidate in intervals during dynamic dispatch table construction",
+        choices=['find_best_candidate'],
+    )
     # Exclusive `torch.compile` API option.
     # Torch Dynamo passes two arguments to the compiler: `fx.graph` and `example_inputs`.
     # From torch==2.4, `example_inputs` is an actual tensor (not FakeTensor, non-symbolic).
@@ -1381,6 +1394,59 @@ class internal:
             Whether to use `example_inputs` shapes instead of `fx.graph` shapes.
         """
         return OptionContext.current().get_option('internal.torch_api_use_example_input_shapes')
+
+    class dispatch_table:
+        """
+        Dispatch table related options.
+        """
+
+        @staticmethod
+        def set_split_points(split_points: Optional[List[int]] = [2**i for i in range(13)]):
+            """
+            Set the spliting points for the dynamic dispatch table construction
+            With split_points = [1, 128, 256] will force the dynamic dispatch table construct with intervals
+            [[1, 128], [129, 256], [256, inf]]
+
+            Parameters
+            -------
+            split_points: List
+            """
+            OptionContext.current().set_option('internal.dispatch_table.split_points', split_points)
+
+        @staticmethod
+        def get_split_points() -> Optional[List[int]]:
+            """
+            Get the spliting points for the dynamic dispatch table construction
+
+            Returns
+            -------
+            ret: List
+            """
+            return OptionContext.current().get_option('internal.dispatch_table.split_points')
+
+        @staticmethod
+        def set_candidate_selection_method(candidate_selection_method: str = 'find_best_candidate'):
+            """
+            Set the candidate selection method in each intervals for table construction
+
+            Parameters
+            -------
+            candidate_selection_method: str
+            """
+            OptionContext.current().set_option(
+                'internal.dispatch_table.candidate_selection_method', candidate_selection_method
+            )
+
+        @staticmethod
+        def get_candidate_selection_method() -> str:
+            """
+            Get the candidate selection method in each intervals for table construction
+
+            Returns
+            -------
+            ret: str
+            """
+            return OptionContext.current().get_option('internal.dispatch_table.candidate_selection_method')
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

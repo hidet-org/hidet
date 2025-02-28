@@ -14,11 +14,10 @@ from dataclasses import dataclass
 import os
 import json
 from collections import namedtuple
-import tabulate
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
 from hidet.ir.dtypes import i32
-from hidet.ffi import runtime_api
 from hidet.ffi.array import Array
+from hidet.runtime.dispatch_table import DispatchTable, IntervalsDispachTable, PointsDispachTable
 
 
 @dataclass
@@ -73,7 +72,7 @@ class CompiledTask:
         self.candidates: List[CompiledFunction] = [
             self.task_module['launch_{}'.format(i)] for i in range(self.meta_data.num_candidates)
         ]
-        self.dispatch_table: Dict[Tuple[int, ...], int] = self._load_dispatch_table()
+        self.dispatch_table: DispatchTable = self.construct_dispatch_table()
 
         self._get_input_shape = self.task_module['get_input_shape']
         self._get_output_shape = self.task_module['get_output_shape']
@@ -119,28 +118,27 @@ class CompiledTask:
             raise RuntimeError(f'No compiled module found in {candidates_dir}')
         return compiled_modules
 
-    def _load_dispatch_table(self):
-        dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
-        if not os.path.exists(dispatch_table_path):
-            return {}
-        dispatch_table = {}
-        with open(dispatch_table_path, 'r') as f:
-            for i, line in enumerate(f.readlines()):
-                if i == 0:
-                    continue
-                items = line.split()
-                if len(items) == 0:
-                    continue
-                if len(items) != len(self.meta_data.symbols) + 1:
-                    os.remove(dispatch_table_path)
-                    raise RuntimeError(f'Invalid dispatch table: {dispatch_table_path}')
-                key = tuple(int(item) for item in items[:-1])
-                value = int(items[-1])
-                dispatch_table[key] = value
-        return dispatch_table
+    def use_dynamic(self) -> bool:
+        return len(self.meta_data.symbols) != 0 and len(self.candidates) > 1
 
-    def _get_symbol_values(self) -> Tuple[int, ...]:
-        return tuple(runtime_api.get_symbol_value(symbol) for symbol in self.meta_data.symbols)
+    def construct_dispatch_table(self) -> DispatchTable:
+        if self.use_dynamic():
+            input_shapes = [inp.shape for inp in self.meta_data.inputs]
+            output_shapes = [out.shape for out in self.meta_data.outputs]
+            try:
+                return IntervalsDispachTable(
+                    candidates=self.candidates,
+                    input_shapes=input_shapes,
+                    output_shapes=output_shapes,
+                    task_dir=self.task_dir,
+                    symbols=self.meta_data.symbols,
+                    name=self.meta_data.name,
+                )
+            except NotImplementedError:
+                pass
+        return PointsDispachTable(
+            candidates=self.candidates, task_dir=self.task_dir, symbols=self.meta_data.symbols, name=self.meta_data.name
+        )
 
     def create_outputs(self, inputs):
         import hidet
@@ -172,45 +170,11 @@ class CompiledTask:
         return outputs
 
     def pick_best_candidate(self, inputs, outputs) -> int:
-        from hidet.utils.benchmark.bench import find_best_candidate
-
-        key = self._get_symbol_values()
-        if key not in self.dispatch_table:
-            if len(self.candidates) > 1:
-                best_idx, latencies = find_best_candidate(self.candidates, self.meta_data.name, *inputs, *outputs)
-                self.dispatch_table[key] = best_idx
-
-                # write a benchmark report
-                report_name = '_'.join('{}_{}'.format(a, b) for a, b in zip(self.meta_data.symbols, key))
-                os.makedirs(os.path.join(self.task_dir, 'reports'), exist_ok=True)
-                report_path = os.path.join(self.task_dir, 'reports', report_name + '.txt')
-                with open(os.path.join(self.task_dir, 'candidates.json'), 'r') as f:
-                    candidates_json = json.load(f)
-                    headers: List[str] = candidates_json['headers']
-                    candidate_lines: List[List[str]] = candidates_json['candidates']
-                headers.extend(['latency', 'rank'])
-                sorted_indices = sorted(range(len(latencies)), key=lambda i: latencies[i])
-                for idx, line in enumerate(candidate_lines):
-                    line.extend(['{:.6f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
-                candidate_lines.sort(key=lambda l: l[-1])
-                with open(report_path, 'w') as f:
-                    f.write(tabulate.tabulate(candidate_lines, headers=headers, tablefmt='plain'))
-            else:
-                assert len(self.candidates) == 1
-                self.dispatch_table[key] = 0
-
-            # write the best candidate to dispatch table
-            dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
-            if not os.path.exists(dispatch_table_path):
-                with open(dispatch_table_path, 'w') as f:
-                    f.write(' '.join(self.meta_data.symbols) + '\n')
-            with open(dispatch_table_path, 'a') as f:
-                f.write(' '.join([str(v) for v in key]) + ' ' + str(self.dispatch_table[key]) + '\n')
-
-        candidate_index = self.dispatch_table[key]
-        if candidate_index >= len(self.candidates):
-            raise RuntimeError(f'Invalid candidate index: {candidate_index}')
-        return candidate_index
+        """
+        Pick the best candidate kernel based on cached dispatch table or by benchmarking.
+        Once determined, the chosen candidate is recorded in the dispatch table for future use.
+        """
+        return self.dispatch_table.pick_best_candidate(inputs, outputs)
 
     def run_async(self, inputs):
         """
