@@ -8,15 +8,26 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
-      runner_group:
-        type: choice
-        options:
-          - arc-l4
-          - arc-a10
-          - arc-h100
-        description: "Runner group to run tests. (arc-l4, arc-a10, arc-h100)"
+      gpu_l4:
+        description: Run Tests on L4 GPU
+        type: boolean
         required: false
-        default: arc-l4
+        default: true
+      gpu_h100:
+        description: Run Tests on H100 GPU
+        type: boolean
+        required: false
+        default: true
+      gpu_a10:
+        description: Run Tests on A10 GPU
+        type: boolean
+        required: false
+        default: false
+      gpu_a100:
+        description: Run Tests on A100-80 GPU
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
@@ -24,18 +35,49 @@ concurrency:
 
 jobs:
 
-  build-docs:
-    runs-on:
-      group: ${{ inputs.runner_group || 'arc-l4' }}
-    container:
-      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
-      options: --gpus all
+  set_gpu_params:
+    runs-on: ubuntu-latest
+    outputs:
+      gpu_l4: ${{ steps.set_params.outputs.gpu_l4 }}
+      gpu_h100: ${{ steps.set_params.outputs.gpu_h100 }}
+      gpu_a10: ${{ steps.set_params.outputs.gpu_a10 }}
+      gpu_a100: ${{ steps.set_params.outputs.gpu_a100 }}
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-      - name: Build docs
-        id: build_step
-        uses: ./.github/actions/build-docs
+      - name: Set Parameter Values Based on Trigger
+        id: set_params
+        shell: bash
+        run: |
+          echo "Triggered by event: $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
+            echo "Using manual dispatch inputs"
+            GPU_L4="${{ github.event.inputs.gpu_l4 }}"
+            GPU_H100="${{ github.event.inputs.gpu_h100 }}"
+            GPU_A10="${{ github.event.inputs.gpu_a10 }}"
+            GPU_A100="${{ github.event.inputs.gpu_a100 }}"
+          elif [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+            echo "Using pull request defaults"
+            # Set PR-specific defaults
+            GPU_L4="true"
+            GPU_H100="true"
+            GPU_A10="false"
+            GPU_A100="false"
+          elif [ "$GITHUB_EVENT_NAME" == "schedule" ]; then
+            echo "Using scheduled run defaults"
+            # Set schedule-specific defaults
+            GPU_L4="true"
+            GPU_H100="true"
+            GPU_A10="true"
+            GPU_A100="true"
+          else
+            echo "Unknown event type. Exiting."
+            exit 1
+          fi
+
+          # Write the parameters to GITHUB_OUTPUT so they can be used in later steps
+          echo "gpu_l4=$GPU_L4" >> $GITHUB_OUTPUT
+          echo "gpu_h100=$GPU_H100" >> $GITHUB_OUTPUT
+          echo "gpu_a10=$GPU_A10" >> $GITHUB_OUTPUT
+          echo "gpu_a100=$GPU_A100" >> $GITHUB_OUTPUT
 
   build-wheel:
     outputs:
@@ -63,6 +105,86 @@ jobs:
           retention-days: 3
           if-no-files-found: "error"
 
+  build-docs-l4:
+    if: ${{ needs.set_gpu_params.outputs.gpu_l4 == 'true' }}
+    name: build-docs (l4)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-l4
+      cancel-in-progress: true
+    needs: [set_gpu_params]
+    timeout-minutes: 120
+    runs-on:
+      group: arc-l4
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+        - name: Checkout source
+          uses: actions/checkout@v4
+        - name: Build docs
+          id: build_step
+          uses: ./.github/actions/build-docs
+
+  build-docs-h100:
+    if: ${{ needs.set_gpu_params.outputs.gpu_h100 == 'true' }}
+    name: build-docs (h100)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-h100
+      cancel-in-progress: true
+    needs: [set_gpu_params]
+    timeout-minutes: 120
+    runs-on:
+      group: arc-h100
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build docs
+        id: build_step
+        uses: ./.github/actions/build-docs
+
+  build-docs-a10:
+    if: ${{ needs.set_gpu_params.outputs.gpu_a10 == 'true' }}
+    name: build-docs (a10)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a10
+      cancel-in-progress: true
+    needs: [set_gpu_params]
+    timeout-minutes: 120
+    runs-on:
+      group: arc-a10
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build docs
+        id: build_step
+        uses: ./.github/actions/build-docs
+
+  build-docs-a100:
+    if: ${{ needs.set_gpu_params.outputs.gpu_a100 == 'true' }}
+    name: build-docs (a100)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a100
+      cancel-in-progress: true
+    needs: [set_gpu_params ]
+    timeout-minutes: 120
+    runs-on:
+      group: arc-a100-80
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build docs
+        id: build_step
+        uses: ./.github/actions/build-docs
+
   list-test-dirs:
     runs-on: ubuntu-latest
     outputs:
@@ -80,45 +202,97 @@ jobs:
         run: |
           python .github/scripts/set_test_matrix.py
 
-  run-test:
-    needs: [list-test-dirs, build-wheel]
+  run-test-l4:
+    if: ${{ needs.set_gpu_params.outputs.gpu_l4 == 'true' }}
+    name: ${{ matrix.path }} (l4)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-l4
+      cancel-in-progress: true
+    needs: [list-test-dirs, build-wheel, set_gpu_params]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
-      group: ${{ inputs.runner_group || 'arc-l4' }}
+      group: arc-l4
     container:
       image: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
-      - name: Install dependencies via apt
-        run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
-
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run Tests
+        id: run_tests_l4
+        uses: ./.github/actions/run-tests
         with:
-          python-version: "3.9"
+          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
+          path: ${{ matrix.path }}
 
-      - name: Download wheel
-        uses: actions/download-artifact@v4
+  run-test-h100:
+    if: ${{ needs.set_gpu_params.outputs.gpu_h100 == 'true' }}
+    name: ${{ matrix.path }} (h100)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-h100
+      cancel-in-progress: true
+    needs: [list-test-dirs, build-wheel, set_gpu_params]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+    runs-on:
+      group: arc-h100
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Tests
+        id: run_tests_h100
+        uses: ./.github/actions/run-tests
         with:
-          name: ${{ needs.build-wheel.outputs.wheel_name }}
+          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
+          path: ${{ matrix.path }}
 
-      - name: Setup Hidet from Wheel
-        run: |
-          pip install -r requirements-dev.txt
-          pip install ${{ needs.build-wheel.outputs.wheel_name }}
+  run-test-a100:
+    if: ${{ needs.set_gpu_params.outputs.gpu_a100 == 'true' }}
+    name: ${{ matrix.path }} (a100-80)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a100-80
+      cancel-in-progress: true
+    needs: [list-test-dirs, build-wheel, set_gpu_params]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+    runs-on:
+      group: arc-a100-80
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Tests
+        id: run_tests_a100
+        uses: ./.github/actions/run-tests
+        with:
+          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
+          path: ${{ matrix.path }}
 
-      - name: List installed packages
-        run: |
-          pip list
-
-      - name: Run tests
-        run: |
-          rm -rf ~/.config/hidet
-          python -m pytest -v --durations=20 --clear-cache ${{ matrix.path }}
+  run-test-a10:
+    if: ${{ needs.set_gpu_params.outputs.gpu_a10 == 'true' }}
+    name: ${{ matrix.path }} (a10)
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a10
+      cancel-in-progress: true
+    needs: [list-test-dirs, build-wheel, set_gpu_params]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
+    runs-on:
+      group: arc-a10
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Tests
+        id: run_tests_a10
+        uses: ./.github/actions/run-tests
+        with:
+          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
+          path: ${{ matrix.path }}
 
   run-test-amdgpu:
     if: |
@@ -170,7 +344,7 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     name: Pass All Functional Tests
-    needs: [run-test, run-test-amdgpu]
+    needs: [run-test-l4, run-test-amdgpu]
     steps:
       - run: exit 1
         if: >-
