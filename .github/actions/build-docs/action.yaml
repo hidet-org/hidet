@@ -45,9 +45,13 @@ runs:
     - name: Build docs
       shell: bash
       run: |
-        cd docs
-        make clean; make html
+        (while true; do echo "Heartbeat: $(date)"; sleep 30; done) &
+        echo_loop_pid=$!
 
+        cd docs
+        make clean; nice -n 10 make html
+
+        kill $echo_loop_pid
     - name: Deploy docs
       env:
         DOCS_DEPLOY_TOKEN: ${{ inputs.docs_deploy_token }}
