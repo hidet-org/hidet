@@ -116,6 +116,49 @@ def bench_reduce(params: str, *args, **kwargs) -> float:
     return bench_model(lambda: g.run_async(), [])
 
 
+def bench_linear_dynamic(shape, dtype):
+    return bench_linear(shape, dtype, dynamic=True)
+
+
+def bench_linear_static(shape, dtype):
+    return bench_linear(shape, dtype, dynamic=False)
+
+
+def bench_linear(shape: str, dtype, dynamic=True) -> float:
+    """
+    Benchmark linear layers.
+    Each shape is {m}x{in_features}x{out_features}.
+    We'll simulate a linear layer: (m, in_features) * (in_features, out_features) -> (m, out_features)
+    where m can be a dynamic dimension.
+    Current implementation uses a hacky way to bypass the errors in constructing cudagraph with dynamic
+    dimensions to boost performance.
+    """
+    from typing import List
+    from hidet.graph.tensor import Tensor, randn_like
+    from hidet.cuda.graph import CudaGraph
+
+    m, in_features, out_features = tuple(int(s) for s in shape.split('x'))
+    weights = hidet.randn([out_features, in_features], dtype=dtype, device='cuda')
+    s0 = [m, in_features]
+    if dynamic:
+        s0 = ["s0", in_features]
+    x = hidet.symbol(s0, dtype=dtype, device='cuda')
+    input_tensor = hidet.randn([m, in_features], dtype=dtype, device='cuda')
+    out = hidet.ops.matmul_nt(x, weights)
+    g = hidet.trace_from(out, inputs=[x, weights])
+    g = hidet.graph.optimize(g)
+
+    def f_create_inputs() -> List[Tensor]:
+        inputs = [input_tensor, randn_like(weights)]
+        return inputs
+
+    def f_run(inputs: List[Tensor]) -> List[Tensor]:
+        return g.forward(inputs)
+
+    cuda_graph = CudaGraph(f_create_inputs=f_create_inputs, f_run=f_run, ref_objs=[g])
+    return bench_model(lambda: cuda_graph.run_async(), [])
+
+
 bench_func_map = {
     'matmul_f16': bench_matmul_f16,
     'batch_matmul': bench_batch_matmul,
@@ -125,6 +168,8 @@ bench_func_map = {
     'attn': bench_attn,
     'attn_mask_add': bench_attn_mask_add,
     'reduce': bench_reduce,
+    'linear_static': bench_linear_static,
+    'linear_dynamic': bench_linear_dynamic,
 }
 
 if __name__ == '__main__':
