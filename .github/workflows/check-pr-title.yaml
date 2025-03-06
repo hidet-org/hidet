@@ -19,9 +19,15 @@ jobs:
           MAX_TITLE_LENGTH=72
           PR_TITLE='${{ github.event.pull_request.title }}'
 
-          # Ensure the title matches the format [Category] Title
-          if [[ ! "$PR_TITLE" =~ ^\[[^\]]+\]\ .+ ]]; then
-            echo "::error::PR title must be in the format '[Category] Title'."
+          # Ensure the title matches the format [Category1][Category2]...[CategoryN] A sentence
+          if [[ ! "$PR_TITLE" =~ ^(\[[^\]]+\])+ ]]; then
+            echo "::error::PR title must be in the format '[Category1][Category2]...[CategoryN] A sentence'."
+            exit 1
+          fi
+
+          # Ensure there is a space after the last category
+          if [[ ! "$PR_TITLE" =~ ^(\[[^\]]+\])+\ .+ ]]; then
+            echo "::error::PR title must contain a space after the last category."
             exit 1
           fi
 
