@@ -109,6 +109,7 @@ def test_reduce(memory_layout, tiled_copy, tiled_copy_r):
             attrs.func_kind = "cuda_kernel"
             attrs.cuda.block_dim = 128
             attrs.cuda.grid_dim = 1
+            attrs.cuda.dynamic_smem_bytes = 0
 
             t_g_in = tensor_view(in_ptr, gmem_layout_in, "global")
             t_regs = make_tensor("float16", tiled_tensor_layout, "register")
