@@ -439,7 +439,6 @@ def wgmma_async(
 
 @initialize()
 def register_wgmma_fence():
-
     func_name = "cuda_wgmma_fence"
     template_string = "wgmma.fence.sync.aligned;"
 
@@ -455,7 +454,6 @@ def register_wgmma_fence():
 
 @initialize()
 def register_wgmma_commit_group():
-
     func_name = "cuda_wgmma_commit_group"
     template_string = "wgmma.commit_group.sync.aligned;"
 
@@ -471,7 +469,6 @@ def register_wgmma_commit_group():
 
 @initialize()
 def register_wgmma_wait_group():
-
     for n in range(8):
         func_name = "cuda_wgmma_wait_group_{}".format(n)
 

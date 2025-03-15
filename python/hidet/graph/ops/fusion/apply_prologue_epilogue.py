@@ -186,7 +186,7 @@ class PrologueEpilogueExtractor(IRRewriter):
             for task_input in node.task.inputs:
                 self.input2task[task_input] = node.task
 
-    def extract(self) -> Tuple[Dict[Tensor, Prologue], Dict[Tensor, Epilogue], Dict[TensorNode, Tensor],]:
+    def extract(self) -> Tuple[Dict[Tensor, Prologue], Dict[Tensor, Epilogue], Dict[TensorNode, Tensor]]:
         """
         Extract prologues and epilogues from the fused graph.
         """
@@ -1934,7 +1934,7 @@ def apply_prologue_epilogue_batch(
     fused_modules: List[IRModule] = list(
         tqdm(
             parallel_imap_2ndlevel(_apply_prologue_epilogue_batch, jobs),
-            desc='Appling fusing',
+            desc='Applying fusion',
             total=len(jobs),
             ncols=80,
         )

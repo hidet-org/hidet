@@ -25,6 +25,8 @@ from ast import Module
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break
 from ast import Continue, Nonlocal, Global
 
+from ast import withitem
+
 # expressions
 from ast import Constant, Num, Str, NameConstant
 from ast import BoolOp, BinOp, UnaryOp, Lambda, IfExp, Compare, Call, Attribute, Subscript, Starred, Name, Tuple, Slice
@@ -44,11 +46,13 @@ from ast import Not, And, Or, Eq, NotEq, Lt, LtE, Gt, GtE
 from ast import Index
 
 import astunparse
+
 from hidet import ir
 from hidet.ir.expr import Var
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.tools import simplify
 from hidet.ir.builders import FunctionBuilder
+from hidet.lang.constructs.context import HidetContext
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attrs
 from hidet.lang.constructs.loops import HidetLoopIterable
@@ -1133,7 +1137,47 @@ class PythonToHidetTranslator(PythonAstFunctor):
         self.current_scope.append(ir.ContinueStmt())
 
     def visit_With(self, stmt: With):
-        raise HidetProgramError(self, stmt, 'Hidet currently do not support with statement.')
+
+        with_items = stmt.items
+        if len(with_items) != 1:
+            raise HidetProgramError(self, stmt, 'Hidet currently do not support multiple with items.')
+
+        with_item: ast.withitem = with_items[0]
+        with_item_visited = self.visit(with_item)
+
+        with_context: HidetContext = with_item_visited
+
+        with self.scope() as with_scope:
+            # bind the value to the context variable
+            if with_item.optional_vars is not None:
+                if not isinstance(with_item.optional_vars, Name):
+                    raise HidetProgramError(
+                        self, with_item.optional_vars, 'Hidet only support binding to a single name.'
+                    )
+                bind_value = with_context.bind_value()
+                if bind_value is None:
+                    raise HidetProgramError(self, with_item.optional_vars, 'The context does not have a bind value.')
+                bind_name = with_item.optional_vars.id
+
+                if isinstance(bind_value, ir.Expr):
+                    from hidet.ir.tools import infer_type
+
+                    bind_var = Var(hint=bind_name, type=infer_type(bind_value))
+                    self.current_scope.append(ir.DeclareStmt(var=bind_var, init=bind_value))
+                    self.current_scope.define_var(bind_name, bind_var)
+                else:
+                    self.current_scope.define_host_var(with_item.optional_vars.id, bind_value)
+
+            for body_stmt in stmt.body:
+                self.visit(body_stmt)
+
+        with_body = with_scope.flush_stmts()
+        processed_body = with_context.post_process(with_body)
+        assert isinstance(processed_body, ir.Stmt)
+        self.current_scope.append(processed_body)
+
+    def visit_withitem(self, with_item: withitem):
+        return self.visit(with_item.context_expr)
 
     def visit_Lambda(self, expr: Lambda):
         raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')

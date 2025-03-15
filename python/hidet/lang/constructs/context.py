@@ -9,6 +9,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from . import loops
-from . import declare
-from . import context
+from typing import Optional, Any
+
+from hidet.ir.stmt import Stmt
+
+
+class HidetContext:
+    """
+    Custom context manager used in Hidet Script to support the syntax of `with ... as ...`.
+
+    with HidetContext() as bind_value:
+        body(bind_value)
+
+    with be transformed to
+
+    post_process(body(bind_value))
+    """
+
+    def bind_value(self) -> Optional[Any]:
+        return None
+
+    def post_process(self, body: Stmt) -> Stmt:
+        raise NotImplementedError()

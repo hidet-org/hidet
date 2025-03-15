@@ -1,20 +1,3 @@
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# pylint: disable=unused-import
-from typing import Union, Optional, Sequence
-from hidet.ir.type import DataType, tensor_type
-from hidet.ir.expr import Expr
-from hidet.ir.stmt import DeclareScope
-from hidet.ir.layout import DataLayout
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
 from hidet.ir.primitives.cuda.cluster import this_cluster
 from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
@@ -29,10 +12,6 @@ from hidet.ir.primitives.cuda.atomic import atomic_add, atomic_sub, atomic_min, 
 from hidet.ir.primitives.cuda.fastintdiv import fast_intdiv, fast_intmod
 from hidet.ir.primitives.cuda.shfl import shfl_sync, shfl_up_sync, shfl_xor_sync, shfl_down_sync
 from hidet.ir.primitives.cuda.mutex import acquire_lock, release_lock, acquire_seq_semaphore, release_seq_semaphore
-from hidet.lang.constructs.declare import register_tensor, shared_tensor
-
-from hidet.ir.library.cuda import cublas
-
 from hidet.ir.primitives.cuda.wgmma import (
     WgmmaConfig,
     wgmma_async,
@@ -40,4 +19,9 @@ from hidet.ir.primitives.cuda.wgmma import (
     wgmma_wait_group,
     wgmma_commit_group,
     wgmma_fence,
-)  # TODO rewrite to use hidet.lang.cuda import
+)
+from hidet.ir.library.cuda import cublas
+from hidet.lang.constructs.declare import register_tensor, shared_tensor
+from hidet.ir.primitives.cuda.setmaxnreg import setmaxnreg
+
+from . import contexts
