@@ -126,7 +126,7 @@ def test_mbarrier_cp_async_single_cta(wait_type: str):
     ir_module = IRModule(functions={func.name: func})
     func = ir_module.build()
 
-    a = hidet.ones([64], dtype='i32')
+    a = hidet.ones([64], dtype='i32', device='cuda')
     func(a)
 
     hidet.cuda.synchronize()
