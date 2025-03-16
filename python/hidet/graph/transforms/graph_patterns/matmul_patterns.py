@@ -11,9 +11,11 @@
 # limitations under the License.
 from typing import List, Optional
 
+import hidet
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
+from hidet.graph.ops.transform import TransposeOp2D
 from hidet.utils import same_list, initialize
 
 # pylint: disable=unused-import
@@ -164,9 +166,38 @@ class ThreeMatmulBiasFusionPattern(SubgraphRewriteRule):
         return None
 
 
+# Given matrices A of shape (m, k) and B of shape (n, k)
+# We want to convert the following pattern
+# B_transposed = ops.transpose(B)
+# C = ops.matmul(A, B_transposed)
+# into
+# C = ops.matmul_nt(A, B)
+class MatmulTransposeRewriteRule(SubgraphRewriteRule):
+    def __init__(self):
+        super().__init__('transpose(B) + matmul(A, B_transposed) ==> matmul_nt(A, B)')
+        self.A = TensorPattern.tensor()
+        self.B = TensorPattern.tensor()
+        self.B_transposed = op_pattern(TransposeOp2D, [self.B])
+        self.C = op_pattern(MatmulOp, [self.A, self.B_transposed])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.C]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        A, B, _, _ = [matched[t] for t in [self.A, self.B, self.B_transposed, self.C]]
+        accepted_dtypes = [hidet.float16, hidet.bfloat16]
+        if len(B.shape) != 2:
+            return None
+        if A.dtype not in accepted_dtypes or B.dtype not in accepted_dtypes:
+            return None
+        new_C = ops.matmul_nt(A, B)
+        return [new_C]
+
+
 @initialize()
 def matmul_patterns():
-    pass
+    register_rewrite_rule(MatmulTransposeRewriteRule())
+    # The following pattern matching passes were temporarily disabled earlier
     # register_rewrite_rule(ThreeMatmulBiasFusionPattern())
     # register_rewrite_rule(ThreeMatmulFusionPattern())
     # register_rewrite_rule(TwoMatmulFusionPattern())
