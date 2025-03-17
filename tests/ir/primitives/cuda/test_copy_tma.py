@@ -353,6 +353,7 @@ def test_cp_async_bulk_tensor_s2g():
     """
     Test smem to global bulk async tensor copy
     """
+    from hidet.ir.primitives.cuda.ldst import store
 
     with hidet.script_module() as script_module:
 
@@ -381,18 +382,12 @@ def test_cp_async_bulk_tensor_s2g():
                 fence_view_async_shared()
                 syncthreads()
 
-                # FIXME
-                # The following assertion may fail on H100 because the fence
-                # instruction doesn't seem to guarantee the memory consistency
-                # as described in the document.
-                # We filed an issue to NVIDIA. For details, please refer to
-                # https://forums.developer.nvidia.com/t/tma-async-bulk-tensor-copy-memory-consistency/290971
-                # We are waiting for the reply from NVIDIA so that we can fix
-                # the issue.
-                # The issue is tracked by the following ticket
-                # https://github.com/CentML/hidet/issues/177
+                # add "release" to the store instruction so that
+                # the store cannot be reordered with the subsequent
+                # synchreads instruction, and will be visible to
+                # other threads
                 assert a[tid] == 1
-                a[tid] = 0
+                store(~a[tid], 0, space="global", sync="release", scope="gpu")
                 assert a[tid] == 0
 
                 fence_view_async_shared()
