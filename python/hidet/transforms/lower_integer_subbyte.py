@@ -334,11 +334,8 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         if isinstance(stmt.buf, Var):
             buf_ty = self.type_infer(stmt.buf)
-            if isinstance(buf_ty, (TensorType, PointerType)):
-                if isinstance(buf_ty, TensorType):
-                    dtype = buf_ty.dtype
-                else:
-                    dtype = buf_ty.base_type
+            if is_pointer_type(buf_ty):
+                dtype = get_pointer_base_type(buf_ty)
                 if is_integer_subbyte(dtype):
                     buf = self.visit(stmt.buf)
                     indices = self.visit(stmt.indices)

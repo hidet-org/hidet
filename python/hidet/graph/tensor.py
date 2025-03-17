@@ -1294,7 +1294,7 @@ def empty(shape, dtype='float32', device='cpu', layout=None):
         The created tensor.
     """
     dtype = data_type(dtype)
-    num_bytes = int(prod(shape) * dtype.nbytes)
+    num_bytes = int(prod(shape) * dtype.nbits // 8)
     storage = Storage.new(device, num_bytes)
     return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 

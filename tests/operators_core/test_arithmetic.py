@@ -404,6 +404,18 @@ def test_isnan(a_shape):
     )
 
 
+def test_cast_int_subbyte():
+    a = torch.randint(low=-8, high=7, size=(4, 4), dtype=torch.int8, device="cuda")
+    hidet_a = hidet.from_torch(a)
+    torch_b = a.to(torch.float32)
+    with hidet.option.context():
+        hidet.option.execution_mode("compilation")
+        hidet_b = ops.cast(ops.cast(hidet_a, "int4b"), "float32").torch()
+    import numpy as np
+
+    np.testing.assert_allclose(actual=hidet_b.cpu().numpy(), desired=torch_b.cpu().numpy(), atol=1e-5, rtol=1e-5)
+
+
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 @pytest.mark.parametrize(
     "a_dtype, b_dtype",

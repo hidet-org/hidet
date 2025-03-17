@@ -30,6 +30,7 @@ from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import simplify, TypeInfer
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
+from hidet.ir.utils.call_graph import CallGraph, CallGraphNode
 
 
 class FlattenTensorAccessRewriter(IRRewriter):
@@ -47,7 +48,9 @@ class FlattenTensorAccessRewriter(IRRewriter):
             if v.name in self.func2func_type:
                 func_ty = self.func2func_type[v.name]
                 if func_ty is not v.type:
-                    return Var(v.hint, func_ty, v.name)
+                    new_var = Var(v.hint, func_ty, v.name)
+                    self.memo[v] = new_var
+                    return new_var
         return super().visit_Var(v)
 
     def visit_Function(self, func: Function):
@@ -134,8 +137,13 @@ class FlattenTensorIndexPass(Pass):
         flatten_index = FlattenTensorAccessRewriter()
 
         new_funcs = {}
-        for name, func in ir_module.functions.items():
+        call_graph = CallGraph(ir_module, allow_missing=True)
+        for node in call_graph.reversed_order:
+            assert isinstance(node, CallGraphNode)
+            name = node.func.name
+            func = node.func
             new_funcs[name] = flatten_index(func)
+
         if all(new_funcs[name] is ir_module.functions[name] for name in new_funcs):
             return ir_module
         else:
