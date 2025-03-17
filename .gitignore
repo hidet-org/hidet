@@ -219,3 +219,7 @@ build-release
 
 # vscode
 .vscode
+
+/python/hidet/include/
+/python/hidet/lib/
+/scripts/wheel/built_wheel/

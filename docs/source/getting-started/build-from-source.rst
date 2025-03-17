@@ -13,37 +13,17 @@ First clone the repository to local:
 .. code-block:: console
 
   $ git clone https://github.com/hidet-org/hidet
-
-Build shared libraries
-~~~~~~~~~~~~~~~~~~~~~~
-Before building the runtime library, make sure you have ``torch`` installed in your python environment:
-.. code-block:: console
-
-  $ pip install torch
-
-The runtime library is written in C++ and compiled into a shared library. To build the shared library, you need to have
-a C++ compiler installed (as well as build tools like ``cmake``, and ``make``). The following command will build the
-shared library:
-
-.. code-block:: console
-
-  $ cd hidet
-  $ mkdir build
-  $ cd build
-  $ cp ../config.cmake .  # copy the cmake config to build directory
-  $ cmake ..
-  $ make -j4
-
-After building, you could find two libraries ``libhidet.so`` and ``libhidet_runtime.so`` under ``build/lib`` directory.
+  $ cd hidet    # enter the hidet directory
 
 Install the Hidet Python package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Next we will install the Python package of Hidet in the develop mode via pip:
+Next we will install the Python package of Hidet via pip. The following command will install the package in the develop
+mode, in which the modification of the source code will be immediately reflected in the installed package. If you want to
+install the package in the normal mode, use 'pip install .' instead.
 
 .. code-block:: console
 
-  $ cd .. # return to the root directory of Hidet
   $ pip install -e .
 
 Validation
