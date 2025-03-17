@@ -357,6 +357,13 @@ def asm(
 ):
     from hidet.ir.tools import infer_type  # pylint: disable=import-outside-toplevel
 
+    if not isinstance(outputs, Sequence):
+        raise TypeError('outputs must be a sequence')
+    if not isinstance(output_inputs, Sequence):
+        raise TypeError('output_inputs must be a sequence')
+    if not isinstance(inputs, Sequence):
+        raise TypeError('inputs must be a sequence')
+
     updated_outputs = []
     updated_inputs = []
 

@@ -108,6 +108,12 @@ class Expr(Node):
     def __rshift__(self, other):
         return self._binary(RightShift, self, other)
 
+    def __rlshift__(self, other):
+        return self._binary(LeftShift, other, self)
+
+    def __rrshift__(self, other):
+        return self._binary(RightShift, other, self)
+
     def __gt__(self, other):
         return self._binary(LessThan, other, self)
 

@@ -812,7 +812,7 @@ class MatmulF32Taskx86(Task):
                     b_alg_loop5 = determine_blocksize_f_sub(loop5_iter, loop5_my_end, NC)
                     b_alg_loop5 = min(b_alg_loop5, loop5_my_end - loop5_iter)
 
-                    loop5_partition_b_width = (b_alg_loop5,)
+                    loop5_partition_b_width = b_alg_loop5
                     loop5_partition_b_start_col = loop5_iter
                     gemm_4th_loop(
                         a,

@@ -316,6 +316,30 @@ class ScopeStack:
         self.scopes.pop()
 
 
+class LambdaProxy:
+    def __init__(self, lambda_expr: Lambda, translator):
+        self.lambda_expr: Lambda = lambda_expr
+        self.translator: PythonToHidetTranslator = translator
+
+    def __call__(self, *args, **kwargs):
+        if kwargs:
+            raise HidetProgramError(
+                self.translator, self.lambda_expr, 'Do not support keyword arguments in lambda function.'
+            )
+
+        with self.translator.scope() as lambda_params_scope:
+            if len(args) != len(self.lambda_expr.args.args):
+                raise HidetProgramError(
+                    self.translator,
+                    self.lambda_expr,
+                    'The number of arguments does not match the lambda function definition.',
+                )
+            for arg, arg_expr in zip(self.lambda_expr.args.args, args):
+                arg_name = arg.arg
+                lambda_params_scope.define_host_var(arg_name, arg_expr)
+            return self.translator.visit(self.lambda_expr.body)
+
+
 class PythonToHidetTranslator(PythonAstFunctor):
     def __init__(self, file, start_lineno, start_column, env, func_annotations):
         super().__init__(file, start_lineno, start_column)
@@ -402,6 +426,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             indices = self.visit(lhs.slice)
             if not isinstance(indices, list):
                 indices = [indices]
+            indices = [ir.expr.convert(idx) for idx in indices]
             self.current_scope.append(ir.BufferStoreStmt(buf=base, indices=indices, value=rhs))
         elif isinstance(lhs, Attribute):
             # example: attr.cuda.block_dim = 16, 16
@@ -560,37 +585,33 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise HidetProgramError(self, stmt, 'Hidet does not support syntax like "a = b = 1".')
         target = stmt.targets[0]
         value = stmt.value
-        if isinstance(target, (Tuple, List)):
+
+        if isinstance(target, (Tuple, List)) and isinstance(value, (Tuple, List)):
+            # a, b = c, d
             lhs_list = target.elts
-        else:
-            lhs_list = [target]
-
-        if isinstance(value, (Tuple, List)):
             rhs_list = [self.visit(v) for v in value.elts]
-        else:
-            rhs_list = [self.visit(value)]
-
-        if len(lhs_list) == len(rhs_list):
-            for lhs, rhs in zip(lhs_list, rhs_list):
-                self.process_assign(lhs, rhs)
-        elif len(lhs_list) == 1:
-            lhs = lhs_list[0]
-            assert isinstance(lhs, (Subscript, Name, Attribute))
-            self.process_assign(lhs, rhs_list)
-        elif len(rhs_list) == 1:
-            if isinstance(rhs_list[0], ir.Expr):
-                raise HidetProgramError(self, stmt, 'Hidet does not support unpacking.')
-            rhs_list = list(rhs_list[0])
             if len(lhs_list) != len(rhs_list):
-                raise HidetProgramError(
-                    self, stmt, 'Trying to assign {} values to {} objects'.format(len(rhs_list), len(lhs_list))
-                )
+                raise HidetProgramError(self, stmt, 'The number of left values and right values does not match.')
             for lhs, rhs in zip(lhs_list, rhs_list):
                 self.process_assign(lhs, rhs)
+        elif isinstance(target, (Tuple, List)):
+            # a, b = c
+            lhs_list = target.elts
+            rhs_list = self.visit(value)
+            if len(lhs_list) != len(rhs_list):
+                raise HidetProgramError(self, stmt, 'The number of left values and right values does not match.')
+            for lhs, rhs in zip(lhs_list, rhs_list):
+                self.process_assign(lhs, rhs)
+        elif isinstance(value, (Tuple, List)):
+            # a = c, d
+            rhs_list = [self.visit(v) for v in value.elts]
+            assert isinstance(target, (Attribute, Subscript, Name))
+            self.process_assign(target, rhs_list)
         else:
-            raise HidetProgramError(
-                self, stmt, 'Can not assign {} elements to {} elements.'.format(len(rhs_list), len(lhs_list))
-            )
+            # a = c
+            assert isinstance(target, (Attribute, Subscript, Name))
+            rhs = self.visit(value)
+            self.process_assign(target, rhs)
 
     def visit_Name(self, expr: Name):
         if isinstance(expr.ctx, Store):
@@ -652,8 +673,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 BitOr: operator.or_,
                 BitAnd: operator.and_,
                 Pow: primitives.pow,
-                LShift: ir.expr.left_shift,
-                RShift: ir.expr.right_shift,
+                LShift: operator.lshift,
+                RShift: operator.rshift,
             }
 
             if type(expr.op) in op_dict:
@@ -1180,7 +1201,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return self.visit(with_item.context_expr)
 
     def visit_Lambda(self, expr: Lambda):
-        raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')
+        return LambdaProxy(expr, self)
 
     def process_generator(self, elt, generators: list[comprehension]) -> list:
         if len(generators) == 0:
