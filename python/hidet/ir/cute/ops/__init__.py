@@ -49,6 +49,6 @@ from .arithmetic import (
     Fill,
     fill,
 )
-from .mma import Mma, mma
+from .mma import Mma, mma, WgmmaFenceOperand, wgmma_fence_operand
 from .subtensor import SubTensor, sub_tensor
 from .misc import Broadcast, broadcast_to, Transpose, transpose

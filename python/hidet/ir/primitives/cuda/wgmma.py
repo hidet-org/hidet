@@ -18,13 +18,14 @@ from itertools import product
 
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import PointerType, data_type
+from hidet.ir.type import ReferenceType, PointerType, data_type
 from hidet.ir.expr import Expr, cast
 from hidet.ir.stmt import asm
 from hidet.ir.func import Function
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
-from hidet.lang import uint64, attrs, script, u64
+from hidet.lang import uint64, attrs, script, u64, ref_u32
+from hidet.ir.tools import infer_type
 
 NUM_THREADS = 128  # num threads per warp group
 ptx_dtype_names: Dict[str, str] = {
@@ -395,7 +396,6 @@ def wgmma_async(
     trans_a: Expr = None,
     trans_b: Expr = 0,
 ):
-    from hidet.ir.tools import infer_type
     from hidet.ir.primitives import is_primitive_function
 
     # from hidet import uint64
@@ -484,6 +484,23 @@ def register_wgmma_wait_group():
         register_primitive_function(name=cuda_wgmma_wait_group.name, func_or_type=cuda_wgmma_wait_group)
 
 
+@initialize()
+def register_wgmma_fence_operand():
+    ref_f32 = ReferenceType(data_type("f32"))
+
+    for dtype in [ref_u32, ref_f32]:
+        func_name = f"cuda_wgmma_fence_operand_{dtype.base_type.short_name}"
+
+        @script
+        def cuda_wgmma_fence_operand(reg: dtype):
+            attrs.func_name = func_name
+            attrs.func_kind = "cuda_internal"
+            template = ""
+            asm(template=template, output_inputs=[reg], is_volatile=True, memory_fence=True)
+
+        register_primitive_function(name=cuda_wgmma_fence_operand.name, func_or_type=cuda_wgmma_fence_operand)
+
+
 def wgmma_fence():
     name = "wgmma_fence"
     return call_cuda(func_name=name, args=[])
@@ -498,6 +515,11 @@ def wgmma_wait_group(N: Expr):
     name = "wgmma_wait_group_{}".format(N)
     assert 0 <= N <= 7
     return call_cuda(func_name=name, args=[])
+
+
+def wgmma_fence_operand(reg: Expr):
+    name = "wgmma_fence_operand_{}".format(infer_type(reg).short_name)
+    return call_cuda(func_name=name, args=[reg])
 
 
 # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-descriptor-format

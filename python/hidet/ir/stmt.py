@@ -293,6 +293,7 @@ class AsmStmt(Stmt):
         outputs: Sequence[Tuple[str, Expr]] = (),
         inputs: Sequence[Tuple[str, Expr]] = (),
         is_volatile=False,
+        memory_fence=False,
     ):
         self.template_string = template_string
         self.output_labels = [pr[0] for pr in outputs]
@@ -300,6 +301,7 @@ class AsmStmt(Stmt):
         self.input_labels = [pr[0] for pr in inputs]
         self.input_exprs = [pr[1] for pr in inputs]
         self.is_volatile = is_volatile
+        self.memory_fence = memory_fence
 
 
 class BlackBoxStmt(Stmt):
@@ -354,6 +356,7 @@ def asm(
     output_inputs: Sequence[Any] = (),
     inputs: Sequence[Any] = (),
     is_volatile=False,
+    memory_fence=False,
 ):
     from hidet.ir.tools import infer_type  # pylint: disable=import-outside-toplevel
 
@@ -409,7 +412,7 @@ def asm(
     for x in inputs:
         constraint = get_register_type(x)
         updated_inputs.append((constraint, convert(x)))
-    return AsmStmt(template, updated_outputs, updated_inputs, is_volatile)
+    return AsmStmt(template, updated_outputs, updated_inputs, is_volatile, memory_fence)
 
 
 Int = Union[Expr, int]

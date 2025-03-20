@@ -35,6 +35,7 @@ from hidet.ir.cute.ops import (
     Broadcast,
     Transpose,
     Atomic,
+    WgmmaFenceOperand,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -81,6 +82,8 @@ class CuteFunctor(BaseFunctor):
             return self.visit_Transpose(node)
         elif isinstance(node, Atomic):
             return self.visit_Atomic(node)
+        elif isinstance(node, WgmmaFenceOperand):
+            return self.visit_WgmmaFenceOperand(node)
         elif isinstance(node, Op):
             raise NotImplementedError("Rewriter for the following op is not implemented: \n{}".format(node.op_name()))
         else:
@@ -172,6 +175,9 @@ class CuteFunctor(BaseFunctor):
     def visit_AutoLayout(self, n: AutoLayout):
         raise NotImplementedError()
 
+    def visit_WgmmaFenceOperand(self, n: WgmmaFenceOperand):
+        raise NotImplementedError()
+
 
 class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_TiledTensorType(self, t: TiledTensorType):
@@ -252,6 +258,9 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
 
     def visit_AutoLayout(self, n: AutoLayout):
         pass
+
+    def visit_WgmmaFenceOperand(self, n: WgmmaFenceOperand):
+        self.visit(n.x)
 
 
 class CuteRewriter(CuteFunctor, BaseRewriter):
@@ -439,3 +448,10 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
 
     def visit_AutoLayout(self, n: AutoLayout):
         return n
+
+    def visit_WgmmaFenceOperand(self, n: WgmmaFenceOperand):
+        x = self.visit(n.x)
+        if x is n.x:
+            return n
+        else:
+            return WgmmaFenceOperand(x)

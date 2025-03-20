@@ -146,3 +146,18 @@ class Mma(Op):
 
 def mma(tiled_mma: TiledMma, d: Expr, a: Expr, b: Expr, c: Expr):
     return Mma(tiled_mma, d, a, b, c).make_call()
+
+
+class WgmmaFenceOperand(Op):
+    def __init__(self, x: Expr):
+        super().__init__(args=[x], attrs={})
+        self.x: Expr = x
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        if not isinstance(arg_types[0], TiledTensorType):
+            raise TypeError(f"Type mismatch. (got:{arg_types[0]})")
+        return void
+
+
+def wgmma_fence_operand(x: Expr):
+    return WgmmaFenceOperand(x).make_call()

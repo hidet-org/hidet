@@ -589,6 +589,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''
+        memory_fence_doc = ' : "memory"' if stmt.memory_fence else ''
         template_doc = f'"{Text(stmt.template_string)}"'
         output_docs = []
         for label, expr in zip(stmt.output_labels, stmt.output_exprs):
@@ -606,6 +607,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             + doc_join(output_docs, ', ')
             + ' : '
             + doc_join(input_docs, ', ')
+            + memory_fence_doc
             + ');'
         )
 

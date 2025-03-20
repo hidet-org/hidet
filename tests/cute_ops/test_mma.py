@@ -17,6 +17,7 @@ from hidet.ir.cute.ops import (
     rearrange,
     arithmetic,
     fill,
+    wgmma_fence_operand,
 )
 from hidet.lang.mapping import auto_map
 
@@ -829,3 +830,39 @@ def test_gemm_multi_buffer(gemm, m, n, k):
 
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
     np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c2.cpu().numpy(), rtol=1e-2)
+
+
+@pytest.mark.requires_cuda
+def test_wgmma_fence_operand():
+    from hidet.lang.types import f32
+    from hidet.lang import attrs
+    from hidet.ir.cute import auto_copy
+    from hidet.ir.cute import auto_layout
+
+    m = 128
+    n = 128
+    with hidet.script_module() as script_module:
+
+        @hidet.script
+        def func(tensor: f32[m, n], out: f32[m, n]):
+            attrs.func_kind = "cuda_kernel"
+            attrs.cuda.block_dim = 128
+            attrs.cuda.grid_dim = 1
+
+            tr = make_tensor("float32", auto_layout, "register")
+            txrx = partition_dst(tr, auto_copy())
+            tg = tensor_view(tensor, TensorLayout((m, n), (n, 1)), "global")
+            txgx = partition_src(tg, auto_copy())
+            copy(auto_copy((m, n)), txgx, txrx)
+
+            wgmma_fence_operand(tr)
+
+            tg_out = tensor_view(out, TensorLayout((m, n), (n, 1)), "global")
+            txrx1 = partition_src(tr, auto_copy())
+            txgout = partition_dst(tg_out, auto_copy())
+            copy(auto_copy((m, n)), txrx1, txgout)
+
+    func = script_module.build()
+    tensor = hidet.empty([m, n], device="cuda")
+    out = hidet.empty([m, n], device="cuda")
+    func(tensor, out)

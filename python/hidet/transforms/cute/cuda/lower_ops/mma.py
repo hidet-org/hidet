@@ -13,8 +13,11 @@ from typing import List, Union, Optional
 from hidet.ir.expr import Expr
 from hidet.ir.type import TensorType
 from hidet.ir.tools import infer_type
+from hidet.ir.primitives.cuda.wgmma import wgmma_fence_operand
 
-from hidet.ir.cute.ops import Mma
+from hidet.ir.cute.ops import Mma, WgmmaFenceOperand
+from hidet.ir.cute.int_tuple import product
+from hidet.ir.cute.layout import filter, TensorLayout, TiledTensorLayout
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -86,3 +89,25 @@ class MmaEmitter(OpEmitter):
                     c_addr = c_ptr + c_rest((m_indices, n_indices), base=c.offset)
                     d_addr = d_ptr + d_rest((m_indices, n_indices), base=d.offset)
                     self.append(inst(d_addr, a_addr, b_addr, c_addr))
+
+
+@register_impl(WgmmaFenceOperand)
+class WgmmaFenceOperandEmitter(OpEmitter):
+    def emit(self, op: WgmmaFenceOperand, args: List[Union[Buffer, Expr]], output: Optional[Buffer]):
+        assert all(isinstance(arg, Buffer) for arg in args)
+        d: Buffer = args[0]
+        layout = d.layout
+        assert isinstance(layout, (TensorLayout, TiledTensorLayout))
+        if isinstance(layout, TiledTensorLayout):
+            val_layout = layout.val_layout()
+            val_layout = filter(val_layout)
+            shape = val_layout.shape_tuple
+        else:
+            val_layout = filter(layout)
+            shape = val_layout.shape_tuple
+
+        assert d.scope.is_register()
+
+        nr_regs = product(shape)
+        with self.for_range(nr_regs) as i:
+            self.append(wgmma_fence_operand(d.buffer[i]))

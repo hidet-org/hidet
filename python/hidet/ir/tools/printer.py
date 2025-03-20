@@ -78,6 +78,7 @@ from hidet.ir.cute.ops import (
     Broadcast,
     Transpose,
     Atomic,
+    WgmmaFenceOperand,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -785,6 +786,9 @@ class IRPrinter(IRFunctor):
         return self.visit_CuteOp(op)
 
     def visit_Atomic(self, op: Atomic):
+        return self.visit_CuteOp(op)
+
+    def visit_WgmmaFenceOperand(self, op: WgmmaFenceOperand):
         return self.visit_CuteOp(op)
 
 
