@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence
+from typing import Dict, List, Sequence
 import time
 import numpy.testing
 import torch
@@ -30,8 +30,40 @@ class FunctionalModule(nn.Module):
 
 
 def check_module(
-    model: torch.nn.Module, args: Sequence[torch.Tensor], device: str, atol=1e-4, rtol=1e-4, dynamic=False
+    model: torch.nn.Module,
+    args: Sequence[torch.Tensor],
+    device: str,
+    atol=1e-4,
+    rtol=1e-4,
+    dynamic=False,
+    dynamic_indices: Dict[int, List[int]] = None,
 ):
+    """Verify outputs of a module via comparison with PyTorch
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The module to be evaluated.
+    args : Sequence[torch.Tensor]
+        A sequence of input arguments for the model.
+    device : str
+        The target device for evaluation.
+    atol : float, optional
+        The absolute tolerance for numerical comparison of outputs.
+    rtol : float, optional
+        The relative tolerance for numerical comparison of outputs.
+    dynamic : bool, optional
+        If True, enables dynamic shape support when compiling the model.
+    dynamic_indices : dict or None, optional
+        A dictionary mapping argument indices to axes that should be marked as dynamic.
+
+    Returns
+    -------
+    None
+        This function does not return a value. It raises an AssertionError or ValueError if the
+        outputs from the eager and compiled executions differ in shape, data type, or numerical values
+        beyond the specified tolerances.
+    """
     torch_device = device_to_torch(device)
     model = model.to(device_to_torch(device))
     model.eval()
@@ -39,10 +71,13 @@ def check_module(
     # convert args to the given device
     hidet_args = []
     torch_args = []
-    for arg in args:
+    for arg_pos, arg in enumerate(args):
         if isinstance(arg, torch.Tensor):
             hidet_args.append(arg.clone().to(torch_device))
             torch_args.append(arg.clone().to(torch_device))
+            if dynamic_indices is not None and arg_pos in dynamic_indices:
+                for dynamic_axis in dynamic_indices[arg_pos]:
+                    torch._dynamo.mark_dynamic(hidet_args[-1], dynamic_axis)  # pylint: disable=protected-access
         else:
             assert not isinstance(arg, hidet.Tensor)
             hidet_args.append(arg)

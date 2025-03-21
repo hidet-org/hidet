@@ -457,7 +457,8 @@ def test_adv_indexing_with_slices(device):
 
 
 @pytest.mark.parametrize(
-    "input_shape, repeats, dim", [([2, 3, 4], 2, 0), ([1, 2, 9], 3, 1), ([1, 3, 4], 4, 2), ([1, 2, 3], 3, None)]
+    "input_shape, repeats, dim",
+    [([2, 3, 4], 2, 0), ([1, 2, 9], 3, 1), ([1, 3, 4], 4, 2), ([1, 2, 3], 3, None), ([32, 32], 2, -1)],
 )
 def test_repeat_interleave(input_shape, repeats, dim, device):
     input_tensor = torch.randn(input_shape).to(device=device_to_torch(device))

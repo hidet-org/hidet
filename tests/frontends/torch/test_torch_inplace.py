@@ -11,7 +11,6 @@
 # limitations under the License.
 import pytest
 import torch
-from pandas.io.stata import value_label_mismatch_doc
 
 from hidet.testing.torch_utils import check_module, FunctionalModule
 
@@ -44,11 +43,33 @@ def test_setitem_with_tensor(a_shape, b_shape, indices, device):
     )
 
 
+@pytest.mark.parametrize("a_shape, b_shape, indices, dynamic_indices_input", [[[2, 5], [11, 3], (0, 0), [(1, 0)]]])
+def test_setitem_dynamic(a_shape, b_shape, indices, dynamic_indices_input, device):
+    def check_setitem(x, y, indices):
+        x[indices] = y.shape[0]
+        return x
+
+    dynamic_indices = {}
+    for arg_pos, dynamic_axis in dynamic_indices_input:
+        dynamic_indices[arg_pos] = dynamic_indices.get(arg_pos, []) + [dynamic_axis]
+
+    check_module(
+        FunctionalModule(op=check_setitem),
+        args=[torch.randn(a_shape), torch.randn(b_shape), indices],
+        atol=0,
+        rtol=0,
+        device=device,
+        dynamic_indices=dynamic_indices,
+    )
+
+
 @pytest.mark.skipif(not (torch.cuda.is_available() and torch.version.hip is None), reason="CUDA is not available")
 @pytest.mark.parametrize('x_dtype, setvalue_dtype', [(torch.float32, torch.float16), (torch.float16, torch.float32)])
 @pytest.mark.parametrize("x_device, setvalue_device", [['cuda', 'cpu'], ['cpu', 'cuda']])
 def test_setitem_device_dtype_special(x_device, setvalue_device, x_dtype, setvalue_dtype):
-    x = torch.randn([3, 3, 3], device=x_device, dtype=x_dtype)
+    import random
+
+    x = torch.randn([3, 3, random.randint(3, 9)], device=x_device, dtype=x_dtype)
     setvalue = torch.randn([3, 3, 2], device=setvalue_device, dtype=setvalue_dtype)
 
     def setitem_func(x, setvalue):

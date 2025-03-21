@@ -309,6 +309,8 @@ class RepeatInterleaveTask(Task):
             # if dim is None: flatten the input tensor and repeat the whole tensor
             output_shape = [prod(data.shape) * repeats]
         else:
+            if dim < 0:
+                dim += len(data.shape)
             output_shape = data.shape[:dim] + [data.shape[dim] * repeats] + data.shape[dim + 1 :]
 
         def fmap(*output_indices):
@@ -938,7 +940,9 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
 
 def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
     rank = len(x.shape)
-    if rank == 2:
+    if axes is not None and any(axis < -rank or axis >= rank for axis in axes):
+        raise ValueError('Invalid axes provided: {}'.format(axes))
+    if rank == 2 and not any(isinstance(mode, Expr) for mode in x.shape):
         return TransposeOp2D(x).outputs[0]
     if axes is None:
         axes = list(reversed(range(rank)))

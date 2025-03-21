@@ -396,7 +396,6 @@ def setitem(x: Tensor, item, setvalue):
 
     if isinstance(setvalue, Tensor):
         if x.device != setvalue.device:
-            # turns out setvalue can be on any device, and it will be moved to x.device
             setvalue = ops.transfer(setvalue, x.device)
         if setvalue.dtype != x.dtype:
             setvalue = ops.cast(setvalue, x.dtype)
@@ -450,11 +449,14 @@ def setitem(x: Tensor, item, setvalue):
             ends.append(v.stop)
             steps.append(v.step)
 
+    # record non-range axes. `setvalue.shape` must match exactly the shape of the slice selected from x
+    index_dims = [axis for axis, index in enumerate(item) if isinstance(index, int)]
     if isinstance(setvalue, Tensor):
         squeeze_dims = [i for i, dimlen in enumerate(setvalue.shape) if dimlen == 1]
         setvalue = ops.squeeze(setvalue, squeeze_dims)
 
-    out = ops.set_strided_slice(x, setvalue, starts, ends, steps)
+    out = ops.set_strided_slice(x, setvalue, starts, ends, index_dims, steps)
+
     return out
 
 
@@ -587,7 +589,7 @@ def interpolate(
 @register_function(torch.true_divide)
 @register_method(torch.Tensor.true_divide)
 @register_method(torch.Tensor.true_divide_)
-def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
+def truediv(x: Union[Tensor, Expr, Number], y: Union[Tensor, Expr, Number]):
     import hidet
 
     def is_integer(v: Union[Tensor, int, float]) -> bool:
@@ -609,45 +611,42 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
 @register_method(torch.Tensor.div_)
 @register_method(torch.Tensor.divide)
 @register_method(torch.Tensor.divide_)
-def div(x: Union[Tensor, Number], y: Union[Tensor, Number], *, rounding_mode: Optional[str] = None, out=None):
-    result = truediv(x, y)
+def div(
+    x: Union[Tensor, Expr, Number], y: Union[Tensor, Expr, Number], *, rounding_mode: Optional[str] = None, out=None
+):
     if rounding_mode is None:
-        return result
+        result = truediv(x, y)
     elif rounding_mode == 'floor':
         # Turns out the `floor` rounding mode will follow a slightly different type promotion rule,
         # and this subtle difference is the cause of issue #264.
         from hidet import int32, float32
 
-        primitive_type_map = {int: int32, float: float32, bool: int32}
-
-        x_dtype = x.dtype if isinstance(x, Tensor) else primitive_type_map[type(x)]
-        y_dtype = y.dtype if isinstance(y, Tensor) else primitive_type_map[type(y)]
-
-        result = ops.floor(result)
-
-        # `rounding_mode = 'floor'` retains the integer type if both inputs are integers
-        if x_dtype.is_integer() and y_dtype.is_integer():
-            return result.to(dtype=promote_type(x_dtype, y_dtype))
+        if isinstance(x, Expr) or isinstance(y, Expr):
+            result = x // y
         else:
-            return result
-
+            primitive_type_map = {int: int32, float: float32, bool: int32}
+            x_dtype = x.dtype if isinstance(x, Tensor) else primitive_type_map[type(x)]
+            y_dtype = y.dtype if isinstance(y, Tensor) else primitive_type_map[type(y)]
+            result = ops.floor(truediv(x, y))
+            # `rounding_mode = 'floor'` retains the integer type if both inputs are integers
+            if x_dtype.is_integer() and y_dtype.is_integer():
+                result = result.to(dtype=promote_type(x_dtype, y_dtype))
     else:
         assert rounding_mode == 'trunc', 'rounding_mode should be one of "floor" or "trunc"'
         if isinstance(result, Tensor):
             dtype = result.dtype
             result = result.to(dtype='int64')
-            return result.to(dtype=dtype)
+            result = result.to(dtype=dtype)
         else:
-            if isinstance(x, float) or isinstance(y, float):
-                return float(int(result))
-            return int(result)
+            result = float(int(result)) if isinstance(x, float) or isinstance(y, float) else int(result)
+    return result
 
 
 @register_function(torch.floor_divide)
 @register_method(torch.Tensor.floor_divide)
 @register_method(torch.Tensor.floor_divide_)
 @register_function(operator.floordiv)
-def floor_divide(x: Union[Tensor, Number], y: Union[Tensor, Number]):
+def floor_divide(x: Union[Tensor, Expr, Number], y: Union[Tensor, Expr, Number]):
     return div(x, y, rounding_mode='floor')
 
 
@@ -728,6 +727,23 @@ def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=Fals
     dtype = dtype_from_torch(dtype)
 
     return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)
+
+
+@register_method(torch.Tensor.new_empty)
+def torch_new_empty(tensor: Tensor, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+
+    if len(size) == 1 and isinstance(size[0], (list, tuple)):
+        size = size[0]
+
+    dtype = tensor.dtype if dtype is None else dtype_from_torch(dtype)
+    device = tensor.device if device is None else device_from_torch(device)
+    _ = pin_memory
+    _ = requires_grad
+
+    # TODO(ryan): how to pass in unitialized data?
+    return ops.full(size, dtype=dtype, device=device, value=dtype.zero)
 
 
 @register_function(torch.ones)
@@ -1968,9 +1984,11 @@ def torch_unfold(input: Tensor, kernel_size, dilation=1, padding=0, stride=1) ->
 
 
 @register_method(torch.Tensor.scatter_)
-def torch_scatter_(input: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str = None) -> Tensor:
+def torch_scatter_(input: Tensor, dim: int, index: Tensor, src: Union[Tensor, Number], reduce: str = None) -> Tensor:
     if reduce is None:
         reduce = 'replace'
+    if isinstance(src, Number):
+        src = ops.full(index.shape, src, dtype=input.dtype, device=input.device)
     return ops.scatter_(input, dim, index, src, reduce)
 
 
@@ -2028,9 +2046,14 @@ def torch_wait_tensor(x: Tensor):
 
 @register_function(getattr)
 def torch_getattr(obj, attr):
-    if isinstance(obj, Tensor) and attr == 'is_cpu':
+    if not isinstance(obj, Tensor):
+        raise RuntimeError(f'Unsupported getattr: {obj}, {attr}')
+    if attr == 'is_cpu':
         return obj.device.kind == 'cpu'
-    raise RuntimeError('Unsupported getattr')
+    elif attr == 'T':
+        return ops.transpose(obj, list(reversed(range(len(obj.shape)))))
+
+    raise RuntimeError(f'Unsupported getattr: {obj}, {attr}')
 
 
 # Below torch function might appear in fxgraph on dynamo level. But dynamo resolved it by itself.

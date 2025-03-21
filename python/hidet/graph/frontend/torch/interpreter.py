@@ -222,7 +222,6 @@ class Interpreter:
         for idx, node in enumerate(self.graph.nodes):
             assert isinstance(node, torch.fx.Node)
             logger.debug(f"interpreting node {idx}: {node.format_node()}")
-
             if node.op == "placeholder":
                 arg = next(args_iter)
                 if isinstance(arg, torch.Tensor):

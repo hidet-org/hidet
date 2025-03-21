@@ -21,7 +21,7 @@ from hidet.utils import prod, same_list
 from hidet.ir.cute import TensorLayout
 from hidet.graph.tensor import from_torch
 from hidet.graph.frontend.torch.utils import dtype_to_torch
-from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
+from .utils import Task, Operator, Tensor, TensorNode, TensorInput, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from .utils import normalize_slice, normalize_dim
 
@@ -195,11 +195,57 @@ class WhereTask(Task):
         super().__init__(name='where', inputs=[cond, x, y], outputs=[z], inverse_map=inverse_map)
 
 
+class SetStridedSliceTensorTask(Task):
+    def __init__(
+        self,
+        data: TensorInput,
+        setvalue: TensorInput,
+        starts: List[Optional[int]],
+        ends: List[Optional[int]],
+        axes: List[int],
+        index_dims: List[int],
+        strides: List[int],
+    ):
+        assert len(starts) == len(ends) == len(axes) == len(strides)
+        if len(axes) != len(set(axes)):
+            raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
+        output_shape = list(data.shape)
+        axis2info = {}
+        for axis, start, end, stride in zip(axes, starts, ends, strides):
+            if stride == 0:
+                raise NotImplementedError(
+                    'Stride can not be 0 in slicing: '
+                    'starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides)
+                )
+            if is_constant(output_shape[axis]) and output_shape[axis] < 0:
+                raise NotImplementedError(
+                    'Slice result can not be: '
+                    'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides)
+                )
+            axis2info[axis] = (start, end, stride)
+
+        def fmap(indices):
+            new_val = True
+            new_indices = []
+            for axis, index in enumerate(indices):
+                start, end, stride = axis2info[axis]
+                new_val = if_then_else(
+                    logical_or(index < start, index >= end, (index - start) % stride != 0), False, new_val
+                )
+                if axis not in index_dims:
+                    new_indices.append((index - start) // stride)
+
+            return if_then_else(new_val, setvalue[new_indices], data[indices])
+
+        out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
+        super().__init__(name='set_strided_slice_tensor', inputs=[data, setvalue], outputs=[out])
+
+
 class SetStridedSliceTask(Task):
     def __init__(
         self,
-        data: TensorNode,
-        setvalue: Union[int, float, TensorNode],
+        data: TensorInput,
+        setvalue: PyScalar,
         starts: List[Optional[int]],
         ends: List[Optional[int]],
         axes: List[int],
@@ -223,37 +269,18 @@ class SetStridedSliceTask(Task):
                 )
             axis2info[axis] = (start, end, stride)
 
-        if isinstance(setvalue, TensorNode):
-            inputs = [data, setvalue]
-        else:
-            inputs = [data]
-
         def fmap(indices):
-            if isinstance(setvalue, TensorNode):
-                ret = setvalue
-            else:
-                ret = data.type.dtype(setvalue)
-
             new_val = True
-            new_indices = []
             for axis, index in enumerate(indices):
                 start, end, stride = axis2info[axis]
                 new_val = if_then_else(
                     logical_or(index < start, index >= end, (index - start) % stride != 0), False, new_val
                 )
-                if start + 1 < end:
-                    new_indices.append((index - start) // stride)
 
-            if isinstance(setvalue, TensorNode):
-                if len(new_indices) != 0:
-                    ret = ret[new_indices]
-                else:
-                    ret = ret[(0,) * ret.ndim]
-
-            return if_then_else(new_val, ret, data[indices])
+            return if_then_else(new_val, data.type.dtype(setvalue), data[indices])
 
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
-        super().__init__(name='set_slice', inputs=inputs, outputs=[out])
+        super().__init__(name='set_strided_slice', inputs=[data], outputs=[out])
 
 
 class RollTask(Task):
@@ -795,9 +822,10 @@ class SetStridedSliceOp(Operator):
     def __init__(
         self,
         data: Tensor,
-        setvalue: Optional[Union[int, float, Tensor]],
+        setvalue: Optional[Union[Tensor, Expr, PyScalar]],
         starts: Sequence[Optional[int]],
         ends: Sequence[Optional[int]],
+        index_dims: List[int],
         strides: Optional[Sequence[Optional[int]]] = None,
     ):
         if setvalue is None:
@@ -805,11 +833,11 @@ class SetStridedSliceOp(Operator):
 
         starts, ends, axes, strides = normalize_slice(data.shape, starts, ends, axes=None, strides=strides)
 
-        attributes = {'starts': starts, 'ends': ends, 'strides': strides}
+        attributes = {'starts': starts, 'ends': ends, 'strides': strides, 'index_dims': index_dims}
 
         if isinstance(setvalue, Tensor):
-            task = SetStridedSliceTask(
-                input_like(data, 'data'), input_like(setvalue, 'setvalue'), starts, ends, axes, strides
+            task = SetStridedSliceTensorTask(
+                input_like(data, 'data'), input_like(setvalue, 'setvalue'), starts, ends, axes, index_dims, strides
             )
             inputs = [data, setvalue]
         else:
@@ -1186,9 +1214,11 @@ def composite_elementwise(
 
 def set_strided_slice(
     data: Tensor,
-    setvalue: Optional[Union[int, float]],
+    setvalue: Optional[Union[Tensor, Expr, PyScalar]],
     starts: Sequence[Optional[int]],
     ends: Sequence[Optional[int]],
+    index_dims: List[int],
     strides: Optional[Sequence[Optional[int]]] = None,
 ) -> Tensor:
-    return SetStridedSliceOp(data, setvalue, starts, ends, strides).outputs[0]
+
+    return SetStridedSliceOp(data, setvalue, starts, ends, index_dims, strides).outputs[0]
