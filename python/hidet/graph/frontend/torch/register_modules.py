@@ -258,13 +258,9 @@ class HidetLayerNorm(HidetModule):
 class HidetGroupNorm(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.GroupNorm)
+        assert x.shape[1] == self.mod.num_channels
         return reg_funcs.group_norm(
-            x=x,
-            num_groups=self.mod.num_groups,
-            num_channels=self.mod.num_channels,
-            weight=self.param('weight'),
-            bias=self.param('bias'),
-            eps=self.mod.eps,
+            x=x, num_groups=self.mod.num_groups, weight=self.param('weight'), bias=self.param('bias'), eps=self.mod.eps
         )
 
 

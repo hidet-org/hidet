@@ -12,7 +12,7 @@
 from typing import Optional, Tuple, List
 import pytest
 import torch
-from hidet.testing.torch_utils import check_module
+from hidet.testing.torch_utils import check_module, FunctionalModule
 
 
 @pytest.mark.parametrize('shape', [[2, 2]])
@@ -32,6 +32,50 @@ def test_group_norm(shape, num_groups, dtype, device):
         torch.nn.GroupNorm(num_groups=num_groups, num_channels=shape[1]),
         [torch.randn(shape, dtype=dtype)],
         device=device,
+    )
+
+
+@pytest.mark.parametrize(
+    'shape',
+    [
+        [1, 4, 32, 32],  # Standard image size
+        [2, 8, 16, 16],  # Batch size 2, more channels
+        [1, 16, 8, 8],  # More channels, smaller spatial dims
+        [4, 12, 24, 24],  # Larger batch, non-power-2 channels
+    ],
+)
+@pytest.mark.parametrize('num_groups', [1, 2, 4, 6])  # Added more group variations
+@pytest.mark.parametrize('dtype', [torch.float32])
+@pytest.mark.parametrize('eps', [1e-5])
+def test_functional_group_norm(shape, num_groups, dtype, eps, device):
+    # Skip invalid combinations where num_channels is not divisible by num_groups
+    if shape[1] % num_groups != 0:
+        pytest.skip(f"Skipping: {shape[1]} channels not divisible by {num_groups} groups")
+
+    # Create random input
+    x = torch.randn(shape, dtype=dtype, device=device)
+
+    # Create random weight and bias
+    num_channels = shape[1]
+    weight = torch.randn(num_channels, dtype=dtype, device=device)
+    bias = torch.randn(num_channels, dtype=dtype, device=device)
+
+    # Test with weight and bias
+    check_module(
+        FunctionalModule(op=lambda x: torch.nn.functional.group_norm(x, num_groups, weight, bias, eps)),
+        [x],
+        device=device,
+        atol=1e-4,
+        rtol=1e-4,
+    )
+
+    # Test without weight and bias
+    check_module(
+        FunctionalModule(op=lambda x: torch.nn.functional.group_norm(x, num_groups)),
+        [x],
+        device=device,
+        atol=1e-4,
+        rtol=1e-4,
     )
 
 

@@ -802,17 +802,10 @@ def layer_norm(
 
 @register_function(torch.nn.functional.group_norm)
 def group_norm(
-    x: Tensor,
-    num_groups: int,
-    num_channels: int,
-    weight: Optional[Tensor] = None,
-    bias: Optional[Tensor] = None,
-    eps: float = 1e-5,
+    x: Tensor, num_groups: int, weight: Optional[Tensor] = None, bias: Optional[Tensor] = None, eps: float = 1e-5
 ):
-    if x.shape[1] != num_channels:
-        raise ValueError(
-            "num_channels does not match tensor shape at index 2, expect {} but got {}".format(num_channels, x.shape[2])
-        )
+    num_channels = x.shape[1]
+
     if num_channels % num_groups != 0:
         raise ValueError("num_channels {} must be divisible by num_groups {}".format(num_channels, num_groups))
 
