@@ -355,7 +355,6 @@ class CompiledGraph:
 
         global global_cuda_workspace
         if global_cuda_workspace is not None and global_cuda_workspace.num_bytes < required_cuda_workspace:
-            global_cuda_workspace.__del__()
             global_cuda_workspace = None
         if global_cuda_workspace is None:
             global_cuda_workspace = Storage.new('cuda', required_cuda_workspace)
