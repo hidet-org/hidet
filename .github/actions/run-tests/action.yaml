@@ -41,5 +41,10 @@ runs:
     - name: Run tests
       shell: bash
       run: |
+        (while true; do echo "Heartbeat: $(date)"; sleep 30; done) &
+        echo_loop_pid=$!
+
         rm -rf ~/.config/hidet
-        python -m pytest -v --durations=20 --clear-cache ${{ inputs.path }}
+        nice -n 10 python -m pytest -v --durations=20 --clear-cache ${{ inputs.path }}
+
+        kill $echo_loop_pid
