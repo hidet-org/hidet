@@ -29,14 +29,16 @@ from hidet.runtime.device import Device, instantiate_device
 
 
 def _simplify_dim(dim: Union[int, Expr]) -> Union[int, SymbolVar]:
-    from hidet.ir.tools import simplify
+    from hidet.transforms.rule_based_simplifier import RuleBasedSimplifier
+
+    simplifier = RuleBasedSimplifier()
 
     if isinstance(dim, (int, SymbolVar)):
         return dim
     elif isinstance(dim, Constant):
         return int(dim)
     else:
-        return simplify(dim)
+        return simplifier(dim)
 
 
 @set_module('hidet')
