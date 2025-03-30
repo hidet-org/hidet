@@ -11,8 +11,8 @@
 # limitations under the License.
 from typing import Union
 
-from hidet.ir.expr import Expr
-from hidet.ir.type import FuncType, void_p, string_type
+from hidet.ir.expr import Expr, as_expr
+from hidet.ir.type import FuncType, void_p, string_type, void
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.ir.dtypes import int64, boolean, int32
 from hidet.utils import initialize
@@ -42,7 +42,15 @@ def register_functions():
         name='get_symbol_value', func_or_type=FuncType([string_type()], int32), codegen_name='get_symbol_value'
     )
     register_primitive_function(
-        name='set_symbol_value', func_or_type=FuncType([string_type(), int32], void_p), codegen_name='set_symbol_value'
+        name='set_symbol_value', func_or_type=FuncType([string_type(), int32], void), codegen_name='set_symbol_value'
+    )
+    register_primitive_function(
+        name="set_ptr_symbol_value",
+        func_or_type=FuncType([string_type(), void_p], void),
+        codegen_name="set_ptr_symbol_value",
+    )
+    register_primitive_function(
+        name="get_ptr_symbol_value", func_or_type=FuncType([string_type()], void_p), codegen_name="get_ptr_symbol_value"
     )
     register_primitive_function(
         name='memory_planner_init', func_or_type=FuncType([int32], void_p), codegen_name='memory_planner_init'
@@ -90,6 +98,43 @@ def get_symbol_value(name: Union[str, Expr]) -> int32:
 
 def set_symbol_value(name: Union[str, Expr], value: Union[int, Expr]):
     return call_primitive_func('set_symbol_value', [name, value])
+
+
+def get_ptr_symbol_value(name: Union[str, Expr]) -> Expr:
+    """
+    Get the value of a symbol by its name. The symbol has to be a pointer type.
+
+    Parameters
+    ----------
+    name: str
+        The name of the symbol
+
+    Returns
+    -------
+    ret: Expr
+        A call expression of getting the symbol value.
+    """
+    return call_primitive_func("get_ptr_symbol_value", [as_expr(name)])
+
+
+def set_symbol_value_ptr(name: Union[str, Expr], value: Expr) -> Expr:
+    """
+    Set the value of a symbol by its name. The symbol has to be a pointer type.
+
+    Parameters
+    ----------
+    name: str
+        The name of the symbol
+
+    value: Expr
+        The value of the symbol. It must be with pointer type.
+
+    Returns
+    -------
+    ret: Expr
+        The call expression of setting the symbol value.
+    """
+    return call_primitive_func("set_ptr_symbol_value", [as_expr(name), value])
 
 
 def memory_planner_init(idx: Union[int, Expr]):

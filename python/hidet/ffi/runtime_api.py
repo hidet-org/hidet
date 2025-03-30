@@ -29,6 +29,8 @@ class RuntimeAPI:
     _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
+    _get_ptr_symbol_value = get_func('get_ptr_symbol_value', [c_char_p], c_void_p)
+    _set_ptr_symbol_value = get_func('set_ptr_symbol_value', [c_char_p, c_void_p], None)
     _request_cuda_workspace = get_func('request_cuda_workspace', [c_size_t, c_bool], c_void_p)
     _set_nccl_comms = get_func('set_nccl_comms', [c_int32, c_void_p], None)
     _get_use_torch_stream = get_func('get_use_torch_cuda_stream', [], c_bool)
@@ -86,6 +88,16 @@ class RuntimeAPI:
     def set_symbol_value(name: str, value: int) -> None:
         name = name.encode('utf-8')
         RuntimeAPI._set_symbol_value(name, value)
+
+    @staticmethod
+    def get_ptr_symbol_value(name: str) -> int:
+        name = name.encode('utf-8')
+        return RuntimeAPI._get_ptr_symbol_value(name)
+
+    @staticmethod
+    def set_ptr_symbol_value(name: str, value: int) -> None:
+        name = name.encode('utf-8')
+        RuntimeAPI._set_ptr_symbol_value(name, value)
 
     @staticmethod
     def set_nccl_comms(comms: Array) -> None:

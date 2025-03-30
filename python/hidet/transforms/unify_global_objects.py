@@ -14,7 +14,7 @@ from hidet.ir.expr import Var, SymbolVar, symbol_var
 from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives.vars import registered_primitive_variables, lookup_primitive_variable
-from hidet.ir.type import DataType, data_type
+from hidet.ir.type import DataType, PointerType, data_type
 from hidet.transforms import Pass
 
 
@@ -24,8 +24,8 @@ class UnifyGlobalObjectsRewriter(IRRewriter):
 
     def visit_Var(self, var: Var):
         if isinstance(var, SymbolVar):
-            assert isinstance(var.type, DataType)
-            return symbol_var(var.name, var.type.name)
+            assert isinstance(var.type, (DataType, PointerType))
+            return symbol_var(var.name, var.type)
         elif var.name is not None and var.name in registered_primitive_variables:
             return lookup_primitive_variable(var.name)
         else:

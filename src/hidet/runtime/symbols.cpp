@@ -13,6 +13,7 @@
 #include <hidet/runtime/symbols.h>
 
 static std::map<std::string, int32_t> symbol_mapping;
+static std::map<std::string, void *> symbol_mapping_ptr;
 
 DLL void reset_symbol_table() {
     try {
@@ -43,4 +44,21 @@ DLL void set_symbol_value(const char *symbol_name, int32_t value) {
         hidet_set_last_error(e.what());
         return;
     }
+}
+
+DLL void *get_ptr_symbol_value(const char *symbol_name) {
+    try {
+        auto it = symbol_mapping_ptr.find(symbol_name);
+        if (it == symbol_mapping_ptr.end()) {
+            LOG(ERROR) << "Symbol " << symbol_name << " not found";
+        }
+        return it->second;
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return 0;
+    }
+}
+
+DLL void set_ptr_symbol_value(const char *symbol_name, void *value) {
+    symbol_mapping_ptr[symbol_name] = value;
 }

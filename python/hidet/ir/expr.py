@@ -19,8 +19,9 @@ import numpy as np
 import hidet.option
 from hidet.ir.dtypes import boolean, int32, int64, uint64, IntegerType, promote_type
 from .node import Node
+from .dtypes import default_float_dtype, default_int_dtype
 from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
-from .type import tensor_pointer_type, string_type, tensor_type, data_type
+from .type import tensor_pointer_type, string_type, tensor_type, data_type, type_equal
 
 PyScalar = Union[bool, int, float, complex, str]
 
@@ -688,6 +689,22 @@ def convert(
         raise NotImplementedError(type(obj))
 
 
+def as_expr(obj: Union[float, bool, int, str, Expr]) -> Expr:
+    if isinstance(obj, Expr):
+        return obj
+    elif isinstance(obj, bool):
+        return boolean.constant(obj)
+    elif isinstance(obj, int):
+        assert default_int_dtype.min_value <= obj <= default_int_dtype.max_value, obj
+        return default_int_dtype.constant(obj)
+    elif isinstance(obj, float):
+        return default_float_dtype.constant(obj)
+    elif isinstance(obj, str):
+        return Constant(obj, const_type=string_type())
+    else:
+        raise ValueError(obj)
+
+
 def var(hint: str = None, dtype='int32'):
     if isinstance(hint, str):
         assert set(hint) <= set(string.ascii_letters + '_.' + string.digits)
@@ -1008,14 +1025,18 @@ def constant_int(value: int, const_type: IntegerType) -> Constant:
         return Constant(value, const_type)
 
 
-def symbol_var(name: str, dtype='int32') -> SymbolVar:
-    dtype = data_type(dtype)
+def symbol_var(name: str, dtype: Union[DataType, PointerType, str] = 'int32') -> SymbolVar:
+    if isinstance(dtype, str):
+        dtype = data_type(dtype)
+    assert isinstance(
+        dtype, (DataType, PointerType)
+    ), "symbolic variable must be with either a data type or a pointer type"
     if name not in SymbolVar.name2symbol:
         if not name.isidentifier():
             raise ValueError('Invalid symbol name "{}", must be a valid identifier'.format(name))
         SymbolVar.name2symbol[name] = SymbolVar(name, dtype)
     else:
-        if SymbolVar.name2symbol[name].type != dtype:
+        if not type_equal(SymbolVar.name2symbol[name].type, dtype):
             raise ValueError(
                 'SymbolVar "{}" already exists with dtype {}, new dtype is {}'.format(
                     name, SymbolVar.name2symbol[name].type, dtype

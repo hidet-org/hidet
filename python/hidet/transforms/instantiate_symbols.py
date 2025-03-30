@@ -11,13 +11,15 @@
 # limitations under the License.
 from typing import List, Dict, Optional, Set
 
-from hidet.ir.expr import Var, SymbolVar, Call
+from hidet.ir.expr import Var, SymbolVar, Call, cast
+from hidet.ir.stmt import LetStmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
+from hidet.ir.dtypes import int32
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives import is_primitive_function
-from hidet.ir.primitives.runtime import get_symbol_value
-from hidet.ir.stmt import LetStmt, LaunchKernelStmt
+from hidet.ir.primitives.runtime import get_symbol_value, get_ptr_symbol_value
+from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.tools import collect
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.transforms import Pass
@@ -87,7 +89,15 @@ class InstantiateSymbolsRewriter(IRRewriter):
 
             if func.kind == 'public':
                 # for public function, we call the runtime primitive functions to get the symbol values
-                symbol_values = [get_symbol_value(symbol.name) for symbol in ordered_symbols]
+                symbol_values = []
+                for symbol in ordered_symbols:
+                    if symbol.type.is_data_type() and symbol.type == int32:
+                        symbol_values.append(get_symbol_value(symbol.name))
+                    elif symbol.type.is_pointer():
+                        symbol_values.append(cast(get_ptr_symbol_value(symbol.name), dtype=symbol.type))
+                    else:
+                        raise NotImplementedError(symbol.type)
+
                 if len(symbol_params) > 0:
                     body = LetStmt(bind_vars=symbol_params, bind_values=symbol_values, body=body)
             elif func.kind in [
