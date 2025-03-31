@@ -23,7 +23,9 @@ from hidet.ir.cute.type import TiledTensorType
 
 from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
-from hidet.ir.stmt import DeclareStmt
+from hidet.ir.stmt import DeclareStmt, IfStmt
+from hidet.ir.builders import StmtBuilder
+
 
 from hidet.ir.primitives import (
     ldg128,
@@ -283,19 +285,25 @@ class UniversalCopyInstruction(CopyInstruction):
         return None
 
     def __call__(self, src: Expr, dst: Expr, mask: Optional[Expr] = None, **kwargs):
-        from hidet.ir.stmt import IfStmt, AssignStmt
-
         # fallback case
         if self.apply is None:
             if self.bytes_per_inst == 1:
                 access_dtype = u8
             else:
                 raise NotImplementedError()
+            sb = StmtBuilder()
+            pointer = cast(dst, ~access_dtype)
+            pointer_type = infer_type(pointer)
+            pointer_var = Var("addr", pointer_type)
+            sb.declare(pointer_var, pointer)
             if mask is not None:
                 assert self.require_mask
-                return IfStmt(mask, AssignStmt(deref(cast(dst, ~access_dtype)), deref(cast(src, ~access_dtype))))
+                with sb.if_then(mask):
+                    sb.buffer_store(pointer_var, [0], deref(cast(src, ~access_dtype)))
+                return sb.finish()
             else:
-                return AssignStmt(deref(cast(dst, ~access_dtype)), deref(cast(src, ~access_dtype)))
+                sb.buffer_store(pointer_var, [0], deref(cast(src, ~access_dtype)))
+                return sb.finish()
         operands: List[Expr] = []
         if self.src_scope == DeclareScope.Register:
             operands.extend(self._get_register_pointers(src))
@@ -418,8 +426,6 @@ class ReduceInstruction(CopyInstruction):
             return ty.base_type
 
     def __call__(self, src: Expr, dst: Expr, mask: Optional[Expr] = None):
-        from hidet.ir.stmt import IfStmt
-
         if self.apply is atomic_add:
             if mask is not None:
                 return IfStmt(mask, self.apply(dst, src[0]))

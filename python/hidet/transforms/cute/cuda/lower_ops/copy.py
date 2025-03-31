@@ -39,7 +39,7 @@ class MaskEmitter(OpEmitter):
         base = var("base")
         self.declare(base, src_thrval_layout[0][0](threadIdx.x))
         with self.for_grid([nr_regs]) as i:
-            self.assign(dst[i], 0)
+            self.buffer_store(dst, [i], u32(0))
         with self.for_grid(extents) as indices:
             idx = var("idx")
             mask_idx = var("mask_idx")
@@ -52,7 +52,7 @@ class MaskEmitter(OpEmitter):
             self.declare(crd, base + rest_layout(indices))
             cond = [e < v for v, e in zip(args, idx2crd(crd, shape))]
             self.declare(pred, logical_and(*cond))
-            self.assign(dst[mask_idx], dst[mask_idx] | (cast(pred, u32) << bit))
+            self.buffer_store(dst, [mask_idx], dst[mask_idx] | (cast(pred, u32) << bit))
 
 
 @register_impl(Copy)

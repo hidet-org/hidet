@@ -28,7 +28,16 @@ from hidet.ir.primitives.cuda.barrier import (
     barrier_sync,
 )
 from hidet.ir.primitives.debug import printf
-from hidet.ir.stmt import AssertStmt, AssignStmt, BlackBoxStmt, DeclareStmt, DeclareScope, SeqStmt, WhileStmt
+from hidet.ir.stmt import (
+    AssertStmt,
+    AssignStmt,
+    BlackBoxStmt,
+    DeclareStmt,
+    DeclareScope,
+    SeqStmt,
+    WhileStmt,
+    BufferStoreStmt,
+)
 from hidet.ir.type import tensor_pointer_type
 from hidet.ir.dtypes import i32, u32, u64
 from hidet.lang import attrs, script
@@ -117,7 +126,7 @@ def test_mbarrier_cp_async_single_cta(wait_type: str):
 
             fb += AssertStmt(smem_a[threadIdx.x] == Constant(1, i32), msg="Async assignment eventually appears")
 
-            fb += AssignStmt(smem_a[threadIdx.x], Constant(0, i32))
+            fb += BufferStoreStmt(smem_a, [threadIdx.x], Constant(0, i32))
             fb += AssertStmt(smem_a[threadIdx.x] == 0, msg="Immediate assignment")
 
         fb += mbarrier_invalidate(mbar)

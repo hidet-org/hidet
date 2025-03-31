@@ -193,6 +193,7 @@ class EvaluateStmt(Stmt):
 class DeclareStmt(Stmt):
     def __init__(self, var, init: Optional[Expr] = None, is_static=False, scope: Optional[DeclareScope] = None):
         super().__init__()
+        assert isinstance(var, Var)
         self.var: Var = var
         self.init: Optional[Expr] = convert(init)
         self.is_static: bool = is_static
@@ -212,6 +213,7 @@ class BufferStoreStmt(Stmt):
 class AssignStmt(Stmt):
     def __init__(self, var, value):
         super().__init__()
+        assert isinstance(var, Var)
         self.var: Var = var
         self.value: Expr = convert(value)
 
