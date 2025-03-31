@@ -44,7 +44,8 @@ runs:
         (while true; do echo "Heartbeat: $(date)"; sleep 30; done) &
         echo_loop_pid=$!
 
+        # Ensure the heartbeat is stopped on exit, even if pytest fails.
+        trap "kill $echo_loop_pid" EXIT
+
         rm -rf ~/.config/hidet
         nice -n 10 python -m pytest -v --durations=20 --clear-cache ${{ inputs.path }}
-
-        kill $echo_loop_pid
