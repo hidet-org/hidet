@@ -14,7 +14,8 @@ import numpy as np
 import torch
 from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
-from hidet.ir.dtypes import bfloat16
+from hidet.ir.dtypes import bfloat16, dtype_to_numpy
+from hidet.ir.type import data_type
 from hidet.testing.torch_utils import device_to_torch
 
 
@@ -327,3 +328,58 @@ def init_hidet(cache=''):
         hidet.option.compile_server.password(os.environ.get('CI_CS_PASSWORD'))
         hidet.option.compile_server.repo(os.environ.get('REPO_NAME').strip(), os.environ.get('REPO_BRANCH').strip())
         hidet.option.compile_server.enable(flag=True)
+
+
+def check_3_execution_paths(
+    shape: Sequence[int], hidet_ops, numpy_ops, device: str = 'auto', dtype: str = 'float32', atol=0.0, rtol=0.0
+):
+    """
+    Test operations with three different execution paths:
+    1. Forward path - direct execution
+    2. Slow path - compiled graph with cleared dispatch table
+    3. Fast path - compiled graph with populated dispatch table
+
+    Args:
+        shape: Shape of the input tensor
+        hidet_ops: Function that takes a hidet.Tensor and returns a hidet.Tensor after applying operations
+        numpy_ops: Function that takes a numpy array and returns a numpy array after applying operations
+        device: Device to run the test on ('auto', 'cuda', 'hip', 'cpu')
+        dtype: Hidet data type (e.g., 'float32', 'int32', etc.)
+        atol: Absolute tolerance for comparison
+        rtol: Relative tolerance for comparison
+    """
+    assert device in ['auto', 'cuda', 'hip', 'cpu']
+    if device == 'auto':
+        for dev in resolve_test_devices():
+            check_3_execution_paths(shape, hidet_ops, numpy_ops, dev, dtype, atol, rtol)
+        return
+
+    # Prepare input data
+    np_input = np.array(np.random.randn(*shape)).astype(dtype_to_numpy(data_type(dtype)))
+    hidet_input = asarray(np_input).to(device=device)
+
+    # Create symbolic tensor and build graph
+    sym = symbol(shape, dtype=dtype, device=device)
+    out = hidet_ops(sym)
+    graph = trace_from(out, sym)
+
+    # 1. The first path is the forward path
+    y1 = graph(hidet_input).cpu()
+
+    # Compile graph
+    compiled_graph = graph.build()
+
+    # 2. The second path is the `slow_path`
+    compiled_graph.dispatch_table.clear()
+    y2 = compiled_graph(hidet_input).cpu()
+
+    # 3. The third path is the `fast_path`
+    y3 = compiled_graph(hidet_input).cpu()
+
+    # Calculate expected result with numpy
+    expected = numpy_ops(np_input)
+
+    # Compare all results
+    assert_allclose(y1, expected, atol=atol, rtol=rtol)
+    assert_allclose(y2, expected, atol=atol, rtol=rtol)
+    assert_allclose(y3, expected, atol=atol, rtol=rtol)

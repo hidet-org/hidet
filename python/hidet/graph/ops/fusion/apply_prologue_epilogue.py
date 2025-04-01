@@ -46,7 +46,7 @@ from hidet.utils import strict_zip, prod
 from hidet.utils.structure import DirectedGraph
 from hidet.graph.graph_utils.functors import GraphVisitor
 
-from hidet.graph.ops.transform import CastOp, ReshapeTask, RearrangeTask
+from hidet.graph.ops.transform import CastOp, ReshapeTask, RearrangeTask, SqueezeTask, UnsqueezeTask
 from hidet.graph.ops.arithmetic import (
     UnaryElementwiseOp,
     BinaryElementwiseOp,
@@ -86,7 +86,7 @@ from hidet.transforms.cute.cuda.lower_cute_dialect import LowerCuteDialectRewrit
 from .fused_operator import FusedTask
 
 
-TENSOR_MANIPULATION = (ReshapeTask, RearrangeTask)
+TENSOR_MANIPULATION = (ReshapeTask, RearrangeTask, SqueezeTask, UnsqueezeTask)
 ELEMENTWISE = (
     CastOp,
     UnaryElementwiseOp,

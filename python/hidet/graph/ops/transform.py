@@ -20,6 +20,8 @@ from hidet.utils import prod
 from hidet.graph.tensor import from_torch
 from hidet.graph.frontend.torch.utils import dtype_to_torch
 from hidet.ir.cute import TensorLayout, compact_row_major, coalesce
+from hidet.ir.task import Target
+from hidet.ir.module import IRModule
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput, normalize_slice
 from .transpose2d import TransposeOp2D
@@ -35,7 +37,28 @@ def same_shape(shape_a: Sequence[Union[Expr, int]], shape_b: Sequence[Union[Expr
     return len(shape_a) == len(shape_b) and all(a == b for a, b in zip(shape_a, shape_b))
 
 
-class ReshapeTask(Task):
+# Implementation of identity Task. Just empty kernel - nothing to do
+class IdentityTask(Task):
+    def __init__(self, name, inputs, outputs, *, inverse_map=None, attributes=None):
+        super().__init__(
+            name=name, inputs=inputs, outputs=outputs, inverse_map=inverse_map, attributes=attributes, share_map={0: 0}
+        )
+
+    def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
+        import hidet
+        from hidet.lang import attrs
+        from hidet.lang.types import void_p
+
+        with hidet.script_module() as script_module:
+
+            @hidet.script
+            def launch(x: void_p, y: void_p):
+                attrs.func_kind = 'public'
+
+        return [script_module.ir_module()]
+
+
+class ReshapeTask(IdentityTask):
     def __init__(self, x: TensorNode, y_shape: List[Int]):
         y_shape = self.normalize_shape(x.shape, y_shape)
         if not isinstance(x.type.layout, RowMajorLayout):
@@ -133,26 +156,10 @@ class ReshapeTask(Task):
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
 
-class ViewTask(Task):
+class ViewTask(IdentityTask):
     def __init__(self, x: TensorNode, dtype: DataType, shape: Sequence[Union[int, Expr]]):
         out = compute(name='view', shape=shape, fcompute=lambda *indices: dtype(0.0))
-        super().__init__(
-            name='view', inputs=[x], outputs=[out], attributes={'dtype': dtype, 'shape': shape}, share_map={0: 0}
-        )
-
-    def implement(self, target, working_dir):
-        import hidet
-        from hidet.lang import script, attrs
-        from hidet.lang.types import void_p
-
-        with hidet.script_module() as script_module:
-
-            @script
-            def launch(x: void_p, y: void_p):
-                attrs.func_kind = 'public'
-
-        module = script_module.ir_module()
-        return [module]
+        super().__init__(name='view', inputs=[x], outputs=[out], attributes={'dtype': dtype, 'shape': shape})
 
 
 class RearrangeTask(Task):
@@ -524,6 +531,54 @@ class FlipTask(Task):
         super().__init__(name='flip', inputs=[x], attributes={'dims': dims}, outputs=[out])
 
 
+class SqueezeTask(IdentityTask):
+    def __init__(self, x: TensorNode, dims: List[int]):
+        def inverse_map(*x_indices):
+            return [v for i, v in enumerate(list(x_indices)) if i not in dims]
+
+        def fmap(*y_indices):
+            indices = list(y_indices)
+            for i in dims:
+                indices.insert(i, 0)
+            return x[indices]
+
+        input_shape = x.shape
+        output_shape = [input_shape[i] for i in range(len(input_shape)) if i not in dims]
+        out = compute(name='y', shape=output_shape, fcompute=fmap)
+        inverse_map = InverseMap.from_lambda(inverse_map, num_args=len(x.shape))
+        inverse_map.tile_mapping = TensorLayout(1)
+
+        super().__init__(name='squeeze', inputs=[x], outputs=[out], inverse_map={x: inverse_map})
+
+
+class UnsqueezeTask(IdentityTask):
+    def __init__(self, x: TensorNode, dims: List[int]):
+        def inverse_map(*x_indices):
+            ret = list(x_indices)
+            for i in dims:
+                ret.insert(i, 0)
+            return ret
+
+        def fmap(*y_indices):
+            indices = [v for i, v in enumerate(list(y_indices)) if i not in dims]
+            return x[indices]
+
+        input_shape = x.shape
+        output_shape = []
+        c = 0
+        for i in range(len(x.shape) + len(dims)):
+            if i in dims:
+                output_shape.append(1)
+            else:
+                output_shape.append(input_shape[c])
+                c += 1
+
+        out = compute(name='y', shape=output_shape, fcompute=fmap)
+        inverse_map = InverseMap.from_lambda(inverse_map, num_args=len(x.shape))
+        inverse_map.tile_mapping = TensorLayout(1)
+        super().__init__(name='unsqueeze', inputs=[x], outputs=[out], inverse_map={x: inverse_map})
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         task = ReshapeTask(input_like(x, 'x'), shape)
@@ -575,27 +630,17 @@ class RearrangeOp(Operator):
 
 class SqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
-        super().__init__(
-            inputs=[x],
-            attributes={'dims': dims},
-            task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
-        )
+        task = SqueezeTask(input_like(x, 'x'), dims)
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=task)
 
 
 class UnsqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
-        dims = list(dims)
-        plan = []
-        c = 0
-        for i in range(len(x.shape) + len(dims)):
-            if i in dims:
-                plan.append([])
-            else:
-                plan.append([c])
-                c += 1
-        if c != len(x.shape):
-            raise ValueError('Invalid unsqueeze dims: {} for shape: {}'.format(dims, x.shape))
-        super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
+        rank = len(x.shape) + len(dims)
+        assert all(-rank <= i < rank for i in dims)
+        assert isinstance(dims, list)
+        task = UnsqueezeTask(input_like(x, 'x'), dims)
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=task)
 
     def run_torch(self):
         import torch
@@ -931,11 +976,18 @@ def view(
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
+    old_shape = x.shape
+    rank = len(x.shape)
     start_dim = normalize_dim(start_dim, len(x.shape))
     end_dim = normalize_dim(end_dim, len(x.shape))
+    assert 0 <= start_dim <= end_dim < rank
     if start_dim >= end_dim:
         return x
-    return FlattenOp(x, start_dim, end_dim).outputs[0]
+    new_shape = []
+    new_shape += old_shape[:start_dim]
+    new_shape += [prod(old_shape[start_dim : end_dim + 1])]
+    new_shape += old_shape[end_dim + 1 :]
+    return ReshapeOp(x, new_shape).outputs[0]
 
 
 def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
