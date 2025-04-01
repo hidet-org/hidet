@@ -31,7 +31,7 @@ from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.functors import ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor
 from hidet.ir.tools import TypeInfer
-from hidet.utils.doc import Doc, NewLine, Text, doc_join
+from hidet.utils.doc import Doc, NewLine, Text, doc_join, doc_strip_parentheses
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
 from hidet.utils import prod
@@ -68,6 +68,29 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return items[0] + '::' + items[1]
         else:
             raise ValueError('Cannot recognize function name {}'.format(name))
+
+    def wrap_try_catch(self, body_doc: Doc, ret_type) -> Doc:
+        try_body_doc = NewLine() + Text('try {')
+        try_body_doc += body_doc.indent()
+        try_body_doc += NewLine() + Text('} catch (HidetException &e) { ')
+        try_body_doc += NewLine().indent() + Text('hidet_set_last_error(e.what());')
+        if ret_type.is_pointer():
+            ret = '0'
+        elif ret_type.is_void():
+            ret = ''
+        elif ret_type.is_data_type():
+            dtype = ret_type.as_data_type()
+            if dtype.is_integer():
+                ret = '0'
+            elif dtype.is_float():
+                ret = '0.0'
+            else:
+                raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+        try_body_doc += NewLine().indent() + Text('return {};'.format(ret))
+        try_body_doc += NewLine() + Text('}')
+        return try_body_doc
 
     def scalar_literal(self, value, dtype: DataType):
         if dtype == dtypes.boolean:
@@ -234,11 +257,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         else:
             return super().visit(node)
 
-    def visit_List(self, lst: List):
-        return doc_join([self(v) for v in lst], ', ')
+    def visit_List(self, lst: List) -> Doc:
+        return doc_join([doc_strip_parentheses(self(v)) for v in lst], ", ")
 
-    def visit_Tuple(self, tp: Tuple):
-        return doc_join([self(v) for v in tp], ', ')
+    def visit_Tuple(self, tp: Tuple) -> Doc:
+        return doc_join([doc_strip_parentheses(self(v)) for v in tp], ", ")
 
     def visit_Dict(self, dct: Dict):
         raise RuntimeError('Dict is not supported in code generation')
@@ -311,7 +334,31 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return '(' + self(e.a) + ' {} '.format(op) + self(e.b) + ')'
 
     def visit_Add(self, e: Add):
-        return self.binary_arith_op(e, '+')
+        addition_chain = []
+
+        def expand(ee):
+            if isinstance(ee.a, Add):
+                expand(ee.a)
+                addition_chain.append(ee.b)
+            else:
+                addition_chain.append(ee.a)
+                addition_chain.append(ee.b)
+
+        expand(e)
+
+        assert len(addition_chain) >= 2
+
+        doc = Doc()
+        doc += "("
+        for i, item in enumerate(addition_chain):
+            doc += self(item)
+            if i != len(addition_chain) - 1:
+                doc += " + "
+        doc += ")"
+        c_type = self.type_infer(e)
+        if isinstance(c_type, DataType) and c_type.is_integer() and c_type.nbytes < 4:
+            doc = "(" + self(c_type) + ")" + doc
+        return doc
 
     def visit_Sub(self, e: Sub):
         return self.binary_arith_op(e, '-')
@@ -685,6 +732,15 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'int4bx8': 'uint32_t',
             'uint4bx8': 'uint32_t',
             'bfloat16x2': '__nv_bfloat162',
+            "uint16x1": "ushort1",
+            "uint16x2": "ushort2",
+            "uint16x4": "ushort4",
+            "uint32x1": "uint1",
+            "uint32x2": "uint2",
+            "uint32x4": "uint4",
+            "uint64x1": "ulonglong1",
+            "uint64x2": "ulonglong2",
+            "uint64x4": "ulonglong4",
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
@@ -843,7 +899,10 @@ class CUDACodegen(Codegen):
         doc += ') {'
 
         # body
-        doc += self(func.body).indent()
+        body_doc = self(func.body)
+        if func.kind == 'public' and self.ir_module.namespace == '':
+            body_doc = self.wrap_try_catch(body_doc, func.ret_type)
+        doc += body_doc.indent()
 
         doc += NewLine() + '}'
 
@@ -919,7 +978,10 @@ class HIPCodegen(Codegen):
         doc += ') {'
 
         # body
-        doc += self(func.body).indent()
+        body_doc = self(func.body)
+        if func.kind == 'public' and self.ir_module.namespace == '':
+            body_doc = self.wrap_try_catch(body_doc, func.ret_type)
+        doc += body_doc.indent()
 
         doc += NewLine() + '}'
 
@@ -984,7 +1046,10 @@ class CPUCodegen(Codegen):
         doc += ') {'
 
         # body
-        doc += self(func.body).indent()
+        body_doc = self(func.body)
+        if func.kind == 'public' and self.ir_module.namespace == '':
+            body_doc = self.wrap_try_catch(body_doc, func.ret_type)
+        doc += body_doc.indent()
 
         doc += NewLine() + '}'
 

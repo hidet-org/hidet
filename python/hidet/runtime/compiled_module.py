@@ -80,7 +80,20 @@ class CompiledFunction:
         if status is not None:
             from hidet.graph.tensor import Tensor
 
-            args_str = ', '.join([arg.signature() if isinstance(arg, Tensor) else str(arg) for arg in args])
+            args_items = []
+            for arg in args:
+                if isinstance(arg, Tensor):
+                    args_items.append(arg.signature())
+                elif hasattr(arg, '__module__') and arg.__module__ == 'torch':
+                    import torch
+
+                    assert isinstance(arg, torch.Tensor)
+                    args_items.append(
+                        'torch.Tensor(shape={}, dtype={}, device={})'.format(tuple(arg.shape), arg.dtype, arg.device)
+                    )
+                else:
+                    args_items.append(str(arg))
+            args_str = ', '.join(args_items)
             msg = (
                 'Calling {} with arguments ({}) failed. error:\n'.format(self.name, args_str)
                 + '{}\n'.format(status)
