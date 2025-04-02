@@ -44,6 +44,7 @@ from .add_hints import add_hints_pass
 from .spatial_simplification import spatial_simplification_pass
 from .expand_repeat import expand_repeat_mapping_pass
 from .task_mapping_bound_check import task_mapping_bound_check
+from .simplify_addition_chain import simplify_addition_chain_pass
 
 from .cute.generic.canonicalize import canonicalize_pass
 from .cute.generic.canonicalize_arithmetic_expression import canonicalize_arithmetic_expression_pass
@@ -125,6 +126,7 @@ def lower(ir_module: IRModule) -> IRModule:
         inline_let_stmt_pass(),
         explicit_unroll_pass(),
         rule_based_simplify_pass(),
+        simplify_addition_chain_pass(),
         add_hints_pass(),
         inline_let_stmt_pass(),
         simplify_stmt_pass(),

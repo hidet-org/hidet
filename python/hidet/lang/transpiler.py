@@ -1027,25 +1027,45 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(
                     self, expr, 'The number of parameters of callee and given arguments does not match.'
                 )
-            if func.kind == 'cuda_kernel':
-                return ir.stmt.launch_kernel(
-                    func_var=func_var,
-                    args=args,
-                    grid_dim=func.attrs['cuda.grid_dim'],
-                    cluster_dim=func.attrs.get('cuda.cluster_dim', 1),
-                    block_dim=func.attrs['cuda.block_dim'],
-                    shared_mem=func.attrs.get('cuda.dynamic_smem_bytes', 0),
-                    target='cuda',
-                )
-            elif func.kind == 'hip_kernel':
-                return ir.stmt.launch_kernel(
-                    func_var=func_var,
-                    args=args,
-                    grid_dim=func.attrs['hip.grid_dim'],
-                    block_dim=func.attrs['hip.block_dim'],
-                    shared_mem=func.attrs.get('hip.dynamic_smem_bytes', 0),
-                    target='hip',
-                )
+            if func.kind in ['cuda_kernel', 'hip_kernel']:
+                from hidet.ir.tools import collect, rewrite
+
+                used_params: list[Var] = []
+                attr_names = [  # we allow these attributes to use the parameters
+                    'cuda.grid_dim',
+                    'cuda.cluster_dim',
+                    'cuda.block_dim',
+                    'hip.grid_dim',
+                    'hip.block_dim',
+                    'cuda.dynamic_smem_bytes',
+                    'hip.dynamic_smem_bytes',
+                ]
+                for name in attr_names:
+                    if name in func.attrs:
+                        used_vars = collect(func.attrs[name], Var)
+                        used_params.extend([var for var in used_vars if var not in used_params and var in func.params])
+                param2arg = {param: arg for param, arg in zip(func.params, args)}
+                rewrite_map = {param: param2arg[param] for param in used_params}
+
+                if func.kind == 'cuda_kernel':
+                    return ir.stmt.launch_kernel(
+                        func_var=func_var,
+                        args=args,
+                        grid_dim=rewrite(func.attrs['cuda.grid_dim'], rewrite_map),
+                        cluster_dim=rewrite(func.attrs.get('cuda.cluster_dim', 1), rewrite_map),
+                        block_dim=rewrite(func.attrs['cuda.block_dim'], rewrite_map),
+                        shared_mem=rewrite(func.attrs.get('cuda.dynamic_smem_bytes', 0), rewrite_map),
+                        target='cuda',
+                    )
+                else:
+                    return ir.stmt.launch_kernel(
+                        func_var=func_var,
+                        args=args,
+                        grid_dim=rewrite(func.attrs['hip.grid_dim'], rewrite_map),
+                        block_dim=rewrite(func.attrs['hip.block_dim'], rewrite_map),
+                        shared_mem=rewrite(func.attrs.get('hip.dynamic_smem_bytes', 0), rewrite_map),
+                        target='hip',
+                    )
             else:
                 return func_var(*args)
         elif isinstance(func, (types.BuiltinMethodType, types.BuiltinFunctionType)):
