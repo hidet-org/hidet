@@ -48,10 +48,11 @@ runs:
         (while true; do echo "Heartbeat: $(date)"; sleep 30; done) &
         echo_loop_pid=$!
 
+        # Ensure the heartbeat is stopped on exit, even if make html fails.
+        trap "kill $echo_loop_pid" EXIT
+
         cd docs
         make clean; nice -n 10 make html
-
-        kill $echo_loop_pid
     - name: Deploy docs
       env:
         DOCS_DEPLOY_TOKEN: ${{ inputs.docs_deploy_token }}
