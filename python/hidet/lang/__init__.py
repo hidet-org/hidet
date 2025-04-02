@@ -26,7 +26,7 @@ from hidet.ir.func import Function
 from hidet.ir.dtypes import int8, int16, int32, int64, uint8, uint16, uint32, uint64, float16, float32, float64, boolean
 from hidet.ir.dtypes import i1, u1, i2, u2, i4, u4, i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64
 from hidet.ir.dtypes import bfloat16, tfloat32, bf16, tf32, float8_e4m3, float8_e5m2
-from hidet.ir.dtypes import f16x2, float16x2, f32x2, float32x2
+from hidet.ir.dtypes import f16x2, float16x2, bfloat16x2, f32x2, float32x2
 
 from hidet.lang.constructs.loops import range, grid
 from hidet.lang.constructs.declare import tensor, tensor_pointer, as_tensor_pointer, register_tensor, shared_tensor

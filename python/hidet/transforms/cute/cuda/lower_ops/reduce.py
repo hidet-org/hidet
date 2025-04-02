@@ -356,6 +356,7 @@ class ReduceEmitter(OpEmitter):
         warp_id = self.auto_var(hint="warp_id", e=tid // WARP_SIZE)
         crds = idx2crd(warp_id, warp.shape_tuple)
         crds_ = []
+        lds_offset = lane_id
         red_shape_warp = []
         red_stride_warp = []
         current = WARP_SIZE
@@ -364,6 +365,8 @@ class ReduceEmitter(OpEmitter):
                 crds_.append(crd)
                 red_shape_warp.append(s)
                 red_stride_warp.append(current)
+            else:
+                lds_offset += crd * current
             current = current * s
         red_layout = TensorLayout(tuple(red_shape_warp), tuple(red_stride_warp))
         cond = [crd == 0 for crd in crds_] + lane_cond
@@ -372,7 +375,7 @@ class ReduceEmitter(OpEmitter):
                 red_cond = [crd != 0 for crd in red] if isinstance(red, list) else [red != 0]
                 with self.if_then(logical_or(*red_cond)):
                     smem_addr2 = self.auto_var(
-                        hint="smem_addr2", e=smem_addr + thread_layout(lane_id + red_layout(red))
+                        hint="smem_addr2", e=smem_addr + thread_layout(lds_offset + red_layout(red))
                     )
                     with self.for_grid(iters) as i:
                         operands = [~temp[i * elems_per_iter + delta] for delta in range(0, elems_per_iter, incr)]

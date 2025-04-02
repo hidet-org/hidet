@@ -12,7 +12,7 @@
 from typing import List, Union, Optional
 from abc import abstractmethod
 
-from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout, is_auto_layout
+from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout, is_auto_layout, make_layout
 from hidet.ir.expr import Expr
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType
@@ -21,7 +21,7 @@ from hidet.ir.type import BaseType, DataType, PointerType, TensorType, TensorPoi
 from hidet.ir.stmt import DeclareScope
 
 
-class TensorBase:
+class TensorBase(Op):
     """
     An abstract base class for tensor operations, defining the interface for checking volatility.
     """
@@ -33,11 +33,41 @@ class TensorBase:
         Returns:
             bool: True if the tensor is volatile, False otherwise.
         """
-
         raise NotImplementedError
 
+    def resolve_logical_encoding(self):
+        """
+        Resolves the logical encoding for tensor layouts in the Hexcute system.
 
-class Tensor(Op, TensorBase):
+        In the current design of Hexcute, layouts are handled differently based on the memory scope:
+
+        - For register tensors: Layouts are typically inferred by the compiler, but users can also
+          explicitly annotate them. This function creates a logical encoding based on the tensor's
+          shape and layout configuration.
+
+        - For global tensors: Layouts must be explicitly specified by users since the kernel compiler
+          cannot modify the layout of global tensors. The layout information is preserved as-is.
+
+        - For shared memory tensors: Layouts are handled through a different mechanism specific to
+          shared memory optimization.
+
+        Returns:
+            List[Optional[Expr]]: A list containing either:
+                - A logical encoding expression for register tensors
+                - None for non-register tensors (global/shared memory)
+        """
+        from hidet.ir.cute.type import logical_encoding
+
+        if self.scope.is_register():
+            assert not is_auto_layout(self.layout) and isinstance(self.layout, TiledTensorLayout)
+            shape = self.layout.shape()
+            thr, val = self.layout.thr_layout(), self.layout.val_layout()
+            return [logical_encoding(shape, make_layout(thr, val))]
+        else:
+            return [None]
+
+
+class Tensor(TensorBase):
     """
     Creates a tensor with a specific data type, layout, and scope.
     Note that the compiler will manage the memory allocation for the tensor, so the tensor cannot
@@ -119,7 +149,7 @@ def make_tensor(
     return Tensor(dtype, layout, scope).make_call()
 
 
-class TensorView(Op, TensorBase):
+class TensorView(TensorBase):
     """
     View a tensor within global/shared memory or register files with a specified layout and scope.
 

@@ -232,7 +232,15 @@ from hidet.ir.cute.layout import (
     compact_col_major,
     slice_and_offset,
 )
-from hidet.ir.cute import TensorLayout, TiledTensorLayout, auto_layout, is_auto_layout, max_common_vector, flatten
+from hidet.ir.cute import (
+    TensorLayout,
+    ComposedTensorLayout,
+    TiledTensorLayout,
+    auto_layout,
+    is_auto_layout,
+    max_common_vector,
+    flatten,
+)
 from hidet.ir.cute.ops import (
     TensorBase,
     Tensor,
@@ -843,7 +851,11 @@ class InferLogicalShape(IRVisitor):
     def infer(self):
         for op in self.ops_resolved:
             if isinstance(op, TensorBase):
-                shape = op.layout.shape if isinstance(op.layout, TensorLayout) else op.layout.shape()
+                shape = (
+                    op.layout.shape
+                    if isinstance(op.layout, (TensorLayout, ComposedTensorLayout))
+                    else op.layout.shape()
+                )
                 if shape is not None:
                     shape = product_each(shape)
                 vars = self.op2vars[op]
@@ -1323,7 +1335,7 @@ class InferLogicalLayout(IRVisitor):
         self.ops_resolved = []
 
     def _inst_logical_layout_for_tensor(self, layout):
-        if isinstance(layout, TensorLayout):
+        if isinstance(layout, (TensorLayout, ComposedTensorLayout)):
             flat_shape = flatten(layout.shape_tuple)
             flat_stride = flatten(layout.stride_tuple)
             stride = list(compact_col_major(flat_shape))
@@ -2835,13 +2847,13 @@ class ResolveAuto(IRVisitor):
             if isinstance(op, (Rearrange, PartitionSrc, PartitionDst, Arithmetic, Copy, Mask)):
                 pass
             elif isinstance(res, NotImplementedError):
-                if not isinstance(op, TensorBase):
-                    raise NotImplementedError(
-                        f"Missing resolve_logical_encoding method for the following operator: \n{type(op).__name__}"
-                    )
+                raise NotImplementedError(
+                    f"Missing resolve_logical_encoding method for the following operator: \n{type(op).__name__}"
+                )
             else:
                 for i, v in enumerate(self.op2vars[op]):
-                    var2logical_encoding[v] = res[i]
+                    if res[i] is not None:
+                        var2logical_encoding[v] = res[i]
         stack_frame = StackFrame(self.constraints, var2logical_encoding)
         self.state_stack.append(stack_frame)
 

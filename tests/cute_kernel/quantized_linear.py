@@ -324,7 +324,7 @@ def preprocess_weight(weight: torch.Tensor):
             txrx_wi = partition_dst(tr_wi, auto_copy())
             copy(auto_copy((bm, bn)), txgx_wi, txrx_wi)
 
-            tr_w = arithmetic(tr_wi, op=cast_interleaved)
+            tr_w = cast(tr_wi, f16)
             tr_w_cvt = rearrange(tr_w, auto_layout, "register")
             tr_wo = cast(tr_w_cvt, u4)
 
@@ -491,7 +491,7 @@ class Config:
 
 
 class FpAIntBGemm:
-    def __init__(self, name: str, k: int, n: int, group_size: int, weight_dtype: DataType = u4):
+    def __init__(self, name: str, k: int, n: int, group_size: int, weight_dtype: DataType = u4, with_zp: bool = True):
         self.name = name
         self.k = k
         self.n = n
@@ -499,6 +499,7 @@ class FpAIntBGemm:
         self.weight_dtype = weight_dtype
         self.functions: Dict[str, CompiledFunction] = {}
         self.m_symbol_name = f"m_{self.name}"
+        self.with_zp = with_zp
         self._compile()
 
     def __call__(self, a: torch.Tensor, b: torch.Tensor, scale: torch.Tensor, zeros: torch.Tensor):
@@ -683,6 +684,7 @@ class FpAIntBGemm:
             scale_smem_layout = TensorLayout((bn, bk), (1, 0))
 
         k_partition = self._k_partition(config)
+        with_zp = self.with_zp
 
         with hidet.script_module() as script_module:
 
@@ -699,7 +701,7 @@ class FpAIntBGemm:
                 attrs.func_kind = "cuda_kernel"
                 attrs.cuda.block_dim = threads
                 attrs.cuda.grid_dim = cdiv(m, bm) * cdiv(n, bn), parallel_k_parts
-                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda.dynamic_smem_bytes = 0
 
                 group_size_m = 8
                 pid = blockIdx.x
@@ -795,7 +797,15 @@ class FpAIntBGemm:
                             copy(auto_copy(), txSsc[:, :, ki + 1], txrsc[:, :, (ki + 1) % 2])
                             copy(auto_copy(), txSbi[:, :, ki + 1], txrbi[:, :, (ki + 1) % 2])
 
-                        txrb_f16 = txrsc[:, :, ki % 2] * (cast(txrb[:, :, ki % 2], f16) - txrbi[:, :, ki % 2])
+                        # We enable this test case to test the deadcode elimination pass.
+                        # When with_zp is False, the txrbi is not used. Therefore, the deadcode elimination pass
+                        # should remove the declaration of tensor tr_bias, and the corresponding shared memory
+                        # tensor ts_bias should be also removed correctly (only be read but never be written
+                        # to global memory).
+                        if with_zp:
+                            txrb_f16 = txrsc[:, :, ki % 2] * (cast(txrb[:, :, ki % 2], f16) - txrbi[:, :, ki % 2])
+                        else:
+                            txrb_f16 = cast(txrb[:, :, ki % 2], f16) * txrsc[:, :, ki % 2]
                         mma(tiled_mma, tr_c, txra[:, :, ki % 2], txrb_f16, tr_c)
                     syncthreads()
 
@@ -876,6 +886,7 @@ class FpAIntBGemm:
 
         k_partition = self._k_partition(config)
         assert k_partition >= bk * stages
+        with_zp = self.with_zp
 
         with hidet.script_module() as script_module:
 
@@ -892,7 +903,7 @@ class FpAIntBGemm:
                 attrs.func_kind = "cuda_kernel"
                 attrs.cuda.block_dim = threads
                 attrs.cuda.grid_dim = cdiv(m, bm) * cdiv(n, bn), parallel_k_parts
-                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda.dynamic_smem_bytes = 0
 
                 group_size_m = 8
                 pid = blockIdx.x
@@ -1029,7 +1040,10 @@ class FpAIntBGemm:
                             smem_pipe_read += 1
                             smem_pipe_read = 0 if smem_pipe_read == stages else smem_pipe_read
 
-                        txrb_f16 = txrsc[:, :, ki % 2] * (cast(txrb[:, :, ki % 2], f16) - txrbi[:, :, ki % 2])
+                        if with_zp:
+                            txrb_f16 = txrsc[:, :, ki % 2] * (cast(txrb[:, :, ki % 2], f16) - txrbi[:, :, ki % 2])
+                        else:
+                            txrb_f16 = cast(txrb[:, :, ki % 2], f16) * txrsc[:, :, ki % 2]
                         mma(tiled_mma, tr_c, txra[:, :, ki % 2], txrb_f16, tr_c)
 
                 k_part = blockIdx.y
@@ -1086,5 +1100,5 @@ class FpAIntBGemm:
         return func
 
 
-def w4a16_linear(name: str, input_feats: int, output_feats: int, group_size: int):
-    return FpAIntBGemm(name, input_feats, output_feats, group_size, u4)
+def w4a16_linear(name: str, input_feats: int, output_feats: int, group_size: int, with_zp: bool = True):
+    return FpAIntBGemm(name, input_feats, output_feats, group_size, u4, with_zp)

@@ -1154,6 +1154,10 @@ class MaskAnnotation(IRRewriter):
             _, src_thrval_layout = tiled_copy.src_tv_layout()
             val_layout = coalesce(make_layout(src_thrval_layout[0][1], src_thrval_layout[1]))
             _, rest_layout = group(val_layout, inst_len, filter_zero=True)
+            # We need to filter the 0-stride dimension because we won't issue the instruction
+            # for the index in 0-stride dimension. This makes the mask align with the copy
+            # operation.
+            rest_layout = filter(rest_layout, False)
             annotations: Dict[str, CConst] = {}
             annotations["rest_layout"] = rest_layout
             return e.reforward(args, annotations_update=annotations)

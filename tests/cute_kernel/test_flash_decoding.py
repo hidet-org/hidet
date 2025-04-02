@@ -984,7 +984,7 @@ def flash_decoding_v3(
                 copy(auto_copy((bm, bn)), txrqk_sum, txgqk_sum)
                 syncthreads()
                 if threadIdx.x == 0:
-                    atomic_add(lc, 1)
+                    atomic_add(lc, 1, "acq_rel")
             else:
                 tr_oi = make_tensor("float16", auto_layout, "register")
                 tr_li = make_tensor("float32", layout_auto((bm, bn), (1, 0)), "register")

@@ -55,6 +55,56 @@ class Reduce(Op):
         """
         return NotImplemented()
 
+    def resolve_logical_encoding(self):
+        """
+        Resolves the logical encoding for reduction operations in the Hexcute system.
+
+        In the layout inference system, this function serves as a bridge to inject pre-resolved layout
+        information into the layout synthesis process. When an operator's input and output layouts can
+        be determined based on the operation's properties (before layout synthesis), this function
+        provides that information to guide the layout inference.
+
+        For reduction operator, if its input layout is already known, it can be considered resolved.
+        The output layout can be inferred before the layout synthesis. This is different from the
+        layout synthesis process which uses global information from the entire program to determine
+        optimal layouts. In contrast, resolve_logical_encoding uses only local information available
+        from the operation itself and its immediate inputs.
+
+        The function performs the following steps:
+        1. Infers the type of the input tensor
+        2. Extracts the shape and layout information from the input tensor
+        3. Creates input layout encoding based on the current tensor layout
+        4. Creates output layout encoding based on the inferred reduction layout
+        5. Returns both encodings as a list
+
+        This pre-resolved layout information helps the layout synthesis system by:
+        - Providing explicit layout constraints for the reduction operation
+        - Ensuring consistent layout handling across the computation graph
+        - Optimizing the layout inference process by avoiding redundant computations
+
+        Returns:
+            List[Expr]: A list containing two logical encodings:
+                - First element: The logical encoding for the input tensor layout
+                - Second element: The logical encoding for the output tensor layout after reduction
+
+        Raises:
+            AssertionError: If the input tensor has an auto layout or is not a TiledTensorLayout
+        """
+        from hidet.ir.tools import infer_type
+        from hidet.ir.cute.type import logical_encoding
+
+        x_ty = infer_type(self.x)
+        assert not is_auto_layout(x_ty.layout)
+        assert isinstance(x_ty.layout, TiledTensorLayout)
+        shape = x_ty.layout.shape()
+        thr, val = x_ty.layout.thr_layout(), x_ty.layout.val_layout()
+        in_layout = make_layout(thr, val)
+        out_layout = self.infer_layout(shape, thr, val)
+        out_layout = make_layout(out_layout.thr_layout(), out_layout.val_layout())
+        in_enc = logical_encoding(shape, in_layout)
+        out_enc = logical_encoding(shape, out_layout)
+        return [in_enc, out_enc]
+
     def infer_layout(self, shape: Tuple[int, ...], thrd: TensorLayout, val: TensorLayout) -> TiledTensorLayout:
         """
         Infer the layout for the reduction operation.

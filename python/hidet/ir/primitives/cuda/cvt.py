@@ -157,19 +157,34 @@ def register_cast_u4x8_to_f16x8_interleaved():
 @initialize()
 def register_vectorized_cvt_instructions():
     from hidet.lang import attrs
-    from hidet.lang import u4, u2, u1, i4, i2, f16, u8, u16, u32, f32, f16x2, f32x2, i8
+    from hidet.lang import u4, u2, u1, i4, i2, f16, bf16, u8, u16, u32, f32, bfloat16x2, f16x2, f32x2, i8
     from hidet.lang import view
+    from hidet.ir.expr import right_shift
 
     register_primitive_function(
-        'cuda_half22float2', func_or_type=FuncType([f16x2], f32x2), codegen_name='__half22float2'
+        'cuda_float1622float322', func_or_type=FuncType([f16x2], f32x2), codegen_name='__half22float2'
     )
     register_primitive_function(
-        'cuda_float22half2', func_or_type=FuncType([f16x2], f32x2), codegen_name='__float22half2_rn'
+        'cuda_float3222float162', func_or_type=FuncType([f32x2], f16x2), codegen_name='__float22half2_rn'
     )
 
-    for src_dtype in [f32, f16]:
-        for dst_dtype in [f32, f16]:
+    register_primitive_function(
+        'cuda_bfloat1622float322', func_or_type=FuncType([bfloat16x2], f32x2), codegen_name='__bfloat1622float2'
+    )
+    register_primitive_function(
+        'cuda_float3222bfloat162', func_or_type=FuncType([f32x2], bfloat16x2), codegen_name='__float22bfloat162_rn'
+    )
+
+    register_primitive_function(
+        'cuda_bfsub2', func_or_type=FuncType([bfloat16x2, bfloat16x2], bfloat16x2), codegen_name='__hsub2'
+    )
+
+    # register fast conversion from f16 and bf16 to f32
+    for src_dtype in [f32, f16, bf16]:
+        for dst_dtype in [f32, f16, bf16]:
             if src_dtype == dst_dtype:
+                continue
+            if (src_dtype == f16 and dst_dtype == bf16) or (src_dtype == bf16 and dst_dtype == f16):
                 continue
 
             BITS_PER_GPR = 32
@@ -181,10 +196,7 @@ def register_vectorized_cvt_instructions():
             src_vector_type = vectorize(src_dtype, vector_size)
             dst_vector_type = vectorize(dst_dtype, vector_size)
 
-            if src_dtype == f32:
-                primitive_func = 'cuda_float22half2'
-            else:
-                primitive_func = 'cuda_half22float2'
+            primitive_func = f"cuda_{src_dtype.name}22{dst_dtype.name}2"
 
             @script
             def cuda_cvt(x: src_dtype[vector_size], y: dst_dtype[vector_size]):
@@ -361,6 +373,237 @@ def register_vectorized_cvt_instructions():
                         )
 
                     register_primitive_function(func_name, cuda_cvt_u4x2_f16x2)
+
+    # register fast conversion from i4 and u4 to bf16
+    for src_dtype in [i4, u4]:
+        if src_dtype == u4:
+            immLut = (0xF0 & 0xCC) | 0xAA
+            xor_mask = 0x43004300
+            and_mask = 0x000F000F
+        else:
+            assert src_dtype == i4
+            immLut = (0xF0 & 0xCC) ^ 0xAA
+            xor_mask = 0x43084308
+            and_mask = 0x000F000F
+        for dst_dtype in [bf16]:
+            for bits_per_vector in [32, 16, 8]:
+                src_vector_size = bits_per_vector // src_dtype.nbits
+                dst_vector_size = bits_per_vector // dst_dtype.nbits
+                vector_size = max(src_vector_size, dst_vector_size)
+                func_name = resolve_vectorized_cvt_func_name(src_dtype, dst_dtype, bits_per_vector)
+                primitive_func = "cuda_bfsub2"
+
+                if bits_per_vector == 32:
+
+                    @script
+                    def cuda_cvt_u4x8_bf16x8(x: src_dtype[vector_size], y: dst_dtype[vector_size]):
+                        """
+                        Converts 8 4-bit unsigned integers to 8 bfloat16 values using CUDA PTX instructions.
+                        This is a specialized conversion that uses bit manipulation and PTX primitives for efficiency.
+
+                        The conversion process follows these steps:
+                        1. Input Preparation:
+                           - View the input as 32-bit integers (xi)
+                           - Right shift the input by 4 bits to prepare for permutation
+
+                        2. Bit Permutation:
+                           - Uses prmt.b32 instructions to rearrange bits into the following pattern:
+                             fp16s_01 = {0x00, u4_21, 0x00, u4_10}
+                             fp16s_23 = {0x00, u4_43, 0x00, u4_32}
+                             fp16s_45 = {0x00, u4_65, 0x00, u4_54}
+                             fp16s_67 = {0x000, u4_7, 0x00, u4_76}
+                           - This creates 4 32-bit values, each containing two bfloat16 values
+
+                        3. Bit Manipulation:
+                           - Uses lop3.b32 instruction to perform the following operations:
+                             For u4: r[i] = (r[i] & and_mask) | xor_mask
+                             For i4: r[i] = (r[i] & and_mask) ^ xor_mask
+                           - This sets up the correct bit pattern for bfloat16 representation
+
+                        4. Final Conversion:
+                           - Uses bfsub2 primitive to subtract 128 from each bfloat16 value
+                           - This is done in pairs (2 bfloat16 values at a time)
+                           - The result is stored back in the output array
+
+                        Args:
+                            x: Input array of 8 4-bit unsigned integers
+                            y: Output array of 8 bfloat16 values
+
+                        Note:
+                            This function uses specific bit patterns and masks:
+                            - and_mask: 0x000F000F (for selecting relevant bits)
+                            - xor_mask: 0x43004300 (for u4) or 0x43084308 (for i4)
+                            - immLut: (0xF0 & 0xCC) | 0xAA (for u4) or (0xF0 & 0xCC) ^ 0xAA (for i4)
+                        """
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_internal'
+
+                        xi = view(x, u32[src_dtype.nbits * vector_size // 32])
+                        yi = view(y, u32[dst_dtype.nbits * vector_size // 32])
+                        x_shifted = right_shift(xi[0], 4)
+
+                        # Step 2: Bit Permutation
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi[0], u32(x_shifted), u32(0xF4F0)], outputs=[yi[0]])
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi[0], u32(x_shifted), u32(0xF5F1)], outputs=[yi[1]])
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi[0], u32(x_shifted), u32(0xF6F2)], outputs=[yi[2]])
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi[0], u32(x_shifted), u32(0xF7F3)], outputs=[yi[3]])
+
+                        # Step 3: Bit Manipulation
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[0], and_mask, xor_mask, immLut], outputs=[yi[0]])
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[1], and_mask, xor_mask, immLut], outputs=[yi[1]])
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[2], and_mask, xor_mask, immLut], outputs=[yi[2]])
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[3], and_mask, xor_mask, immLut], outputs=[yi[3]])
+
+                        # Step 4: Final Conversion
+                        bias_rep = u32(xor_mask)
+                        imm0 = call_primitive_func(
+                            primitive_func, [cast(yi, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[0] = cast(~imm0, ~u32)[0]
+                        imm1 = call_primitive_func(
+                            primitive_func, [cast(yi + 1, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[1] = cast(~imm1, ~u32)[0]
+                        imm2 = call_primitive_func(
+                            primitive_func, [cast(yi + 2, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[2] = cast(~imm2, ~u32)[0]
+                        imm3 = call_primitive_func(
+                            primitive_func, [cast(yi + 3, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[3] = cast(~imm3, ~u32)[0]
+
+                    register_primitive_function(func_name, cuda_cvt_u4x8_bf16x8)
+                elif bits_per_vector == 16:
+
+                    @script
+                    def cuda_cvt_u4x4_bf16x4(x: src_dtype[vector_size], y: dst_dtype[vector_size]):
+                        """
+                        Converts 4 4-bit unsigned integers to 4 bfloat16 values using CUDA PTX instructions.
+                        This is a specialized conversion that uses bit manipulation and PTX primitives for efficiency.
+
+                        The conversion process follows these steps:
+                        1. Input Preparation:
+                           - View the input as 16-bit integers (x16)
+                           - Convert to 32-bit integers (xi)
+                           - Right shift the input by 4 bits to prepare for permutation
+
+                        2. Bit Permutation:
+                           - Uses prmt.b32 instructions to rearrange bits into the following pattern:
+                             fp16s_01 = {0x00, u4_21, 0x00, u4_10}
+                             fp16s_23 = {0x00, u4_43, 0x00, u4_32}
+                           - This creates 2 32-bit values, each containing two bfloat16 values
+
+                        3. Bit Manipulation:
+                           - Uses lop3.b32 instruction to perform the following operations:
+                             For u4: r[i] = (r[i] & and_mask) | xor_mask
+                             For i4: r[i] = (r[i] & and_mask) ^ xor_mask
+                           - This sets up the correct bit pattern for bfloat16 representation
+
+                        4. Final Conversion:
+                           - Uses bfsub2 primitive to subtract 128 from each bfloat16 value
+                           - This is done in pairs (2 bfloat16 values at a time)
+                           - The result is stored back in the output array
+
+                        Args:
+                            x: Input array of 4 4-bit unsigned integers
+                            y: Output array of 4 bfloat16 values
+
+                        Note:
+                            This function uses specific bit patterns and masks:
+                            - and_mask: 0x000F000F (for selecting relevant bits)
+                            - xor_mask: 0x43004300 (for u4) or 0x43084308 (for i4)
+                            - immLut: (0xF0 & 0xCC) | 0xAA (for u4) or (0xF0 & 0xCC) ^ 0xAA (for i4)
+                        """
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_internal'
+
+                        x16 = view(x, u16[1])
+                        xi = cvt(x16[0], u32)
+                        yi = view(y, u32[dst_dtype.nbits * vector_size // 32])
+                        x_shifted = right_shift(xi, 4)
+
+                        # Step 2: Bit Permutation
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi, u32(x_shifted), u32(0xF4F0)], outputs=[yi[0]])
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi, u32(x_shifted), u32(0xF5F1)], outputs=[yi[1]])
+
+                        # Step 3: Bit Manipulation
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[0], and_mask, xor_mask, immLut], outputs=[yi[0]])
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[1], and_mask, xor_mask, immLut], outputs=[yi[1]])
+
+                        # Step 4: Final Conversion
+                        bias_rep = u32(xor_mask)
+                        imm0 = call_primitive_func(
+                            primitive_func, [cast(yi, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[0] = cast(~imm0, ~u32)[0]
+                        imm1 = call_primitive_func(
+                            primitive_func, [cast(yi + 1, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[1] = cast(~imm1, ~u32)[0]
+
+                    register_primitive_function(func_name, cuda_cvt_u4x4_bf16x4)
+                elif bits_per_vector == 8:
+
+                    @script
+                    def cuda_cvt_u4x2_bf16x2(x: src_dtype[vector_size], y: dst_dtype[vector_size]):
+                        """
+                        Converts 2 4-bit unsigned integers to 2 bfloat16 values using CUDA PTX instructions.
+                        This is a specialized conversion that uses bit manipulation and PTX primitives for efficiency.
+
+                        The conversion process follows these steps:
+                        1. Input Preparation:
+                           - View the input as 8-bit integers (x8)
+                           - Convert to 32-bit integers (xi)
+                           - Right shift the input by 4 bits to prepare for permutation
+
+                        2. Bit Permutation:
+                           - Uses prmt.b32 instruction to rearrange bits into the following pattern:
+                             fp16s_01 = {0x00, u4_21, 0x00, u4_10}
+                           - This creates a 32-bit value containing two bfloat16 values
+
+                        3. Bit Manipulation:
+                           - Uses lop3.b32 instruction to perform the following operations:
+                             For u4: r[i] = (r[i] & and_mask) | xor_mask
+                             For i4: r[i] = (r[i] & and_mask) ^ xor_mask
+                           - This sets up the correct bit pattern for bfloat16 representation
+
+                        4. Final Conversion:
+                           - Uses bfsub2 primitive to subtract 128 from each bfloat16 value
+                           - The result is stored back in the output array
+
+                        Args:
+                            x: Input array of 2 4-bit unsigned integers
+                            y: Output array of 2 bfloat16 values
+
+                        Note:
+                            This function uses specific bit patterns and masks:
+                            - and_mask: 0x000F000F (for selecting relevant bits)
+                            - xor_mask: 0x43004300 (for u4) or 0x43084308 (for i4)
+                            - immLut: (0xF0 & 0xCC) | 0xAA (for u4) or (0xF0 & 0xCC) ^ 0xAA (for i4)
+                        """
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_internal'
+
+                        x8 = view(x, u8[1])
+                        xi = cast(x8[0], u32)
+                        yi = view(y, u32[dst_dtype.nbits * vector_size // 32])
+                        x_shifted = right_shift(xi, 4)
+
+                        # Step 2: Bit Permutation
+                        asm("prmt.b32 %0, %1, %2, %3;", inputs=[xi, u32(x_shifted), u32(0xF4F0)], outputs=[yi[0]])
+
+                        # Step 3: Bit Manipulation
+                        asm("lop3.b32 %0, %1, %2, %3, %4;", inputs=[yi[0], and_mask, xor_mask, immLut], outputs=[yi[0]])
+
+                        # Step 4: Final Conversion
+                        bias_rep = u32(xor_mask)
+                        imm0 = call_primitive_func(
+                            primitive_func, [cast(yi, ~bfloat16x2)[0], cast(~bias_rep, ~bfloat16x2)[0]]
+                        )
+                        yi[0] = cast(~imm0, ~u32)[0]
+
+                    register_primitive_function(func_name, cuda_cvt_u4x2_bf16x2)
 
     def get_magic_numbers_2bits(input_dtype: DataType):
         if input_dtype == u2:

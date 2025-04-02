@@ -48,7 +48,7 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.stmt import Stmt, LetStmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt
 
-from hidet.ir.cute.ops import PartitionSrc, PartitionDst, Copy, Mma, SubTensor, Atomic
+from hidet.ir.cute.ops import PartitionSrc, PartitionDst, Copy, Mma, SubTensor, Atomic, TensorBase
 from hidet.ir.cute.collective import CollectiveStore
 
 from hidet.logging import logger, setConsoleLevel, DEBUG
@@ -194,7 +194,7 @@ class DeadcodeElimination(IRVisitor):
 
     def _eliminate_stmt(self, stmt: Stmt, v: Var = None):
         if isinstance(stmt, LetStmt):
-            # some of the bind_vars can be eliminated, some of them cannot be eliminated.
+            # some of the bind_vars can be eliminated, while others cannot be eliminated.
             # we need to record the eliminated bind_vars for each LetStmt.
             if stmt not in self.let2eliminated_vars:
                 self.let2eliminated_vars[stmt] = [v]
@@ -222,6 +222,22 @@ class DeadcodeElimination(IRVisitor):
                         self.var2users[alias_var].remove(stmt)
                         self._try_eliminate(arg)
 
+    def _get_def_op(self, v: Var):
+        assert v in self.var2defs
+        def_stmt = self.var2defs[v]
+        if isinstance(def_stmt, DeclareStmt):
+            call = def_stmt.init
+            assert isinstance(call, CallOp)
+            return call.op
+        else:
+            assert isinstance(def_stmt, LetStmt)
+            for bind_var, bind_value in zip(def_stmt.bind_vars, def_stmt.bind_values):
+                if bind_var is v:
+                    call = bind_value
+                    assert isinstance(call, CallOp)
+                    return call.op
+        raise AssertionError(f"Cannot find the operator that declares {v} in {def_stmt}")
+
     def _try_eliminate(self, v: Var):
         alias_var = self.visit(v)
         users = self.var2users[alias_var]
@@ -239,11 +255,15 @@ class DeadcodeElimination(IRVisitor):
                     # 2. The variable is the source of the Copy operation.
                     # 3. The variable is the destination of the Copy operation and the variable
                     # is a global variable.
-                    if (
-                        v is op.mask
-                        or alias_var is self.visit(op.src)
-                        or (alias_var is self.visit(op.dst) and v_type.scope.is_global())
-                    ):
+                    cond_mask = v is op.mask
+                    cond_src = alias_var is self.visit(op.src)
+                    if alias_var is self.visit(op.dst) and v_type.scope.is_memory():
+                        def_op = self._get_def_op(alias_var)
+                        assert isinstance(def_op, TensorBase)
+                        cond_dst = v_type.scope.is_global() or def_op.is_volatile()
+                    else:
+                        cond_dst = False
+                    if cond_mask or cond_src or cond_dst:
                         can_eliminate = False
                 elif isinstance(op, Mma):
                     can_eliminate = False
