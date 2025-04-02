@@ -182,7 +182,7 @@ class Tensor:
         ret: int
             The number of bytes.
         """
-        return prod(self.shape) * self.dtype.nbytes
+        return prod(dtypes.int64(shape) for shape in self.shape) * self.dtype.nbytes
 
     @property
     def op(self):
