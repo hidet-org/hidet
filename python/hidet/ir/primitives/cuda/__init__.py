@@ -14,7 +14,7 @@ from . import mma
 
 from .cluster import this_cluster
 from .smem import set_kernel_max_dynamic_smem_bytes
-from .sync import syncthreads, syncwarp
+from .sync import syncthreads, syncwarp, bar_sync
 from .ldst import lds128, sts128
 from .ldst import ldg256, ldg128, ldg64, ldg32, ldg256_lu, ldg128_lu, ldg64_lu, ldg32_lu, ldg16
 from .ldst import stg512, stg256, stg128, stg64, stg32, stg16

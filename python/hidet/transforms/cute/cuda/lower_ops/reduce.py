@@ -13,7 +13,10 @@ from typing import List, Union
 from hidet.ir.expr import Expr, tensor_var, cast, deref, logical_and, logical_or
 from hidet.ir.type import PointerType, TensorType
 from hidet.ir.tools import infer_type
-
+from hidet.lang.cuda import threadIdx
+from hidet.ir.primitives.cuda.sync import bar_sync
+from hidet.ir.primitives.cuda import shfl_xor_sync, syncthreads
+from hidet.ir.dtypes import f64, u32, f16
 from hidet.ir.cute.ops.reduce import Reduce
 from hidet.ir.cute.type import TiledTensorType
 from hidet.ir.cute import (
@@ -28,6 +31,7 @@ from hidet.ir.cute import (
     make_layout,
     idx2crd,
 )
+from hidet.ir.cute.contexts import tid_in_groups
 from .registry import OpEmitter, Buffer, register_impl
 
 
@@ -248,8 +252,6 @@ class ReduceEmitter(OpEmitter):
                 )
 
         # intra - warp reduce
-        from hidet.ir.primitives.cuda import shfl_xor_sync, syncthreads
-        from hidet.ir.dtypes import f64, u32, f16
 
         # src_thr = src.layout.thr_layout()
         # generates the warp shuffle instructions to perform the intra-warp reduction.
@@ -299,6 +301,16 @@ class ReduceEmitter(OpEmitter):
             with self.for_grid(nr_regs) as i:
                 self.buffer_store(dst.buffer, [i], op.op(dst.buffer[i], temp[i]))
 
+        if "group_ids" in op.annotations:
+            group_ids = op.annotations["group_ids"]
+            assert "group_threads" in op.annotations
+            group_threads = op.annotations["group_threads"]
+            tid = tid_in_groups(group_ids)
+            sync = bar_sync(group_threads)
+        else:
+            tid = threadIdx.x
+            sync = syncthreads()
+
         # inter - warp reduce
         # finally, we perform the inter-warp reduction if necessary.
         # the approach is straightforward:
@@ -308,8 +320,7 @@ class ReduceEmitter(OpEmitter):
         # and perform the reduction.
         if not self._require_inter_warp_reduce(warp):
             return
-        self.append(syncthreads())
-        from hidet.lang.cuda import threadIdx
+        self.append(sync)
 
         smem_size = filter(lane).size() * warp.size() * nr_regs
         smem_addr = self.auto_var(
@@ -320,7 +331,7 @@ class ReduceEmitter(OpEmitter):
         thread_stride = lane_stride + [filter(lane).size()]
         thread_stride = [d * nr_regs for d in thread_stride]
         thread_layout = TensorLayout(tuple(thread_shape), tuple(thread_stride))
-        lane_id = self.auto_var(hint="lane_id", e=threadIdx.x % WARP_SIZE)
+        lane_id = self.auto_var(hint="lane_id", e=tid % WARP_SIZE)
         lds, sts, bits_per_inst = self._get_lds_sts(nr_bits)
         if lds is None:
             raise NotImplementedError(f"cannot find lds/sts instruction to perform inter-warp reduce.(op:{op}")
@@ -328,7 +339,7 @@ class ReduceEmitter(OpEmitter):
         elems_per_iter = bits_per_inst // src_dtype.nbits
         BITS_PER_GPR = 32
         incr = BITS_PER_GPR // src_dtype.nbits
-        smem_addr1 = self.auto_var(hint="smem_addr1", e=smem_addr + thread_layout(threadIdx.x))
+        smem_addr1 = self.auto_var(hint="smem_addr1", e=smem_addr + thread_layout(tid))
         lane_crds = idx2crd(lane_id, tuple(lane_shape))
         lane_crds_ = []
         for crd, d in zip(lane_crds, lane_stride):
@@ -341,8 +352,8 @@ class ReduceEmitter(OpEmitter):
                 operands.append(smem_addr1 + i * elems_per_iter)
                 self.append(sts(*operands))
 
-        self.append(syncthreads())
-        warp_id = self.auto_var(hint="warp_id", e=threadIdx.x // WARP_SIZE)
+        self.append(sync)
+        warp_id = self.auto_var(hint="warp_id", e=tid // WARP_SIZE)
         crds = idx2crd(warp_id, warp.shape_tuple)
         crds_ = []
         red_shape_warp = []
@@ -373,7 +384,7 @@ class ReduceEmitter(OpEmitter):
                         operands = [~dst.buffer[i * elems_per_iter + delta] for delta in range(0, elems_per_iter, incr)]
                         operands.append(smem_addr1 + i * elems_per_iter)
                         self.append(sts(*operands))
-        self.append(syncthreads())
+        self.append(sync)
         thread_shape = lane_shape
         thread_stride = lane_stride
         current = filter(lane).size()
@@ -387,7 +398,7 @@ class ReduceEmitter(OpEmitter):
             current *= s
         thread_stride = [d * nr_regs for d in thread_stride]
         thread_layout = TensorLayout(tuple(thread_shape), tuple(thread_stride))
-        smem_addr3 = self.auto_var(hint="smem_addr3", e=smem_addr + thread_layout(threadIdx.x))
+        smem_addr3 = self.auto_var(hint="smem_addr3", e=smem_addr + thread_layout(tid))
         with self.for_grid(iters) as i:
             operands = [~dst.buffer[i * elems_per_iter + delta] for delta in range(0, elems_per_iter, incr)]
             operands += [smem_addr3 + i * elems_per_iter]

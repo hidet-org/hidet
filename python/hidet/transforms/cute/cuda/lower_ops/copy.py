@@ -19,6 +19,7 @@ from hidet.lang.cuda import threadIdx
 from hidet.ir.cute.ops import Copy, Mask, Atomic
 from hidet.ir.cute.layout import TensorLayout, composition
 from hidet.ir.cute.int_tuple import size, idx2crd
+from hidet.ir.cute.contexts import tid_in_groups
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -36,8 +37,14 @@ class MaskEmitter(OpEmitter):
         nr_masks = size(extents)
         nr_regs = (nr_masks + u32.nbytes * 8 - 1) // (u32.nbytes * 8)
 
+        if "group_ids" in annotations:
+            group_ids = annotations["group_ids"]
+            tid = tid_in_groups(group_ids)
+        else:
+            tid = threadIdx.x
+
         base = var("base")
-        self.declare(base, src_thrval_layout[0][0](threadIdx.x))
+        self.declare(base, src_thrval_layout[0][0](tid))
         with self.for_grid([nr_regs]) as i:
             self.buffer_store(dst, [i], u32(0))
         with self.for_grid(extents) as indices:
@@ -78,6 +85,7 @@ class CopyEmitter(OpEmitter):
         annotations = op.annotations
         assert len(annotations) > 0
         inst = annotations["inst"]
+
         src_layout = annotations["src_layout"]
         dst_layout = annotations["dst_layout"]
         attrs = op.attrs
@@ -127,9 +135,15 @@ class AtomicEmitter(OpEmitter):
         dst_shape = dst.layout.shape
         assert src_shape == dst_shape
         thr2mem = composition(dst.layout, thr)
-        dst_offset = self.auto_var(hint="partition_dst", e=thr2mem(threadIdx.x, base=dst.offset))
         annotations = op.annotations
         assert len(annotations) > 0
+        if "group_ids" in annotations:
+            group_ids = annotations["group_ids"]
+            tid = tid_in_groups(group_ids)
+        else:
+            tid = threadIdx.x
+
+        dst_offset = self.auto_var(hint="partition_dst", e=thr2mem(tid, base=dst.offset))
         inst = annotations["inst"]
         src_layout = annotations["src_layout"]
         dst_layout = annotations["dst_layout"]

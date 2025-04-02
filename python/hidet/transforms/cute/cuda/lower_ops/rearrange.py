@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import Tuple, List, Union
 from hidet.ir.expr import Expr, var
+from hidet.ir.primitives.cuda.sync import bar_sync
 from hidet.ir.type import PointerType, TensorType
 from hidet.ir.tools import infer_type
 from hidet.lang.cuda import threadIdx, syncthreads
@@ -19,6 +20,7 @@ from hidet.ir.cute.ops.rearrange import Rearrange
 from hidet.ir.cute.int_tuple import flatten, compact_col_major
 from hidet.ir.cute.type import TiledTensorType
 from hidet.ir.cute.layout import TiledTensorLayout, TensorLayout, composition, coalesce, make_layout, common_reshape
+from hidet.ir.cute.contexts import tid_in_groups
 
 from ..instruction_selection import memory_instructions
 from .registry import OpEmitter, Buffer, register_impl
@@ -294,25 +296,35 @@ class RearrangeEmitter(OpEmitter):
             Buffer(dst_buf, None, dst.dtype, dst_inner, "register"),
         )
 
+        if "group_ids" in op.annotations:
+            group_ids = op.annotations["group_ids"]
+            assert "group_threads" in op.annotations
+            group_threads = op.annotations["group_threads"]
+            tid = tid_in_groups(group_ids)
+            sync = bar_sync(group_threads)
+        else:
+            tid = threadIdx.x
+            sync = syncthreads()
+
         with self.for_grid(src_outer.shape) as coords:
             ## cond = [crd != 0 for crd in coords] if type(coords) is list else [coords != 0]
             ## with self.if_then(logical_or(*cond)):
             ##     self.append(syncthreads())
-            self.append(syncthreads())
+            self.append(sync)
             src_addr_base = var("src_addr_base", dst_ty)
             smem_addr_base = var("smem_addr_base", dst_ty)
             self.declare(src_addr_base, src_buf + src_outer(coords, base=src.offset))
-            self.declare(smem_addr_base, smem_addr + sts_layout[0](threadIdx.x))
+            self.declare(smem_addr_base, smem_addr + sts_layout[0](tid))
             with self.for_grid(sts_src_layout[1].shape) as sts_coords:
                 src_ptr = var("src_ptr", dst_ty)
                 smem_ptr = var("smem_ptr", dst_ty)
                 self.declare(src_ptr, src_addr_base + sts_src_layout[1](sts_coords))
                 self.declare(smem_ptr, smem_addr_base + sts_dst_layout[1](sts_coords))
                 self.append(sts(src_ptr, smem_ptr))
-            self.append(syncthreads())
+            self.append(sync)
             dst_addr_base = var("dst_addr_base", dst_ty)
             self.declare(dst_addr_base, dst_buf + dst_outer(coords, base=dst.offset))
-            self.assign(smem_addr_base, smem_addr + lds_layout[0](threadIdx.x))
+            self.assign(smem_addr_base, smem_addr + lds_layout[0](tid))
             with self.for_grid(lds_src_layout[1].shape) as lds_coords:
                 smem_ptr = var("smem_ptr", dst_ty)
                 dst_ptr = var("dst_ptr", dst_ty)
