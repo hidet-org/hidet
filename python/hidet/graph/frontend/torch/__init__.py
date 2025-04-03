@@ -49,6 +49,25 @@ def from_torch(module, concrete_args=None):
     return Interpreter(graph_module)
 
 
+def gather_unsupported_ops(module, concrete_args=None):
+    import torch
+    from . import register_functions, register_modules, register_methods  # pylint: disable=unused-import
+    from .interpreter import Interpreter
+
+    if not available():
+        raise RuntimeError('torch is not available.')
+
+    if isinstance(module, torch.fx.GraphModule):
+        graph_module = module
+    elif isinstance(module, torch.nn.Module):
+        graph_module = torch.fx.symbolic_trace(module, concrete_args=concrete_args)
+    else:
+        raise ValueError(f'Current only support import torch.nn.Module and torch.fx.GraphModule, got {type(module)}.')
+    return Interpreter(  # pylint: disable=protected-access
+        graph_module, fail_on_unsupport=False
+    ).gather_unsupported_ops()
+
+
 def register_dynamo_backends():
     print(
         'Now, hidet will use the entry_points mechanism to register as a dynamo backend. \n'

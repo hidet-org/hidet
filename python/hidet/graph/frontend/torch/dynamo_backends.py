@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module
-from typing import List, Sequence, Union
+from typing import List, Sequence, Union, Tuple
 import logging
 import torch
 import hidet.option
@@ -61,22 +61,10 @@ def process_options(kwargs):
         hidet.option.set_option(option, value)
 
 
-# NOTES ABOUT DYNAMIC SHAPE.
-# From pytorch we got two argument:
-#   - fxgraph
-#   - example_inputs
-# In case when we are requested to create dynamic shape, `example_inputs` contain info
-# about used symbols only (all symbols are presented in `example_input` as element of list).
-# But in `example_inputs` there is no information about what dimentions of input tensors
-# should be symbolic and correspondence between symbol and dimention.
-# These info is presented in fxgraph. Every input corresponds fxgraph node.
-# in `fx_node.meta['example_value']` stored `FakeTensor` that contain all symbols in its shape.
-# We use this data to determinate shapes of the inputs.
-def get_flow_graph(interpreter: Interpreter, example_inputs):
-    inputs: List[Union[Tensor, SymbolVar]] = []  # for flow graph construction
-
+def convert_inputs(node_list: List[torch.fx.Node], example_inputs) -> Tuple[List[Union[Tensor, SymbolVar]], List[int]]:
+    inputs: List[Union[Tensor, SymbolVar]] = []
     traceable_input_ids = []
-    for idx, (fxgraph_node, example_input) in enumerate(zip(interpreter.graph.nodes, example_inputs)):
+    for idx, (fxgraph_node, example_input) in enumerate(zip(node_list, example_inputs)):
         if isinstance(example_input, torch.Tensor):
             tensor_dict = fxgraph_node.meta.get('tensor_dict', {})
             is_unguarded = tensor_dict.get('_dynamo_static_input_type', None) == 'unguarded'
@@ -91,6 +79,8 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
                     inputs.append(input)
                 else:
                     fake_input = fxgraph_node.meta['example_value']
+                    if isinstance(fake_input, Tuple):
+                        fake_input = fake_input[idx]
                     symbolic_input = symbol_like_torch(fake_input)
                     inputs.append(symbolic_input)
         elif isinstance(example_input, int):
@@ -100,9 +90,28 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
             name = fxgraph_node.name
             var = hidet.symbol_var(name)
             inputs.append(var)
+        elif isinstance(example_input, Tuple):
+            nested_inputs, nested_traceable_input_ids = convert_inputs([fxgraph_node], example_input)
+            inputs.append(nested_inputs)
+            traceable_input_ids.append(nested_traceable_input_ids)
         else:
             raise ValueError(f"hidet_backend: unexpected example input {example_input}, type {type(example_input)}")
+    return inputs, traceable_input_ids
 
+
+# NOTES ABOUT DYNAMIC SHAPE.
+# From pytorch we got two argument:
+#   - fxgraph
+#   - example_inputs
+# In case when we are requested to create dynamic shape, `example_inputs` contain info
+# about used symbols only (all symbols are presented in `example_input` as element of list).
+# But in `example_inputs` there is no information about what dimentions of input tensors
+# should be symbolic and correspondence between symbol and dimention.
+# These info is presented in fxgraph. Every input corresponds fxgraph node.
+# in `fx_node.meta['example_value']` stored `FakeTensor` that contain all symbols in its shape.
+# We use this data to determinate shapes of the inputs.
+def get_flow_graph(interpreter: Interpreter, example_inputs):
+    inputs, traceable_input_ids = convert_inputs(list(interpreter.graph.nodes), example_inputs)
     logger.info('hidet:   inputs: ')
     for arg in inputs:
         if isinstance(arg, hidet.Tensor):

@@ -61,14 +61,14 @@ def is_torch_method_inplace(name: str):
 
 
 class Interpreter:
-    def __init__(self, graph_module: torch.fx.GraphModule):
+    def __init__(self, graph_module: torch.fx.GraphModule, fail_on_unsupport: bool = True):
         super().__init__()
         self.graph_module: torch.fx.GraphModule = graph_module
         self.graph: torch.fx.Graph = graph_module.graph
         self.torch_modules: Dict[str, torch.nn.Module] = dict(graph_module.named_modules())
         self.hidet_modules: Dict[str, HidetModule] = {}
-
-        self._check_support()
+        if fail_on_unsupport:
+            self._check_support_and_raise_error()
 
     def __call__(self, *args):
         return self.forward(*args)
@@ -88,7 +88,7 @@ class Interpreter:
         else:
             return str(target)
 
-    def _check_support(self):
+    def gather_unsupported_ops(self) -> List[Callable]:
         not_supported = set()
         for node in self.graph.nodes:
             if node.op == "call_module":
@@ -99,7 +99,10 @@ class Interpreter:
                 converted_fn: Optional[Callable] = self._lookup_hidet_function(node.target)
                 if converted_fn is None:
                     not_supported.add(node.target)
+        return list(not_supported)
 
+    def _check_support_and_raise_error(self):
+        not_supported = self.gather_unsupported_ops()
         if len(not_supported) > 0:
             self._raise_unsupported_error(not_supported)
 
