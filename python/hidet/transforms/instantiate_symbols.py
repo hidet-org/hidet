@@ -40,17 +40,26 @@ class InstantiateSymbolsRewriter(IRRewriter):
 
     def visit_IRModule(self, module: IRModule):
         updated_module = module.copy().reset_funcs()
+        # add the global variables (that are not the function variable) to the updated module
+        updated_module.global_vars.update(
+            {name: global_var for name, global_var in module.global_vars.items() if name not in module.functions}
+        )
         call_graph = CallGraph(module, allow_missing=True)
         self.ir_module = updated_module
+
+        # update the function in the reversed order of the call graph, from callee to caller
         for node in call_graph.reversed_order:
             updated_module.functions[node.func.name] = self.visit(node.func)
             # use a new memo for each function, in case there are some expressions are used in multiple functions
             self.memo.clear()
-        updated_module.global_vars = module.global_vars.copy()
+
         return updated_module
 
     def visit_Function(self, func: Function):
         symbols: Set[SymbolVar] = set()
+
+        if is_primitive_function(func.name):
+            return func
 
         for node in collect(func, (SymbolVar, Call, LaunchKernelStmt)):
             if isinstance(node, SymbolVar):
@@ -63,9 +72,6 @@ class InstantiateSymbolsRewriter(IRRewriter):
                 symbols.update(func_symbols.symbols)
             else:
                 assert False
-
-        if is_primitive_function(func.name):
-            return func
 
         ordered_symbols: List[SymbolVar] = list(symbols)
         symbol_params: List[Var] = [Var(symbol.name, symbol.type) for symbol in ordered_symbols]
@@ -134,6 +140,8 @@ class InstantiateSymbolsRewriter(IRRewriter):
         for callee_used_symbol in callee_func_symbols.symbols:
             assert callee_used_symbol in caller_func_symbols.symbol2param
             stmt.args.append(caller_func_symbols.symbol2param[callee_used_symbol])
+        # update the function variable since the function type has changed.
+        stmt.func_var = self.ir_module.lookup_var(stmt.func_var.name)
         return stmt
 
     def visit_Call(self, call: Call):
@@ -152,6 +160,7 @@ class InstantiateSymbolsRewriter(IRRewriter):
         for callee_used_symbol in callee_func_symbols.symbols:
             assert callee_used_symbol in caller_func_symbols.symbol2param
             args.append(caller_func_symbols.symbol2param[callee_used_symbol])
+        call.func_var = self.ir_module.lookup_var(call.func_var.name)
         call.args = tuple(args)
         return call
 
