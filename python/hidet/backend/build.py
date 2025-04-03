@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional, List, Sequence, Union
+import time
 import functools
 import warnings
 import os
@@ -65,7 +66,10 @@ class SourceCompiler:
 
             # run the compilation command
             with tempfile.TemporaryDirectory() as working_dir:
+
+                t1 = time.time()
                 result = subprocess.run(command.split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False)
+                t2 = time.time()
 
                 # if the compilation failed, raise an exception
                 if result.returncode:
@@ -81,6 +85,8 @@ class SourceCompiler:
                 with open(os.path.join(out_lib_dir, log_name), 'w', encoding='utf-8') as f:
                     output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
                     f.write(output.strip())
+                    f.write('\n')
+                    f.write('elapsed time: {:.3f} seconds'.format(t2 - t1))
 
                     lines = output.split('\n')
                     warning_lines = [line for line in lines if 'warning' in line]
@@ -167,8 +173,8 @@ class NVCC(SourceCompiler):
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
             # ftz=true and prec-div=false for fast math
-            '-ftz=true',
-            '-prec-div=false',
+            '-ftz={}'.format('true' if hidet.option.get_option('cuda.build.ftz') else 'false'),
+            '-prec-div={}'.format('true' if hidet.option.get_option('cuda.build.prec_div') else 'false'),
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.

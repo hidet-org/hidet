@@ -310,6 +310,18 @@ def register_hidet_options():
         description='The CPU architecture to compile the host code for (e.g., "x86-64"). "auto" for auto-detect.',
     )
     register_option(
+        name='cuda.build.ftz',
+        type_hint='bool',
+        default_value=True,
+        description='Whether to enable FTZ (flush-to-zero) mode in CUDA kernels. Default True.',
+    )
+    register_option(
+        name='cuda.build.prec_div',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to enable precise division in CUDA kernels. Default False.',
+    )
+    register_option(
         name='cpu.arch',
         type_hint='str',
         default_value='auto',
@@ -1145,6 +1157,31 @@ class cuda:
         """
         arch = cuda.get_arch()
         return int(arch[3]), int(arch[4])
+
+    class build:
+        @staticmethod
+        def use_ftz(flag: bool):
+            """
+            Enable or disable FTZ (Flush to Zero) mode for CUDA kernels.
+
+            Parameters
+            ----------
+            flag: bool
+                Whether to enable FTZ mode.
+            """
+            OptionContext.current().set_option('cuda.build.ftz', flag)
+
+        @staticmethod
+        def use_prec_div(flag: bool):
+            """
+            Disable precision division for CUDA kernels.
+
+            Parameters
+            ----------
+            flag: bool
+                Whether to disable precision division.
+            """
+            OptionContext.current().set_option('cuda.build.prec_div', flag)
 
 
 class cpu:
