@@ -217,14 +217,7 @@ class CompiledGraph:
         else:
             self.is_dynamic = False
 
-    def _init_compiled_graph(self):
-        # initialize weights
-        weights_buffer = Array(void_p, len(self.weights))
-        for i in range(len(self.weights)):
-            weights_buffer[i] = self.weights[i].storage.addr
-        self._init(len(self.weights), weights_buffer)
-
-        # load the dispatch table
+    def _load_dispatch_table(self):
         if os.path.exists(self.dispatch_table_path):
             with open(self.dispatch_table_path, 'r') as f:
                 lines = f.readlines()
@@ -249,6 +242,15 @@ class CompiledGraph:
                             )
                         kernel_array[task_idx] = ctypes_func_pointer(compiled_task.candidates[sch_idx].ctypes_func)
                     self.dispatch_table[tuple(symbol_dims)] = kernel_array
+
+    def _init_compiled_graph(self):
+        # initialize weights
+        weights_buffer = Array(void_p, len(self.weights))
+        for i in range(len(self.weights)):
+            weights_buffer[i] = self.weights[i].storage.addr
+        self._init(len(self.weights), weights_buffer)
+        # load the dispatch table
+        self._load_dispatch_table()
 
     def _init_space_sizes(self):
         if self.is_dynamic:
@@ -380,6 +382,7 @@ class CompiledGraph:
 
     def _run_slow_path(self, inputs, symbol_dims: Tuple[int, ...]):
         """Interpret the graph execution"""
+
         from hidet.graph.tensor import Tensor
 
         index2tensor: Dict[int, Tensor] = {}

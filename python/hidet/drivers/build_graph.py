@@ -13,7 +13,7 @@ from typing import List, Dict
 import os
 import json
 from hashlib import sha256
-
+import numpy
 import hidet
 from hidet.ir.type import FuncType, void, byte_p
 from hidet.ir.expr import SymbolVar, Var, Expr, var
@@ -325,7 +325,9 @@ def save_to_graph_cache(cgraph: CompiledGraph):
     src_list.append(cgraph.graph_module.module_dir)
     dst_list.append(os.path.join(cache_dir, 'graph_module/'))
     copy_tree_ignore_existing(src_list, dst_list)
-
+    # save weights
+    with open(os.path.join(cache_dir, 'weights.npz'), 'wb') as f:
+        numpy.savez(f, *[weight.cpu().numpy() for weight in cgraph.weights])
     # save graph execution
     with open(os.path.join(cache_dir, 'graph_execution.json'), 'w') as f:
         json.dump(asdict(cgraph.graph_execution), f, indent=4)

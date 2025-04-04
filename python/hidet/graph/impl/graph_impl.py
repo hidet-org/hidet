@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Optional, Union
 from collections import defaultdict
+import hashlib
 import hidet.option
 from hidet.ir.expr import Expr
 from hidet.graph.tensor import Tensor
@@ -231,6 +232,7 @@ def graph_as_text(graph: FlowGraph) -> str:
                     + ' = Constant('
                     + _get_tensor_sig(printer, size_var_equivalence, x)
                     + ')'
+                    + ' # hash: {}'.format(hashlib.sha256(x.cpu().numpy().data.tobytes()).hexdigest()[:32])
                 )
         outputs = op.outputs
         line_doc = Doc()

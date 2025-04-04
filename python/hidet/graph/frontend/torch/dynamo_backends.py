@@ -27,6 +27,7 @@ from .interpreter import Interpreter
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph, tensor_from_torch
 from .utils import symbol_like_torch
 from .registry import allow_in_graph_registered_funcs_only
+from .flow_graph_cache import flow_graph_cache_load, flow_graph_cache_save
 
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,12 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
     )
 
 
-def get_compiled_graph(flow_graph: FlowGraph):
+def get_compiled_graph(flow_graph: FlowGraph, kwargs):
+    # check on-disk cache first before compiling FlowGraph into CompiledGraph
+    # and acquire the hash key for saving the FlowGraph after compiling
+    cached_compiled_graph, flowgraph_key = flow_graph_cache_load(flow_graph, kwargs)
+    if cached_compiled_graph is not None:
+        return cached_compiled_graph
     save_dir = dynamo_config['dump_graph_ir']
     with PassContext() as ctx:
         if save_dir:
@@ -156,6 +162,7 @@ def get_compiled_graph(flow_graph: FlowGraph):
     logger.info('start to build the optimized computation graph')
     cgraph: CompiledGraph = graph_opt.build(space=hidet.option.get_search_space())
     logger.info('finish building computation graph')
+    flow_graph_cache_save(flowgraph_key, cgraph)
     return cgraph
 
 
@@ -248,7 +255,7 @@ def hidet_backend(graph_module, example_inputs, **kwargs):
 
         flow_graph, inputs, traceable_input_ids, output_format = get_flow_graph(interpreter, example_inputs)
         del interpreter
-        cgraph = get_compiled_graph(flow_graph)
+        cgraph = get_compiled_graph(flow_graph, kwargs)
         return HidetCompiledModel(cgraph, inputs, traceable_input_ids, output_format)
 
 

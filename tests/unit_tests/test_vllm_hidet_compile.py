@@ -61,11 +61,11 @@ def test_compile_with_fake_tensor(device):
         real_inputs.append(torch.randn(example_value.shape, dtype=example_value.dtype, device=example_value.device))
 
     flow_graph, inputs, traceable_input_ids, output_format = get_flow_graph(interpreter, fake_inputs)
-    cgraph = get_compiled_graph(flow_graph)
+    cgraph = get_compiled_graph(flow_graph, {})
     hidet_fake_compiled = HidetCompiledModel(cgraph, inputs, traceable_input_ids, output_format)
 
     flow_graph, inputs, traceable_input_ids, output_format = get_flow_graph(interpreter, real_inputs)
-    cgraph = get_compiled_graph(flow_graph)
+    cgraph = get_compiled_graph(flow_graph, {})
     hidet_real_compiled = HidetCompiledModel(cgraph, inputs, traceable_input_ids, output_format)
 
     f = hidet_fake_compiled(*real_inputs)
