@@ -44,7 +44,7 @@ class ReduceEmitter(OpEmitter):
     Emitter for Reduce operations, responsible for generating code for reduction operations on tensors.
     """
 
-    def _require_inter_warp_reduce(self, warp: TensorLayout):
+    def require_inter_warp_reduce(self, warp: TensorLayout):
         """
         Determine if inter-warp reduction is required based on the warp layout.
 
@@ -77,7 +77,7 @@ class ReduceEmitter(OpEmitter):
         dst_thr = dst_type.layout.thr_layout()
         dst_val = dst_type.layout.val_layout()
         lane, warp = group(dst_thr, WARP_SIZE)
-        if self._require_inter_warp_reduce(warp):
+        if self.require_inter_warp_reduce(warp):
             return filter(lane).size() * warp.size() * dst_val.count() * x_type.dtype.nbits // 8
         else:
             return 0
@@ -164,7 +164,7 @@ class ReduceEmitter(OpEmitter):
         dst_layout = make_layout(dst_par, dst_red)
         return tuple(par_shape), tuple(red_shape), src_layout, dst_layout
 
-    def _get_lds_sts(self, nr_bits: int):
+    def get_lds_sts(self, nr_bits: int):
         """
         Get the appropriate load/store instructions based on the number of bits.
 
@@ -318,7 +318,7 @@ class ReduceEmitter(OpEmitter):
         # warps belonging to the parallel axes first store local data into shared memory.
         # then warps belonging to the reduction axes load the data from the shared memory to the local register tensor
         # and perform the reduction.
-        if not self._require_inter_warp_reduce(warp):
+        if not self.require_inter_warp_reduce(warp):
             return
         self.append(sync)
 
@@ -332,7 +332,7 @@ class ReduceEmitter(OpEmitter):
         thread_stride = [d * nr_regs for d in thread_stride]
         thread_layout = TensorLayout(tuple(thread_shape), tuple(thread_stride))
         lane_id = self.auto_var(hint="lane_id", e=tid % WARP_SIZE)
-        lds, sts, bits_per_inst = self._get_lds_sts(nr_bits)
+        lds, sts, bits_per_inst = self.get_lds_sts(nr_bits)
         if lds is None:
             raise NotImplementedError(f"cannot find lds/sts instruction to perform inter-warp reduce.(op:{op}")
         iters = nr_bits // bits_per_inst

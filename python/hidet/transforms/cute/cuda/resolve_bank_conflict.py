@@ -19,9 +19,9 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.expr import Var, var
 from hidet.ir.stmt import DeclareStmt
-from hidet.ir.cute import LayoutBase, TensorLayout, ComposedTensorLayout, composition
-from hidet.ir.cute.layout import canonical_thread_value_layout
-from hidet.ir.cute.ops import Copy, TensorBase, Tensor, TensorView
+from hidet.ir.cute import LayoutBase, TensorLayout, ComposedTensorLayout, composition, canonical_thread_value_layout
+from hidet.ir.cute.ops import Copy, TensorBase, Tensor, TensorView, Mma
+from hidet.ir.cute.expr import CConst
 from hidet.transforms.cute.analysis import TensorAliasAnalysis
 
 from .instruction_selection import group
@@ -75,6 +75,8 @@ class ResolveBankConflict(TensorAliasAnalysis):
         super().__init__()
         self.tensor2copys: Dict[Tensor, List[Copy]] = {}
         self.copy2layout: Dict[Copy, TensorLayout] = {}
+        self.copy2conflicts: Dict[Copy, int] = {}
+        self.immutable_tensors: Set[Tensor] = set()
         self.tensor2layout: Dict[Tensor, TensorLayout] = {}
         self.infer_type = TypeInfer()
 
@@ -103,6 +105,26 @@ class ResolveBankConflict(TensorAliasAnalysis):
             self._on_shared_tensor(src, e)
         elif dst_ty.scope.is_shared():
             self._on_shared_tensor(dst, e)
+
+    def visit_Mma(self, e: Mma):
+        """
+        Note: Mma is a special case, we need to handle it separately. If
+        wgmma instruction is used, the swizzle layout cannot be determined
+        freely. We need to consider the swizzle determined by the wgmma
+        instruction.
+        """
+        a = e.a
+        a_ty = self.infer_type(a)
+        b = e.b
+        b_ty = self.infer_type(b)
+        if a_ty.scope.is_shared():
+            tensor_info = self.get_tensor(a)
+            tensor = tensor_info.tensor
+            self.immutable_tensors.add(tensor)
+        elif b_ty.scope.is_shared():
+            tensor_info = self.get_tensor(b)
+            tensor = tensor_info.tensor
+            self.immutable_tensors.add(tensor)
 
     def _bank_conflicts(self, phase: TensorLayout, elements_per_inst: int, banks: int, logger=None):
         """
@@ -155,8 +177,11 @@ class ResolveBankConflict(TensorAliasAnalysis):
         verbose = False
 
         from hidet.logging import logger, setConsoleLevel, DEBUG
+        from hidet.ir.cute import make_swizzle
 
         origin_level = logger.level
+        need_annotate = tensor in self.immutable_tensors
+
         if verbose:
             setConsoleLevel(DEBUG)
             logger.debug("====================================")
@@ -193,12 +218,13 @@ class ResolveBankConflict(TensorAliasAnalysis):
             if verbose:
                 logger.debug(f"copy {copy}, bank conlicts before resolving:")
             bank_conflicts = self._bank_conflicts(phase_layout, elements_per_inst, banks, logger if verbose else None)
-            if bank_conflicts > 1:
+            if need_annotate:
+                self.copy2conflicts[copy] = bank_conflicts
+            elif bank_conflicts > 1:
                 yshft_max = max(int(phase_layout.cosize()).bit_length(), yshft_max)
                 need_resolve = True
                 bits_max = max(int(phase_layout.cosize()).bit_length(), bits_max)
 
-        from hidet.ir.cute import make_swizzle
         import sys
 
         if need_resolve:
@@ -234,7 +260,7 @@ class ResolveBankConflict(TensorAliasAnalysis):
                             composed_layout = ComposedTensorLayout(phase_layout, 0, swizzle)
                             bank_conflicts = self._bank_conflicts(composed_layout, elements_per_inst, banks)
                             current_conflicts += bank_conflicts
-                        if current_conflicts < min_conflicts:
+                        if current_conflicts <= min_conflicts:
                             min_conflicts = current_conflicts
                             best_swizzle = swizzle
                             found = min_conflicts == num_copys
@@ -287,7 +313,7 @@ class ResolveBankConflict(TensorAliasAnalysis):
         for tensor, copys in self.tensor2copys.items():
             self._resolve_banks(tensor, copys)
 
-        return self.tensor2layout
+        return self.tensor2layout, self.copy2conflicts
 
 
 class ApplySharedMemoryLayoutUpdate(IRRewriter):
@@ -302,7 +328,7 @@ class ApplySharedMemoryLayoutUpdate(IRRewriter):
         old2new (Dict[Var, Var]): The mapping from old variables to new variables.
     """
 
-    def __init__(self, tensor2layout: Dict[TensorBase, LayoutBase]):
+    def __init__(self, tensor2layout: Dict[TensorBase, LayoutBase], copy2conflicts: Dict[Copy, int]):
         """
         Initializes the ApplySharedMemoryLayoutUpdate instance.
 
@@ -311,6 +337,7 @@ class ApplySharedMemoryLayoutUpdate(IRRewriter):
         """
         super().__init__(use_memo=False)
         self.tensor2layout: Dict[TensorBase, LayoutBase] = tensor2layout
+        self.copy2conflicts: Dict[Copy, int] = copy2conflicts
         self.old2new: Dict[Var, Var] = {}
         self.infer_type = TypeInfer()
 
@@ -392,13 +419,22 @@ class ApplySharedMemoryLayoutUpdate(IRRewriter):
         else:
             return e.reforward([x], attrs_update={"layout": layout})
 
+    def visit_Copy(self, e: Copy):
+        if e in self.copy2conflicts:
+            bank_conflicts = self.copy2conflicts[e]
+            args = [self.visit(arg) for arg in e.args]
+            annotations: Dict[str, CConst] = {}
+            annotations["bank_conflicts"] = bank_conflicts
+            return e.reforward(args, annotations_update=annotations)
+        return super().visit_Copy(e)
+
 
 class ResolveBankConflictPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
         solver = ResolveBankConflict()
         solution = solver.solve(func)
 
-        rewriter = ApplySharedMemoryLayoutUpdate(solution)
+        rewriter = ApplySharedMemoryLayoutUpdate(*solution)
         return rewriter(func)
 
 

@@ -924,6 +924,7 @@ class LatencyModel(CostModel):
         assert len(annotations) > 0
         src_layout = annotations["src_layout"]
         dst_layout = annotations["dst_layout"]
+        bank_conflicts = annotations.get("bank_conflicts", None)
         src_elements = src_layout[1].size()
         dst_elements = dst_layout[1].size()
         assert src_elements == dst_elements, f"elements mismatch.(src:{src_elements},dst:{dst_elements})"
@@ -944,7 +945,8 @@ class LatencyModel(CostModel):
             self.ops_on_the_fly.pop(op)
         # the cycles to wait for the last instruction to complete
         # Note: The completion latency is adjusted for overlap with subsequent operations
-        self.ops_on_the_fly[copy] = dependent_cpi_lut[opcode] - issue_latency
+        bank_conflicts_penalty = 1 if bank_conflicts is None else bank_conflicts
+        self.ops_on_the_fly[copy] = dependent_cpi_lut[opcode] * bank_conflicts_penalty - issue_latency
         self.var2op[copy.dst] = copy
         return cycles
 
@@ -960,7 +962,11 @@ class LatencyModel(CostModel):
         Raises:
             NotImplementedError: If the input types are not supported.
         """
-        if inst.a_dtype.is_float() and inst.b_dtype.is_float():
+        from .instruction_selection import WgmmaAsyncInstruction
+
+        if isinstance(inst, WgmmaAsyncInstruction):
+            return Opcode.Wgmma
+        elif inst.a_dtype.is_float() and inst.b_dtype.is_float():
             return Opcode.Hmma
         elif inst.a_dtype.is_integer() and inst.b_dtype.is_integer():
             return Opcode.Imma
@@ -1008,7 +1014,6 @@ class LatencyModel(CostModel):
         for op in pops:
             self.ops_on_the_fly.pop(op)
         # the cycles to wait for the last instruction to complete
-        # Note: The completion latency is adjusted for overlap with subsequent operations
         lat_to_complete = get_mma_latency_to_complete(opcode, inst)
         if lat_to_complete > issue_latency:
             self.ops_on_the_fly[mma] = lat_to_complete - issue_latency

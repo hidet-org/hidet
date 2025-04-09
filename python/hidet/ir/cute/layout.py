@@ -499,6 +499,40 @@ def left_inverse(a: TensorLayout):
     return right_inverse(make_layout(a, complement(a)))
 
 
+def right_inverse_ignore_zero_strides(a: TensorLayout):
+    """
+    TODO: add document
+    """
+    flat_layout = coalesce(a)
+    if is_integer(flat_layout.stride):
+        flat_shape = tuple([flat_layout.shape])
+        flat_stride = [flat_layout.stride]
+    else:
+        flat_shape = flat_layout.shape
+        flat_stride = [shape_abs(i) for i in flat_layout.stride]
+    result_shape = []
+    result_stride = []
+    current_idx = 1
+    for d, s, rstride in sorted(zip(flat_stride, flat_shape, compact_col_major(flat_shape))):
+        if d == 0:
+            continue
+        if d != current_idx:
+            break
+        result_shape.append(s)
+        result_stride.append(signum(d) * rstride)
+        current_idx = s * d
+    if len(result_stride) == 0:
+        return TensorLayout(1, 0)
+    return TensorLayout(tuple(result_shape), tuple(result_stride))
+
+
+def left_inverse_ignore_zero_strides(a: TensorLayout):
+    """
+    TODO: add document
+    """
+    return right_inverse_ignore_zero_strides(make_layout(a, complement(a)))
+
+
 def logical_product(a: TensorLayout, b: TensorLayout):
     return make_layout(a, composition(complement(a, a.size() * b.cosize()), b))
 

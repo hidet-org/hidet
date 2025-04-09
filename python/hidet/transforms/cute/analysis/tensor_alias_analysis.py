@@ -18,9 +18,10 @@ from hidet.ir.cute.expr import CallOp
 
 from hidet.ir.func import Function
 from hidet.ir.stmt import DeclareStmt
+from hidet.ir.tools import TypeInfer
 
 from hidet.ir.cute import TensorLayout, make_layout
-from hidet.ir.cute.ops import PartitionSrc, PartitionDst, SubTensor, TensorBase, Transpose
+from hidet.ir.cute.ops import PartitionSrc, PartitionDst, SubTensor, TensorBase, Transpose, PartitionA, PartitionB
 
 
 class TensorInfo:
@@ -160,6 +161,7 @@ class TensorAliasAnalysis(IRVisitor):
         super().__init__()
         self.var2tensor: Dict[Var, TensorInfo] = {}
         self.var2var: Dict[Expr, Expr] = {}
+        self.infer_type = TypeInfer()
 
     def get_tensor(self, v: Var):
         """
@@ -200,6 +202,13 @@ class TensorAliasAnalysis(IRVisitor):
                 tensor = self.get_tensor(v)
                 if tensor is not None:
                     self.var2tensor[v] = tensor
+            elif isinstance(op, (PartitionA, PartitionB)):
+                v_ty = self.infer_type(v)
+                if v_ty.scope.is_shared():
+                    self.var2var[v] = op.x
+                    tensor = self.get_tensor(v)
+                    if tensor is not None:
+                        self.var2tensor[v] = tensor
             elif isinstance(op, Transpose):
                 tensor = self.var2tensor[op.x]
                 self.var2tensor[v] = tensor_info(tensor.tensor, *op.dims)

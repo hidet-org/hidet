@@ -48,19 +48,22 @@ from hidet.ir.primitives import (
     sts8,
 )
 from hidet.ir.primitives.cuda.mma import ldmatrix, mma_sync, MmaConfig, mma_configs
+from hidet.ir.primitives.cuda.wgmma import WgmmaConfig, wgmma_configs, wgmma_async
 from hidet.ir.primitives.cuda.cp_async import cp_async
 from hidet.ir.primitives.cuda.atomic import reduce_add, atomic_add
 
-from hidet.ir.cute.ops import Copy, Mask, Mma, Atomic, AtomicAdd
+from hidet.ir.cute.ops import TensorBase, Copy, Mask, Mma, PartitionA, PartitionB, Atomic, AtomicAdd
 from hidet.ir.cute.algorithm import TiledCopy, TiledMma
 from hidet.ir.cute.layout import (
     TiledTensorLayout,
     ComposedTensorLayout,
     TensorLayout,
+    LayoutBase,
     composition,
     make_layout,
     max_common_vector,
     left_inverse,
+    left_inverse_ignore_zero_strides,
     coalesce,
     filter,
     common_reshape,
@@ -69,8 +72,44 @@ from hidet.ir.cute.layout import (
 )
 from hidet.ir.cute.int_tuple import rank, compact_col_major, flatten, depth
 from hidet.utils import initialize
+from hidet.transforms.cute.analysis import TensorAliasAnalysis
 from hidet.logging import logger, DEBUG
+from .resolve_bank_conflict import ApplySharedMemoryLayoutUpdate
 from .lower_ops import Buffer
+
+
+def expr_to_buffer(expr: Expr, layout_: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = None) -> Buffer:
+    """
+    Convert an expression to a buffer
+    Buffer is a wrapper around a variable that represents a tensor and is used to pass
+    tensor information during IR lowering.
+    """
+    expr_ty: TiledTensorType = infer_type(expr)
+    assert isinstance(expr_ty, TiledTensorType)
+    layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = (
+        layout_ if layout_ is not None else expr_ty.layout
+    )
+    dtype: DataType = expr_ty.dtype
+    scope: DeclareScope = expr_ty.scope
+    return Buffer(buffer=expr, offset=None, dtype=dtype, scope=scope, layout=layout)
+
+
+def convert_layout_type_to_layout(tensor2layout: Dict[TensorBase, str]):
+    from hidet.ir.cute import Swizzle
+
+    _tensor2layout: Dict[TensorBase, LayoutBase] = {}
+    for tensor, layout_type in tensor2layout.items():
+        layout = tensor.layout
+        dtype = tensor.dtype
+        logbits = (dtype.nbits - 1).bit_length()
+        if layout_type.startswith("SW32"):
+            layout = ComposedTensorLayout(layout, 0, Swizzle(1, 7 - logbits, 3))
+        elif layout_type.startswith("SW64"):
+            layout = ComposedTensorLayout(layout, 0, Swizzle(2, 7 - logbits, 3))
+        elif layout_type.startswith("SW128"):
+            layout = ComposedTensorLayout(layout, 0, Swizzle(3, 7 - logbits, 3))
+        _tensor2layout[tensor] = layout
+    return _tensor2layout
 
 
 # The bits of a general purpose register in CUDA is 32
@@ -585,6 +624,8 @@ class MmaInstruction:
         self.c_scope = _scope(c_scope)
         self.d_scope = _scope(d_scope)
 
+        self.elements_per_inst = self.shape_mnk[0] * self.shape_mnk[1]
+
     def match(self, d: Buffer, a: Buffer, b: Buffer, c: Buffer, tiled_mma: TiledMma):
         got_scope = [a.scope, b.scope, c.scope, d.scope]
         expected_scope = [self.a_scope, self.b_scope, self.c_scope, self.d_scope]
@@ -618,9 +659,17 @@ class MmaInstruction:
         c_thr_inst, c_thr_rest = group(c_thr_layout, c_thr_layout_inst.size())
         c_val_inst, c_val_rest = group(c_val_layout, c_val_layout_inst.size())
 
+        # check divisibility
+        if any(v is None for v in [a_thr_inst, a_val_inst, b_thr_inst, b_val_inst, c_thr_inst, c_val_inst]):
+            return None
+
         # Step 1: Compute the conversion mapping from the instruction to the tile
-        cvt_a = coalesce(composition(make_layout(a_thr_inst, a_val_inst), left_inverse(self.a_layout)))
-        cvt_b = coalesce(composition(make_layout(b_thr_inst, b_val_inst), left_inverse(self.b_layout)))
+        cvt_a = coalesce(
+            composition(make_layout(a_thr_inst, a_val_inst), left_inverse_ignore_zero_strides(self.a_layout))
+        )
+        cvt_b = coalesce(
+            composition(make_layout(b_thr_inst, b_val_inst), left_inverse_ignore_zero_strides(self.b_layout))
+        )
         cvt_c = coalesce(composition(make_layout(c_thr_inst, c_val_inst), left_inverse(self.c_layout)))
 
         def split_mn(cvt: TensorLayout, m: int, inst_m: int):
@@ -678,6 +727,8 @@ class MmaInstruction:
                 Tuple[TensorLayout, TensorLayout]: The grouped tensor layouts.
             """
             layout = arg.layout
+            if isinstance(layout, ComposedTensorLayout):
+                layout = layout.layout
             if isinstance(layout, TensorLayout):
                 return group(layout, inst.size())
             else:
@@ -880,10 +931,203 @@ class MmaSyncInstruction(MmaInstruction):
             return self.apply(self.mma_config, a, b, d)
 
 
+class WgmmaAsyncInstruction(MmaInstruction):
+    def __init__(
+        self,
+        wgmma_config: WgmmaConfig,
+        swap_AB: bool,
+        apply: Callable,
+        shape_mnk,
+        a_layout: TensorLayout,
+        b_layout: TensorLayout,
+        c_layout: TensorLayout,
+        d_layout: TensorLayout,
+        a_dtype: Union[DataType, str],
+        b_dtype: Union[DataType, str],
+        c_dtype: Union[DataType, str],
+        d_dtype: Union[DataType, str] = None,
+        a_scope: Union[DeclareScope, str] = "register",
+        b_scope: Union[DeclareScope, str] = "shared",
+        c_scope: Union[DeclareScope, str] = "register",
+        d_scope: Union[DeclareScope, str] = "register",
+        trans_a: Union[bool, None] = None,
+        trans_b: Union[bool, None] = False,
+    ):
+        super().__init__(
+            apply,
+            shape_mnk,
+            a_layout,
+            b_layout,
+            c_layout,
+            d_layout,
+            a_dtype,
+            b_dtype,
+            c_dtype,
+            d_dtype,
+            a_scope,
+            b_scope,
+            c_scope,
+            d_scope,
+        )
+        self.wgmma_config = wgmma_config
+        self.swap_AB = swap_AB
+        self._trans_a = trans_a
+        self._trans_b = trans_b
+
+        def validate(scope, trans, multiplicand):
+            if scope.is_register() and trans is not None:
+                raise ValueError(
+                    f"Unsupported combination of scope({scope}) and transpose({trans}) for multiplicand {multiplicand}"
+                )
+            if scope.is_shared() and trans is None:
+                raise ValueError(f"Transpose of multiplicand {multiplicand} must be specified for shared scope")
+
+        validate(self.a_scope, self.trans_a, "A")
+        validate(self.b_scope, self.trans_b, "B")
+
+    @property
+    def trans_a(self):
+        if self._trans_a is None:
+            return None
+        return 1 if self._trans_a else 0
+
+    @property
+    def trans_b(self):
+        if self._trans_b is None:
+            return None
+        return 1 if self._trans_b else 0
+
+    def get_core_matrix_layouts(self, dtype: DataType, m: int, k: int, trans: bool):
+        if not trans:
+            bytes_per_row = 16
+            core_matrix_row = 8
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            layout_interleaved = TensorLayout(
+                ((core_matrix_row, m // core_matrix_row), (core_matrix_col, k // core_matrix_col)),
+                ((core_matrix_col, k * core_matrix_row), (1, core_matrix_row * core_matrix_col)),
+            )
+            bytes_per_row = 32
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            layout_SW32 = TensorLayout((m, core_matrix_col), (core_matrix_col, 1))
+            bytes_per_row = 64
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            layout_SW64 = TensorLayout((m, core_matrix_col), (core_matrix_col, 1))
+            bytes_per_row = 128
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            layout_SW128 = TensorLayout((m, core_matrix_col), (core_matrix_col, 1))
+            return [layout_interleaved, layout_SW32, layout_SW64, layout_SW128]
+        else:
+            bytes_per_row = 16
+            core_matrix_row = 8
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            layout_interleaved = TensorLayout(
+                ((core_matrix_row, m // core_matrix_row), (core_matrix_col, k // core_matrix_col)),
+                ((1, k * core_matrix_row), (core_matrix_row, core_matrix_row * core_matrix_col)),
+            )
+            bytes_per_row = 32
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            # FIXME: if m is not a multiple of core_matrix_col
+            if m % core_matrix_col != 0:
+                layout_SW32 = None
+            else:
+                layout_SW32 = TensorLayout(
+                    ((core_matrix_col, m // core_matrix_col), (k,)), ((1, k * core_matrix_col), (core_matrix_col,))
+                )
+            bytes_per_row = 64
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            if m % core_matrix_col != 0:
+                layout_SW64 = None
+            else:
+                layout_SW64 = TensorLayout(
+                    ((core_matrix_col, m // core_matrix_col), (k,)), ((1, k * core_matrix_col), (core_matrix_col,))
+                )
+            bytes_per_row = 128
+            core_matrix_col = bytes_per_row // dtype.nbytes
+            if m % core_matrix_col != 0:
+                layout_SW128 = None
+            else:
+                layout_SW128 = TensorLayout(
+                    ((core_matrix_col, m // core_matrix_col), (k,)), ((1, k * core_matrix_col), (core_matrix_col,))
+                )
+            return [layout_interleaved, layout_SW32, layout_SW64, layout_SW128]
+
+    def get_core_matrix_layouts_A(self):
+        assert self.a_scope.is_shared()
+        m, _, k = self.shape_mnk
+        return self.get_core_matrix_layouts(self.a_dtype, m, k, self.trans_a)
+
+    def get_core_matrix_layouts_B(self):
+        assert self.b_scope.is_shared()
+        _, n, k = self.shape_mnk
+        return self.get_core_matrix_layouts(self.b_dtype, n, k, self.trans_b)
+
+    def _get_layout_type(self, layout_type: int, trans: bool):
+        _layout_type_dict = {
+            (0, True): "Interleaved_T",
+            (0, False): "Interleaved_N",
+            (1, True): "SW32_T",
+            (1, False): "SW32_N",
+            (2, True): "SW64_T",
+            (2, False): "SW64_N",
+            (3, True): "SW128_T",
+            (3, False): "SW128_N",
+        }
+        rst = _layout_type_dict.get((layout_type, trans), None)
+        if rst is None:
+            raise ValueError(f"Invalid combination of layout type (got:{layout_type}) and transpose(got:{trans})")
+        return rst
+
+    def layout_match(self, a_tensor_info, b_tensor_info, tiled_mma: TiledMma):
+        layout_type_a = None
+        layout_type_b = None
+        if a_tensor_info is not None:
+            _, tv = tiled_mma.a_tv_layout()
+            _, v = canonical_thread_value_layout(tv)
+            _, value_inst = self.a_layout
+            v_inst, _ = group(v, value_inst.size())
+            layout_type = None
+            for i, core_matrix_layout in enumerate(self.get_core_matrix_layouts_A()):
+                if core_matrix_layout is None:
+                    continue
+                flat_core_matrix_layout = coalesce(core_matrix_layout)
+                v_reshape = composition(v_inst, TensorLayout(core_matrix_layout.shape_tuple))
+                core_matrix_layout = coalesce(composition(a_tensor_info.layout, v_reshape))
+                if core_matrix_layout == flat_core_matrix_layout:
+                    layout_type = i
+                    break
+            if layout_type is None:
+                return None
+            layout_type_a = self._get_layout_type(layout_type, self.trans_a)
+        if b_tensor_info is not None:
+            _, tv = tiled_mma.b_tv_layout()
+            _, v = canonical_thread_value_layout(tv)
+            _, value_inst = self.b_layout
+            v_inst, _ = group(v, value_inst.size())
+            layout_type = None
+            for i, core_matrix_layout in enumerate(self.get_core_matrix_layouts_B()):
+                if core_matrix_layout is None:
+                    continue
+                flat_core_matrix_layout = coalesce(core_matrix_layout)
+                v_reshape = composition(v_inst, TensorLayout(core_matrix_layout.shape_tuple))
+                core_matrix_layout_ = coalesce(composition(b_tensor_info.layout, v_reshape))
+                if core_matrix_layout_ == flat_core_matrix_layout:
+                    layout_type = i
+                    break
+            if layout_type is None:
+                return None
+            layout_type_b = self._get_layout_type(layout_type, self.trans_b)
+        return layout_type_a, layout_type_b
+
+    def __call__(self, d: Expr, a: Expr, b: Expr, c: Expr):
+        if self.swap_AB:
+            return self.apply(self.wgmma_config, b, d, a, trans_a=self.trans_b, trans_b=self.trans_a)
+        else:
+            return self.apply(self.wgmma_config, a, d, b, trans_a=self.trans_a, trans_b=self.trans_b)
+
+
 mma_instructions = []
 
 
-@initialize()
 def register_mma_instruction():
     shape = (16, 8, 16)
     a = TensorLayout(((4, 8), (2, 2, 2)), ((32, 1), (16, 8, 128)))
@@ -925,31 +1169,231 @@ def register_mma_instruction():
         MmaSyncInstruction(mma_configs["m16n8k16_bf16_f32"], True, mma_sync, shape, a, b, c, c, "bf16", "bf16", "f32")
     )
 
+    for n in range(8, 257, 8):
+        for trans_b in [True, False]:
+            shape = (64, n, 16)
+            # a in register
+            a = TensorLayout(((4, 8, 4), (2, 2, 2)), ((128, 1, 16), (64, 8, 512)))
+            b = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
+                    False,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f16",
+                    trans_b=trans_b,
+                )
+            )
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f32_f16_f16"],
+                    False,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f32",
+                    trans_b=trans_b,
+                )
+            )
+
+            # a in shared
+            a = TensorLayout(((128,), (64, 16)), ((0,), (1, 64)))
+            b = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
+                    False,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f16",
+                    a_scope="shared",
+                    trans_a=False,
+                    trans_b=trans_b,
+                )
+            )
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f32_f16_f16"],
+                    False,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f32",
+                    a_scope="shared",
+                    trans_a=False,
+                    trans_b=trans_b,
+                )
+            )
+
+        for trans_a in [True, False]:
+            shape = (n, 64, 16)
+            # b in register
+            a = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
+            b = TensorLayout(((4, 8, 4), (2, 2, 2)), ((128, 1, 16), (64, 8, 512)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
+                    True,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f16",
+                    "f16",
+                    "shared",
+                    "register",
+                    trans_a=trans_a,
+                    trans_b=None,
+                )
+            )
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f32_f16_f16"],
+                    True,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f32",
+                    "f32",
+                    "shared",
+                    "register",
+                    trans_a=trans_a,
+                    trans_b=None,
+                )
+            )
+
+            # b in shared
+            a = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
+            b = TensorLayout(((128,), (64, 16)), ((0,), (1, 64)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
+                    True,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f16",
+                    "f16",
+                    "shared",
+                    "shared",
+                    trans_a=trans_a,
+                )
+            )
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k16_f32_f16_f16"],
+                    True,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f16",
+                    "f16",
+                    "f32",
+                    "f32",
+                    "shared",
+                    "shared",
+                    trans_a=trans_a,
+                )
+            )
+
+
+def get_mma_instructions():
+    if len(mma_instructions) == 0:
+        register_mma_instruction()
+    return mma_instructions
+
 
 class MmaInstructionSelection(IRRewriter):
-    def __init__(self):
+    def __init__(self, var2tensor):
         super().__init__()
+        self.var2tensor = var2tensor
+        self.tensor2layout: Dict[TensorBase, str] = {}
+
+    def _pick_candidate(self, op: Mma, candidates: List[Tuple[MmaInstruction, ...]]):
+        candidates = sorted(candidates, key=lambda x: -x[0].elements_per_inst)
+        for inst, d_rest, a_rest, b_rest, c_rest in candidates:
+            if inst.a_scope.is_shared() or inst.b_scope.is_shared():
+                a_tensor_info = None
+                b_tensor_info = None
+                if inst.a_scope.is_shared():
+                    a = op.a
+                    assert a in self.var2tensor
+                    a_tensor_info = self.var2tensor[a]
+                elif inst.b_scope.is_shared():
+                    b = op.b
+                    assert b in self.var2tensor
+                    b_tensor_info = self.var2tensor[b]
+                result = inst.layout_match(a_tensor_info, b_tensor_info, op.tiled_mma)
+                if result is None:
+                    continue
+                layout_type_a, layout_type_b = result
+                if a_tensor_info is not None and layout_type_a is not None:
+                    self.tensor2layout[a_tensor_info.tensor] = layout_type_a
+                elif b_tensor_info is not None and layout_type_b is not None:
+                    self.tensor2layout[b_tensor_info.tensor] = layout_type_b
+                return inst, d_rest, a_rest, b_rest, c_rest
+            else:
+                return inst, d_rest, a_rest, b_rest, c_rest
+        return None
 
     def visit_Mma(self, e: Mma):
         args = [self.visit(arg) for arg in e.args]
-
-        def arg_to_buffer(arg: Expr):
-            arg_ty: TiledTensorType = infer_type(arg)
-            layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = arg_ty.layout
-            dtype: DataType = arg_ty.dtype
-            scope: DeclareScope = arg_ty.scope
-            return Buffer(buffer=arg, offset=None, dtype=dtype, scope=scope, layout=layout)
-
-        bufs = [arg_to_buffer(arg) for arg in args]
+        bufs = [expr_to_buffer(arg) for arg in args]
         candidates = []
-        for inst in mma_instructions:
+        for inst in get_mma_instructions():
             result = inst.match(*bufs, e.tiled_mma)
             if result is not None:
                 candidates.append((inst, *result))
         if len(candidates) == 0:
             raise NotImplementedError(f"Cannot find a suitable instruction for {e}")
-        # candidates = sorted(candidates, key=lambda x: -x[0].bytes_per_inst)
-        inst, d_rest, a_rest, b_rest, c_rest = candidates[0]
+        cand = self._pick_candidate(e, candidates)
+        if cand is None:
+            raise NotImplementedError(f"Cannot find a suitable instruction for {e}")
+        inst, d_rest, a_rest, b_rest, c_rest = cand
         annotations: Dict[str, CConst] = {}
         annotations["inst"] = inst
         annotations["a_rest"] = a_rest
@@ -957,6 +1401,31 @@ class MmaInstructionSelection(IRRewriter):
         annotations["c_rest"] = c_rest
         annotations["d_rest"] = d_rest
         return e.reforward(args, annotations_update=annotations)
+
+
+class AnnotateLayoutRewritter(IRRewriter):
+    def __init__(self, var2tensor, tensor2layout: Dict[TensorBase, str]):
+        super().__init__()
+        self.var2tensor = var2tensor
+        self.tensor2layout: Dict[TensorBase, str] = tensor2layout
+
+    def visit_PartitionA(self, e: PartitionA):
+        x_tensor_info = self.var2tensor.get(e.x, None)
+        if x_tensor_info is not None and x_tensor_info.tensor in self.tensor2layout:
+            x_tensor = x_tensor_info.tensor
+            x = self.visit(e.x)
+            layout_type = self.tensor2layout[x_tensor]
+            return e.reforward([x], annotations_update={"layout_type": layout_type})
+        return super().visit_PartitionA(e)
+
+    def visit_PartitionB(self, e: PartitionB):
+        x_tensor_info = self.var2tensor.get(e.x, None)
+        if x_tensor_info is not None and x_tensor_info.tensor in self.tensor2layout:
+            x_tensor = x_tensor_info.tensor
+            x = self.visit(e.x)
+            layout_type = self.tensor2layout[x_tensor]
+            return e.reforward([x], annotations_update={"layout_type": layout_type})
+        return super().visit_PartitionB(e)
 
 
 class CopyInstructionSelection(IRRewriter):
@@ -1015,14 +1484,7 @@ class CopyInstructionSelection(IRRewriter):
     def visit_Copy(self, e: Copy):
         args = [self.visit(arg) for arg in e.args]
 
-        def arg_to_buffer(arg: Expr):
-            arg_ty: TiledTensorType = self.infer_type(arg)
-            layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = arg_ty.layout
-            dtype: DataType = arg_ty.dtype
-            scope: DeclareScope = arg_ty.scope
-            return Buffer(buffer=arg, offset=None, dtype=dtype, scope=scope, layout=layout)
-
-        bufs = [arg_to_buffer(arg) for arg in args[:2]]
+        bufs = [expr_to_buffer(arg) for arg in args[:2]]
         candidate = None
         logger.debug("============================================================")
         logger.debug(f"copy: {e}")
@@ -1224,15 +1686,32 @@ class InstructionSelectionPass(FunctionPass):
         if DEBUG_VERBOSE:
             logger.setLevel(DEBUG)
 
-        mma_inst_selection = MmaInstructionSelection()
-        func = mma_inst_selection(func)
+        # Step 1: Perform tensor alias analysis
+        tensor_alias_analysis = TensorAliasAnalysis()
+        tensor_alias_analysis(func)
+        var2tensor = tensor_alias_analysis.var2tensor
 
+        # Step 2: Perform instruction selection for mma operations
+        mma_inst_selection = MmaInstructionSelection(var2tensor)
+        func = mma_inst_selection(func)
+        tensor2layout = mma_inst_selection.tensor2layout
+
+        # Step 3: Annotate the layout type for PartitionA and PartitionB
+        rewriter = AnnotateLayoutRewritter(var2tensor, tensor2layout)
+        func = rewriter(func)
+
+        # Step 4: Convert the shared memory layout to Swizzle Layout
+        _tensor2layout = convert_layout_type_to_layout(tensor2layout)
+        rewriter = ApplySharedMemoryLayoutUpdate(_tensor2layout, {})
+        func = rewriter(func)
+
+        # Step 5: Perform instruction selection for copy operations
         copy_inst_selection = CopyInstructionSelection()
         func = copy_inst_selection(func)
 
+        # Step 6: Annotate the mask for each copy operation
         marker = MaskUsageMarker()
         mask2user = marker.mark(func)
-
         mask_annotation = MaskAnnotation(mask2user)
         func = mask_annotation(func)
 

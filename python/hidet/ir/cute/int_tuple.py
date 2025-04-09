@@ -468,3 +468,17 @@ def has_none(a: Union[None, tuple, int]):
         return any(has_none(v) for v in a)
     else:
         return a is None
+
+
+def concat_tuple(a: Union[tuple, int], b: Union[tuple, int]):
+    """Concatenate two int_tuples"""
+    if is_tuple(a):
+        if is_tuple(b):
+            return a + b
+        else:
+            return a + (b,)
+    else:
+        if is_tuple(b):
+            return (a,) + b
+        else:
+            return (a, b)

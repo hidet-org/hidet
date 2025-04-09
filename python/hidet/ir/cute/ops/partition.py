@@ -17,6 +17,7 @@ from hidet.ir.expr import Expr, is_constant
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.algorithm import TiledCopy, is_auto_copy, TiledMma, is_auto_mma
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType, logical_encoding
+from hidet.ir.cute.layout import is_auto_layout
 from hidet.ir.cute import (
     TensorLayout,
     TiledTensorLayout,
@@ -277,7 +278,7 @@ class PartitionA(Partition):
         x_type = arg_types[0]
         if not isinstance(x_type, TiledTensorType):
             raise TypeError(f"Type mismatch.(got:x({x_type}))")
-        if x_type.layout is auto_layout:
+        if is_auto_layout(x_type.layout):
             return tiled_tensor(x_type.dtype, auto_layout, x_type.scope)
         if is_auto_mma(self.tiled_mma):
             return tiled_tensor(x_type.dtype, auto_layout, x_type.scope)
@@ -334,7 +335,7 @@ class PartitionB(Partition):
         x_type = arg_types[0]
         if not isinstance(x_type, TiledTensorType):
             raise TypeError(f"Type mismatch.(got:x({x_type}))")
-        if x_type.layout is auto_layout:
+        if is_auto_layout(x_type.layout):
             return tiled_tensor(x_type.dtype, auto_layout, x_type.scope)
         if is_auto_mma(self.tiled_mma):
             return tiled_tensor(x_type.dtype, auto_layout, x_type.scope)

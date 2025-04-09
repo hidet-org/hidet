@@ -11,7 +11,9 @@
 # limitations under the License.
 from typing import List, Union, Optional
 from hidet.ir.expr import Expr
+from hidet.ir.stmt import DeclareScope
 from hidet.ir.type import TensorType
+from hidet.ir.dtypes import u64
 from hidet.ir.tools import infer_type
 from hidet.ir.primitives.cuda.wgmma import wgmma_fence_operand
 
@@ -68,6 +70,14 @@ class MmaEmitter(OpEmitter):
 
         d_ptr, a_ptr, b_ptr, c_ptr = (get_pointer(i) for i in [d.buffer, a.buffer, b.buffer, c.buffer])
 
+        def add_pointer_offset(ptr: Expr, offset: Expr, scope: DeclareScope):
+            if scope.is_shared():
+                # Multiplicand in shared memory indicates that the argument should be
+                # a descriptor of the shared memory.
+                return u64(u64(ptr) + (u64(offset) >> 3))  # + (u64(offset) & 0x3FFFF) >> 4)
+            else:
+                return ptr + offset
+
         # The code generation follows the structure of a typical matrix multiplication:
         # ```python
         # for m in range(M):
@@ -84,8 +94,8 @@ class MmaEmitter(OpEmitter):
         with self.for_grid(m) as m_indices:
             with self.for_grid(n) as n_indices:
                 with self.for_grid(k) as k_indices:
-                    a_addr = a_ptr + a_rest((m_indices, k_indices), base=a.offset)
-                    b_addr = b_ptr + b_rest((n_indices, k_indices), base=b.offset)
+                    a_addr = add_pointer_offset(a_ptr, a_rest((m_indices, k_indices), base=a.offset), a.scope)
+                    b_addr = add_pointer_offset(b_ptr, b_rest((n_indices, k_indices), base=b.offset), b.scope)
                     c_addr = c_ptr + c_rest((m_indices, n_indices), base=c.offset)
                     d_addr = d_ptr + d_rest((m_indices, n_indices), base=d.offset)
                     self.append(inst(d_addr, a_addr, b_addr, c_addr))

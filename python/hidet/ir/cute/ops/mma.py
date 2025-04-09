@@ -11,7 +11,14 @@
 # limitations under the License.
 from typing import Tuple, List, Dict
 
-from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout, make_layout, coalesce
+from hidet.ir.cute.layout import (
+    TiledTensorLayout,
+    ComposedTensorLayout,
+    TensorLayout,
+    LayoutBase,
+    make_layout,
+    coalesce,
+)
 from hidet.ir.expr import Expr
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.type import TiledTensorType, logical_encoding
@@ -108,7 +115,7 @@ class Mma(Op):
         d_ty, a_ty, b_ty, c_ty = arg_types
         if any(not isinstance(ty, TiledTensorType) for ty in arg_types):
             raise TypeError(f"Type mimatch. (got:d({d_ty}),a({a_ty}),b({b_ty}),c({c_ty}))")
-        if any(not isinstance(ty.layout, (TensorLayout, TiledTensorLayout)) for ty in arg_types):
+        if any(not isinstance(ty.layout, LayoutBase) for ty in arg_types):
             raise TypeError(
                 f"Invalid layout. (got:d({d_ty.layout}),a({a_ty.layout}),b({b_ty.layout}),c({c_ty.layout}))"
             )
@@ -121,7 +128,7 @@ class Mma(Op):
 
         def constraint(got, expected, operand: str):
             expt_tv = expected[0][0], make_layout(expected[0][1], expected[1])
-            if isinstance(got, TensorLayout):
+            if isinstance(got, (TensorLayout, ComposedTensorLayout)):
                 val = expt_tv[1]
                 val_shape = flatten(val.shape_tuple)
                 got_shape = flatten(got.shape_tuple)
@@ -133,11 +140,11 @@ class Mma(Op):
                 got_tv = got.thr_layout(), got.val_layout()
                 if any(coalesce(x) != coalesce(y) for x, y in zip(got_tv, expt_tv)):
                     raise TypeError(f"Layout {operand} mismatch. (got:{got.thrval_layout()},expected:{expected})")
-            elif isinstance(got, ComposedTensorLayout):
-                raise NotImplementedError()
 
-        constraint(a_ty.layout, a_tv_layout, "a")
-        constraint(b_ty.layout, b_tv_layout, "b")
+        if a_ty.scope.is_register():
+            constraint(a_ty.layout, a_tv_layout, "a")
+        if b_ty.scope.is_register():
+            constraint(b_ty.layout, b_tv_layout, "b")
         constraint(c_ty.layout, c_tv_layout, "c")
         constraint(d_ty.layout, d_tv_layout, "d")
 

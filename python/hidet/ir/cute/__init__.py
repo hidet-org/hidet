@@ -37,6 +37,7 @@ from .int_tuple import (
     slice_,
     has_none,
     is_tuple,
+    concat_tuple,
 )
 from .layout import (
     TiledTensorLayout,
@@ -60,6 +61,7 @@ from .layout import (
     slice_and_offset,
     group,
     codomain_from_shape_and_tv_layout,
+    canonical_thread_value_layout,
 )
 from .layout import CopyAtom, ThrValAtom, MmaAtom, Level
 from .swizzle import Swizzle, make_swizzle

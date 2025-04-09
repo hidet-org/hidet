@@ -212,7 +212,7 @@ from typing import Type, Tuple, List, Dict, Union, Optional, Callable
 
 from hidet.ir.type import DataType
 from hidet.ir.expr import Var, Expr, var, is_constant
-from hidet.ir.tools import infer_type
+from hidet.ir.tools import TypeInfer, infer_type
 from hidet.ir.functors import IRVisitor, IRRewriter
 
 from hidet.ir.cute.expr import Op, CallOp
@@ -240,6 +240,7 @@ from hidet.ir.cute import (
     is_auto_layout,
     max_common_vector,
     flatten,
+    concat_tuple,
 )
 from hidet.ir.cute.ops import (
     TensorBase,
@@ -247,6 +248,7 @@ from hidet.ir.cute.ops import (
     TensorView,
     Partition,
     PartitionA,
+    PartitionB,
     PartitionSrc,
     PartitionDst,
     Copy,
@@ -267,7 +269,13 @@ from hidet.transforms.cute.analysis import TensorAliasAnalysis, TensorInfo
 from hidet.logging import logger, setConsoleLevel, DEBUG, WARNING
 from hidet.utils.py import gcd
 
-from .instruction_selection import CopyInstruction, memory_instructions
+from .instruction_selection import (
+    CopyInstruction,
+    memory_instructions,
+    MmaInstruction,
+    get_mma_instructions,
+    expr_to_buffer,
+)
 
 
 verbose = False
@@ -282,6 +290,7 @@ class MarkUnresolved(IRVisitor):
         self.ops_unresolved: List[Op] = []
         self.ops_resolved: List[Op] = []
         self.op2vars: Dict[Op, List[Var]] = {}
+        self.infer_type = TypeInfer()
 
     def mark(self, func: Function):
         self.visit(func)
@@ -338,7 +347,16 @@ class MarkUnresolved(IRVisitor):
 
     def visit_PartitionA(self, e: PartitionA):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
+        if is_auto_mma(e.tiled_mma) or is_auto_layout(x_ty.layout):
+            self.ops_unresolved.append(e)
+        else:
+            self.ops_resolved.append(e)
+        self.op2vars[e] = [e.x]
+
+    def visit_PartitionB(self, e: PartitionB):
+        self.visit(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_mma(e.tiled_mma) or is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -374,7 +392,7 @@ class MarkUnresolved(IRVisitor):
 
     def visit_SubTensor(self, e: SubTensor):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -392,7 +410,7 @@ class MarkUnresolved(IRVisitor):
     def visit_Arithmetic(self, e: Arithmetic):
         for i in e.inputs:
             self.visit(i)
-        input_tys = [infer_type(i) for i in e.inputs]
+        input_tys = [self.infer_type(i) for i in e.inputs]
         if any(is_auto_layout(input_ty.layout) for input_ty in input_tys):
             self.ops_unresolved.append(e)
         else:
@@ -401,7 +419,7 @@ class MarkUnresolved(IRVisitor):
 
     def visit_Reduce(self, e: Reduce):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -411,8 +429,8 @@ class MarkUnresolved(IRVisitor):
     def visit_Broadcast(self, e: Broadcast):
         self.visit(e.x)
         self.visit(e.target)
-        x_ty = infer_type(e.x)
-        tgt_ty = infer_type(e.target)
+        x_ty = self.infer_type(e.x)
+        tgt_ty = self.infer_type(e.target)
         if is_auto_layout(x_ty.layout) or is_auto_layout(tgt_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -421,7 +439,7 @@ class MarkUnresolved(IRVisitor):
 
     def visit_Transpose(self, e: Transpose):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -437,7 +455,7 @@ class MarkUnresolved(IRVisitor):
         # operation. We could extend it to more complicated situations later
         # TODO:
         self.visit(e.src)
-        src_ty = infer_type(e.src)
+        src_ty = self.infer_type(e.src)
         if is_auto_layout(src_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -453,6 +471,7 @@ class InferLogicalShape(IRVisitor):
         self.ops_resolved: List[Op] = ops_resolved
         self.ops_unresolved: List[Op] = ops_unresolved.copy()
         self.op2vars: Dict[Op, List[Var]] = op2vars
+        self.infer_type = TypeInfer()
 
     def _shape_resolved(self, shape: Tuple[ShapeVar]):
         return shape is not None and all(is_constant(s) for s in shape)
@@ -654,6 +673,9 @@ class InferLogicalShape(IRVisitor):
             self.ops_resolved.append(op)
 
     def visit_PartitionA(self, op: Partition):
+        self.visit_Partition(op)
+
+    def visit_PartitionB(self, op: Partition):
         self.visit_Partition(op)
 
     def visit_PartitionSrc(self, op: PartitionSrc):
@@ -864,9 +886,9 @@ class InferLogicalShape(IRVisitor):
             elif isinstance(op, Transpose):
                 vars = self.op2vars[op]
                 x_var, out_var = vars
-                x_type = infer_type(op.x)
+                x_type = self.infer_type(op.x)
                 x_shape = x_type.layout.shape_tuple
-                out_type = infer_type(op.make_call())
+                out_type = self.infer_type(op.make_call())
                 out_shape = out_type.layout.shape_tuple
                 x_shp = self._get_var_shape(x_var)
                 out_shp = self._get_var_shape(out_var)
@@ -907,6 +929,7 @@ class InferLogicalLayout(IRVisitor):
         self.ops_resolved: List[Op] = ops_resolved
         self.ops_unresolved: List[Op] = ops_unresolved
         self.op2vars: Dict[Op, List[Var]] = op2vars
+        self.infer_type = TypeInfer()
 
     def _layout_resolved(self, layout: TensorLayout):
         return layout is not None and all(
@@ -983,6 +1006,9 @@ class InferLogicalLayout(IRVisitor):
         self._identical_io(op)
 
     def visit_PartitionA(self, op: PartitionA):
+        self.visit_Partition(op)
+
+    def visit_PartitionB(self, op: PartitionB):
         self.visit_Partition(op)
 
     def visit_PartitionSrc(self, op: PartitionSrc):
@@ -1376,13 +1402,13 @@ class InferLogicalLayout(IRVisitor):
                 x_var, out_var = vars
                 x_layout = self._get_var_layout(x_var)
                 if x_layout is None:
-                    x_type = infer_type(op.x)
+                    x_type = self.infer_type(op.x)
                     x_layout = x_type.layout
                     layout = self._inst_logical_layout_for_tensor(x_layout)
                     self._update_var_layout(x_var, layout)
                 out_layout = self._get_var_layout(out_var)
                 if out_layout is None:
-                    out_type = infer_type(op.make_call())
+                    out_type = self.infer_type(op.make_call())
                     out_layout = out_type.layout
                     layout = self._inst_logical_layout_for_tensor(out_layout)
                     self._update_var_layout(out_var, layout)
@@ -1438,16 +1464,21 @@ def constraint(tensor: TensorBase, memory_constraints: TensorLayout):
 
 
 class InferResult:
-    def __init__(self, encs: List[LogicalEncoding], memory_constraint: MemoryConstraint):
+    def __init__(
+        self, encs: List[LogicalEncoding], memory_constraints: Union[List[MemoryConstraint], MemoryConstraint]
+    ):
         self.encs = encs
-        self.memory_constraint = memory_constraint
+        self.memory_constraints = memory_constraints
 
     def __getitem__(self, i):
         return self.encs[i]
 
+    def empty(self):
+        return len(self.encs) == 0
 
-def infer_result(*encs: LogicalEncoding, memory_constraint: MemoryConstraint = None):
-    return InferResult(encs, memory_constraint)
+
+def infer_result(*encs: LogicalEncoding, memory_constraints: Union[List[MemoryConstraint], MemoryConstraint] = None):
+    return InferResult(encs, memory_constraints)
 
 
 class InferRule:
@@ -1700,6 +1731,10 @@ class MemoryConstraintsUnifier:
             shapes.append(s)
             strides.append(d1)
             current_idx = d * s
+        from hidet.utils import prod
+
+        if prod(flat_shape) < prod(shapes):
+            return None
         result_shape = []
         result_stride = []
         cur_shape = []
@@ -1779,6 +1814,92 @@ def validate_alignment(value: TensorLayout, memory: TensorLayout, elements_per_i
 
 # currently, hard-coded number, may be designed as a configurable argument
 early_stop_candidates = 4
+
+
+@register_infer_rules(Mma)
+class MmaInferRules(InferRules):
+    def __init__(self):
+        super().__init__()
+
+        def infer_shared_ab(
+            op: Mma, args: List[LogicalEncoding], ctx: InferContext, input_vars: List[Var], output_var: Var
+        ):
+            a: Expr = op.a
+            b: Expr = op.b
+            a_ty: TiledTensorType = infer_type(a)
+            b_ty: TiledTensorType = infer_type(b)
+            candidates: List[MmaInstruction] = []
+            arg_tv = [arg.layout[1] for arg in args]
+
+            for inst in get_mma_instructions():
+                bufs = [expr_to_buffer(arg, tv) for arg, tv in zip(op.args, arg_tv)]
+                result = inst.match(*bufs, op.tiled_mma)
+                if result is not None:
+                    candidates.append((inst))
+
+            a_v = arg_tv[1]
+            b_v = arg_tv[2]
+            infers = []
+            for inst in candidates:
+                constr_a: List[MemoryConstraint] = []
+                if a_ty.scope.is_shared():
+                    a_tensor_info = ctx.var2tensor[a]
+                    a_memory_layout = a_tensor_info.layout
+                    core_matrix_layouts = inst.get_core_matrix_layouts_A()
+                    for core_matrix_layout in core_matrix_layouts:
+                        if core_matrix_layout is None:
+                            continue
+                        a_v_reorder = self.get_equivalent_value_layout(a_v, core_matrix_layout)
+                        if is_auto_layout(a_memory_layout):
+                            constr = infer_memory_constraints(
+                                ctx, a_tensor_info, a_v_reorder, core_matrix_layout.size()
+                            )
+                            if constr is not None:
+                                constr_a.append(constr)
+                constr_b: List[MemoryConstraint] = []
+                if b_ty.scope.is_shared():
+                    b_tensor_info = ctx.var2tensor[b]
+                    b_memory_layout = b_tensor_info.layout
+                    core_matrix_layouts = inst.get_core_matrix_layouts_B()
+                    for core_matrix_layout in core_matrix_layouts:
+                        if core_matrix_layout is None:
+                            continue
+                        b_v_reorder = self.get_equivalent_value_layout(b_v, core_matrix_layout)
+                        if is_auto_layout(b_memory_layout):
+                            constr = infer_memory_constraints(
+                                ctx, b_tensor_info, b_v_reorder, core_matrix_layout.size()
+                            )
+                            if constr is not None:
+                                constr_b.append(constr)
+                from itertools import product
+
+                if len(constr_a) != 0 and len(constr_b) != 0:
+                    for c1, c2 in product(constr_a, constr_b):
+                        infers.append(infer_result([], memory_constraints=[c1, c2]))
+                elif len(constr_a) != 0:
+                    for c in constr_a:
+                        infers.append(infer_result([], memory_constraints=c))
+                elif len(constr_b) != 0:
+                    for c in constr_b:
+                        infers.append(infer_result([], memory_constraints=c))
+            if len(infers) == 0:
+                raise NotImplementedError(f"Cannot find an instruction to execute mma op{op}")
+            return infers
+
+        self.update_infer_rules("shared_ab", infer_shared_ab)
+
+    @staticmethod
+    def get_equivalent_value_layout(v: TensorLayout, core_matrix_layout: TensorLayout):
+        core_matrix_shape = core_matrix_layout.shape_tuple
+        v_reshape = composition(v, TensorLayout(core_matrix_shape))
+        shape = concat_tuple(v_reshape.shape_tuple[0], v_reshape.shape_tuple[1])
+        stride = concat_tuple(v_reshape.stride_tuple[0], v_reshape.stride_tuple[1])
+        core_matrix_stride = flatten(core_matrix_layout.stride_tuple)
+        sorted_DS = sorted(zip(core_matrix_stride, shape, stride))
+        result_shape = flatten(tuple(s for _, s, _ in sorted_DS))
+        result_stride = flatten(tuple(d for _, _, d in sorted_DS))
+        v_reorder = TensorLayout(result_shape, result_stride)
+        return v_reorder
 
 
 @register_infer_rules(Copy)
@@ -1901,10 +2022,10 @@ class CopyInferRules(InferRules):
                     logger.debug("====================================")
                 if constr is None:
                     return [infer_result(logical_encoding(arg_shape, result_tv))]
-                infers.append(infer_result(logical_encoding(arg_shape, result_tv), memory_constraint=constr))
+                infers.append(infer_result(logical_encoding(arg_shape, result_tv), memory_constraints=constr))
 
             if len(infers) == 0:
-                raise NotImplementedError(f"Cannot find an instruction to perform copy for op{op}")
+                raise NotImplementedError(f"Cannot find an instruction to execute copy op{op}")
             return infers[:early_stop_candidates]
 
         self.update_infer_rules("i2o", infer).update_infer_rules("o2i", infer)
@@ -2048,28 +2169,6 @@ class PartitionDstInferRules(InferRules):
         self.update_infer_rules("i2o", forward).update_infer_rules("o2i", forward)
 
 
-# @register_infer_rules(TensorView)
-# class TensorViewInferRules(InferRules):
-#    def __init__(self):
-#        super().__init__()
-#
-#        def infer(op: TensorView, args: List[LogicalEncoding], ctx: InferContext, signature: int):
-#            return [None]
-#
-#        self.update_infer_rules(0b11, infer)
-#
-#
-# @register_infer_rules(Rearrange)
-# class RearrangeInferRules(InferRules):
-#    def __init__(self):
-#        super().__init__()
-#
-#        def infer(op: Rearrange, args: List[LogicalEncoding], ctx: InferContext, signature: int):
-#            return [None]
-#
-#        self.update_infer_rules(0b111, infer)
-
-
 @register_infer_rules(Reduce)
 class ReduceInferRules(InferRules):
     def __init__(self):
@@ -2092,17 +2191,6 @@ class ReduceInferRules(InferRules):
             return [infer_result(logical_encoding(shp, out_tv))]
 
         self.update_infer_rules("i2o", infer_output)
-
-
-# @register_infer_rules(Mask)
-# class MaskInferRules(InferRules):
-#    def __init__(self):
-#        super().__init__()
-#
-#        def infer(op: Mask, args: List[LogicalEncoding], ctx: InferContext, signature: int):
-#            return [None]
-#
-#        self.update_infer_rules(0b11, infer)
 
 
 @register_infer_rules(Arithmetic)
@@ -2256,6 +2344,7 @@ class ResolveAuto(IRVisitor):
         self.op2vars: Dict[Op, List[Var]] = {}
         self.op2copys: Dict[Union[PartitionSrc, PartitionDst, Mask], List[Copy]] = {}
         self.var2expr: Dict[Var, Union[Var, Expr]] = {}
+        self.infer_type = TypeInfer()
 
         self.threads = None
 
@@ -2302,7 +2391,7 @@ class ResolveAuto(IRVisitor):
             self.constraints.append(make_constraint([op.src], op.dst, op, "i2o"))
             self.constraints.append(make_constraint([op.dst], op.src, op, "o2i"))
         elif isinstance(op, Partition):
-            x_ty = infer_type(op.x)
+            x_ty = self.infer_type(op.x)
             out_var = self.op2vars[op][-1]
             if not x_ty.scope.is_memory():
                 self.constraints.append(make_constraint([out_var], op.x, op, "o2i"))
@@ -2334,6 +2423,12 @@ class ResolveAuto(IRVisitor):
         elif isinstance(op, Broadcast):
             out_var = self.op2vars[op][-1]
             self.constraints.append(make_constraint([op.x, op.target], out_var, op, "i2o"))
+        elif isinstance(op, Mma):
+            a_ty = self.infer_type(op.a)
+            b_ty = self.infer_type(op.b)
+            d, a, b, c = self.op2vars[op]
+            if a_ty.scope.is_shared() or b_ty.scope.is_shared():
+                self.constraints.append(make_constraint([d, a, b, c], None, op, "shared_ab"))
 
     def visit_Copy(self, e: Copy):
         self.visit(e.src)
@@ -2384,7 +2479,7 @@ class ResolveAuto(IRVisitor):
 
     def visit_PartitionA(self, e: PartitionA):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_mma(e.tiled_mma) or is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -2412,16 +2507,20 @@ class ResolveAuto(IRVisitor):
         self.visit(e.a)
         self.visit(e.b)
         self.visit(e.c)
+        self.op2vars[e] = [e.d, e.a, e.b, e.c]
         if is_auto_mma(e.tiled_mma):
             self.ops_unresolved.append(e)
             self.append_constraint(e)
         else:
+            a_ty = self.infer_type(e.a)
+            b_ty = self.infer_type(e.b)
+            if a_ty.scope.is_shared() or b_ty.scope.is_shared():
+                self.append_constraint(e)
             self.ops_resolved.append(e)
-        self.op2vars[e] = [e.d, e.a, e.b, e.c]
 
     def visit_SubTensor(self, e: SubTensor):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -2439,7 +2538,7 @@ class ResolveAuto(IRVisitor):
     def visit_Arithmetic(self, e: Arithmetic):
         for i in e.inputs:
             self.visit(i)
-        input_tys = [infer_type(i) for i in e.inputs]
+        input_tys = [self.infer_type(i) for i in e.inputs]
         if any(is_auto_layout(input_ty.layout) for input_ty in input_tys):
             self.ops_unresolved.append(e)
         else:
@@ -2448,7 +2547,7 @@ class ResolveAuto(IRVisitor):
 
     def visit_Reduce(self, e: Reduce):
         self.visit(e.x)
-        x_ty = infer_type(e.x)
+        x_ty = self.infer_type(e.x)
         if is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
@@ -2478,9 +2577,49 @@ class ResolveAuto(IRVisitor):
                 self._resolve(op)
             current_state.constraints.remove(c)
 
+    def _update_state(self, infer_result_: InferResult, constraint_: Constraint, state: StackFrame):
+        output = constraint_.output
+        if output is not None:
+            state.var2logical_encoding[output] = infer_result_[0]
+        if infer_result_ is not None and infer_result_.memory_constraints is not None:
+            if isinstance(infer_result_.memory_constraints, list):
+                for memory_constraint in infer_result_.memory_constraints:
+                    tensor = memory_constraint.tensor
+                    memory_constraints = memory_constraint.memory_constraints
+                    state.solution[tensor] = memory_constraints
+            else:
+                tensor = infer_result_.memory_constraints.tensor
+                memory_constraints = infer_result_.memory_constraints.memory_constraints
+                state.solution[tensor] = memory_constraints
+        op = constraint_.op
+        if isinstance(op, Mma):
+            state.constraints.remove(constraint_)
+            return
+        vars = self.op2vars[op]
+        is_resolved = all(v in state.var2logical_encoding for v in vars)
+        if is_resolved:
+            if isinstance(op, Copy):
+                src = op.src
+                par = self.get_partition_op(src)
+                equivalents = self.op2copys[par]
+                ops = equivalents
+                assert op in ops
+                for copy in equivalents:
+                    for j, v in enumerate(self.op2vars[copy]):
+                        if v not in state.var2logical_encoding:
+                            ev = self.op2vars[op][j]
+                            state.var2logical_encoding[v] = state.var2logical_encoding[ev]
+            else:
+                ops = [op]
+            for _op in ops:
+                if not isinstance(_op, (PartitionSrc, PartitionDst, Mask)):
+                    self._resolve(_op, state)
+                else:
+                    state.finalize.append(_op)
+        state.constraints.remove(constraint_)
+
     def _resolve_ready(self):
         for c in self.ready:
-            op = c.op
             current_state = self._current_state()
             args = []
             for i in c.inputs:
@@ -2498,64 +2637,11 @@ class ResolveAuto(IRVisitor):
                 new_states = [current_state.copy() for _ in range(nr_results)]
                 for i, res in enumerate(results):
                     state = new_states[i]
-                    output = c.output
-                    state.var2logical_encoding[output] = res[0]
-                    if res is not None and res.memory_constraint is not None:
-                        tensor = res.memory_constraint.tensor
-                        memory_constraints = res.memory_constraint.memory_constraints
-                        state.solution[tensor] = memory_constraints
-                    vars = self.op2vars[op]
-                    is_resolved = all(v in state.var2logical_encoding for v in vars)
-                    if is_resolved:
-                        if isinstance(op, Copy):
-                            src = op.src
-                            par = self.get_partition_op(src)
-                            equivalents = self.op2copys[par]
-                            ops = equivalents
-                            assert op in ops
-                            for copy in equivalents:
-                                for j, v in enumerate(self.op2vars[copy]):
-                                    if v not in state.var2logical_encoding:
-                                        ev = self.op2vars[op][j]
-                                        state.var2logical_encoding[v] = state.var2logical_encoding[ev]
-                        else:
-                            ops = [op]
-                        for _op in ops:
-                            if not isinstance(_op, (PartitionSrc, PartitionDst, Mask)):
-                                self._resolve(_op, state)
-                            else:
-                                state.finalize.append(_op)
-                    state.constraints.remove(c)
+                    self._update_state(res, c, state)
                     self.state_stack.append(state)
             else:
                 res = results[0]
-                output = c.output
-                current_state.var2logical_encoding[output] = res[0]
-                if res is not None and res.memory_constraint is not None:
-                    tensor = res.memory_constraint.tensor
-                    memory_constraints = res.memory_constraint.memory_constraints
-                    current_state.solution[tensor] = memory_constraints
-                vars = self.op2vars[op]
-                is_resolved = all(v in current_state.var2logical_encoding for v in vars)
-                if is_resolved:
-                    if isinstance(op, Copy):
-                        src = op.src
-                        par = self.get_partition_op(src)
-                        equivalents = self.op2copys[par]
-                        ops = equivalents
-                        for copy in equivalents:
-                            for j, v in enumerate(self.op2vars[copy]):
-                                if v not in current_state.var2logical_encoding:
-                                    ev = self.op2vars[op][j]
-                                    current_state.var2logical_encoding[v] = current_state.var2logical_encoding[ev]
-                    else:
-                        ops = [op]
-                    for _op in ops:
-                        if not isinstance(_op, (PartitionSrc, PartitionDst, Mask)):
-                            self._resolve(_op)
-                        else:
-                            current_state.finalize.append(_op)
-                current_state.constraints.remove(c)
+                self._update_state(res, c, current_state)
         self.ready = []
         return True
 
@@ -2656,11 +2742,12 @@ class ResolveAuto(IRVisitor):
                 break
 
         memory_constraints = None
-        if extra_memory_constraints is not None:
+        if extra_memory_hint is not None:
             val = TensorLayout(tuple(val_shape), tuple(val_stride))
             unifier = MemoryConstraintsUnifier()
             memory_constraints = unifier.infer(extra_memory_hint, val)
-            memory_constraints = unifier.unify(extra_memory_constraints, memory_constraints)
+            if extra_memory_constraints is not None:
+                memory_constraints = unifier.unify(extra_memory_constraints, memory_constraints)
             if memory_constraints is None:
                 return None
 
@@ -2705,8 +2792,8 @@ class ResolveAuto(IRVisitor):
         return TiledCopy(copy_atom), memory_constraints
 
     def _coalesce_memory_access(self, e: Copy):
-        src_ty = infer_type(e.src)
-        dst_ty = infer_type(e.dst)
+        src_ty = self.infer_type(e.src)
+        dst_ty = self.infer_type(e.dst)
         if src_ty.scope.is_global():
             src_tensor = self.var2tensor[e.src]
             mem = src_tensor.layout
@@ -2722,6 +2809,9 @@ class ResolveAuto(IRVisitor):
             shared_tensor_info = self.var2tensor[e.src]
         elif dst_ty.scope.is_shared():
             shared_tensor_info = self.var2tensor[e.dst]
+        shared_tensor = shared_tensor_info.tensor if shared_tensor_info is not None else None
+        extra_memory_hint = shared_tensor_info.layout if shared_tensor_info is not None else None
+
         shape = e.tiled_copy.shape
         tile = TensorLayout(shape)
         tile_layout = composition(mem, tile)
@@ -2733,9 +2823,10 @@ class ResolveAuto(IRVisitor):
         candidates = sorted(candidates, key=lambda x: -x.bytes_per_inst)
         for inst in candidates:
             bits_per_memory_inst = inst.alignment * 8
-            if shared_tensor_info is not None and shared_tensor_info.tensor in current_state.solution:
-                shared_tensor = shared_tensor_info.tensor
-                extra_memory_constraints = current_state.solution[shared_tensor]
+            if shared_tensor is not None and is_auto_layout(extra_memory_hint):
+                extra_memory_constraints = (
+                    current_state.solution[shared_tensor] if shared_tensor in current_state.solution else None
+                )
                 sche = self._schedule_tiled_copy(
                     dtype, tile_layout, bits_per_memory_inst, shared_tensor_info.layout, extra_memory_constraints
                 )
@@ -2748,9 +2839,8 @@ class ResolveAuto(IRVisitor):
             return False
         tiled_copy, memory_constraints = sche
         current_state.solution[e] = tiled_copy
-        if shared_tensor_info is not None and shared_tensor_info.tensor in current_state.solution:
-            assert memory_constraints is not None
-            shared_tensor = shared_tensor_info.tensor
+        # update memory constraints
+        if shared_tensor is not None and memory_constraints is not None:
             current_state.solution[shared_tensor] = memory_constraints
 
         assert e.src not in current_state.var2logical_encoding and e.dst not in current_state.var2logical_encoding
@@ -2804,8 +2894,8 @@ class ResolveAuto(IRVisitor):
         ]
 
         def f(op: Copy):
-            src_ty = infer_type(op.src)
-            dst_ty = infer_type(op.dst)
+            src_ty = self.infer_type(op.src)
+            dst_ty = self.infer_type(op.dst)
             is_gmem = src_ty.scope.is_global() or dst_ty.scope.is_global()
             has_auto = is_auto_copy(op.tiled_copy)
             return is_gmem and has_auto
@@ -2813,8 +2903,8 @@ class ResolveAuto(IRVisitor):
         unresolved_copys = [op for op in unresolved_copys if f(op)]
 
         def g(op: Copy):
-            src_ty = infer_type(op.src)
-            dst_ty = infer_type(op.dst)
+            src_ty = self.infer_type(op.src)
+            dst_ty = self.infer_type(op.dst)
             if src_ty.scope.is_global():
                 src_tensor = self.var2tensor[op.src]
                 gmem = src_tensor.layout
@@ -2933,6 +3023,7 @@ class MaterializeAuto(IRRewriter):
         super().__init__()
         self.solution: Dict[Op, Union[TensorLayout, TiledCopy, TiledMma]] = solution
         self.old2new: Dict[Var, Var] = {}
+        self.infer_type = TypeInfer()
 
     def visit_Var(self, v: Var):
         if v in self.old2new:
@@ -2949,7 +3040,7 @@ class MaterializeAuto(IRRewriter):
             else:
                 v = stmt.var
                 init = op.make_call()
-                v = var(v.hint, infer_type(init))
+                v = var(v.hint, self.infer_type(init))
                 self.old2new[stmt.var] = v
                 return DeclareStmt(v, init, stmt.is_static, stmt.scope)
         return super().visit_DeclareStmt(stmt)
@@ -3077,7 +3168,6 @@ class InstantiateAutoAnnotationPass(FunctionPass):
         solver = ResolveAuto(var2layout, var2tensor)
         solutions = solver.resolve(func)
 
-        # print(f"found solution: {len(solutions)}")
         str2func: Dict[str, Function] = {}
         nr_solutions = len(solutions)
         for i in range(nr_solutions):
@@ -3086,14 +3176,28 @@ class InstantiateAutoAnnotationPass(FunctionPass):
             key = str(new_func)
             if key not in str2func:
                 str2func[key] = new_func
-        # print(f"found solution: {len(str2func.items())}")
+        nr_solutions = len(str2func.items())
+        if nr_solutions == 1:
+            return str2func.popitem()[1]
 
-        # TODO: a performance model to pick the best solution
-        values = list(str2func.values())
-        if len(values) > 1:
-            func = values[1]
-        else:
-            func = values[0]
+        from .cost_model import LatencyModel
+        from .instruction_selection import instruction_selection_pass
+        from .resolve_bank_conflict import resolve_bank_conflict_pass
+
+        model = LatencyModel()
+        func2lat: Dict[Function, float] = {}
+        for _, fn in str2func.items():
+            transforms = [instruction_selection_pass(), resolve_bank_conflict_pass(), instruction_selection_pass()]
+            f = None
+            for ps in transforms:
+                if f is None:
+                    f = ps.process_func(fn)
+                else:
+                    f = ps.process_func(f)
+            lat = model.predict(f)
+            func2lat[fn] = lat
+        funcs = sorted(func2lat.keys(), key=lambda x: func2lat[x])
+        func = funcs[0]
 
         if verbose:
             logger.debug(f"{func}")

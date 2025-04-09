@@ -12,6 +12,7 @@
 from typing import List, Union
 from hidet.ir.expr import Expr
 from hidet.ir.type import PointerType
+from hidet.ir.dtypes import u64
 from hidet.ir.tools import infer_type
 
 from hidet.ir.cute.ops.subtensor import SubTensor
@@ -29,7 +30,7 @@ class SubTensorEmitter(OpEmitter):
         src_buf = src.buffer
         src_off = src.offset
         src_ty = infer_type(src_buf)
-        assert isinstance(src_ty, PointerType)
+        assert isinstance(src_ty, PointerType) or src_ty == u64
         _, offset = slice_and_offset(args[1], src.layout)
         dst.buffer = self.auto_var(hint=op.name, e=src_buf)
         from hidet.ir.dtypes import i32
