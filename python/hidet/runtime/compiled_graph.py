@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Union
 import zipfile
 import os
 import json
@@ -19,7 +19,6 @@ import tempfile
 from tabulate import tabulate
 import numpy
 import hidet
-from hidet.ffi.utils import ctypes_func_pointer
 from hidet.ffi.array import Array
 from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
@@ -30,6 +29,7 @@ from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils.py import prod, median
 from hidet.utils.trace_utils import TraceEventEmitter
+from hidet.runtime.utils.dispatch_table import GraphIntervalDispatchTable, GraphPointsDispatchTable
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 global_cuda_workspace: Optional[Storage] = None
@@ -132,7 +132,9 @@ class CompiledGraph:
         # runtime state
         self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
-        self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
+        self._dispatch_table: Union[
+            GraphPointsDispatchTable, GraphIntervalDispatchTable
+        ] = self._construct_dispatch_table()
         self.cpu_workspace: Optional[Storage] = None
         self.cuda_workspace: Optional[Storage] = None
         self.hip_workspace: Optional[Storage] = None
@@ -217,40 +219,12 @@ class CompiledGraph:
         else:
             self.is_dynamic = False
 
-    def _load_dispatch_table(self):
-        if os.path.exists(self.dispatch_table_path):
-            with open(self.dispatch_table_path, 'r') as f:
-                lines = f.readlines()
-                for idx, line in enumerate(lines):
-                    if idx == 0:
-                        continue  # skip the header line
-                    items = line.split()
-                    if len(items) == 0:
-                        continue  # skip empty lines
-                    if len(items) != len(self.dynamic_dims) + len(self.compiled_tasks):
-                        raise RuntimeError('Invalid dispatch table')
-                    items = [int(item) for item in items]
-                    symbol_dims = items[: len(self.dynamic_dims)]
-                    schedule_indices = items[len(self.dynamic_dims) :]
-                    kernel_array = Array(void_p, len(self.compiled_tasks))
-                    for task_idx, (compiled_task, sch_idx) in enumerate(zip(self.compiled_tasks, schedule_indices)):
-                        if not 0 <= sch_idx < len(compiled_task.candidates):
-                            raise RuntimeError(
-                                'Invalid schedule index {} for compiled task at {}'.format(
-                                    sch_idx, compiled_task.task_dir
-                                )
-                            )
-                        kernel_array[task_idx] = ctypes_func_pointer(compiled_task.candidates[sch_idx].ctypes_func)
-                    self.dispatch_table[tuple(symbol_dims)] = kernel_array
-
     def _init_compiled_graph(self):
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
         for i in range(len(self.weights)):
             weights_buffer[i] = self.weights[i].storage.addr
         self._init(len(self.weights), weights_buffer)
-        # load the dispatch table
-        self._load_dispatch_table()
 
     def _init_space_sizes(self):
         if self.is_dynamic:
@@ -259,24 +233,10 @@ class CompiledGraph:
         self._get_workspace_size(buffer)
         return list(buffer)
 
-    def _update_symbol_table(self, symbol_dims: Tuple[int, ...], best_candidates: List[int]):
-        kernel_array = Array(void_p, len(self.compiled_tasks))
-        for task_idx, best_candidate in enumerate(best_candidates):
-            kernel_array[task_idx] = ctypes_func_pointer(
-                self.compiled_tasks[task_idx].candidates[best_candidate].ctypes_func
-            )
-        self.dispatch_table[symbol_dims] = kernel_array
-
-        if not os.path.exists(self.dispatch_table_path):
-            with open(self.dispatch_table_path, 'w') as f:
-                symbol_names = [name for name, _ in self.dynamic_dims]
-                f.write(' '.join(symbol_names))
-                f.write('\n')
-        with open(self.dispatch_table_path, 'a') as f:
-            f.write(' '.join(str(x) for x in symbol_dims))
-            f.write(' ')
-            f.write(' '.join(str(x) for x in best_candidates))
-            f.write('\n')
+    def _construct_dispatch_table(self):
+        if len(self.dynamic_dims) == 1 and hidet.option.internal.dispatch_table.get_split_points() is not None:
+            return GraphIntervalDispatchTable(self)
+        return GraphPointsDispatchTable(self)
 
     def _update_symbol_dims(self, inputs) -> Tuple[int, ...]:
         symbol_dims = []
@@ -427,7 +387,7 @@ class CompiledGraph:
         outputs = [index2tensor[i] for i in exe.outputs_index]
 
         # update the dispatch table
-        self._update_symbol_table(symbol_dims, best_candidates)
+        self.dispatch_table.update_symbol_table(symbol_dims, best_candidates)
 
         # save the trace
         trace_filename = 'trace{}.json'.format('_'.join(str(x) for x in symbol_dims))
@@ -435,6 +395,15 @@ class CompiledGraph:
             trace_emitter.save(f)
 
         return outputs
+
+    @property
+    def dispatch_table(self):
+        if self._dispatch_table is None:
+            self._dispatch_table = self._construct_dispatch_table()
+        return self._dispatch_table
+
+    def clear_dispatch_table(self):
+        self._dispatch_table = None
 
     def set_weights(self, weights):
         """
@@ -489,13 +458,13 @@ class CompiledGraph:
 
         symbol_dims = self._update_symbol_dims(inputs)
 
-        if symbol_dims in self.dispatch_table:
-            return self._run_fast_path(inputs, symbol_dims, output_to_torch_tensor)
-        else:
+        if symbol_dims not in self.dispatch_table:
             res = self._run_slow_path(inputs, symbol_dims)
             if output_to_torch_tensor:
                 res = [tensor.torch() if isinstance(tensor, hidet.Tensor) else tensor for tensor in res]
             return res
+
+        return self._run_fast_path(inputs, symbol_dims, output_to_torch_tensor)
 
     def cuda_graph(self, *args):
         """

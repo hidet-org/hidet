@@ -1459,7 +1459,8 @@ class internal:
             -------
             ret: List
             """
-            return OptionContext.current().get_option('internal.dispatch_table.split_points')
+            split_points = OptionContext.current().get_option('internal.dispatch_table.split_points')
+            return list(split_points) if split_points else None
 
         @staticmethod
         def set_candidate_selection_method(candidate_selection_method: str = 'find_best_candidate'):

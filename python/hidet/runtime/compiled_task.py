@@ -17,7 +17,7 @@ from collections import namedtuple
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
 from hidet.ir.dtypes import i32
 from hidet.ffi.array import Array
-from hidet.runtime.dispatch_table import DispatchTable, IntervalsDispachTable, PointsDispachTable
+from hidet.runtime.utils.dispatch_table import DispatchTable, IntervalsDispachTable, PointsDispachTable
 
 
 @dataclass

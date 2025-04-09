@@ -35,7 +35,7 @@ def test_inplace_relu(device):
 
     compiled_graph: CompiledGraph = graph.build()
 
-    compiled_graph.dispatch_table.clear()
+    compiled_graph.clear_dispatch_table()
     y2 = compiled_graph(xx)  # run in slow path
     assert y2.storage is xx.storage
 

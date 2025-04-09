@@ -370,7 +370,7 @@ def check_3_execution_paths(
     compiled_graph = graph.build()
 
     # 2. The second path is the `slow_path`
-    compiled_graph.dispatch_table.clear()
+    compiled_graph.clear_dispatch_table()
     y2 = compiled_graph(hidet_input).cpu()
 
     # 3. The third path is the `fast_path`
