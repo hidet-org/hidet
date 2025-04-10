@@ -248,6 +248,44 @@ def test_matmul_fp16_dynamic(a_shape, b_shape):
 
 @pytest.mark.requires_cuda
 @pytest.mark.parametrize(
+    "a_shape, b_shape", [[[256, 128], [256, 128]], [[4096, 4096], [4096, 4096]], [[512, 256], [128, 256]]]
+)
+def test_matmul_f8(a_shape, b_shape):
+    import hidet
+    from hidet.testing.torch_utils import device_to_torch
+    from hidet.ir.dtypes import f16, f8e4m3
+    from hidet.graph.frontend.torch.utils import dtype_to_torch
+    from hidet.graph.ops.matmul.matmul_f8 import matmul_f8
+    from hidet.testing import assert_torch_allclose
+
+    device, rtol, atol = "cuda", 1e-2, 1e-2
+    gen_dtype = dtype_to_torch(f16)
+    dtype = dtype_to_torch(f8e4m3)
+
+    torch_device = device_to_torch(device)
+    torch_a = torch.randint(-1, 1, a_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
+    torch_b = torch.randint(-1, 1, b_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
+    hidet_a = hidet.from_torch(torch_a)
+    hidet_b = hidet.from_torch(torch_b)
+    torch_result: torch.Tensor = torch._scaled_mm(
+        torch_a,
+        torch_b.T,
+        out_dtype=dtype,
+        scale_a=torch.tensor(1.0, device=device),
+        scale_b=torch.tensor(1.0, device=device),
+    )
+    hidet_result: hidet.Tensor = matmul_f8(hidet_a, hidet_b)
+    print(hidet_result, torch_result)
+    torch.testing.assert_close(
+        actual=hidet_result.torch().to(dtype=torch.float16),
+        expected=torch_result.to(dtype=torch.float16),
+        atol=atol,
+        rtol=rtol,
+    )
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize(
     "a_shape, b_shape",
     [
         [[1, 128, 128], [128, 128]],

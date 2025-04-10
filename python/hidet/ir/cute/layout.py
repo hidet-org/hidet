@@ -918,11 +918,11 @@ class Atom:
         Example:
             Suppose we have an atom that represents an mma instruction with the shape
             (16, 8, 16). Typically, the instruction will be repeated along the m and n
-            dimensions. For example, we assume the instrucion is repeated 2 times along
-            the n dimension and 2 times along the n dimension. Then the output of this
+            dimensions. For example, we assume the instruction is repeated 2 times along
+            the n dimension and 2 times along the m dimension. Then the output of this
             function will be
             ```
-            shape_mk = (2, 1) # 1 for k and 1 for m
+            shape_mk = (2, 1) # 2 for m and 1 for k
             ```
             We can always assume the repeat in k dimension is 1 because the repeat in
             k dimension can be represented by a loop in the kernel.

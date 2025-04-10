@@ -204,7 +204,7 @@ def register_tiled_mma():
     for (warp_m, warp_n) in [(2, 2), (4, 2), (2, 4), (1, 4), (4, 1), (2, 1), (1, 2), (1, 1)]:
         for repeat_m in [1, 2, 3, 4, 6, 8, 12, 16]:
             for repeat_n in [1, 2, 3, 4, 6, 8, 12, 16]:
-                num_regs = repeat_m * repeat_n * 8 + 2 * repeat_m * 4 + 2 * repeat_n * 2
+                num_regs = repeat_m * repeat_n * 8 + 2 * repeat_m * 4 + 2 * repeat_n * 2 * 2
                 if num_regs > 255:
                     continue
                 a = TensorLayout(((4, 8), (2, 2, 2)), ((32, 1), (16, 8, 128)))

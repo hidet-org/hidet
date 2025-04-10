@@ -1169,6 +1169,29 @@ def register_mma_instruction():
         MmaSyncInstruction(mma_configs["m16n8k16_bf16_f32"], True, mma_sync, shape, a, b, c, c, "bf16", "bf16", "f32")
     )
 
+    # f8 m16n8k32
+    shape = (16, 8, 32)
+    a = TensorLayout(((4, 8), (4, 2, 2)), ((64, 1), (16, 8, 256)))
+    b = TensorLayout(((4, 8), (4, 2)), ((32, 1), (8, 128)))  # N-major
+    c = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 8)))
+    for acc_dtype in ["f32", "f16"]:
+        for ab_dtype in ["f8e4m3", "f8e5m2"]:
+            mma_instructions.append(
+                MmaSyncInstruction(
+                    mma_configs[f"m16n8k32_{ab_dtype}_{acc_dtype}"],
+                    False,
+                    mma_sync,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    ab_dtype,
+                    ab_dtype,
+                    acc_dtype,
+                )
+            )
+
     for n in range(8, 257, 8):
         for trans_b in [True, False]:
             shape = (64, n, 16)

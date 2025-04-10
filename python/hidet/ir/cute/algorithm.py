@@ -9,9 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import Union, Tuple, List, Optional
-from hidet.ir.cute.layout import CopyAtom, MmaAtom, Level, chain, compact_coshape
-from hidet.ir.cute import TiledTensorLayout
+from hidet.ir.cute.layout import CopyAtom, MmaAtom, Level, chain, compact_coshape, canonical_thread_value_layout
+from hidet.ir.cute import TiledTensorLayout, TensorLayout
+from hidet.ir.type import DataType
 
 
 class TiledCopy:
@@ -105,18 +107,24 @@ class TiledMma:
             levels = []
         self.mma_atom = mma_atom
         self.levels = sorted(levels, key=lambda x: x.level.value)
+
         shape, a_thrval_layout = chain(
             self.mma_atom.shape_mk(), self.mma_atom.a_thrval_layout, *self.mma_atom.repeat_mk(), self.levels_mk()
         )
         shape = compact_coshape(shape, a_thrval_layout)
         self.a_shape = shape
         self.a_thrval_layout = a_thrval_layout
+        self.a_t, self.a_v = canonical_thread_value_layout(self.a_thrval_layout)
+
         shape, b_thrval_layout = chain(
             self.mma_atom.shape_nk(), self.mma_atom.b_thrval_layout, *self.mma_atom.repeat_nk(), self.levels_nk()
         )
         shape = compact_coshape(shape, b_thrval_layout)
         self.b_shape = shape
         self.b_thrval_layout = b_thrval_layout
+        self.b_t, self.b_v = canonical_thread_value_layout(self.b_thrval_layout)
+        _, self.inst_k = self.b_shape
+
         shape, c_thrval_layout = chain(
             self.mma_atom.shape_mn(),
             self.mma_atom.c_thrval_layout,
@@ -126,6 +134,34 @@ class TiledMma:
         )
         self.c_shape = shape
         self.c_thrval_layout = c_thrval_layout
+        self.c_t, self.c_v = canonical_thread_value_layout(self.c_thrval_layout)
+        self.bM, self.bN = self.c_shape
+
+    @staticmethod
+    def make_tiled_mma(
+        mma_atom: MmaAtom, mma_layout: Union[TensorLayout, List[int]], mma_tile: List[int]
+    ) -> "TiledMma":
+        """
+        **WARNING**: this function does not have any static checks to check the arguments' validity.
+        Creates a tiledMMA from an mma_atom, mma_layout, and mma_tile.
+
+        Parameters
+        ----------
+        `mma_atom`: MmaAtom
+
+        `mma_layout`: TensorLayout. Repeating the mma atom along the M, N, and K dimensions. It increases the number
+        of threads used to process the tiledMMA. Informally, it is the parallelization of the mma atoms.
+
+        `mma_tile`. Repeating the mma processing along the M,N, and K dimensions. This does not increase the number
+        of threads to process the tiledMMA, but increases the number of registers required.
+
+        **NOTE**: inside the MmaAtom, there is an inner layer of mma_tiling, on top of which
+        stacks the `mma_tile` argument.
+        """
+        if isinstance(mma_layout, (list, tuple)):
+            mma_layout = TensorLayout(mma_layout)
+        level = Level("warp", "thread_block", mma_layout.shape, mma_layout, mma_tile)
+        return TiledMma(mma_atom, [level])
 
     def levels_mk(self):
         return [lvl.level_mk() for lvl in self.levels]
@@ -144,6 +180,32 @@ class TiledMma:
 
     def d_tv_layout(self):
         return self.c_tv_layout()
+
+    def get_num_threads(self) -> int:
+        """
+        Returns the number of threads used by the tiledMMA.
+        """
+        return self.c_t.size()
+
+    def get_register_pressure(
+        self, acc_dtype: DataType, a_dtype: DataType, b_dtype: DataType, bR: int = 2
+    ) -> Tuple[int, str]:
+        """
+        Returns the number of registers/thread used by the tiledMMA (also in the CTA)
+
+        Parameters
+        ----------
+        `acc_dtype`: DataType. The data type of the accumulator.
+        `a_dtype`: DataType. The data type of the a matrix.
+        `b_dtype`: DataType. The data type of the b matrix.
+        `bR`: int. Depth of RMEM buffering.
+        """
+        reg_nbytes = 4  # An SM contains 64K 32bit registers.
+        a_reg_pressure = self.a_v.size() // (reg_nbytes // a_dtype.nbytes) * bR
+        b_reg_pressure = self.b_v.size() // (reg_nbytes // b_dtype.nbytes) * bR
+        c_reg_pressure = self.c_v.size() // (reg_nbytes // acc_dtype.nbytes)
+
+        return a_reg_pressure + b_reg_pressure + c_reg_pressure
 
     def str_indented(self, depth: int = 0):
         indent = " " * (depth * 2)
