@@ -327,21 +327,22 @@ class DeadcodeEliminationRewriter(IRRewriter):
         super().__init__()
         self.stmts = stmts
         self.let2vars = let2vars
+        self.empty_stmt = SeqStmt([])
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         if stmt not in self.stmts:
             return super().visit_DeclareStmt(stmt)
-        return None
+        return self.empty_stmt
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         if stmt not in self.stmts:
             return super().visit_EvaluateStmt(stmt)
-        return None
+        return self.empty_stmt
 
     def visit_AssignStmt(self, stmt: AssignStmt):
         if stmt not in self.stmts:
             return super().visit_AssignStmt(stmt)
-        return None
+        return self.empty_stmt
 
     def visit_LetStmt(self, stmt: LetStmt):
         if stmt not in self.let2vars:
@@ -356,13 +357,15 @@ class DeadcodeEliminationRewriter(IRRewriter):
             body = self.visit(stmt.body)
             if len(bind_vars) > 0:
                 return LetStmt(bind_vars, bind_values, body)
-            return None
+            return self.empty_stmt
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = []
         for s in stmt.seq:
             new_stmt = self.visit(s)
-            if new_stmt is not None:
+            if isinstance(new_stmt, SeqStmt):
+                seq.extend(new_stmt.seq)
+            else:
                 seq.append(new_stmt)
         return SeqStmt(seq)
 

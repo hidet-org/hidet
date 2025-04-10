@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Sequence
 
 from hidet.ir.type import VoidType
 from hidet.ir.expr import Var
@@ -62,7 +62,7 @@ class FunctionBuilder(StmtBuilder):
         if exc_type is None:
             self.finish_func()
 
-    def extend_params(self, params: List[Var]):
+    def extend_params(self, params: Sequence[Var]):
         self.params.extend(params)
 
     def extend_attrs(self, new_attrs: Dict[str, object]):

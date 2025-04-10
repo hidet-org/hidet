@@ -19,9 +19,6 @@ class Boolean(DataType):
     def __init__(self):
         super().__init__('bool', 'bool', 1)
 
-    def is_integer_subbyte(self) -> bool:
-        return False
-
     def is_float(self) -> bool:
         return False
 

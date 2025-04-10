@@ -42,9 +42,6 @@ class IntegerSubbyteType(IntegerType):
     def sign_mask(self):
         return self._sign_mask
 
-    def is_integer_subbyte(self):
-        return True
-
     def iinfo(self) -> IntInfo:
         return IntInfo(self._nbits, self._max_value, self._min_value, self)
 

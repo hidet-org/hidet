@@ -23,6 +23,7 @@ from hidet.ir.stmt import (
     ForStmt,
     ForMappingStmt,
     SeqStmt,
+    Stmt,
 )
 from hidet.ir.stmt import WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AsmStmt, AssertStmt, BlackBoxStmt
 from hidet.ir.stmt import LaunchKernelStmt
@@ -204,6 +205,30 @@ class StmtVisitor(StmtFunctor, BaseVisitor):
 
 
 class StmtRewriter(StmtFunctor, BaseRewriter):
+    def __init__(self, use_memo: bool = True):
+        super().__init__(use_memo=use_memo)
+        self._prologues: List[Stmt] = []
+
+    def append_prologue_stmt(self, stmt: Stmt):
+        self._prologues.append(stmt)
+
+    def visit_dispatch(self, node: Node):
+        ret = super().visit_dispatch(node)
+        if ret is NotImplemented:
+            # can not dispatch to the statement functors
+            return NotImplemented
+        else:
+            assert isinstance(ret, Stmt), node
+
+        if self._prologues:
+            if isinstance(ret, SeqStmt):
+                seq = self._prologues + list(ret.seq)
+                ret = SeqStmt(seq)
+            else:
+                ret = SeqStmt(self._prologues + [ret])
+            self._prologues = []
+        return ret
+
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         v = self.visit(stmt.var)
         init = self.visit(stmt.init) if stmt.init is not None else None

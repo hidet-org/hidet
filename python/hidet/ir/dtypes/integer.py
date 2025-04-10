@@ -30,9 +30,6 @@ class IntegerType(DataType):
         self._min_value: int = min_value
         self._max_value: int = max_value
 
-    def is_integer_subbyte(self) -> bool:
-        return False
-
     def is_float(self) -> bool:
         return False
 

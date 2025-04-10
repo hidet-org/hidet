@@ -29,6 +29,7 @@ class DeclareScope(enum.Enum):
     Global = 1
     Shared = 2
     Register = 3
+    Host = 4
 
     @staticmethod
     def from_str(name):

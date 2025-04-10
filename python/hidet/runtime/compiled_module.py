@@ -366,4 +366,8 @@ def compiled_module_exists(module_dir: str) -> bool:
     for file in required_files:
         if not os.path.exists(os.path.join(module_dir, file)):
             return False
+        # if the lib.so file is empty, we consider it as not exists since it is a broken library
+        # due to interrupted compilation
+        if file == 'lib.so' and os.path.getsize(os.path.join(module_dir, file)) == 0:
+            return False
     return True

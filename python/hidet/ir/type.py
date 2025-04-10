@@ -160,7 +160,16 @@ class DataType(BaseType):
         return self
 
     def is_integer_subbyte(self) -> bool:
-        raise NotImplementedError()
+        return self.is_integer() and self.is_subbyte()
+
+    def is_float_subbyte(self) -> bool:
+        return self.is_float() and self.is_subbyte()
+
+    def is_subbyte(self):
+        return self.nbits < 8
+
+    def is_any_float16(self) -> bool:
+        return self.is_float() and self.nbits == 16
 
     def is_float(self) -> bool:
         raise NotImplementedError()
@@ -175,9 +184,6 @@ class DataType(BaseType):
         raise NotImplementedError()
 
     def is_boolean(self) -> bool:
-        raise NotImplementedError()
-
-    def is_any_float16(self) -> bool:
         raise NotImplementedError()
 
     def constant(self, value: Any):
@@ -475,6 +481,33 @@ def type_equal(lhs: BaseType, rhs: BaseType) -> bool:
         return True
     else:
         raise NotImplementedError()
+
+
+def sizeof(tp: BaseType) -> int:
+    """
+    Get the size of the given type in bytes.
+
+    Parameters
+    ----------
+    tp: BaseType
+        The type to get the size.
+
+    Returns
+    -------
+    ret: int
+        The size of the type in bytes.
+    """
+    from hidet.utils import prod
+
+    if isinstance(tp, DataType):
+        return tp.nbytes
+    elif isinstance(tp, (PointerType, TensorPointerType)):
+        # we assume we work on 64-bit system
+        return 8
+    elif isinstance(tp, TensorType):
+        return sizeof(tp.dtype) * prod(tp.shape)
+    else:
+        raise NotImplementedError(type(tp))
 
 
 void_p = PointerType(VoidType())

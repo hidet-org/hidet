@@ -901,6 +901,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
             Div: operator.truediv,
             FloorDiv: operator.floordiv,
             Mod: operator.mod,
+            RShift: operator.rshift,
+            LShift: operator.lshift,
+            BitXor: operator.xor,
         }
         result_value = op_dict[type(stmt.op)](var_value, value)
         assert isinstance(stmt.target, (Name, Subscript))

@@ -11,8 +11,10 @@
 # limitations under the License.
 from typing import Union, Sequence, List, cast, Optional
 
+from hidet.ir.type import BaseType
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForMappingStmt, ForStmtAttr
-from hidet.ir.stmt import DeclareStmt, BufferStoreStmt, AssignStmt, ReturnStmt, WhileStmt, BreakStmt
+from hidet.ir.stmt import DeclareStmt, BufferStoreStmt, AssignStmt, ReturnStmt, WhileStmt, BreakStmt, DeclareScope
+from hidet.ir.stmt import AssertStmt
 from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.mapping import RepeatTaskMapping
 from hidet.ir.dtypes import int32
@@ -119,11 +121,26 @@ class StmtBuilder:
         self.append(DeclareStmt(v, init, scope=scope))
         return v
 
+    def declare_var(
+        self, name: str, tp: BaseType, init: Optional[Expr] = None, scope: Optional[DeclareScope] = None
+    ) -> Var:
+        v = var(name, tp)
+        self.append(DeclareStmt(v, init=init, scope=scope))
+        return v
+
     def buffer_store(self, buf: Expr, indices: Sequence[Union[Expr, int]], value: Expr):
         self.append(BufferStoreStmt(buf, convert(indices), value))
 
     def assign(self, dst: Var, value: Expr):
         self.append(AssignStmt(dst, value))
+
+    def assertion(self, cond: Union[Expr, bool], msg: str) -> None:
+        self.append(AssertStmt(cond, msg))
+
+    def comment(self, comment_string: str, style: str = "//") -> None:
+        from hidet.ir.primitives.debug import comment
+
+        self.append(comment(comment_string, style=style))
 
     def brk(self):
         self.append(BreakStmt())
@@ -138,7 +155,7 @@ class StmtBuilder:
         assert len(bind_vars) == len(values)
         bind_vars = [var(v) if isinstance(v, str) else v for v in bind_vars]
         bind_values = [convert(value) for value in values]
-        return StmtScope(self, stmts=LetStmt(bind_vars, bind_values, body=1), ret=bind_vars)
+        return StmtScope(self, stmts=LetStmt(bind_vars, bind_values, body=None), ret=bind_vars)
 
     def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], attr: str = '.') -> StmtScope:
         if isinstance(v, str):
@@ -169,21 +186,25 @@ class StmtBuilder:
         iter_vars = [var(name) for name in iter_names]
         return StmtScope(self, stmts=ForMappingStmt(iter_vars, mapping, worker, cast(Stmt, None)), ret=iter_vars)
 
-    def for_grid(self, shape: List[Union[Expr, int]]) -> StmtScope:
+    def for_grid(self, shape: Sequence[Union[Expr, int]]) -> StmtScope:
         return self.for_mapping(mapping=repeat_map(shape), iter_names=self._name_index_vars(len(shape)), worker=0)
 
-    def for_range(self, extent: Union[Expr, int]):
-        iter_var = var('i')
-        return StmtScope(self, stmts=ForStmt(iter_var, extent), ret=iter_var)
+    def for_range(self, extent: Union[Expr, int], *, attr: Optional[Union[str, ForStmtAttr]] = None) -> StmtScope:
+        iter_var = var("i")
+        if isinstance(attr, str):
+            attr = ForStmtAttr.parse(attr, num_loops=1)[0]
+        else:
+            attr = ForStmtAttr()
+        return StmtScope(self, stmts=ForStmt(iter_var, extent, attr=attr), ret=iter_var)
 
-    def while_loop(self, cond: Expr):
+    def while_loop(self, cond: Expr) -> StmtScope:
         return StmtScope(self, stmts=WhileStmt(cond, body=None), ret=None)
 
     def ret(self, value: Optional[Expr] = None):
         self.append(ReturnStmt(value))
 
     # utils
-    def append(self, stmt: Union[Stmt, Expr, Sequence[Stmt]]):
+    def append(self, stmt: Union[Stmt, Expr, Sequence[Stmt], None]) -> None:
         if stmt is None:
             return
         if isinstance(stmt, (Stmt, Expr)):

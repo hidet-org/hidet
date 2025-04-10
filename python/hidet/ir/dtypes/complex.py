@@ -20,9 +20,6 @@ class ComplexType(DataType):
         super().__init__(name, short_name, 2 * base_dtype.nbytes)
         self.base_dtype: DataType = base_dtype
 
-    def is_integer_subbyte(self) -> bool:
-        return False
-
     def is_float(self) -> bool:
         return False
 
