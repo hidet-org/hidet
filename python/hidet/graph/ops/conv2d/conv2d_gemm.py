@@ -491,7 +491,7 @@ class Conv2dGemmFp16Task(Task):
         smem_img_type = tensor_type(
             'float16',
             shape=[block_m, block_k],
-            layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8)
+            layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8),
             # layout=row_major(block_m, block_k)
         )
         smem_weight_type = tensor_type(

@@ -2,6 +2,7 @@
 Kernel Functions
 ================
 """
+
 # %%
 # Besides the ``public`` function, there are other function kinds in hidet script. Currently, we support the following
 # function kinds:

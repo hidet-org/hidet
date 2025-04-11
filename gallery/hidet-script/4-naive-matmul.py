@@ -2,6 +2,7 @@
 Naive Matrix Multiplication
 ===========================
 """
+
 # %%
 # In this example, we will show you how to write a program that performs matrix multiplication on GPU that supports
 # arbitrary input size.

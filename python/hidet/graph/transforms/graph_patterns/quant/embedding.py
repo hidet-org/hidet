@@ -16,6 +16,7 @@ from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.transform import TakeOp
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern
 
+
 # we use the heuristic that if the weight is constant and the axis is 0 in the take op, then its an embedding layer
 #   and we quantize the weights
 class SymmetricEmbeddingQuantizePattern(SubgraphRewriteRule):

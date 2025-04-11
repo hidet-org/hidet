@@ -3,6 +3,7 @@ Modified from
   https://github.com/vllm-project/vllm/blob/main/vllm/sampling_params.py
 Licensed under the Apache License, Version 2.0
 """
+
 from enum import IntEnum
 from functools import cached_property
 from typing import Callable, List, Optional, Union

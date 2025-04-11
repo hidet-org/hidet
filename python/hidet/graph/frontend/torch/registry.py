@@ -184,6 +184,7 @@ class HidetModule:
 
 TRACED_MODULES = {'torch'}
 
+
 # Allow in fxgraph registered functions only.
 def allow_in_graph_registered_funcs_only():
     import sys

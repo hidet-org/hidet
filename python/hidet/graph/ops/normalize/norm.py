@@ -476,9 +476,11 @@ class NormalizeOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'dims': dims, 'epsilon': epsilon, 'accumulate_dtype': accumulate_dtype},
-            task=CPUNormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype)
-            if x.device.is_cpu()
-            else NormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype),
+            task=(
+                CPUNormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype)
+                if x.device.is_cpu()
+                else NormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype)
+            ),
         )
 
 

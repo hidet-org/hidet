@@ -637,17 +637,9 @@ def register_vectorized_cvt_instructions():
                 vector_size = max(src_vector_size, dst_vector_size)
                 func_name = resolve_vectorized_cvt_func_name(src_dtype, dst_dtype, bits_per_vector)
 
-                (
-                    immLut,
-                    lo_xor_mask,
-                    hi_xor_mask,
-                    lo_and_mask,
-                    hi_and_mask,
-                    mul_lo,
-                    add_lo,
-                    mul_hi,
-                    add_hi,
-                ) = get_magic_numbers_2bits(src_dtype)
+                (immLut, lo_xor_mask, hi_xor_mask, lo_and_mask, hi_and_mask, mul_lo, add_lo, mul_hi, add_hi) = (
+                    get_magic_numbers_2bits(src_dtype)
+                )
 
                 if bits_per_vector == 32:
 

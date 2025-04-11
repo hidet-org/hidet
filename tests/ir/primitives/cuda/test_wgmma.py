@@ -31,6 +31,7 @@ from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
 from hidet.ir.primitives.cuda.barrier import fence_view_async_shared
 from hidet.ir.primitives.cuda.wgmma import make_wgmma_desc
 
+
 # layout use to prepare smem data for swizzling case
 # use the global2local to prepare the data in main then copy over to smem
 # https://research.colfax-intl.com/cutlass-tutorial-wgmma-hopper/
@@ -254,6 +255,7 @@ trans_b_values = [1, 0]
 swizzle_modes = ["SW128", "SW64", "SW32", "NOSW"]
 trans_required_types = ["f16", "bf16"]  # wgmma.async transpose option only support f16 and bf16
 non_fp_list = ["i8", "u8"]
+
 
 # Generate test configurations
 # default to generate shorter test configurations

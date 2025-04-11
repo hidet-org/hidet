@@ -117,7 +117,7 @@ def matmul_simt(
     warp_threads=(4, 8),
     thread_shape=(4, 4),
     swizzle_tile=1,
-    arch='sm_70'
+    arch='sm_70',
 ):
     from hidet.lang import attrs
     from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref
@@ -393,7 +393,7 @@ def matmul_simt(
     def matmul_kernel(
         a: dtype[a_head + [m_size, k_size]],
         b: dtype[b_head + [k_size, n_size]],
-        c: (dtype[[k_parts] + c_head + [m_size, n_size]] if k_parts > 1 else dtype[c_head + [m_size, n_size]]),
+        c: dtype[[k_parts] + c_head + [m_size, n_size]] if k_parts > 1 else dtype[c_head + [m_size, n_size]],
     ):
         attrs.func_kind = 'cuda_kernel'
         attrs.cuda.dynamic_smem_bytes = smem_total_size

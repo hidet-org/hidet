@@ -201,7 +201,7 @@ def register_tiled_mma():
 
     # We enumerate all possible tile sizes here. The warp shape is carefully chosen to avoid
     # register spill, and this knowledge comes from CUTLASS and Triton.
-    for (warp_m, warp_n) in [(2, 2), (4, 2), (2, 4), (1, 4), (4, 1), (2, 1), (1, 2), (1, 1)]:
+    for warp_m, warp_n in [(2, 2), (4, 2), (2, 4), (1, 4), (4, 1), (2, 1), (1, 2), (1, 1)]:
         for repeat_m in [1, 2, 3, 4, 6, 8, 12, 16]:
             for repeat_n in [1, 2, 3, 4, 6, 8, 12, 16]:
                 num_regs = repeat_m * repeat_n * 8 + 2 * repeat_m * 4 + 2 * repeat_n * 2 * 2

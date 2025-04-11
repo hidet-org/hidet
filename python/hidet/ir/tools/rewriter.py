@@ -19,6 +19,7 @@ from hidet.ir.stmt import LetStmt, BufferStoreStmt
 
 from hidet.ir.polinomial import Poli, from_expr_to_poli, POLINOMIAL_BIAS_VAR
 
+
 # Rewriter that search for given polinomial `old: Expr` and change it on another `new: Expr`.
 # It's supposed `new` is simpler than `old`
 # Search only throught indeces of tensors.

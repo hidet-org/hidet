@@ -5,6 +5,7 @@ Hello World!
 In this example, we will show you how to use hidet to write a simple "Hello World" program.
 
 """
+
 # %%
 # Hidet is a deep learning compiler implemented in python. Let's import it first.
 import hidet

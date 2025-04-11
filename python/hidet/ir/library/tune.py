@@ -65,7 +65,7 @@ class TuningSpace:
                     kwargs[key] = value
             yield kwargs
 
-    def add_sub_space(self, level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice],]]]):
+    def add_sub_space(self, level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice]]]]):
         if level in self.spaces:
             raise ValueError(f'Level {level} is already defined.')
         if level == 0:

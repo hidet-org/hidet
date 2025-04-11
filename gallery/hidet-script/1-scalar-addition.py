@@ -2,6 +2,7 @@
 Scalar Addition
 ===============
 """
+
 # %%
 # In this example, we will show you how to write a program that adds two float32 numbers.
 

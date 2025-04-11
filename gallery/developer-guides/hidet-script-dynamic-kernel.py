@@ -7,6 +7,7 @@ Writing Dynamic kernel
   More details about hidet script and how to write dynamic kernel are coming soon.
 
 """
+
 import numpy.testing
 import hidet
 

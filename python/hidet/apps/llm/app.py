@@ -43,6 +43,7 @@ The LLM app supports two operations:
 Acknowledgement:
     - We adopt the page attention mechanism proposed in vLLM: https://github.com/vllm-project/vllm
 """
+
 # pylint: disable=useless-super-delegation
 import asyncio
 from typing import List, Optional, Iterable, Union, Dict
@@ -68,7 +69,7 @@ class SyncGenerationMixin:
         self,
         prompts: Union[str, Iterable[str]],
         *,
-        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None
+        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None,
     ) -> Union[SequenceOutput, List[SequenceOutput]]:
         """
         Generate text with the LLM app synchronously.
@@ -403,7 +404,7 @@ class LLM(SyncGenerationMixin, AsyncGenerationMixin):
         self,
         prompts: Union[str, Iterable[str]],
         *,
-        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None
+        sampling_params: Optional[Union[SamplingParams, Iterable[SamplingParams]]] = None,
     ) -> Union[SequenceOutput, List[SequenceOutput]]:
         return super().generate(prompts, sampling_params=sampling_params)
 

@@ -60,6 +60,7 @@ Let's implement the sub-graph rewrite rule shown in the above example. Before we
 that contains the sub-graph we want to rewrite:
 
 """
+
 from typing import Optional, List
 
 import hidet

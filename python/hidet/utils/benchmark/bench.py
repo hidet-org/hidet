@@ -25,6 +25,7 @@ from .utils import get_event_time_accuracy_ms, get_cuda_event_duration
 # Number of repetitions between time measurements for benchmarking
 DEFAULT_NUMBER_FOR_MEASUREMENTS = 5
 
+
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
 def _do_bench(fn, warmup, rep, percentiles):
     """

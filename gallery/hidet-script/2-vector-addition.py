@@ -2,6 +2,7 @@
 Vector Addition
 ===============
 """
+
 # %%
 # In this example, we will show you how to write a program that adds two float32 vectors in hidet script.
 import hidet

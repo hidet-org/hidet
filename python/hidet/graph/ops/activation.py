@@ -194,9 +194,9 @@ class SoftmaxOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'axis': axis},
-            task=CPUSoftmaxTask(input_like(x, 'x'), axis)
-            if x.device.is_cpu()
-            else SoftmaxTask(input_like(x, 'x'), axis),
+            task=(
+                CPUSoftmaxTask(input_like(x, 'x'), axis) if x.device.is_cpu() else SoftmaxTask(input_like(x, 'x'), axis)
+            ),
         )
 
 

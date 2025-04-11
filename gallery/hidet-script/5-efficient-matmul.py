@@ -11,6 +11,7 @@ memory. For simplicity, we omitted some optimizations like software pipelining (
 Feel free to skip this example if you are not familiar with CUDA programming.
 
 """
+
 # %%
 import torch
 import hidet

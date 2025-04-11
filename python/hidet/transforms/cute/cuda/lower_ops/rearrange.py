@@ -258,14 +258,9 @@ class RearrangeEmitter(OpEmitter):
                 raise TypeError(f"Shape mismatch. (got:src({shape}),dst({_shape}))")
             src_tv_layout = make_layout(src_thr_layout, src_val_layout)
             dst_tv_layout = make_layout(dst_thr_layout, dst_val_layout)
-            self.op2exec_plan[op] = (
-                src_outer,
-                src_inner,
-                dst_outer,
-                dst_inner,
-                sts_layout,
-                lds_layout,
-            ) = self._schedule(shape, src_tv_layout, dst_tv_layout)
+            self.op2exec_plan[op] = (src_outer, src_inner, dst_outer, dst_inner, sts_layout, lds_layout) = (
+                self._schedule(shape, src_tv_layout, dst_tv_layout)
+            )
         smem_size = sts_layout.cosize()
         assert (
             smem_size == lds_layout.cosize()

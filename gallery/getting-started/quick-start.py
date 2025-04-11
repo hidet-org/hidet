@@ -6,6 +6,7 @@ Quick Start
 
 This guide walks through the key functionality of Hidet for tensor computation.
 """
+
 # %%
 # Optimize PyTorch model with Hidet
 # ---------------------------------

@@ -1519,9 +1519,9 @@ class PrologueEpilogueRewriter(IRRewriter):
             if isinstance(op, CollectiveStore):
                 assert self.epilogue_visitor_tree is not None
                 inputs2stub: Dict[Tensor, Var] = self.epilogue_visitor_tree.inputs2stub
-                tensor2collective_store: Dict[
-                    Tensor, CollectiveStoreRecord
-                ] = self.epilogue_visitor_tree.tensor2collective_store
+                tensor2collective_store: Dict[Tensor, CollectiveStoreRecord] = (
+                    self.epilogue_visitor_tree.tensor2collective_store
+                )
                 tensor2stmts: Dict[Tensor, List[Stmt]] = self.epilogue_visitor_tree.tensor2stmts
                 src = self.visit(op.src)
                 dst = op.dst

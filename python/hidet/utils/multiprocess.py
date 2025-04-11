@@ -36,6 +36,7 @@ def get_parallel_num_workers(is_remote_allowed: bool) -> int:
 # The reason why we have two levels is that we have to control how many processes are spawned in the second level
 # to prevent overload of the system.
 
+
 # 1ST LEVEL PARALLELIZATION IMPLEMENTATION
 def parallel_imap_1stlevel(func: Callable, jobs: Sequence[Any], is_remote_allowed: bool = False) -> Iterable[Any]:
     jobs_num = len(jobs)

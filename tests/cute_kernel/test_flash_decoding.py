@@ -940,7 +940,7 @@ def flash_decoding_v3(
 
                 if no < no_size - 1:
                     tg_k1 = tensor_view(
-                        k[batch_idx, seqk_part * seqk_partition + (no + 1) * bn :, head_idx, :,],
+                        k[batch_idx, seqk_part * seqk_partition + (no + 1) * bn :, head_idx, :],
                         TensorLayout((bn, head_size), (num_heads_k * head_size, 1)),
                         "global",
                     )

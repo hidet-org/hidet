@@ -3,6 +3,7 @@ Opaque operator is an operator that does not provide the computation definition,
 identify the computation. Opaque operator is used to represent the operators that are hard to represent its
 computation definition, or it is too tedious to represent its computation definition.
 """
+
 from typing import List, Dict, Any, Optional, Union, Sequence
 from hidet.graph.tensor import symbol
 from .utils import Tensor, Task, Operator, IRModule, Expr, input_like

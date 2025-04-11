@@ -180,8 +180,8 @@ Define a Computation Task
 -------------------------
 The computation of each operator can be described as a directed acyclic graph (DAG). The DAG is composed of tensor
 nodes. Both :py:func:`~hidet.ir.compute.tensor_input` and :py:func:`~hidet.ir.compute.compute` primitives create tensor
-nodes. The edges of the DAG are the dependencies between the tensor nodes. Such a DAG is stored in a 
-:py:class:`~hidet.ir.task.Task` object. 
+nodes. The edges of the DAG are the dependencies between the tensor nodes. Such a DAG is stored in a
+:py:class:`~hidet.ir.task.Task` object.
 
 .. py:class:: Task(name: str, inputs: List[TensorNode], outputs: List[TensorNode])
     :noindex:

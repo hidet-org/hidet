@@ -344,6 +344,7 @@ def einsum_different_ranks(lhs: str, rhs: str, operands: Sequence[Tensor]):
 # 2. More than 2 operands
 # 3. Equations without '->'
 
+
 # Do ad-hoc pattern matching: only support simple cases such as matrix multiply
 def einsum(equation: str, operands: Sequence[Tensor]):
     if isinstance(operands[0], (Tuple, List)):

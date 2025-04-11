@@ -23,7 +23,7 @@ def get_test_texts() -> List[str]:
     return [
         "Hello, world!",
         "你好，世界！ This 😀 is a test string with emojis 🚀🌟",
-        "Invalid UTF-8: \xFF\xFF\xFF \xF0\x28\x8C\xBC, \xC0\xAF, \xF8\xA1\xA1\xA1.",
+        "Invalid UTF-8: \xff\xff\xff \xf0\x28\x8c\xbc, \xc0\xaf, \xf8\xa1\xa1\xa1.",
         "Special tokenization characters: ByteLevel: Ġ, SentencePiece: ▁",
     ]
 

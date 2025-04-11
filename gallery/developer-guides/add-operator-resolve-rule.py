@@ -73,6 +73,7 @@ is a constant integer 3.
 
 Before we start, let's have a look at the original behavior when there is no such resolve rule.
 """
+
 import hidet
 
 a = hidet.symbol(shape=[2, 3], device='cuda')

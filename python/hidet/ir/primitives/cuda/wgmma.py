@@ -59,9 +59,9 @@ class WgmmaConfig:
         self.c_elements: int = m * n // NUM_THREADS
         self.a_regs: int = num_regs(a_input_dtype, m * k)
         self.c_regs: int = num_regs(output_dtype, m * n)
-        self.required_arch: Tuple[
-            int, int
-        ] = required_arch  # The arch should be sm_90a only. Currently, get_arch returns sm_90,
+        self.required_arch: Tuple[int, int] = (
+            required_arch  # The arch should be sm_90a only. Currently, get_arch returns sm_90,
+        )
         # and in the build process, it converts to sm_90a.
         self.scale_d: int = 1  # D = A*B when false, D = A*B+D when true
         self.scale_a: int = 1  # A = -A when -1

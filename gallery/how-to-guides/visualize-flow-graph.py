@@ -16,6 +16,7 @@ Define model
 We first define a model with a self-attention layer.
 
 """
+
 import math
 import hidet
 from hidet import Tensor

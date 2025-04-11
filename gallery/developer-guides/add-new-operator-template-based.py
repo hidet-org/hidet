@@ -14,6 +14,7 @@ The :class:`~hidet.ir.task.Task` class have two methods :code:`implement_cpu()` 
 can be override when we define a new task.
 
 """
+
 import hidet
 from hidet.ir.compute import TensorNode, compute, reduce
 from hidet.ir.task import Task

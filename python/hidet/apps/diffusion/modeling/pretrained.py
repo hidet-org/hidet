@@ -40,7 +40,7 @@ class PretrainedModelForDiffusion(PretrainedModel):
             **hf_config,
             vae_scale_factor=hf_pipeline.vae_scale_factor,
             embed_max_length=hf_pipeline.text_encoder.config.max_position_embeddings,
-            embed_hidden_dim=hf_pipeline.text_encoder.config.hidden_size
+            embed_hidden_dim=hf_pipeline.text_encoder.config.hidden_size,
         )
 
         hidet_unet.to(dtype=dtype, device=device)

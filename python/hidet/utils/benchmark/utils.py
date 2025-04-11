@@ -106,6 +106,7 @@ empty_kernel = _empty_kernel()
 
 _cached_cuda_event_duration = None
 
+
 # Get the duration between 2 event calls
 def get_cuda_event_duration():
     global _cached_cuda_event_duration
@@ -140,6 +141,7 @@ def get_cuda_event_duration():
 
 
 _cached_empty_kernel_times = {}
+
 
 # Get the CPU time requered for calling `number` repeats of empty kernel
 # In fact this is a estimation of CPU overhead in `_benchmark_func_internal`

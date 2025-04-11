@@ -429,11 +429,11 @@ class MatmulF32Taskx86(Task):
                         for remain_off in range(k_remainder):
                             curr_remain_col = remaining_start_col + remain_off
                             for micropanel_row in range(MR):
-                                packed_a_tensor[
-                                    a_curr_panel_row_start + micropanel_row, curr_remain_col
-                                ] = loop3_partition_a[
-                                    (micropanel_row + a_curr_panel_row_start) * k_size + curr_remain_col
-                                ]
+                                packed_a_tensor[a_curr_panel_row_start + micropanel_row, curr_remain_col] = (
+                                    loop3_partition_a[
+                                        (micropanel_row + a_curr_panel_row_start) * k_size + curr_remain_col
+                                    ]
+                                )
                     else:
                         remain_start_row = npanels_full_a * MR
                         for remain_col in range(loop3_partition_a_width):
