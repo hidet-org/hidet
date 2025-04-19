@@ -16,8 +16,6 @@ parser.add_argument(
 
 
 def install_dependencies():
-    subprocess.run(['pip', 'install', '-r', 'requirements.txt'], check=True)
-    subprocess.run(['pip', 'install', '-r', 'requirements-dev.txt'], check=True)
     subprocess.run(['pip', 'install', '-r', 'scripts/bench/requirements.txt'], check=True)
 
 
@@ -31,7 +29,7 @@ def reinstall_hidet():
     subprocess.run(['rm', '-rf', 'build/*'], check=True)
     subprocess.run(['cmake', '-S', '.', '-B', 'build'], check=True)
     subprocess.run(['cmake', '--build', 'build'], check=True)
-    subprocess.run(['pip', 'install', '-e', '.'], check=True)
+    subprocess.run(['pip', 'install', '-e', '.[dev]'], check=True)
 
 
 def run_bench_script(space, report_file):

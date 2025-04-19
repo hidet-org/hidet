@@ -45,8 +45,6 @@ from ast import Not, And, Or, Eq, NotEq, Lt, LtE, Gt, GtE
 
 from ast import Index
 
-import astunparse
-
 from hidet import ir
 from hidet.ir.expr import Var
 from hidet.ir.stmt import DeclareScope
@@ -217,7 +215,7 @@ class PythonAstFunctor:
         raise NotImplementedError()
 
     def visit_Starred(self, expr: Starred):
-        raise NotImplementedError(astunparse.unparse(expr))
+        raise NotImplementedError(ast.unparse(expr))
 
     def visit_Name(self, expr: Name):
         raise NotImplementedError()
@@ -457,7 +455,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_Module(self, module: Module):
         if len(module.body) != 1 or not isinstance(module.body[0], FunctionDef):
             msg = 'The module expects to have only one function definition statement, got\n'
-            msg += str(astunparse.unparse(module))
+            msg += str(ast.unparse(module))
             raise ValueError(msg)
         return self.visit(module.body[0])
 

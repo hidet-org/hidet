@@ -16,6 +16,7 @@ import hidet
 from hidet.testing import device_to_torch
 
 
+@pytest.mark.skip(reason="The repo seems invalid and the model is not available now.")
 @pytest.mark.parametrize('batch_size', [1])
 @pytest.mark.parametrize('seq_length', [128])
 @pytest.mark.parametrize('use_tensor_core', [False, True])

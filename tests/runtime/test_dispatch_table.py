@@ -35,6 +35,7 @@ def mock_intervals_table(tmp_path, monkeypatch):
     Provides an IntervalsDispachTable for testing internal methods.
     We patch get_split_points to return a default range so the constructor won't raise.
     """
+
     # Patch get_split_points to return something like [1, 10].
     def mock_get_split_points():
         return [1, 10]

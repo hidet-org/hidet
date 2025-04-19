@@ -79,8 +79,7 @@ jobs:
 
       - name: Setup Hidet from Wheel
         run: |
-          pip install -r requirements-dev.txt
-          pip install ${{ needs.build-wheel.outputs.wheel_name }}
+          pip install ${{ needs.build-wheel.outputs.wheel_name }}[dev]
   
       - name: List installed packages
         run: |

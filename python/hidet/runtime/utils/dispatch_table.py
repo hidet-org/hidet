@@ -245,7 +245,7 @@ class IntervalsDispachTable(DispatchTable):
         input_shapes = [list(shape) for shape in self.input_shapes]
         input_tensors = []
         output_tensors = []
-        for (i, j) in self.dynamic_input_dim:
+        for i, j in self.dynamic_input_dim:
             runtime_api.set_symbol_value(input_shapes[i][j], shape_val)
             input_shapes[i][j] = shape_val
         for in_shape in input_shapes:

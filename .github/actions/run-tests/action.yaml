@@ -30,8 +30,7 @@ runs:
     - name: Setup Hidet from Wheel
       shell: bash
       run: |
-        pip install -r requirements-dev.txt
-        pip install ${{ inputs.wheel_name }}
+        pip install ${{ inputs.wheel_name }}[dev]
 
     - name: List installed packages
       shell: bash

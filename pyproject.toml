@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "cmake"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -30,25 +30,45 @@ classifiers = [
   "Operating System :: POSIX :: Linux"
 ]
 dependencies = [
-  "numpy>=1.23",
-  "psutil",
-  "tabulate",
-  "pytest",
-  "tqdm",
-  "nvtx",
-  "astunparse",
-  "click",
-  "packaging",
-  "requests",
-  "filelock",
-  "cuda-python>=11.6.1",
-  "hip-python-fork",
-  "lark",
-  "tomlkit",
-  "scipy"
+  "numpy>=1.23",  # numpy 1.23 is required for dlpack support
+  "psutil",  # used for query available memory
+  "tabulate",  # used for print table
+  "tqdm",  # show progress bar
+  "nvtx",  # used to annotate the scope of events in host process, which can be visualized in Nsight System.
+  "click",  # for command line interface
+  "packaging",  # for package version check
+  "requests",  # download files from url
+  "filelock",  # lock file on disk
+  "cuda-python>=11.6.1",  # for cuda runtime api
+  "hip-python-fork",  # for hip runtime api, need converted to hip-python when AMD release hip-python on PyPI
+  "lark",  # for parser
+  "tomlkit",  # for configuration store/load on disk
+  "scipy",  # we used some scipy functions in hidet
+  "gitpython",  # used to detect whether hidet is installed from a local repo or not, and determine default cache dir
+  "importlib_metadata", # check installed packages
 ]
 
 [project.optional-dependencies]
+dev = [
+  "pytest==7.2",  # python test
+  "black==25.1.0", # formatter
+  "pylint==2.13.9",  # linter
+
+  # check the correctness of onnx frontend
+  "onnx",
+  "onnxruntime-gpu",
+
+  # model zoo
+  "torch>=2.3.0",
+  "torchvision",
+  "torchaudio",
+  "datasets",
+  "diffusers",
+  "transformers",
+  "sentencepiece",
+  "sacremoses",
+]
+
 torch = ["torch>=2.3.0"]
 
 [project.urls]

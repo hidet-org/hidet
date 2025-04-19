@@ -132,9 +132,9 @@ class CompiledGraph:
         # runtime state
         self.working_dir: str = hidet.utils.cache_file('graphs', self.meta.graph_hash)
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
-        self._dispatch_table: Union[
-            GraphPointsDispatchTable, GraphIntervalDispatchTable
-        ] = self._construct_dispatch_table()
+        self._dispatch_table: Union[GraphPointsDispatchTable, GraphIntervalDispatchTable] = (
+            self._construct_dispatch_table()
+        )
         self.cpu_workspace: Optional[Storage] = None
         self.cuda_workspace: Optional[Storage] = None
         self.hip_workspace: Optional[Storage] = None
