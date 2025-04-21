@@ -18,7 +18,7 @@ from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean, int32
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var, LogicalOr
-from hidet.ir.expr import Div, Constant, Expr, logical_and, constant, IfThenElse
+from hidet.ir.expr import Div, Constant, Expr, logical_and, constant, IfThenElse, SymbolVar
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
@@ -137,6 +137,7 @@ class RuleBasedSimplifier(IRRewriter):
             ((e1 // ic1) // ic2, e1 // (ic1 * ic2)),
             ((e1 * c1) // c1, e1),
             ((e1 * c1 + e2) // c1, e1 + e2 // c1),
+            ((e1 * c1) // (e1 * c2), c1 // c2),
             # mod
             ((e1 * c1 + e2) % c1, e2 % c1),
             ((e1 % c1) % c1, e1 % c1),
@@ -310,3 +311,13 @@ class RuleBasedSimplifyPass(FunctionPass):
 
 def rule_based_simplify_pass():
     return RuleBasedSimplifyPass()
+
+
+def rule_based_simplify(expr: Expr) -> Expr:
+    if isinstance(expr, (int, float, SymbolVar)):
+        return expr
+    elif isinstance(expr, Constant) and expr.type is dtypes.default_int_dtype:
+        return int(expr)
+    else:
+        simplifier = RuleBasedSimplifier()
+        return simplifier(expr)

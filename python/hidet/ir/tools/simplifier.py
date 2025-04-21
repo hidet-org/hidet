@@ -19,10 +19,10 @@ from hidet.ir.expr import SymbolVar
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.dtypes import int32
 from hidet.ir.tools import rewrite
-from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter
+from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter, LayoutRewriter
 
 
-class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
+class Simplifier(StmtRewriter, ExprRewriter, LayoutRewriter, BaseRewriter):
     def __init__(self, instantiate_symbols: bool = False):
         super().__init__()
         self.instantiate_symbols = instantiate_symbols
@@ -227,15 +227,25 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
             return super().visit_Var(e)
 
 
-def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, instantiate_symbols=False, repeat_limit=10):
-    if isinstance(node, (int, float)):
+def simplify(
+    node: Union[Stmt, Expr, int, float, list, tuple], *, instantiate_symbols=False, repeat_limit=10, enable_rules=False
+):
+    if isinstance(node, (int, float, SymbolVar)):
         return node
+
     simplifier = Simplifier(instantiate_symbols)
     for _ in range(repeat_limit):
         old_node = node
         node = simplifier(node)
         if old_node is node:
             break
+
+    # Apply rule-based simplification if enabled
+    if enable_rules:
+        from hidet.transforms.rule_based_simplifier import rule_based_simplify
+
+        node = rule_based_simplify(node)
+
     return node
 
 

@@ -196,7 +196,7 @@ def reduce(shape, fcompute, reduce_type, accumulate_dtype='float32', name: Optio
     reduce_type = ReduceType(reduce_type)
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
-    value = simplify(convert(fcompute(*axes)))
+    value = simplify(convert(fcompute(*axes)), enable_rules=True)
     if name is None:
         name = f'acc_{reduce_type.name}'
     return ReduceCompute(
@@ -232,9 +232,9 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
     """
     from hidet.ir.tools import simplify
 
-    shape = [convert(v) for v in shape]
+    shape = [simplify(convert(v), enable_rules=True) for v in shape]
     axes = [var() for _ in shape]
-    value = simplify(convert(fcompute(*axes)))
+    value = simplify(convert(fcompute(*axes)), enable_rules=True)
     return GridCompute(name=name, shape=shape, axes=axes, value=value, layout=layout)
 
 
@@ -265,7 +265,7 @@ def arg_reduce(extent, fcompute, reduce_type, index_dtype='int64', name=None) ->
     reduce_type = ReduceType(reduce_type)
     extent = convert(extent)
     axis = var()
-    value = simplify(convert(fcompute(axis)))
+    value = simplify(convert(fcompute(axis)), enable_rules=True)
     if name is None:
         name = f'arg_{reduce_type.name}'
     return ArgReduceCompute(

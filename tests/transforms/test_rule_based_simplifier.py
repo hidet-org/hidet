@@ -14,6 +14,7 @@ from collections import namedtuple
 import hidet
 from hidet.ir.expr import if_then_else
 from hidet.transforms.rule_based_simplifier import RuleBasedSimplifier
+from hidet.ir.tools import simplify
 from hidet.utils import repeat_until_converge
 
 
@@ -29,6 +30,11 @@ def test_rule_based_simplify():
         testcase(expr=n / n, expected=1),
     ]
 
+    # Test the original RuleBasedSimplifier
     simp = RuleBasedSimplifier()
     for expr, expected in cases:
         assert repeat_until_converge(simp, expr) == expected
+
+    # Test simplify with enable_rules=True
+    for expr, expected in cases:
+        assert simplify(expr, enable_rules=True) == expected

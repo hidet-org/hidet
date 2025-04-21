@@ -304,6 +304,12 @@ class TypeInfer(IRFunctor):
     def visit_Constant(self, e: Constant):
         return e.type
 
+    def visit_PyConstant(self, c):
+        if isinstance(c, int):
+            return dtypes.default_int_dtype
+        else:
+            raise NotImplementedError()
+
     def visit_ScalarInput(self, node: ScalarInput):
         return node.dtype
 

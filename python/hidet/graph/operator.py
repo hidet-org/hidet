@@ -15,7 +15,8 @@ import hidet.option
 from hidet.ir.type import TensorType
 from hidet.ir.task import Task
 from hidet.runtime.compiled_task import CompiledTask
-from hidet.graph.tensor import Tensor, SymbolVar
+from hidet.graph.tensor import Tensor
+from hidet.ir.expr import SymbolVar
 from hidet.runtime.device import Device, instantiate_device
 
 
