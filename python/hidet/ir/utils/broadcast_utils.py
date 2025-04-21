@@ -12,7 +12,7 @@
 from typing import Sequence, List
 
 import hidet.option
-from hidet.ir.expr import Expr, Int, is_constant, if_then_else
+from hidet.ir.expr import Expr, Int, is_constant
 from hidet.utils import repeat_until_converge
 
 
@@ -114,5 +114,6 @@ def broadcast_indices(out_indices: Sequence[Int], shape: Sequence[Int], out_shap
     pad_dim = len(out_shape) - len(shape)
     indices = list(out_indices[pad_dim:])
     for idx, dim in enumerate(shape):
-        indices[idx] = if_then_else(dim == 1, 0, indices[idx])
+        if dim == 1:
+            indices[idx] = 0
     return indices
