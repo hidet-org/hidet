@@ -191,7 +191,7 @@ def register_mma_configs():
     # Since the output dtype is s32, which I assume to be int32, and the maximum K dimension is 32,
     # so the maximum possible value is 32 * 255 * 255, well below the maximum representable value for int 32.
     # TODO: mma tests for int8, uint8, f8e4m3, f8e5m2 currently do not work
-    for input_type in ['int8', 'uint8']:
+    for input_type in ['i8', 'u8']:
         mma_configs.update(
             {
                 f'm8n8k16_{input_type}_i32': MmaConfig(
