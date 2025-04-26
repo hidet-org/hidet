@@ -312,7 +312,7 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
 
 
 def save_to_graph_cache(cgraph: CompiledGraph):
-    cache_dir = hidet.utils.cache_dir('graphs', cgraph.meta.graph_hash)
+    cache_dir = cgraph.get_cache_dir()
 
     # save meta data
     with open(os.path.join(cache_dir, 'meta.json'), 'w') as f:
@@ -380,6 +380,14 @@ def build_flow_graph(graph, *, space=0) -> CompiledGraph:
 
     # save the compiled graph to cache
     save_to_graph_cache(compiled_graph)
+
+    # dump the graph visual when needed
+    if hidet.option.get_option('debug_dump_graph_visual'):
+        from hidet.utils.netron import dump
+
+        cache_dir = compiled_graph.get_cache_dir()
+        with open(os.path.join(cache_dir, 'netron_graph.json'), 'w') as f:
+            dump(graph, f)
 
     return compiled_graph
 

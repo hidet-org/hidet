@@ -212,6 +212,13 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='debug_dump_graph_visual',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to dump the graph visual to the graph cache.',
+        choices=[True, False],
+    )
+    register_option(
         name='debug_show_var_id',
         type_hint='bool',
         default_value=False,
@@ -921,6 +928,18 @@ def debug_show_var_id(enable: bool = True):
     if not OptionContext.current().get_option('debug_enable_var_id'):
         warnings.warn("Please use `hidet.option.debug_enable_var_id()` to enable the id first")
     OptionContext.current().set_option('debug_show_var_id', enable)
+
+
+def debug_dump_graph_visual(enable: bool = True):
+    """
+    Whether to dump the graph visual to the graph cache.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to dump the graph visual to the graph cache.
+    """
+    OptionContext.current().set_option('debug_dump_graph_visual', enable)
 
 
 def debug_strict_broadcast_check(enable: bool = False):

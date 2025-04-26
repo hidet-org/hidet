@@ -19,6 +19,7 @@ import tempfile
 from tabulate import tabulate
 import numpy
 import hidet
+import hidet.option
 from hidet.ffi.array import Array
 from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
@@ -395,6 +396,9 @@ class CompiledGraph:
             trace_emitter.save(f)
 
         return outputs
+
+    def get_cache_dir(self):
+        return hidet.utils.cache_dir('graphs', self.meta.graph_hash)
 
     @property
     def dispatch_table(self):
