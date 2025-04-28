@@ -14,6 +14,7 @@ import zipfile
 import os
 import json
 from dataclasses import dataclass
+import warnings
 import tempfile
 
 from tabulate import tabulate
@@ -477,7 +478,9 @@ class CompiledGraph:
         Parameters
         ----------
         args: Sequence[hidet.Tensor]
-            The input tensors. Weight tensors are excluded from args.
+            The input tensors. If None, the inputs will be created based on
+            meta data of the graph. If not None, the inputs will be created
+            based on the given real inputs.
 
         Returns
         -------
@@ -486,7 +489,7 @@ class CompiledGraph:
         """
         import torch
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
-        from hidet.graph.tensor import Tensor
+        from hidet.graph.tensor import Tensor, randn, zeros, empty
 
         for x in self.meta.inputs + self.meta.outputs:
             if x.device == 'cpu':
@@ -503,11 +506,26 @@ class CompiledGraph:
         def f_create_inputs() -> List[Tensor]:
             with hidet.option.context():
                 hidet.option.execution_mode('compilation')
-                inputs = []
-                for arg in args:
-                    arg = hidet.from_torch(arg) if isinstance(arg, torch.Tensor) else arg
-                    inputs.append(hidet.randn_like(arg))
-                return inputs
+                if not args:
+                    dummy_inputs = []
+                    for meta_input in self.meta.inputs:
+                        dtype = hidet.ir.data_type(meta_input.dtype)
+                        if dtype.is_float():
+                            inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                        elif dtype.is_integer():
+                            inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                        else:
+                            warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                            inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                        dummy_inputs.append(inp)
+
+                    return dummy_inputs
+                else:
+                    inputs = []
+                    for arg in args:
+                        arg = hidet.from_torch(arg) if isinstance(arg, torch.Tensor) else arg
+                        inputs.append(hidet.randn_like(arg))
+                    return inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
@@ -527,7 +545,6 @@ class CompiledGraph:
         hip_graph: hidet.hip.graph.HipGraph
             The HIP graph.
         """
-        import warnings
         from hidet.hip.graph import HipGraph, HipGraphCreationError
         from hidet.graph.tensor import Tensor, randn, zeros, empty
 

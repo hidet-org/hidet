@@ -10,22 +10,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module
-from typing import List, Sequence, Union, Tuple
+from typing import List, Sequence
 import logging
 import torch
 import hidet.option
-from hidet import Tensor
-from hidet.ir.type import DataType
-from hidet.ir.expr import SymbolVar
 from hidet.runtime import CompiledGraph
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.cuda.graph import CudaGraphCreationError
-from hidet.ffi import runtime_api
 from .dynamo_config import dynamo_config
 from .interpreter import Interpreter
-from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph, tensor_from_torch
-from .utils import symbol_like_torch
+from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
+from .utils import convert_compilation_input, convert_runtime_input
 from .registry import allow_in_graph_registered_funcs_only
 from .flow_graph_cache import flow_graph_cache_load, flow_graph_cache_save
 
@@ -62,59 +58,10 @@ def process_options(kwargs):
         hidet.option.set_option(option, value)
 
 
-def convert_inputs(node_list: List[torch.fx.Node], example_inputs) -> Tuple[List[Union[Tensor, SymbolVar]], List[int]]:
-    inputs: List[Union[Tensor, SymbolVar]] = []
-    traceable_input_ids = []
-    for idx, (fxgraph_node, example_input) in enumerate(zip(node_list, example_inputs)):
-        if isinstance(example_input, torch.Tensor):
-            tensor_dict = fxgraph_node.meta.get('tensor_dict', {})
-            is_unguarded = tensor_dict.get('_dynamo_static_input_type', None) == 'unguarded'
-            # pylint: disable=protected-access
-            if is_unguarded and not isinstance(example_input, torch._subclasses.fake_tensor.FakeTensor):
-                # Usually, such tensors are weight tensors passed as inputs
-                inputs.append(tensor_from_torch(example_input))
-            else:
-                traceable_input_ids.append(idx)
-                if hidet.option.internal.is_torch_api_use_example_input_shapes():
-                    input = symbol_like_torch(example_input)
-                    inputs.append(input)
-                else:
-                    fake_input = fxgraph_node.meta['example_value']
-                    if isinstance(fake_input, Tuple):
-                        fake_input = fake_input[idx]
-                    symbolic_input = symbol_like_torch(fake_input)
-                    inputs.append(symbolic_input)
-        elif isinstance(example_input, int):
-            inputs.append(example_input)
-        elif isinstance(example_input, torch.SymInt):
-            assert fxgraph_node.op == 'placeholder' and fxgraph_node.type is torch.SymInt
-            name = fxgraph_node.name
-            var = hidet.symbol_var(name)
-            inputs.append(var)
-        elif isinstance(example_input, Tuple):
-            nested_inputs, nested_traceable_input_ids = convert_inputs([fxgraph_node], example_input)
-            inputs.append(nested_inputs)
-            traceable_input_ids.append(nested_traceable_input_ids)
-        else:
-            raise ValueError(f"hidet_backend: unexpected example input {example_input}, type {type(example_input)}")
-    return inputs, traceable_input_ids
-
-
-# NOTES ABOUT DYNAMIC SHAPE.
-# From pytorch we got two argument:
-#   - fxgraph
-#   - example_inputs
-# In case when we are requested to create dynamic shape, `example_inputs` contain info
-# about used symbols only (all symbols are presented in `example_input` as element of list).
-# But in `example_inputs` there is no information about what dimentions of input tensors
-# should be symbolic and correspondence between symbol and dimention.
-# These info is presented in fxgraph. Every input corresponds fxgraph node.
-# in `fx_node.meta['example_value']` stored `FakeTensor` that contain all symbols in its shape.
-# We use this data to determinate shapes of the inputs.
 def get_flow_graph(interpreter: Interpreter, example_inputs):
-    inputs, traceable_input_ids = convert_inputs(list(interpreter.graph.nodes), example_inputs)
+    input_format, hidet_inputs, flatten_hidet_inputs = convert_compilation_input(example_inputs, interpreter.graph)
     logger.info('hidet:   inputs: ')
-    for arg in inputs:
+    for arg in hidet_inputs:
         if isinstance(arg, hidet.Tensor):
             logger.info('hidet:   %s', arg.signature())
         else:
@@ -122,24 +69,10 @@ def get_flow_graph(interpreter: Interpreter, example_inputs):
 
     with hidet.option.context():
         hidet.option.execution_mode('symbolic')
-        output = interpreter(*inputs)
+        output = interpreter(*hidet_inputs)
         output_format, output_tensors = serialize_output(output)
-        input_tensors = []
-        weight_tensors = []
-        for idx, x in enumerate(inputs):
-            if not isinstance(x, hidet.Tensor):
-                continue
-            if idx in traceable_input_ids:
-                input_tensors.append(x)
-            else:
-                weight_tensors.append(x)
 
-    return (
-        hidet.trace_from(output_tensors, inputs=input_tensors, weight_tensors=weight_tensors),
-        inputs,
-        traceable_input_ids,
-        output_format,
-    )
+    return (hidet.trace_from(output_tensors, inputs=flatten_hidet_inputs), input_format, output_format)
 
 
 def get_compiled_graph(flow_graph: FlowGraph, kwargs):
@@ -174,15 +107,14 @@ def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[torch.Tensor]:
 
 
 class HidetCompiledModel:
-    def __init__(self, cgraph: CompiledGraph, inputs, nonconstant_input_ids, output_format):
+    def __init__(self, cgraph: CompiledGraph, input_format, output_format):
         '''
         Torch (>=2.5) compile treats all weights as inputs. Hidet, on the other hand,
         treats weights as constant tensors. Actual inputs selected from all inputs
         provided by torch using `nonconstant_input_ids`.
         '''
         super().__init__()
-        self.inputs = inputs
-        self.nonconstant_input_ids = nonconstant_input_ids
+        self.input_format = input_format
         self.output_format = output_format
         self.cgraph_configured = False
         self.cgraph = cgraph
@@ -190,8 +122,7 @@ class HidetCompiledModel:
     def configure_cgraph(self):
         if dynamo_config['use_cuda_graph']:
             try:
-                inputs_for_cgraph = [self.inputs[idx] for idx in self.nonconstant_input_ids]
-                self.cgraph = self.cgraph.cuda_graph(*inputs_for_cgraph)
+                self.cgraph = self.cgraph.cuda_graph()
             except CudaGraphCreationError:
                 pass  # Leave cgraph as is
 
@@ -200,22 +131,7 @@ class HidetCompiledModel:
             self.configure_cgraph()
             self.cgraph_configured = True
 
-        tensor_args = []
-        for idx, (param, arg) in enumerate(zip(self.inputs, args)):
-            if isinstance(param, Tensor) and idx in self.nonconstant_input_ids:
-                tensor_args.append(arg)
-            elif isinstance(param, SymbolVar):
-                dtype = param.type
-                assert isinstance(dtype, DataType)
-                if dtype.name == 'int32':
-                    runtime_api.set_symbol_value(param.name, int(arg))
-                else:
-                    raise ValueError(f'hidet_backend: unsupported symbolic dtype {dtype}. We only support int32 now.')
-            else:
-                # ignore constant
-                pass
-        # Prepare inputs
-        tensor_args = preprocess_inputs(tensor_args)
+        tensor_args = preprocess_inputs(convert_runtime_input(self.input_format, args))
         # Run graph/model
         outputs = self.cgraph.run_async(tensor_args, output_to_torch_tensor=True)
         outputs: Sequence[torch.Tensor] = [
@@ -253,10 +169,10 @@ def hidet_backend(graph_module, example_inputs, **kwargs):
 
             return wrapper
 
-        flow_graph, inputs, traceable_input_ids, output_format = get_flow_graph(interpreter, example_inputs)
+        flow_graph, input_format, output_format = get_flow_graph(interpreter, example_inputs)
         del interpreter
         cgraph = get_compiled_graph(flow_graph, kwargs)
-        return HidetCompiledModel(cgraph, inputs, traceable_input_ids, output_format)
+        return HidetCompiledModel(cgraph, input_format, output_format)
 
 
 allow_in_graph_registered_funcs_only()

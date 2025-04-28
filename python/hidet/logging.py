@@ -17,7 +17,7 @@ stderr_handler = logging.StreamHandler()  # defaults to sys.stderr
 
 
 def init_hidet_root_logger():
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.WARNING)
     stderr_handler.setLevel(logging.WARNING)
 
     console_formatter = logging.Formatter(fmt='%(name)s: [%(levelname)s] %(message)s')

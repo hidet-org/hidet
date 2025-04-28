@@ -12,10 +12,8 @@
 from __future__ import annotations
 from typing import Sequence, List, Dict, Union, Tuple, Optional
 from collections import defaultdict
-from hidet.ir.expr import Var, Expr
 from hidet.ir.task import Task, Target
 from hidet.ir.module import IRModule
-from hidet.ir.tools import simplify
 from hidet.ir.compute import TensorNode, TensorInput
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
@@ -67,7 +65,6 @@ class FusedTask(Task):
         inputs: List[TensorInput] = []
         consumer: Dict[Tensor, List[Operator]] = defaultdict(list)
         tensor_map: Dict[Tensor, TensorNode] = {}
-        scalar_map: Dict[Var, Expr] = {}
 
         for op in fused_graph.nodes:
             if isinstance(op, FusedOperator):
@@ -88,12 +85,7 @@ class FusedTask(Task):
         for op in fused_graph.nodes:
             task: Task = op.task
             remap: Dict[TensorNode, TensorNode] = {a: tensor_map[b] for a, b in zip(op.task.inputs, op.inputs)}
-            task_outputs: List[TensorNode] = [rewrite(rewrite(x, remap), scalar_map) for x in task.outputs]
-            for a, b in zip(task_outputs, op.outputs):
-                for a_dim, b_dim in zip(a.shape, b.shape):
-                    a_dim = simplify(a_dim)
-                    if isinstance(b_dim, Var) and b_dim not in scalar_map:
-                        scalar_map[b_dim] = a_dim
+            task_outputs: List[TensorNode] = [rewrite(x, remap) for x in task.outputs]
             tensor_map.update({a: b for a, b in zip(op.outputs, task_outputs)})
 
         outputs: List[TensorNode] = [tensor_map[x] for x in fused_graph.outputs]

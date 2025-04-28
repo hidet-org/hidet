@@ -99,6 +99,11 @@ class Interpreter:
                 converted_fn: Optional[Callable] = self._lookup_hidet_function(node.target)
                 if converted_fn is None:
                     not_supported.add(node.target)
+            elif node.op == "call_method":
+                # We only support torch.Tensor methods right now
+                torch_method = getattr(torch.Tensor, node.target)
+                if torch_method not in Registry.registered_methods:
+                    not_supported.add(node.target)
         return list(not_supported)
 
     def _check_support_and_raise_error(self):

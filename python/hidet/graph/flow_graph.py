@@ -366,12 +366,10 @@ class FlowGraph:
             raise TypeError('Expect to load FlowGraph, got {}'.format(type(ret)))
         return ret
 
-    def update_nodes(self, weight_tensors=None):
+    def update_nodes(self):
         from hidet.graph.impl.graph_impl import graph_analyze
 
-        inputs = self.inputs if self.inputs else []
-        weight_tensors = weight_tensors if weight_tensors else []
-        free_vars, self._nodes, self._usage_count = graph_analyze(self.outputs, stop_tensors=inputs + weight_tensors)
+        free_vars, self._nodes, self._usage_count = graph_analyze(self.outputs, stop_tensors=self.inputs)
 
         if self.inputs:
             non_bound_free_vars: Set[Tensor] = set(free_vars)
@@ -598,9 +596,7 @@ class FlowGraph:
                     outp.hip_()
 
 
-def trace_from(
-    tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None, weight_tensors=None
-) -> FlowGraph:
+def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:
     """
     Trace the flow graph given the output tensor(s).
 
@@ -620,9 +616,6 @@ def trace_from(
     inputs: Optional, Tensor or List[Tensor]
         The inputs of the flow graph. When there is only a single symbol tensor in the flow graph, it is
         optional. When there are multiple inputs, this is required to specify the input order.
-    weight_tensors: Optional, List[Tensor]
-        Torch (from version 2.5.1) compile treats weight tensors as inputs.
-        To treat weights as constant tensors in FlowGraph weights should be marked as stop tensors.
 
     Returns
     -------
@@ -641,7 +634,7 @@ def trace_from(
             inputs = [inputs]
         else:
             inputs = list(inputs)
-    return FlowGraph(outputs, inputs).update_nodes(weight_tensors)
+    return FlowGraph(outputs, inputs).update_nodes()
 
 
 def save_graph(graph: FlowGraph, fname: str):
