@@ -18,6 +18,7 @@ from filelock import FileLock
 
 from tabulate import tabulate
 import numpy as np
+from tqdm import tqdm
 
 import hidet
 from hidet.ffi import runtime_api
@@ -161,9 +162,6 @@ class IntervalsDispachTable(DispatchTable):
 
         split_points = option.internal.dispatch_table.get_split_points()
 
-        if split_points is None:
-            raise NotImplementedError("Split Points must be set as an option in order to use IntervalsDispachTable")
-
         with FileLock(os.path.join(self.task_dir, 'dispatch_table.txt.t_lock')):
             self._init_intervals(split_points)
 
@@ -210,12 +208,10 @@ class IntervalsDispachTable(DispatchTable):
     def _add_intervals(self, start: int, end: int) -> List[Dict[str, Any]]:
         from hidet.utils.benchmark.bench import find_best_candidate
 
-        if option.internal.dispatch_table.get_candidate_selection_method() == 'find_best_candidate':
-            input_tensors, output_tensors = self._fake_inputs(end)
-            best_idx, _ = find_best_candidate(self.candidates, self.name, *input_tensors, *output_tensors)
-            return [{"range": (start, end), "best_candidate": best_idx}]
-        else:
-            raise NotImplementedError('Only find_best_candidate method is supported')
+        input_tensors, output_tensors = self._fake_inputs(end)
+        best_idx, latencies = find_best_candidate(self.candidates, self.name, *input_tensors, *output_tensors)
+        self._record_candidate_selection([end], latencies)
+        return [{"range": (start, end), "best_candidate": best_idx}]
 
     def _find_dynamic_input_dim(self) -> Optional[Tuple[int, int]]:
         """
@@ -273,7 +269,7 @@ class IntervalsDispachTable(DispatchTable):
         total_loss_time = 0.0
         total_actual_time = 0.0
 
-        for shape_val in test_shapes:
+        for shape_val in tqdm(test_shapes, desc="Measuring Approximation Loss"):
             input_tensors, output_tensors = self._fake_inputs(shape_val)
             num_candidates = len(self.candidates)
             actual_latencies = np.zeros(num_candidates, dtype=np.float32)
@@ -282,7 +278,6 @@ class IntervalsDispachTable(DispatchTable):
                     self.candidates[c_idx], [*input_tensors, *output_tensors], warmup=10, repeat=100
                 )
 
-            # Optionally record all candidate latencies
             self._record_candidate_selection([shape_val], actual_latencies, report_path=timestamp_str)
 
             actual_best_idx = int(np.argmin(actual_latencies))
@@ -573,7 +568,7 @@ class GraphIntervalDispatchTable:
         )
 
         max_split = split_points[-1]
-        self.dispatch_table = [{} for _ in range(max_split)]
+        self.dispatch_table = [{} for _ in range(max_split + 1)]
 
         def create_inputs(symbol_val: int):
             input_shapes = [list(tensor.shape) for tensor in graph.meta.inputs]
@@ -626,19 +621,12 @@ class GraphIntervalDispatchTable:
             for task_idx, bc in enumerate(best_candidates):
                 kernel_array[task_idx] = ctypes_func_pointer(graph.compiled_tasks[task_idx].candidates[bc].ctypes_func)
 
-            for val in range(interval_beg, min(interval_end, len(self.dispatch_table))):
+            for val in range(interval_beg, interval_end + 1):
                 self.dispatch_table[val] = {"best_candidates": best_candidates, "kernel_array": kernel_array}
 
-            split_points[i + 1] += 1
+            split_points[interval_num + 1] += 1
 
-        assert any(self.dispatch_table)
-
-        for i in reversed(range(len(self.dispatch_table))):
-            if self.dispatch_table[i]:
-                last_entry = self.dispatch_table[i]
-                break
-
-        self.dispatch_table.append(last_entry)
+        assert all(self.dispatch_table[1:])
 
         self.save()
 
@@ -648,7 +636,7 @@ class GraphIntervalDispatchTable:
         We do NOT store the kernel arrays (function pointers).
         """
         to_serialize = []
-        for entry in self.dispatch_table:
+        for entry in self.dispatch_table[1:]:
             assert entry
             to_serialize.append(entry["best_candidates"])
 
@@ -670,7 +658,7 @@ class GraphIntervalDispatchTable:
             data = json.load(f)
 
         loaded_candidates_list = data["dispatch_table"]
-        self.dispatch_table = []
+        self.dispatch_table = [{}]
 
         for best_candidates in loaded_candidates_list:
             if best_candidates is None:
@@ -682,6 +670,10 @@ class GraphIntervalDispatchTable:
                         self.compiled_graph.compiled_tasks[task_idx].candidates[bc].ctypes_func
                     )
                 self.dispatch_table.append({"best_candidates": best_candidates, "kernel_array": kernel_array})
+
+        max_split = option.internal.dispatch_table.get_split_points()[-1]
+
+        assert len(self.dispatch_table) == max_split + 1
 
 
 class GraphPointsDispatchTable:

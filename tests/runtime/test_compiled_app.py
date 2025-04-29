@@ -5,6 +5,7 @@ from hidet.runtime import save_compiled_app, load_compiled_app, create_compiled_
 
 
 def test_compiled_app(device):
+    hidet.option.internal.dispatch_table.set_split_points([1, 4])
     module_1 = resnet18().cuda()
     module_2 = resnet18().cuda()
 

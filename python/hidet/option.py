@@ -355,17 +355,27 @@ def register_hidet_options():
         "'enable', 'disable', and 'auto'",
     )
     register_option(
-        name='internal.dispatch_table.split_points',
-        type_hint='List[int]',
-        default_value=None,
-        description="Select the spliting point of the intervals during dynamic dispatch table construction",
+        name='internal.dispatch_table.enabled_idt',
+        type_hint='bool',
+        default_value=True,
+        description='The switch to turn on interval based dispatch table (IDT) for dynamic shape',
+        choices=[True, False],
     )
     register_option(
-        name='internal.dispatch_table.candidate_selection_method',
-        type_hint='str',
-        default_value='find_best_candidate',
-        description="Select the mode to select candidate in intervals during dynamic dispatch table construction",
-        choices=['find_best_candidate'],
+        name='internal.dispatch_table.split_points',
+        type_hint='List[int]',
+        default_value=[1, 8, 16, 24, 32, 40, 64, 72, 80, 88, 96, 104, 120, 128]
+        + [136, 160, 168, 176, 184, 192, 200, 208, 216, 256]
+        + [264, 288, 296, 320, 328, 352, 360, 384, 392, 416, 424, 448, 456, 512]
+        + [520, 576, 584, 640, 648, 704, 712, 768, 776, 832, 840, 896, 904]
+        + list(range(1024, 3072, 128))
+        + list(range(3072, 4097, 256)),
+        description=(
+            'Select the spliting point of the intervals during interval dispatch table construction'
+            'Row-dimension (M) cut-points the dispatch_table uses to pick operators kernels. '
+            'Values were tuned for Llama-style FP16 GEMM workloads; '
+            'consider re-tuning for other operators or architectures.'
+        ),
     )
     # Exclusive `torch.compile` API option.
     # Torch Dynamo passes two arguments to the compiler: `fx.graph` and `example_inputs`.
@@ -1457,20 +1467,21 @@ class internal:
         """
 
         @staticmethod
-        def set_split_points(split_points: Optional[List[int]] = [2**i for i in range(13)]):
+        def set_split_points(split_points: List[int]):
             """
             Set the spliting points for the dynamic dispatch table construction
-            With split_points = [1, 128, 256] will force the dynamic dispatch table construct with intervals
-            [[1, 128], [129, 256], [256, inf]]
+            For example,  setting split_points = [1, 128, 256] will result in a dynamic dispatch table
+            constructed with intervals
 
             Parameters
             -------
             split_points: List
             """
+            assert split_points is not None, "split_points should always be set"
             OptionContext.current().set_option('internal.dispatch_table.split_points', split_points)
 
         @staticmethod
-        def get_split_points() -> Optional[List[int]]:
+        def get_split_points() -> List[int]:
             """
             Get the spliting points for the dynamic dispatch table construction
 
@@ -1479,31 +1490,31 @@ class internal:
             ret: List
             """
             split_points = OptionContext.current().get_option('internal.dispatch_table.split_points')
-            return list(split_points) if split_points else None
+            assert split_points is not None, "split_points should always be set"
+            return list(split_points)
 
         @staticmethod
-        def set_candidate_selection_method(candidate_selection_method: str = 'find_best_candidate'):
+        def set_interval_dispatch_table_enabled(enable: bool = True):
             """
-            Set the candidate selection method in each intervals for table construction
+            Set the switch to enable Interval based dispatch table for dynamic shape inputs.
+            When this option is enabled, all schedule search is performed at compile time rather than at runtime.
 
             Parameters
             -------
-            candidate_selection_method: str
+            enable: bool
             """
-            OptionContext.current().set_option(
-                'internal.dispatch_table.candidate_selection_method', candidate_selection_method
-            )
+            OptionContext.current().set_option('internal.dispatch_table.enabled_idt', enable)
 
         @staticmethod
-        def get_candidate_selection_method() -> str:
+        def is_interval_dispatch_table_enabled() -> bool:
             """
-            Get the candidate selection method in each intervals for table construction
+            Get the switch to enable Interval based dispatch table for dynamic shape inputs.
 
             Returns
             -------
-            ret: str
+            ret: bool
             """
-            return OptionContext.current().get_option('internal.dispatch_table.candidate_selection_method')
+            return OptionContext.current().get_option('internal.dispatch_table.enabled_idt')
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

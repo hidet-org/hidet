@@ -236,7 +236,8 @@ class CompiledGraph:
         return list(buffer)
 
     def _construct_dispatch_table(self):
-        if len(self.dynamic_dims) == 1 and hidet.option.internal.dispatch_table.get_split_points() is not None:
+        enabled_idt = hidet.option.internal.dispatch_table.is_interval_dispatch_table_enabled()
+        if len(self.dynamic_dims) == 1 and enabled_idt:
             return GraphIntervalDispatchTable(self)
         return GraphPointsDispatchTable(self)
 

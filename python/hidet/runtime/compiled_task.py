@@ -118,11 +118,14 @@ class CompiledTask:
             raise RuntimeError(f'No compiled module found in {candidates_dir}')
         return compiled_modules
 
-    def use_dynamic(self) -> bool:
-        return len(self.meta_data.symbols) != 0 and len(self.candidates) > 1
+    def use_interval(self) -> bool:
+        from hidet import option
+
+        enabled_idt = option.internal.dispatch_table.is_interval_dispatch_table_enabled()
+        return len(self.meta_data.symbols) != 0 and len(self.candidates) > 1 and enabled_idt
 
     def construct_dispatch_table(self) -> DispatchTable:
-        if self.use_dynamic():
+        if self.use_interval():
             input_shapes = [inp.shape for inp in self.meta_data.inputs]
             output_shapes = [out.shape for out in self.meta_data.outputs]
             try:

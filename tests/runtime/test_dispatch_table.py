@@ -105,9 +105,6 @@ def test_intervals_init_okay_with_split_points(split_points, monkeypatch, fresh_
         return split_points
 
     monkeypatch.setattr("hidet.option.internal.dispatch_table.get_split_points", mock_get_split_points)
-    monkeypatch.setattr(
-        "hidet.option.internal.dispatch_table.get_candidate_selection_method", lambda: 'find_best_candidate'
-    )
 
     candidates = [MockCompiledFunction("cand0"), MockCompiledFunction("cand1")]
     input_shapes = [["s0", 128]]
@@ -135,9 +132,6 @@ def test_intervals_pick_best_candidate(monkeypatch, fresh_task_dir):
         return [1, 4, 10]
 
     monkeypatch.setattr("hidet.option.internal.dispatch_table.get_split_points", mock_get_split_points)
-    monkeypatch.setattr(
-        "hidet.option.internal.dispatch_table.get_candidate_selection_method", lambda: 'find_best_candidate'
-    )
 
     def mock_find_best_candidate(cands, name, *inputs):
         shape_val = inputs[0].shape[0] if inputs else 1
@@ -211,23 +205,20 @@ def test_points_dispatch_table_load_save(fresh_task_dir):
 
 def test_intervals_init_symbols_mismatch():
     with patch("hidet.option.internal.dispatch_table.get_split_points", return_value=[1, 10]):
-        with patch(
-            "hidet.option.internal.dispatch_table.get_candidate_selection_method", return_value='find_best_candidate'
-        ):
-            candidates = [MockCompiledFunction("cand0")]
-            input_shapes = [["(s0 * 2)", 128], ['s0']]
-            output_shapes = [["s0", 128]]
-            symbols = ["s0"]
+        candidates = [MockCompiledFunction("cand0")]
+        input_shapes = [["(s0 * 2)", 128], ['s0']]
+        output_shapes = [["s0", 128]]
+        symbols = ["s0"]
 
-            with pytest.raises(AssertionError, match=r"Expected 1 symbols.*found 2"):
-                IntervalsDispachTable(
-                    candidates=candidates,
-                    input_shapes=input_shapes,
-                    output_shapes=output_shapes,
-                    task_dir="",
-                    symbols=symbols,
-                    name="test_mismatch_symbols",
-                )
+        with pytest.raises(AssertionError, match=r"Expected 1 symbols.*found 2"):
+            IntervalsDispachTable(
+                candidates=candidates,
+                input_shapes=input_shapes,
+                output_shapes=output_shapes,
+                task_dir="",
+                symbols=symbols,
+                name="test_mismatch_symbols",
+            )
 
 
 def test_find_dynamic_dimension_name_complex(mock_intervals_table):
