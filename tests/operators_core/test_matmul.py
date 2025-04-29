@@ -256,15 +256,18 @@ def test_matmul_f8(a_shape, b_shape):
     from hidet.ir.dtypes import f16, f8e4m3
     from hidet.graph.frontend.torch.utils import dtype_to_torch
     from hidet.graph.ops.matmul.matmul_f8 import matmul_f8
-    from hidet.testing import assert_torch_allclose
+
+    hidet.option.search_space(2)
+    # hidet.option.debug_cache_tuning()
+    # hidet.option.save_lower_ir(True)
 
     device, rtol, atol = "cuda", 1e-2, 1e-2
     gen_dtype = dtype_to_torch(f16)
     dtype = dtype_to_torch(f8e4m3)
 
     torch_device = device_to_torch(device)
-    torch_a = torch.randint(-1, 1, a_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
-    torch_b = torch.randint(-1, 1, b_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
+    torch_a = torch.randint(-3, 3, a_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
+    torch_b = torch.randint(-3, 3, b_shape, dtype=gen_dtype, device=torch_device).to(dtype=dtype)
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
     torch_result: torch.Tensor = torch._scaled_mm(
@@ -275,13 +278,98 @@ def test_matmul_f8(a_shape, b_shape):
         scale_b=torch.tensor(1.0, device=device),
     )
     hidet_result: hidet.Tensor = matmul_f8(hidet_a, hidet_b)
-    print(hidet_result, torch_result)
+
     torch.testing.assert_close(
         actual=hidet_result.torch().to(dtype=torch.float16),
         expected=torch_result.to(dtype=torch.float16),
         atol=atol,
         rtol=rtol,
     )
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize(
+    "a_shape, b_shape", [[[4096, 4096], [4096, 4096]], [[2048, 256], [4096, 256]], [[16384, 7168], [1536, 7168]]]
+)
+@pytest.mark.parametrize("group_m, group_n, group_k", [[1, 128, 128]])
+def test_matmul_f8_scaled(a_shape, b_shape, group_m, group_n, group_k):
+    # input a_shape is (M,K) and b_shape is (N,K)
+    # vLLM uses this exact scaled matmul configuration
+    # m16384n1536k7168 is used in DSR1
+    import hidet
+    from hidet.testing.torch_utils import device_to_torch
+    from hidet.ir.dtypes import f16, f8e4m3, f32, bf16
+    from hidet.graph.frontend.torch.utils import dtype_to_torch
+    from hidet.graph.ops.matmul.matmul_f8 import matmul_f8_scaled
+
+    hidet.option.search_space(2)
+
+    # dtype settings
+    device, rtol, atol, gen_dtype, dtype = (
+        device_to_torch("cuda"),
+        1e-2,
+        1e-2,
+        dtype_to_torch(f32),
+        dtype_to_torch(f8e4m3),
+    )
+    output_dtype = bf16
+
+    M, K = a_shape
+    N = b_shape[0]
+    num_group_M, num_group_N, num_group_K = M // group_m, N // group_n, K // group_k
+
+    # generate random input
+    torch_a = torch.randint(-5, 5, a_shape, dtype=gen_dtype, device=device)
+    torch_b = torch.randint(-5, 5, b_shape, dtype=gen_dtype, device=device)
+    torch_scale_a = torch.randint(1, 5, [num_group_K, num_group_M], dtype=dtype_to_torch(f32), device=device)
+    torch_scale_b = torch.randint(1, 5, [num_group_N, num_group_K], dtype=dtype_to_torch(f32), device=device)
+
+    hidet_a = hidet.from_torch(torch_a.to(dtype=dtype))
+    hidet_b = hidet.from_torch(torch_b.to(dtype=dtype))
+    hidet_scale_a = hidet.from_torch(torch_scale_a)
+    hidet_scale_b = hidet.from_torch(torch_scale_b)
+
+    hidet_result: hidet.Tensor = matmul_f8_scaled(
+        hidet_a, hidet_b, scale_a=hidet_scale_a, scale_b=hidet_scale_b, output_dtype=output_dtype
+    )
+
+    # Verify with vLLM implementation
+    # from vllm import _custom_ops as ops
+    # vllm_result: torch.Tensor = ops.cutlass_scaled_mm(
+    #     torch_a.to(dtype=dtype),
+    #     torch_b.to(dtype=dtype).T,
+    #     scale_a=torch_scale_a.T,
+    #     scale_b=torch_scale_b.T ,
+    #     out_dtype=dtype_to_torch(output_dtype)
+    # )
+
+    # from vllm.model_executor.layers.quantization.utils.fp8_utils import w8a8_block_fp8_matmul
+    # vllm_result = w8a8_block_fp8_matmul(
+    #     torch_a.to(dtype=dtype),
+    #     torch_b.to(dtype=dtype),
+    #     torch_scale_a.T,
+    #     torch_scale_b,
+    #     block_size=[group_n,group_k],
+    #     output_dtype=dtype_to_torch(output_dtype),
+    # )
+
+    for i in range(num_group_M):
+        for j in range(num_group_K):
+            torch_a[i * group_m : (i + 1) * group_m, j * group_k : (j + 1) * group_k] *= torch_scale_a[j, i]
+
+    for i in range(num_group_N):
+        for j in range(num_group_K):
+            torch_b[i * group_n : (i + 1) * group_n, j * group_k : (j + 1) * group_k] *= torch_scale_b[i, j]
+
+    torch_result = torch._scaled_mm(
+        torch_a.to(dtype=dtype),
+        torch_b.to(dtype=dtype).T,
+        out_dtype=dtype_to_torch(output_dtype),
+        scale_a=torch.tensor(1.0, device=device),
+        scale_b=torch.tensor(1.0, device=device),
+    )
+
+    torch.testing.assert_close(actual=hidet_result.torch(), expected=torch_result, atol=atol, rtol=rtol)
 
 
 @pytest.mark.requires_cuda
