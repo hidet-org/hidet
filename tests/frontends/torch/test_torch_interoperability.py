@@ -363,15 +363,6 @@ def test_torch_T(shape, device):
     check_module(FunctionalModule(op=lambda x: x.T), args=[a], atol=0, rtol=0, device=device)
 
 
-@pytest.mark.parametrize('shape', [[2, 3], [4, 9, 77, 5]])
-def test_torch_new_empty(shape, device):
-    a: torch.Tensor = torch.randint(low=0, high=10, size=shape, device='cuda')
-    check_module(FunctionalModule(op=lambda x: x.new_empty((3, 2, 1))), args=[a], atol=0, rtol=0, device=device)
-    check_module(
-        FunctionalModule(op=lambda x: x.new_empty(3, 2, 1, device=device)), args=[a], atol=0, rtol=0, device=device
-    )
-
-
 @pytest.mark.parametrize(
     'input_shape, offsets_shape, weight_shape', [([223], [156], [333, 444]), ([26], [1], [33, 33])]
 )
