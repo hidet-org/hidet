@@ -468,13 +468,13 @@ class MatmulF16CuteTask(Task):
                 temp_c_buffer: target_float_type[c_head + [m_size, n_size]],
                 c: target_float_type[c_head_no_parallel_k + [m_size, n_size]],
             ):
-                attrs.cuda.grid_dim = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head_no_parallel_k)
+                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n) * prod(c_head_no_parallel_k)
                 attrs.cuda.block_dim = threads
                 attrs.cuda.dynamic_shared_memory = 0
 
-                bidx = blockIdx.x
-                bidy = blockIdx.y
-                bidz = blockIdx.z
+                bidx = blockIdx.x % cdiv(m_size, block_m)
+                bidy = (blockIdx.x // cdiv(m_size, block_m)) % cdiv(n_size, block_n)
+                bidz = blockIdx.x // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
 
                 tensor_sum = make_tensor(target_float_type, store_c_layout, "register")
                 fill(tensor_sum, 0.0)
@@ -519,11 +519,13 @@ class MatmulF16CuteTask(Task):
             ):
                 attrs.func_kind = "cuda_kernel"
                 attrs.cuda.block_dim = threads
-                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n), prod(c_head)
+                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n) * prod(c_head)
                 attrs.cuda.dynamic_smem_bytes = 0
 
                 group_size_m = 8
                 pid = blockIdx.x
+                bidy = pid // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
+                pid = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
                 num_pid_m = cdiv(m_size, block_m)
                 num_pid_n = cdiv(n_size, block_n)
                 num_pid_in_group = group_size_m * num_pid_n
@@ -533,7 +535,7 @@ class MatmulF16CuteTask(Task):
                 pid_m = first_pid_m + (pid % group_size_m)
                 pid_n = (pid % num_pid_in_group) // group_size_m
 
-                c_head_index = spatial(*c_head).map(blockIdx.y)
+                c_head_index = spatial(*c_head).map(bidy)
                 k_part = c_head_index[0]
                 k_extent = k_part_extent
                 if k_size < k_part_extent * k_parts:
@@ -626,7 +628,7 @@ class MatmulF16CuteTask(Task):
 
                 # Store C from register to global memory
                 if k_parts > 1:
-                    c_head_index = spatial(*c_head).map(blockIdx.y)
+                    c_head_index = spatial(*c_head).map(bidy)
                     txrcvt = partition_src(tr_C, tiled_copy_c)
                     tg_c = tensor_view(
                         c[c_head_index][offset_m:, offset_n:], TensorLayout((block_m, block_n), (n_size, 1)), "global"
@@ -635,7 +637,7 @@ class MatmulF16CuteTask(Task):
                     mask_c = mask(tiled_copy_c, extents)
                     copy(tiled_copy_c, txrcvt, txgc, mask_c)
                 else:
-                    c_head_index = spatial(*c_head_no_parallel_k).map(blockIdx.y)
+                    c_head_index = spatial(*c_head_no_parallel_k).map(bidy)
                     collective_store(tiled_copy_c, tr_C, c, c_head_index + [offset_m, offset_n], extents)
 
             @hidet.script
@@ -719,13 +721,13 @@ class MatmulF16CuteTask(Task):
                 temp_c_buffer: target_float_type[c_head + [m_size, n_size]],
                 c: target_float_type[c_head_no_parallel_k + [m_size, n_size]],
             ):
-                attrs.cuda.grid_dim = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head_no_parallel_k)
+                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n) * prod(c_head_no_parallel_k)
                 attrs.cuda.block_dim = threads
                 attrs.cuda.dynamic_shared_memory = 0
 
-                bidx = blockIdx.x
-                bidy = blockIdx.y
-                bidz = blockIdx.z
+                bidx = blockIdx.x % cdiv(m_size, block_m)
+                bidy = (blockIdx.x // cdiv(m_size, block_m)) % cdiv(n_size, block_n)
+                bidz = blockIdx.x // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
 
                 tensor_sum = make_tensor(target_float_type, store_c_layout, "register")
                 fill(tensor_sum, 0.0)
@@ -770,11 +772,13 @@ class MatmulF16CuteTask(Task):
             ):
                 attrs.func_kind = "cuda_kernel"
                 attrs.cuda.block_dim = threads
-                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n), prod(c_head)
+                attrs.cuda.grid_dim = cdiv(m_size, block_m) * cdiv(n_size, block_n) * prod(c_head)
                 attrs.cuda.dynamic_smem_bytes = 0
 
                 group_size_m = 8
                 pid = blockIdx.x
+                bidy = pid // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
+                pid = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
                 num_pid_m = cdiv(m_size, block_m)
                 num_pid_n = cdiv(n_size, block_n)
                 num_pid_in_group = group_size_m * num_pid_n
@@ -808,7 +812,7 @@ class MatmulF16CuteTask(Task):
                 tr_c = make_tensor(acc_dtype, auto_layout, "register")
                 fill(tr_c, 0.0)
 
-                c_head_index = spatial(*c_head).map(blockIdx.y)
+                c_head_index = spatial(*c_head).map(bidy)
                 k_part = c_head_index[0]
                 k_extent = k_part_extent
                 if k_size < k_part_extent * k_parts:
@@ -932,10 +936,10 @@ class MatmulF16CuteTask(Task):
                 offset_m, offset_n = pid_m * block_m, pid_n * block_n
 
                 if k_parts == 1:
-                    c_head_index = spatial(*c_head_no_parallel_k).map(blockIdx.y)
+                    c_head_index = spatial(*c_head_no_parallel_k).map(bidy)
                     collective_store(tiled_copy_c, tr_C, c, c_head_index + [offset_m, offset_n], extents)
                 else:
-                    c_head_index = spatial(*c_head).map(blockIdx.y)
+                    c_head_index = spatial(*c_head).map(bidy)
                     tg_c = tensor_view(
                         c[c_head_index][offset_m:, offset_n:], TensorLayout((block_m, block_n), (n_size, 1)), "global"
                     )
