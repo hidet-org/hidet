@@ -18,6 +18,7 @@ from hidet.option import get_cache_dir
 from hidet.utils.counters import counters
 from hidet.runtime.compiled_graph import CompiledGraph, load_compiled_graph, save_compiled_graph
 from hidet.utils.cache_utils import clear_cache_dir
+from hidet.distributed import is_initialized, get_default_group
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,13 @@ def compute_flow_graph_hash(fg: FlowGraph, kwargs) -> str:
     """
     kwargs_str = ''.join(f'{k}={v}' for k, v in sorted(kwargs.items()))
     flow_graph_detail = str(fg) + kwargs_str
+    # in multi-gpu case, we add rank to hash to differentiate
+    # same flowgraph on different gpus. They point to different
+    # compiledgraphs, but there hash values are the same if the
+    # rank info is not added, resulting in having multiple
+    # compiledgraphs stored in a single flowgraph hash directory
+    if is_initialized():
+        flow_graph_detail += str(get_default_group().rank())
     return sha256(flow_graph_detail.encode()).hexdigest()[:32]
 
 

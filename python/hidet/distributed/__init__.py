@@ -25,6 +25,7 @@ from .distributed import (
     send,
     recv,
     is_initialized,
+    get_default_group,
 )
 from .group import set_nccl_comms
 from .store import FileStore

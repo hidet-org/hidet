@@ -75,6 +75,10 @@ def is_initialized():
     return DEFAULT_GROUP is not None
 
 
+def get_default_group():
+    return DEFAULT_GROUP
+
+
 def is_nccl_available():
     return nccl_available()
 
