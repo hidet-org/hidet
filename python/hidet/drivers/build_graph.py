@@ -193,31 +193,60 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
 
         def get_workspace_size_impl(cpu_size: Var, cuda_size: Var, hip_size: Var):
             sb = hidet.ir.builders.StmtBuilder()
-            usage_count = graph.usage_count
-            tensor_ptr: Dict[Tensor, Var] = {x: var(x.op.name.lower(), int64) for x in graph_intermediates}
-            cpu_idx = 0  # memory planner index
+
+            # Create intermediate variables just as in launch_impl
+            intermediate_vars = [var(x.op.name.lower(), int64) for x in graph_intermediates]
+
+            # Create placeholder input/output vars (these are function parameters in launch_impl)
+            input_placeholders = [var(f"input_{i}_placeholder", int64) for i in range(len(graph.inputs))]
+            output_placeholders = [var(f"output_{i}_placeholder", int64) for i in range(len(graph.outputs))]
+
+            # Create the tensor mapping using the same variables where possible
+            t_mapping = Tensor2VarMap(
+                graph.inputs,
+                input_placeholders,  # Placeholders instead of actual inputs parameter
+                graph.outputs,
+                output_placeholders,  # Placeholders instead of actual outputs parameter
+                graph_weights,
+                weights,  # Use actual weights from outer scope
+                graph_intermediates,
+                intermediate_vars,
+                {k: v for k, v in graph.usage_count.items()},  # Make a copy to avoid modifying original
+                cpu_workspace,  # Use actual variable from outer scope
+                cuda_workspace,  # Use actual variable from outer scope
+            )
+
+            # Initialize memory planners
+            cpu_idx = 0
             cuda_idx = 1
             hip_idx = 2
             device2idx = {'cpu': cpu_idx, 'cuda': cuda_idx, 'hip': hip_idx}
             for idx in [cpu_idx, cuda_idx, hip_idx]:
                 sb += memory_planner_init(idx)
+
+            # Apply share_map optimization first - critical for matching execution
+            t_mapping.process_share_map(graph_nodes)
+
+            # Follow the same allocation pattern as in launch_impl
             for node in graph_nodes:
-                for output_idx, y in enumerate(node.outputs):
-                    if y in graph_intermediates:
-                        if node.share_map and y in node.share_map:
-                            # share the memory with input tensor
-                            input_idx: int = node.share_map[output_idx]
-                            init_addr = tensor_ptr[node.inputs[input_idx]]
-                        else:
-                            init_addr = memory_planner_allocate(device2idx[y.device.kind], tensor_size[y])
-                        sb += DeclareStmt(tensor_ptr[y], init=init_addr)
+                for y in node.outputs:
+                    if not t_mapping.is_allocated(y) and t_mapping.is_local(y):
+                        init_addr = memory_planner_allocate(device2idx[y.device.kind], tensor_size[y])
+                        sb += DeclareStmt(t_mapping.get_var(y), init=init_addr)
+                        t_mapping.set_allocated(y, True)
+
+                # Track maximum memory used
                 sb += AssignStmt(cpu_size, primitives.max(cpu_size, memory_planner_used(cpu_idx)))
                 sb += AssignStmt(cuda_size, primitives.max(cuda_size, memory_planner_used(cuda_idx)))
                 sb += AssignStmt(hip_size, primitives.max(hip_size, memory_planner_used(hip_idx)))
+
+                # Free memory with same pattern as launch_impl
                 for x in node.inputs:
-                    usage_count[x] -= 1
-                    if usage_count[x] == 0 and x in graph_intermediates:
-                        sb += memory_planner_free(device2idx[x.device.kind], tensor_ptr[x])
+                    t_mapping.dec_usage_count(x)
+                    if t_mapping.get_usage_count(x) == 0 and t_mapping.is_local(x):
+                        sb += memory_planner_free(device2idx[x.device.kind], t_mapping.get_var(x))
+                        t_mapping.set_allocated(x, False)
+
             return sb.finish()
 
         @hidet.script
