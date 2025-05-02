@@ -27,7 +27,7 @@ from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device
 from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
-from hidet.runtime.storage import Storage
+from hidet.runtime.storage import Storage, current_memory_pool
 from hidet.ffi import runtime_api
 from hidet.utils.py import prod, median
 from hidet.utils.trace_utils import TraceEventEmitter
@@ -321,6 +321,7 @@ class CompiledGraph:
         global global_cuda_workspace
         if global_cuda_workspace is not None and global_cuda_workspace.num_bytes < required_cuda_workspace:
             global_cuda_workspace = None
+            current_memory_pool('cuda').clear()
         if global_cuda_workspace is None:
             global_cuda_workspace = Storage.new('cuda', required_cuda_workspace)
         self._set_workspace(1, global_cuda_workspace.addr)
