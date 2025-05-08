@@ -525,15 +525,15 @@ class MatmulF16CuteTask(Task):
                 group_size_m = 8
                 pid = blockIdx.x
                 bidy = pid // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
-                pid = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
+                pid1 = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
                 num_pid_m = cdiv(m_size, block_m)
                 num_pid_n = cdiv(n_size, block_n)
                 num_pid_in_group = group_size_m * num_pid_n
-                group_id = pid // num_pid_in_group
+                group_id = pid1 // num_pid_in_group
                 first_pid_m = group_id * group_size_m
                 group_size_m = min(num_pid_m - first_pid_m, group_size_m)
-                pid_m = first_pid_m + (pid % group_size_m)
-                pid_n = (pid % num_pid_in_group) // group_size_m
+                pid_m = first_pid_m + (pid1 % group_size_m)
+                pid_n = (pid1 % num_pid_in_group) // group_size_m
 
                 c_head_index = spatial(*c_head).map(bidy)
                 k_part = c_head_index[0]
@@ -778,15 +778,15 @@ class MatmulF16CuteTask(Task):
                 group_size_m = 8
                 pid = blockIdx.x
                 bidy = pid // (cdiv(m_size, block_m) * cdiv(n_size, block_n))
-                pid = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
+                pid1 = pid % (cdiv(m_size, block_m) * cdiv(n_size, block_n))
                 num_pid_m = cdiv(m_size, block_m)
                 num_pid_n = cdiv(n_size, block_n)
                 num_pid_in_group = group_size_m * num_pid_n
-                group_id = pid // num_pid_in_group
+                group_id = pid1 // num_pid_in_group
                 first_pid_m = group_id * group_size_m
                 group_size_m = min(num_pid_m - first_pid_m, group_size_m)
-                pid_m = first_pid_m + (pid % group_size_m)
-                pid_n = (pid % num_pid_in_group) // group_size_m
+                pid_m = first_pid_m + (pid1 % group_size_m)
+                pid_n = (pid1 % num_pid_in_group) // group_size_m
 
                 # manually annotate the tensor layout to save compile time
                 ts_a = make_tensor(
