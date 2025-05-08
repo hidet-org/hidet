@@ -48,3 +48,6 @@ runs:
 
         rm -rf ~/.config/hidet
         nice -n 10 python -m pytest -v --durations=20 --clear-cache ${{ inputs.path }}
+
+        # Fix of https://github.com/CentML/hidet/issues/928
+        python .github/scripts/cuda_cleanup.py

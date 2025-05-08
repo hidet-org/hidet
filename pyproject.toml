@@ -59,7 +59,7 @@ dev = [
   "onnxruntime-gpu",
 
   # model zoo
-  "torch==2.6.0",
+  "torch>=2.3.0",
   "torchvision",
   "torchaudio",
   "datasets",
