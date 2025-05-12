@@ -12,8 +12,8 @@
 # pylint: disable=no-name-in-module, c-extension-no-member
 from __future__ import annotations
 from typing import Union, Optional, Dict
-from cuda import cudart
-from cuda.cudart import cudaStream_t
+from cuda.bindings import runtime as cudart
+from cuda.bindings.runtime import cudaStream_t
 from hidet.utils import exiting
 from .event import Event
 from .device import CudaDeviceContext, current_device

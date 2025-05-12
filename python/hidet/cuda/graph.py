@@ -11,8 +11,8 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
 from typing import List, Sequence, Optional, Any, Callable
-from cuda import cudart
-from cuda.cudart import cudaGraphExec_t
+from cuda.bindings import runtime as cudart
+from cuda.bindings.runtime import cudaGraphExec_t
 from hidet.option import use_torch_stream, is_use_torch_stream
 from hidet.graph.tensor import Tensor
 from hidet.runtime.storage import MemoryPool, CudaMemoryAPI, memory_pool

@@ -11,8 +11,8 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
 from typing import Tuple, Union, Optional
-from cuda import cudart
-from cuda.cudart import cudaStream_t, cudaMemcpyKind
+from cuda.bindings import runtime as cudart
+from cuda.bindings.runtime import cudaStream_t, cudaMemcpyKind
 from .stream import Stream, current_stream
 
 

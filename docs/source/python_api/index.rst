@@ -16,6 +16,7 @@ Python API
    tensor
    data_types
    drivers
+   ir/index
    ops/index
    graph/index
    runtime/index

@@ -94,11 +94,6 @@ for name, model in [('eager', model), ('hidet', model_opt)]:
 #   precision of data type automatically (e.g., float16), or control the behavior of parallelization of the reduction
 #   dimension of the matrix multiplication and convolution operators.
 #
-# .. seealso::
-#
-#   You can learn more about the configuration of hidet as a backend in torch dynamo in the tutorial
-#   :doc:`/gallery/tutorials/optimize-pytorch-model`.
-#
 # In the remaining parts, we will show you the key components of Hidet.
 #
 #
@@ -219,11 +214,4 @@ print(y2)
 # - Run operators imperatively.
 # - Use symbolic tensor to create computation graph (e.g., flow graph).
 # - Optimize and run flow graph.
-#
-
-# %%
-# Next Step
-# ---------
-# It is time to learn how to use hidet in your project. A good start is to :ref:`Optimize PyTorch Model` and
-# :ref:`Optimize ONNX Model` with Hidet.
 #

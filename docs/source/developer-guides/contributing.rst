@@ -4,12 +4,17 @@ Contributing
 To contribute to this project, please fork the hidet repository and create a pull request.
 Before submitting a pull request, please make sure that your code is properly formatted and that it passes the tests.
 
-**Format & Lint** Run the following scripts to format and lint the code:
+**Install editable dev version of hidet**
 
 .. code-block:: bash
 
-    # run this only once to install the development dependencies
-    $ pip install -r requirements-dev.txt
+    $ git clone hidet-org/hidet
+    $ cd hidet
+    $ pip install -e .[dev]
+
+**Format & Lint** Run the following scripts to format and lint the code:
+
+.. code-block:: bash
 
     $ bash scripts/lint/format.sh
     $ bash scripts/lint/lint.sh

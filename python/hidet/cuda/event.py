@@ -11,8 +11,8 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module, c-extension-no-member
 from __future__ import annotations
-from cuda import cudart
-from cuda.cudart import cudaEvent_t
+from cuda.bindings import runtime as cudart
+from cuda.bindings.runtime import cudaEvent_t
 from hidet.utils import exiting
 
 

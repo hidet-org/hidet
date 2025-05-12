@@ -46,6 +46,7 @@ dependencies = [
   "scipy",  # we used some scipy functions in hidet
   "gitpython",  # used to detect whether hidet is installed from a local repo or not, and determine default cache dir
   "importlib_metadata", # check installed packages
+  "torch>=2.3.0",
 ]
 
 [project.optional-dependencies]
@@ -68,8 +69,6 @@ dev = [
   "sentencepiece",
   "sacremoses",
 ]
-
-torch = ["torch>=2.3.0"]
 
 [project.urls]
 Homepage = "https://github.com/hidet-org/hidet"

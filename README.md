@@ -20,17 +20,12 @@ Currently, hidet focuses on optimizing the inference workloads on NVIDIA GPUs, a
 ## Getting Started
 
 ### Installation
-If you are going to use hidet's API 
+Please install hidet via
 ```bash
 pip install hidet
 ```
 
-If you are going to use hidet as PyTorch compiler 
-```bash
-pip install hidet[torch]
-```
-
-You can also try the [nightly build version](https://docs.hidet.org/stable/getting-started/install.html) or [build from source](https://docs.hidet.org/stable/getting-started/build-from-source.html#).
+You can also install hidet via [building from source](https://docs.hidet.org/stable/getting-started/build-from-source.html#).
 
 ### Usage
 
@@ -53,8 +48,6 @@ y = model_opt(x)
 ```
 See the following tutorials to learn other usages:
 - [Quick Start](http://hidet.org/docs/stable/gallery/getting-started/quick-start.html)
-- [Optimize PyTorch models](http://hidet.org/docs/stable/gallery/tutorials/optimize-pytorch-model.html)
-- [Optimize ONNX models](http://hidet.org/docs/stable/gallery/tutorials/optimize-onnx-model.html)
 
 ## Publication
 Hidet originates from the following research work:

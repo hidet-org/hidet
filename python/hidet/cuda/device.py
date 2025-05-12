@@ -15,8 +15,8 @@ import warnings
 import logging
 from typing import Tuple, Optional, List
 from functools import lru_cache
-from cuda import cudart
-from cuda.cudart import cudaDeviceProp
+from cuda.bindings import runtime as cudart
+from cuda.bindings.runtime import cudaDeviceProp
 
 
 logger = logging.getLogger(__name__)
