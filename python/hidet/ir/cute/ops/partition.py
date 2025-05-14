@@ -86,7 +86,8 @@ def infer_type(x_type: BaseType, shape: Tuple[int], thrval_layout: TensorLayout)
         rest = composition(rest, TensorLayout(remain))
         for i in rest:
             layouts.append(i)
-    return tiled_tensor(x_type.dtype, x_type.layout.compose(make_layout(*layouts)), x_type.scope)
+    layout = auto_layout if is_auto_layout(x_type.layout) else x_type.layout.compose(make_layout(*layouts))
+    return tiled_tensor(x_type.dtype, layout, x_type.scope)
 
 
 class Partition(Op):

@@ -79,6 +79,9 @@ from hidet.ir.cute.ops import (
     Transpose,
     Atomic,
     WgmmaFenceOperand,
+    MBarriers,
+    MBarrierArrive,
+    MBarrierTryWait,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -789,6 +792,15 @@ class IRPrinter(IRFunctor):
         return self.visit_CuteOp(op)
 
     def visit_WgmmaFenceOperand(self, op: WgmmaFenceOperand):
+        return self.visit_CuteOp(op)
+
+    def visit_MBarriers(self, op: MBarriers):
+        return self.visit_CuteOp(op)
+
+    def visit_MBarrierArrive(self, op: MBarrierArrive):
+        return self.visit_CuteOp(op)
+
+    def visit_MBarrierTryWait(self, op: MBarrierTryWait):
         return self.visit_CuteOp(op)
 
 

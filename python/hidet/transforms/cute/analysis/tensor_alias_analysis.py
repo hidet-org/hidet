@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict
+from typing import Union, List, Dict
 
 from hidet.ir.expr import Var, Expr
 from hidet.ir.functors import IRVisitor
@@ -18,10 +18,19 @@ from hidet.ir.cute.expr import CallOp
 
 from hidet.ir.func import Function
 from hidet.ir.stmt import DeclareStmt
-from hidet.ir.tools import TypeInfer
+from hidet.ir.tools import TypeInfer, infer_type
 
 from hidet.ir.cute import TensorLayout, make_layout
-from hidet.ir.cute.ops import PartitionSrc, PartitionDst, SubTensor, TensorBase, Transpose, PartitionA, PartitionB
+from hidet.ir.cute.ops import (
+    PartitionSrc,
+    PartitionDst,
+    SubTensor,
+    TensorBase,
+    Transpose,
+    PartitionA,
+    PartitionB,
+    MBarriers,
+)
 
 
 class TensorInfo:
@@ -58,7 +67,7 @@ class TensorInfo:
             Returns a string representation of the TensorInfo object.
     """
 
-    def __init__(self, tensor: TensorBase, dims: List[int] = None):
+    def __init__(self, tensor: Union[TensorBase, MBarriers], dims: List[int] = None):
         """
         Initializes a TensorInfo object.
 
@@ -66,11 +75,11 @@ class TensorInfo:
             tensor (TensorBase): The tensor object.
             dims (List[int], optional): The dimensions of the tensor. Default is None.
         """
-        self._tensor: TensorBase = tensor
+        self._tensor: Union[TensorBase, MBarriers] = tensor
         self._dims: List[int] = dims
 
     @property
-    def tensor(self) -> TensorBase:
+    def tensor(self) -> Union[TensorBase, MBarriers]:
         """Returns the tensor object."""
         return self._tensor
 
@@ -88,10 +97,12 @@ class TensorInfo:
         Returns:
             TensorLayout: The layout of the tensor.
         """
-        if self._dims is None:
-            return self.tensor.layout
+        ty = infer_type(self.tensor.make_call())
+        layout = ty.layout
 
-        layout = self.tensor.layout
+        if self._dims is None:
+            return layout
+
         modes = [layout[d] for d in self.dims]
         return make_layout(*modes)
 
@@ -114,12 +125,12 @@ class TensorInfo:
         return f"{{tensor:{self.tensor}, layout:{self.layout}}}"
 
 
-def tensor_info(tensor: TensorBase, *dims):
+def tensor_info(tensor: Union[TensorBase, MBarriers], *dims):
     """
     Creates and returns a TensorInfo object based on the provided tensor and optional dimensions.
 
     Args:
-        tensor (TensorBase): The tensor object.
+        tensor: Union[TensorBase, MBarriers]: The tensor object.
         dims: Optional dimensions for the tensor.
 
     Returns:
@@ -194,7 +205,7 @@ class TensorAliasAnalysis(IRVisitor):
             v = stmt.var
             op = call.op
             self.visit(op)
-            if isinstance(op, TensorBase):
+            if isinstance(op, (TensorBase, MBarriers)):
                 tensor = tensor_info(op)
                 self.var2tensor[v] = tensor
             elif isinstance(op, (PartitionSrc, PartitionDst, SubTensor)):

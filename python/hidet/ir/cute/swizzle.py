@@ -102,6 +102,9 @@ class Swizzle:
     def __repr__(self):
         return f"Swizzle({self.bits},{self.base},{self.shift})"
 
+    def __eq__(self, other: "Swizzle"):
+        return self.bits == other.bits and self.base == other.base and self.shift == other.shift
+
 
 def make_swizzle(y: int, z: int) -> Swizzle:
     bz = bit_count(z)

@@ -68,7 +68,7 @@ from hidet.ir.cute.layout import (
     filter,
     common_reshape,
     group,
-    canonical_thread_value_layout,
+    canonicalize_thread_value_layout,
 )
 from hidet.ir.cute.int_tuple import rank, compact_col_major, flatten, depth
 from hidet.utils import initialize
@@ -166,8 +166,8 @@ class CopyInstruction:
 
         _, src_tv_layout = tiled_copy.src_tv_layout()
         _, dst_tv_layout = tiled_copy.dst_tv_layout()
-        src_thr_layout, src_val_layout = canonical_thread_value_layout(src_tv_layout)
-        dst_thr_layout, dst_val_layout = canonical_thread_value_layout(dst_tv_layout)
+        src_thr_layout, src_val_layout = canonicalize_thread_value_layout(src_tv_layout)
+        dst_thr_layout, dst_val_layout = canonicalize_thread_value_layout(dst_tv_layout)
 
         # split the thread-value layout into two parts, the element of the first part
         # should be the same as the element of the instruction layout. Then, we can
@@ -648,9 +648,9 @@ class MmaInstruction:
         b_thr_layout_inst, b_val_layout_inst = (self.b_layout[0], self.b_layout[1])
         c_thr_layout_inst, c_val_layout_inst = (self.c_layout[0], self.c_layout[1])
 
-        a_thr_layout, a_val_layout = canonical_thread_value_layout(a_tv_layout)
-        b_thr_layout, b_val_layout = canonical_thread_value_layout(b_tv_layout)
-        c_thr_layout, c_val_layout = canonical_thread_value_layout(c_tv_layout)
+        a_thr_layout, a_val_layout = canonicalize_thread_value_layout(a_tv_layout)
+        b_thr_layout, b_val_layout = canonicalize_thread_value_layout(b_tv_layout)
+        c_thr_layout, c_val_layout = canonicalize_thread_value_layout(c_tv_layout)
 
         a_thr_inst, a_thr_rest = group(a_thr_layout, a_thr_layout_inst.size())
         a_val_inst, a_val_rest = group(a_val_layout, a_val_layout_inst.size())
@@ -1082,7 +1082,7 @@ class WgmmaAsyncInstruction(MmaInstruction):
         layout_type_b = None
         if a_tensor_info is not None:
             _, tv = tiled_mma.a_tv_layout()
-            _, v = canonical_thread_value_layout(tv)
+            _, v = canonicalize_thread_value_layout(tv)
             _, value_inst = self.a_layout
             v_inst, _ = group(v, value_inst.size())
             layout_type = None
@@ -1100,7 +1100,7 @@ class WgmmaAsyncInstruction(MmaInstruction):
             layout_type_a = self._get_layout_type(layout_type, self.trans_a)
         if b_tensor_info is not None:
             _, tv = tiled_mma.b_tv_layout()
-            _, v = canonical_thread_value_layout(tv)
+            _, v = canonicalize_thread_value_layout(tv)
             _, value_inst = self.b_layout
             v_inst, _ = group(v, value_inst.size())
             layout_type = None

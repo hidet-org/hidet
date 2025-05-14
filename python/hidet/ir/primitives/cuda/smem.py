@@ -28,6 +28,7 @@ def register_functions():
         'int8',
         'uint8',
         'uint32',
+        'uint64',
         'int32',
         'float16',
         'float32',

@@ -30,6 +30,22 @@ def is_surjective(strides: List[int]):
     return all(0 not in stride for stride in strides)
 
 
+def check_divisibility(shape, stride, other_shape, other_stride):
+    for s, d in zip(shape, stride):
+        for os, od in zip(other_shape, other_stride):
+            # not corresponding to each other
+            if (d % od == 0 and d // od >= os) or (s * d <= od):
+                continue
+            # not divisible
+            if (os * od) % d != 0:
+                return False
+            si = os * od // d
+            # not aligned
+            if s % si != 0 and si % s != 0:
+                return False
+    return True
+
+
 @register_impl(Rearrange)
 class RearrangeEmitter(OpEmitter):
     def __init__(self):
@@ -106,9 +122,6 @@ class RearrangeEmitter(OpEmitter):
         sorted_DS = sorted(zip(flatten(orig_layout.stride), flatten(orig_layout.shape), flatten(new_layout.shape)))
         shp = tuple(s for _, s, _ in sorted_DS)
         strd = compact_col_major(tuple(s for _, _, s in sorted_DS))
-        # print("calc smem")
-        # print(f"inner{inner}")
-        # print(f"orig:{orig_layout}")
         return coalesce(composition(TensorLayout(shp, strd), row_major))
 
     def _schedule(self, shape, src: TensorLayout, dst: TensorLayout):
@@ -129,11 +142,15 @@ class RearrangeEmitter(OpEmitter):
 
         # The following algorithm is trying to find the minimal shared memory
         # that allows the threads exchange their data.
-        # The algorith is not going to work if there are zeros in the strides,
+        # The algorithm won't workif there are zeros in the strides,
         # which means the mapping from data to workers is not surjective
         # and some of the threads are not going to participate in the
         # communication.
-        if not is_surjective([st_stride, dt_stride, sv_stride, dv_stride]):
+        if not (
+            is_surjective([st_stride, dt_stride, sv_stride, dv_stride])
+            and check_divisibility(sv_shape, sv_stride, dt_shape + dv_shape, dt_stride + dv_stride)
+            and check_divisibility(dv_shape, dv_stride, st_shape + sv_shape, st_stride + sv_stride)
+        ):
             src_inner = list(sv_shape)
             dst_inner = list(dv_shape)
             src_outer = [1 for _ in src_inner]

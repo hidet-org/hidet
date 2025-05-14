@@ -21,6 +21,9 @@ from hidet.ir.expr import Expr, Constant, is_constant, if_then_else
 from .typing import Integer
 
 
+Int = Union[Expr, int]
+
+
 def is_tuple(i):
     return isinstance(i, tuple)
 

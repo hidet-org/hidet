@@ -71,10 +71,11 @@ def register_mbarrier():
     template_string = '{ .reg .pred P1; mbarrier.try_wait.parity.acquire.cluster.shared::cta.b64 P1, [%1], %2; selp.u32 %0, 1, 0, P1; }'
 
     @script
-    def cuda_mbarrier_try_wait(mbar: ~u64, phase: u32, wait_complete: u32) -> u32:
+    def cuda_mbarrier_try_wait(mbar: ~u64, phase: u32) -> u32:
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
+        wait_complete = u32(0)
         asm(template=template_string, outputs=[wait_complete], inputs=[smem_addr, phase])
         return wait_complete
 
@@ -305,12 +306,12 @@ def mbarrier_test_wait(mbar: Expr, phase: Expr, wait_complete: Expr, pred: Expr 
     return call_cuda(func_name, [mbar, phase, wait_complete, pred])
 
 
-def mbarrier_try_wait(mbar: Expr, phase: Expr, wait_complete: Expr):
+def mbarrier_try_wait(mbar: Expr, phase: Expr):
     """
     Try wait
     """
     func_name = 'mbarrier_try_wait'
-    return call_cuda(func_name, [mbar, phase, wait_complete])
+    return call_cuda(func_name, [mbar, phase])
 
 
 def mbarrier_arrive(mbar: Expr, cta_id: Optional[Expr] = None, pred: Optional[Expr] = None):

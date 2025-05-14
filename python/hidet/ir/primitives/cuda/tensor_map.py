@@ -64,7 +64,22 @@ def create_tensor_map(
         - 128B: 128-byte swizzling
     """
 
-    dtypes = ['float16', 'float32', 'float64', 'int32', 'int64', 'uint32', 'uint64']
+    if str(dtype) in ('float8_e5m2', 'float8_e4m3', 'f8e5m2', 'f8e4m3'):
+        dtype = 'uint8'
+
+    dtypes = [
+        'float16',
+        'bfloat16',
+        'float32',
+        'float64',
+        'uint8',
+        'uint16',
+        'uint32',
+        'int32',
+        'int64',
+        'uint32',
+        'uint64',
+    ]
     assert str(dtype) in dtypes
 
     # From the CUDA driver API(linked above):

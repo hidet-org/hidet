@@ -69,12 +69,16 @@ class MmaEmitter(OpEmitter):
                 return buf
 
         d_ptr, a_ptr, b_ptr, c_ptr = (get_pointer(i) for i in [d.buffer, a.buffer, b.buffer, c.buffer])
+        a_bytes = a.dtype.nbits // 8
+        b_bytes = b.dtype.nbits // 8
 
-        def add_pointer_offset(ptr: Expr, offset: Expr, scope: DeclareScope):
+        def add_pointer_offset(ptr: Expr, offset: Expr, bytes: int, scope: DeclareScope):
             if scope.is_shared():
+                bits = bytes.bit_length() - 1
+                assert bits <= 4
                 # Multiplicand in shared memory indicates that the argument should be
                 # a descriptor of the shared memory.
-                return u64(u64(ptr) + (u64(offset) >> 3))  # + (u64(offset) & 0x3FFFF) >> 4)
+                return u64(u64(ptr) + (u64(offset) >> (4 - bits)))  # + (u64(offset) & 0x3FFFF) >> 4)
             else:
                 return ptr + offset
 
@@ -94,8 +98,8 @@ class MmaEmitter(OpEmitter):
         with self.for_grid(m) as m_indices:
             with self.for_grid(n) as n_indices:
                 with self.for_grid(k) as k_indices:
-                    a_addr = add_pointer_offset(a_ptr, a_rest((m_indices, k_indices), base=a.offset), a.scope)
-                    b_addr = add_pointer_offset(b_ptr, b_rest((n_indices, k_indices), base=b.offset), b.scope)
+                    a_addr = add_pointer_offset(a_ptr, a_rest((m_indices, k_indices), base=a.offset), a_bytes, a.scope)
+                    b_addr = add_pointer_offset(b_ptr, b_rest((n_indices, k_indices), base=b.offset), b_bytes, b.scope)
                     c_addr = c_ptr + c_rest((m_indices, n_indices), base=c.offset)
                     d_addr = d_ptr + d_rest((m_indices, n_indices), base=d.offset)
                     self.append(inst(d_addr, a_addr, b_addr, c_addr))

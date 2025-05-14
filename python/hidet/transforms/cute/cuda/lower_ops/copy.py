@@ -65,12 +65,11 @@ class MaskEmitter(OpEmitter):
 @register_impl(Copy)
 class CopyEmitter(OpEmitter):
     def emit(self, op: Copy, args: List[Union[Buffer, Expr]], output: Optional[Buffer]):
-        assert isinstance(args[0], Buffer)
-        assert isinstance(args[1], Buffer)
-        assert len(args) <= 2 or isinstance(args[2], Buffer)
+        assert all(isinstance(arg, Buffer) for arg in args[:2])
+        assert all(arg is None or isinstance(arg, Buffer) for arg in args[2:])
         src: Buffer = args[0]
         dst: Buffer = args[1]
-        mask: Optional[Buffer] = args[2] if len(args) >= 3 else None
+        mask: Union[Buffer, None] = args[2]
         src_buf = src.buffer
         src_ty = infer_type(src_buf)
         assert isinstance(src_ty, PointerType)

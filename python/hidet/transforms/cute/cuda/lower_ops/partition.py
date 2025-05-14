@@ -18,7 +18,7 @@ from hidet.ir.dtypes import u64
 from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
 
 from hidet.ir.cute.ops.partition import PartitionSrc, PartitionDst, PartitionA, PartitionB
-from hidet.ir.cute import coalesce, composition, canonical_thread_value_layout, TensorLayout
+from hidet.ir.cute import coalesce, composition, canonicalize_thread_value_layout, TensorLayout
 from hidet.ir.cute.contexts import tid_in_groups
 
 from hidet.utils import initialize
@@ -53,6 +53,12 @@ class PartitionSrcEmitter(OpEmitter):
             dst.buffer = src_buf
             dst.offset = self.auto_var(hint=op.name, e=thr_layout(tid, base=src_off))
 
+        # TODO: commit this in the next PR
+        # if src.is_tma_buffer():
+        #     assert src.scope.is_global()
+        #     dst.tensor_maps = src.tensor_maps
+        #     dst.coords = src.coords
+
 
 @register_impl(PartitionDst)
 class PartitionDstEmitter(OpEmitter):
@@ -81,6 +87,12 @@ class PartitionDstEmitter(OpEmitter):
             thr_layout = composition(src.layout, dst_thrval_layout[0][0])
             dst.buffer = src_buf
             dst.offset = self.auto_var(hint=op.name, e=thr_layout(tid, base=src_off))
+
+        # TODO: commit this in the next PR
+        # if src.is_tma_buffer():
+        #     assert src.scope.is_global()
+        #     dst.tensor_maps = src.tensor_maps
+        #     dst.coords = src.coords
 
 
 # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-descriptor-format
@@ -126,7 +138,6 @@ class PartitionAEmitter(OpEmitter):
         if isinstance(src_ty, TensorType):
             indices = [0] * len(src_ty.shape)
             src_buf = ~src_buf[indices]
-
         if "group_ids" in op.annotations:
             group_ids = op.annotations["group_ids"]
             tid = tid_in_groups(group_ids)
@@ -140,7 +151,7 @@ class PartitionAEmitter(OpEmitter):
             _, a_tv = op.tiled_mma.a_tv_layout()
             assert "layout_type" in op.annotations
             layout_type = op.annotations["layout_type"]
-            a_t, _ = canonical_thread_value_layout(a_tv)
+            a_t, _ = canonicalize_thread_value_layout(a_tv)
             threads = a_t.size()
             warpgroup_layout = TensorLayout((128, threads // 128), (0, 128))
             thread_layout = composition(src.layout, a_t)
@@ -168,7 +179,6 @@ class PartitionBEmitter(OpEmitter):
         if isinstance(src_ty, TensorType):
             indices = [0] * len(src_ty.shape)
             src_buf = ~src_buf[indices]
-
         if "group_ids" in op.annotations:
             group_ids = op.annotations["group_ids"]
             tid = tid_in_groups(group_ids)
@@ -182,7 +192,7 @@ class PartitionBEmitter(OpEmitter):
             _, b_tv = op.tiled_mma.b_tv_layout()
             assert "layout_type" in op.annotations
             layout_type = op.annotations["layout_type"]
-            b_t, _ = canonical_thread_value_layout(b_tv)
+            b_t, _ = canonicalize_thread_value_layout(b_tv)
             threads = b_t.size()
             warpgroup_layout = TensorLayout((128, threads // 128), (0, 128))
             thread_layout = composition(src.layout, b_t)

@@ -15,9 +15,10 @@ from typing import List, Tuple, Optional
 from hidet.ir.type import BaseType
 from hidet.ir.expr import Expr
 
+from hidet.ir.cute.int_tuple import is_integer
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType
-from hidet.ir.cute import LayoutBase, auto_layout, is_auto_layout
+from hidet.ir.cute import LayoutBase, TensorLayout, auto_layout, is_auto_layout
 
 
 class SubTensor(Op):
@@ -69,7 +70,10 @@ class SubTensor(Op):
             raise TypeError(f"Type mismatch.(got:x({x_type}))")
         if not isinstance(x_type.layout, LayoutBase):
             raise TypeError(f"Can't slice a distributed tensor.(got:x({x_type}))")
-        layout = x_type.layout(self.coord)
+        coord = self.coord[0] if len(self.coord) == 1 else self.coord
+        layout = x_type.layout(coord)
+        if is_integer(layout):
+            return tiled_tensor(x_type.dtype, TensorLayout(1), x_type.scope)
         if not isinstance(layout, LayoutBase):
             raise ValueError(f"Invalid coord({self.coord}) for SubTensor")
         return tiled_tensor(x_type.dtype, layout, x_type.scope)

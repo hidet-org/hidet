@@ -19,7 +19,7 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.expr import Var, var
 from hidet.ir.stmt import DeclareStmt
-from hidet.ir.cute import LayoutBase, TensorLayout, ComposedTensorLayout, composition, canonical_thread_value_layout
+from hidet.ir.cute import LayoutBase, TensorLayout, ComposedTensorLayout, composition, canonicalize_thread_value_layout
 from hidet.ir.cute.ops import Copy, TensorBase, Tensor, TensorView, Mma
 from hidet.ir.cute.expr import CConst
 from hidet.transforms.cute.analysis import TensorAliasAnalysis
@@ -203,13 +203,13 @@ class ResolveBankConflict(TensorAliasAnalysis):
             if src_ty.scope.is_shared():
                 elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // src_ty.dtype.nbits
                 _, tv = copy.tiled_copy.src_tv_layout()
-                t, _ = canonical_thread_value_layout(tv)
+                t, _ = canonicalize_thread_value_layout(tv)
                 tcache.append(t)
             else:
                 assert dst_ty.scope.is_shared()
                 elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // dst_ty.dtype.nbits
                 _, tv = copy.tiled_copy.dst_tv_layout()
-                t, _ = canonical_thread_value_layout(tv)
+                t, _ = canonicalize_thread_value_layout(tv)
                 tcache.append(t)
             memory_layout = self.copy2layout[copy]
             phase_layout, _ = group(composition(memory_layout, t), threads_per_phase)

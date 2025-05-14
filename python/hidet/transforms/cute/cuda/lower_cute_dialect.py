@@ -284,7 +284,9 @@ class LowerCuteDialectRewriter(IRRewriter):
         if self._if_lower(call.op):
             args: List[Union[Expr, Buffer]] = []
             for arg in call.op.args:
-                if isinstance(arg, (tuple, list)):
+                if arg is None:  # optional argument in copy operation
+                    args.append(None)
+                elif isinstance(arg, (tuple, list)):
                     args.append(tuple(self.visit(v) for v in arg))
                 else:
                     arg_type = self.type_infer(arg)

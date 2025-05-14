@@ -58,7 +58,7 @@ Classes:
 from typing import List, Dict, Union
 import sys
 
-from hidet.ir.tools import infer_type
+from hidet.ir.tools import TypeInfer
 from hidet.ir.functors import IRVisitor, IRRewriter
 from hidet.ir.module import IRModule
 from hidet.ir.func import Function
@@ -68,7 +68,17 @@ from hidet.ir.expr import Var, is_constant, if_then_else
 from hidet.utils import same_list
 
 from hidet.ir.cute.expr import Op, CallOp, CConst
-from hidet.ir.cute.ops import Tensor, Copy, Rearrange, Reduce
+from hidet.ir.cute.ops import (
+    Tensor,
+    Mma,
+    Copy,
+    Rearrange,
+    Reduce,
+    MBarriers,
+    MBarrierArrive,
+    MBarrierTryWait,
+    MBarrierWait,
+)
 from hidet.transforms.cute.analysis import TensorAliasAnalysis, TensorInfo
 
 from hidet.logging import logger, setConsoleLevel, DEBUG
@@ -187,6 +197,7 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
         self.forstmt2non_local_tensors: Dict[ForStmt, Dict[Tensor, bool]] = {}
         self.for_stmt_stack: List[ForStmt] = []
         self.shared_memory_size: int = 0
+        self.infer_type = TypeInfer()
 
     def current_for_stmt(self):
         if len(self.for_stmt_stack) > 0:
@@ -214,6 +225,24 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
         # self._insert_tensor_and_user(tensor, op)
         if op.scope.is_shared():
             self.buffers.append(op)
+
+    def visit_MBarriers(self, op: MBarriers):
+        self.buffers.append(op)
+
+    def visit_MBarrierArrive(self, op: MBarrierArrive):
+        bar_tensor = self.var2tensor[op.mbarrier].tensor
+        self._add_tensor(bar_tensor, False)
+        self._insert_tensor_and_user(bar_tensor, op)
+
+    def visit_MBarrierTryWait(self, op: MBarrierTryWait):
+        bar_tensor = self.var2tensor[op.mbarrier].tensor
+        self._add_tensor(bar_tensor, True)
+        self._insert_tensor_and_user(bar_tensor, op)
+
+    def visit_MBarrierWait(self, op: MBarrierWait):
+        bar_tensor = self.var2tensor[op.mbarrier].tensor
+        self._add_tensor(bar_tensor, True)
+        self._insert_tensor_and_user(bar_tensor, op)
 
     # partition and subtensor are not the actual users of the tensor
     # so we could skip them to have better overlap between the tensors
@@ -245,16 +274,33 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
         self.buffers.append(op)
 
     def visit_Copy(self, op: Copy):
-        src_ty = infer_type(op.src)
+        src_ty = self.infer_type(op.src)
         if src_ty.scope.is_shared():
             src_tensor = self.var2tensor[op.src].tensor
             self._add_tensor(src_tensor, True)
             self._insert_tensor_and_user(src_tensor, op)
-        dst_ty = infer_type(op.dst)
+        dst_ty = self.infer_type(op.dst)
         if dst_ty.scope.is_shared():
             dst_tensor = self.var2tensor[op.dst].tensor
             self._add_tensor(dst_tensor, False)
             self._insert_tensor_and_user(dst_tensor, op)
+        bar_tensor = self.var2tensor.get(op.mbarrier, None)
+        if bar_tensor is not None:
+            bar_tensor = bar_tensor.tensor
+            self._add_tensor(bar_tensor, False)
+            self._insert_tensor_and_user(bar_tensor, op)
+
+    def visit_Mma(self, op: Mma):
+        a_ty = self.infer_type(op.a)
+        if a_ty.scope.is_shared():
+            a_tensor = self.var2tensor[op.a].tensor
+            self._add_tensor(a_tensor, True)
+            self._insert_tensor_and_user(a_tensor, op)
+        b_ty = self.infer_type(op.b)
+        if b_ty.scope.is_shared():
+            b_tensor = self.var2tensor[op.b].tensor
+            self._add_tensor(b_tensor, True)
+            self._insert_tensor_and_user(b_tensor, op)
 
     def visit_CallOp(self, call: CallOp):
         op = call.op
@@ -295,7 +341,7 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
                     self._insert_tensor_and_user(tensor, stmt)
         self.for_stmt_stack.pop()
 
-    def _resolve_liveness_for_tensor(self, tensor: Tensor):
+    def _resolve_liveness_for_tensor(self, tensor: Union[Tensor, MBarriers]):
         from hidet.ir.cute import filter
 
         users = self.tensor2users[tensor]
@@ -306,8 +352,8 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
             min_id = min(op_id, min_id)
             max_id = max(op_id + 1, max_id)
         self.buffer2liveness[tensor] = Interval(min_id, max_id)
-        tensor_type = infer_type(tensor.make_call())
-        self.buffer2size[tensor] = filter(tensor.layout).size() * tensor_type.dtype.nbits // 8
+        tensor_type = self.infer_type(tensor.make_call())
+        self.buffer2size[tensor] = filter(tensor_type.layout).size() * tensor_type.dtype.nbits // 8
 
     def compute_offset(self):
         buffer_start = self.calculate_starts()
@@ -432,7 +478,7 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
         for buffer in self.buffers:
             if isinstance(buffer, (Reduce, Rearrange)):
                 self._resolve_liveness_for_operator(buffer)
-            elif isinstance(buffer, Tensor):
+            elif isinstance(buffer, (Tensor, MBarriers)):
                 self._resolve_liveness_for_tensor(buffer)
 
         buffer_start = self.compute_offset()
@@ -452,6 +498,12 @@ class SharedMemoryOffsetAnnotation(IRRewriter):
     def __init__(self, buffer_start: Dict[Op, int]):
         super().__init__()
         self.buffer_start: Dict[Op, int] = buffer_start
+
+    def visit_MBarriers(self, e: MBarriers):
+        buffer_start = self.buffer_start[e]
+        annotations: Dict[str, CConst] = {}
+        annotations["smem_offset"] = buffer_start
+        return e.reforward([], annotations_update=annotations)
 
     def visit_Tensor(self, e: Tensor):
         if e.scope.is_shared():

@@ -11,7 +11,7 @@
 # limitations under the License.
 
 from typing import Union, Tuple, List, Optional
-from hidet.ir.cute.layout import CopyAtom, MmaAtom, Level, chain, compact_coshape, canonical_thread_value_layout
+from hidet.ir.cute.layout import CopyAtom, MmaAtom, Level, chain, compact_coshape, canonicalize_thread_value_layout
 from hidet.ir.cute import TiledTensorLayout, TensorLayout
 from hidet.ir.type import DataType
 
@@ -114,7 +114,7 @@ class TiledMma:
         shape = compact_coshape(shape, a_thrval_layout)
         self.a_shape = shape
         self.a_thrval_layout = a_thrval_layout
-        self.a_t, self.a_v = canonical_thread_value_layout(self.a_thrval_layout)
+        self.a_t, self.a_v = canonicalize_thread_value_layout(self.a_thrval_layout)
 
         shape, b_thrval_layout = chain(
             self.mma_atom.shape_nk(), self.mma_atom.b_thrval_layout, *self.mma_atom.repeat_nk(), self.levels_nk()
@@ -122,7 +122,7 @@ class TiledMma:
         shape = compact_coshape(shape, b_thrval_layout)
         self.b_shape = shape
         self.b_thrval_layout = b_thrval_layout
-        self.b_t, self.b_v = canonical_thread_value_layout(self.b_thrval_layout)
+        self.b_t, self.b_v = canonicalize_thread_value_layout(self.b_thrval_layout)
         _, self.inst_k = self.b_shape
 
         shape, c_thrval_layout = chain(
@@ -134,7 +134,7 @@ class TiledMma:
         )
         self.c_shape = shape
         self.c_thrval_layout = c_thrval_layout
-        self.c_t, self.c_v = canonical_thread_value_layout(self.c_thrval_layout)
+        self.c_t, self.c_v = canonicalize_thread_value_layout(self.c_thrval_layout)
         self.bM, self.bN = self.c_shape
 
     @staticmethod

@@ -9,15 +9,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Optional
+from typing import Union, List, Dict, Optional
 
 from hidet.ir.cute.layout import ComposedTensorLayout, TensorLayout, TiledTensorLayout, auto_layout, is_auto_layout
-from hidet.ir.expr import Expr
+from hidet.ir.expr import Expr, is_constant
 from hidet.ir.cute.expr import Op, CConst
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType, logical_encoding
 from hidet.ir.cute.algorithm import TiledCopy, is_auto_copy
-from hidet.ir.type import BaseType, void
-from hidet.ir.dtypes import u32
+from hidet.ir.type import BaseType, void, DataType
+from hidet.ir.dtypes import u32, u64, boolean
 
 
 class Mask(Op):
@@ -100,7 +100,7 @@ class Mask(Op):
         annotations = self.annotations
         if is_auto_copy(self.tiled_copy):
             return tiled_tensor(dtype=u32, layout=auto_layout, scope="register")
-        elif len(annotations) == 0:
+        elif "rest_layout" not in annotations:
             return tiled_tensor(dtype=u32, layout=TensorLayout(-1), scope="register")
         rest_layout = annotations["rest_layout"]
         nr_masks = rest_layout.size()
@@ -121,6 +121,7 @@ class Copy(Op):
         src (Expr): The source tensor expression.
         dst (Expr): The destination tensor expression.
         mask (Optional[Expr]): Optional mask expression for the copy.
+        mbarrier (Optional[Expr]): Optional mbarrier expression for the copy.
 
     Methods:
         reforward(args: List[Expr], attrs_update: Dict[str, CConst] = None,
@@ -135,15 +136,20 @@ class Copy(Op):
     """
 
     def __init__(
-        self, tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None, evict: Optional[str] = None
+        self,
+        tiled_copy: TiledCopy,
+        src: Expr,
+        dst: Expr,
+        mask_: Optional[Expr] = None,
+        mbarrier: Optional[Expr] = None,
+        evict: Optional[str] = None,
     ):
-        super().__init__(
-            args=[src, dst] + ([mask_] if mask_ is not None else []), attrs={"tiled_copy": tiled_copy, "evict": evict}
-        )
+        super().__init__(args=[src, dst, mask_, mbarrier], attrs={"tiled_copy": tiled_copy, "evict": evict})
         self.tiled_copy: TiledCopy = tiled_copy
         self.src: Expr = src
         self.dst: Expr = dst
         self.mask: Optional[Expr] = mask_
+        self.mbarrier: Optional[Expr] = mbarrier
         self.evict: Optional[str] = evict
 
     def resolve_logical_encoding(self):
@@ -180,27 +186,25 @@ class Copy(Op):
     def infer_type(self, arg_types: List[BaseType]) -> BaseType:
         src_ty = arg_types[0]
         dst_ty = arg_types[1]
-        mask_ty = arg_types[2] if len(arg_types) >= 3 else void
+        mask_ty = arg_types[2]
+        mbarrier_ty = arg_types[3]
         if not (
-            isinstance(src_ty, TiledTensorType)
-            and isinstance(dst_ty, TiledTensorType)
-            and (mask_ty is void or isinstance(mask_ty, TiledTensorType))
+            all(isinstance(ty, TiledTensorType) for ty in [src_ty, dst_ty])
+            and all(ty is void or isinstance(ty, TiledTensorType) for ty in [mask_ty, mbarrier_ty])
         ):
-            raise TypeError(f"Type mismatch. (got:src({src_ty}),dst({dst_ty}),mask({mask_ty}))")
+            raise TypeError(f"Type mismatch. (got:src({src_ty}),dst({dst_ty}),mask({mask_ty}),mbarrier({mbarrier_ty}))")
         if is_auto_copy(self.tiled_copy):
             return void
-        elif (
-            is_auto_layout(src_ty.layout)
-            or is_auto_layout(dst_ty.layout)
-            or (mask_ty is not void and is_auto_layout(mask_ty.layout))
-        ):
+        elif any(ty is not void and is_auto_layout(ty.layout) for ty in [src_ty, dst_ty, mask_ty, mbarrier_ty]):
             return void
         elif not (
-            isinstance(src_ty.layout, (TensorLayout, ComposedTensorLayout))
-            and isinstance(dst_ty.layout, (TensorLayout, ComposedTensorLayout))
-            and (mask_ty is void or isinstance(mask_ty.layout, TensorLayout))
+            all(isinstance(ty.layout, (TensorLayout, ComposedTensorLayout)) for ty in [src_ty, dst_ty])
+            and all(ty is void or isinstance(ty.layout, TensorLayout) for ty in [mask_ty, mbarrier_ty])
         ):
-            raise TypeError(f"Invalid layout. (got:src({src_ty.layout}),dst({dst_ty.layout}),mask({mask_ty}))")
+            raise TypeError(
+                f"Invalid layout. (got:src({src_ty.layout}),dst({dst_ty.layout}),"
+                f"mask({mask_ty.layout}),mbarrier({mbarrier_ty.layout}))"
+            )
         elif src_ty.scope.is_global() or dst_ty.scope.is_global():
             # as long as the total element of non-zero-stride dimensions are
             # equal, we can perform the copy. The zero-stride dimensions can be
@@ -208,13 +212,19 @@ class Copy(Op):
             src_count = src_ty.layout.count()
             dst_count = dst_ty.layout.count()
             if src_count != dst_count:
-                print(self)
                 raise TypeError(f"Tensor count mismatch. (got:src({src_count}),dst({dst_count}))")
         return void
 
 
-def copy(tiled_copy: TiledCopy, src: Expr, dst: Expr, mask_: Optional[Expr] = None, evict: Optional[str] = None):
-    return Copy(tiled_copy, src, dst, mask_, evict).make_call()
+def copy(
+    tiled_copy: TiledCopy,
+    src: Expr,
+    dst: Expr,
+    mask_: Optional[Expr] = None,
+    mbarrier: Optional[Expr] = None,
+    evict: Optional[str] = None,
+):
+    return Copy(tiled_copy, src, dst, mask_, mbarrier, evict).make_call()
 
 
 class Atomic(Op):
@@ -296,3 +306,91 @@ class AtomicAdd(Atomic):
 
 def cute_atomic_add(src: Expr, dst: Expr, mask_: Optional[Expr] = None):
     return AtomicAdd(src, dst, mask_).make_call()
+
+
+class MBarriers(Op):
+    def __init__(self, num_barriers: int):
+        super().__init__(args=[], attrs={"num_barriers": num_barriers})
+        self.num_barriers: int = num_barriers
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        if not is_constant(self.num_barriers):
+            raise TypeError(f"num_barriers should be a constant. got({self.num_barriers})")
+        nr_regs = self.num_barriers
+        return tiled_tensor(dtype=u64, layout=TensorLayout(nr_regs), scope="shared")
+
+
+def make_mbarriers(num_barriers: int):
+    return MBarriers(num_barriers).make_call()
+
+
+class MBarrierArrive(Op):
+    def __init__(self, mbarrier: Expr, count: Expr):
+        super().__init__(args=[mbarrier, count], attrs={})
+        self.mbarrier: Expr = mbarrier
+        self.count: Expr = count
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        mbarrier_ty = arg_types[0]
+        count_ty = arg_types[1]
+        if not isinstance(mbarrier_ty, TiledTensorType):
+            raise TypeError(f"mbarrier should be a tiled tensor. got({mbarrier_ty})")
+        if not isinstance(count_ty, DataType):
+            raise TypeError(f"count should be a scalar. got({count_ty})")
+        if not count_ty.is_integer():
+            raise TypeError(f"count should be an integer. got({count_ty})")
+        return void
+
+
+def mbarrier_arrive(mbarrier: Expr, count: Union[Expr, int] = 0):
+    if isinstance(count, int):
+        count = u32(count)
+    return MBarrierArrive(mbarrier, count).make_call()
+
+
+class MBarrierTryWait(Op):
+    def __init__(self, mbarrier: Expr, phase: Expr):
+        super().__init__(args=[mbarrier, phase], attrs={})
+        self.mbarrier: Expr = mbarrier
+        self.phase: Expr = phase
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        mbarrier_ty = arg_types[0]
+        phase_ty = arg_types[1]
+        if not isinstance(mbarrier_ty, TiledTensorType):
+            raise TypeError(f"mbarrier should be a tiled tensor. got({mbarrier_ty})")
+        if not isinstance(phase_ty, DataType):
+            raise TypeError(f"phase should be a scalar. got({phase_ty})")
+        if not phase_ty.is_boolean():
+            raise TypeError(f"phase should be a boolean. got({phase_ty})")
+        return tiled_tensor(dtype=u32, layout=TensorLayout(1), scope="register")
+
+
+def mbarrier_try_wait(mbarrier: Expr, phase: Expr):
+    if isinstance(phase, bool):
+        phase = boolean(phase)
+    return MBarrierTryWait(mbarrier, phase).make_call()
+
+
+class MBarrierWait(Op):
+    def __init__(self, mbarrier: Expr, phase: Expr):
+        super().__init__(args=[mbarrier, phase], attrs={})
+        self.mbarrier: Expr = mbarrier
+        self.phase: Expr = phase
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        mbarrier_ty = arg_types[0]
+        phase_ty = arg_types[1]
+        if not isinstance(mbarrier_ty, TiledTensorType):
+            raise TypeError(f"mbarrier should be a tiled tensor. got({mbarrier_ty})")
+        if not isinstance(phase_ty, DataType):
+            raise TypeError(f"phase should be a scalar. got({phase_ty})")
+        if not phase_ty.is_boolean():
+            raise TypeError(f"phase should be a boolean. got({phase_ty})")
+        return void
+
+
+def mbarrier_wait(mbarrier: Expr, phase: Expr):
+    if isinstance(phase, bool):
+        phase = boolean(phase)
+    return MBarrierWait(mbarrier, phase).make_call()

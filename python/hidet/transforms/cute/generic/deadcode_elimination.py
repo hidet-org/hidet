@@ -48,7 +48,17 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.stmt import Stmt, LetStmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt
 
-from hidet.ir.cute.ops import PartitionSrc, PartitionDst, Copy, Mma, SubTensor, Atomic, TensorBase
+from hidet.ir.cute.ops import (
+    PartitionSrc,
+    PartitionDst,
+    Copy,
+    Mma,
+    SubTensor,
+    Atomic,
+    TensorBase,
+    MBarrierArrive,
+    MBarrierWait,
+)
 from hidet.ir.cute.collective import CollectiveStore
 
 from hidet.logging import logger, setConsoleLevel, DEBUG
@@ -256,6 +266,7 @@ class DeadcodeElimination(IRVisitor):
                     # 3. The variable is the destination of the Copy operation and the variable
                     # is a global variable.
                     cond_mask = v is op.mask
+                    cond_mbar = isinstance(op, Copy) and v is op.mbarrier
                     cond_src = alias_var is self.visit(op.src)
                     if alias_var is self.visit(op.dst) and v_type.scope.is_memory():
                         def_op = self._get_def_op(alias_var)
@@ -263,11 +274,12 @@ class DeadcodeElimination(IRVisitor):
                         cond_dst = v_type.scope.is_global() or def_op.is_volatile()
                     else:
                         cond_dst = False
-                    if cond_mask or cond_src or cond_dst:
+                    if cond_mask or cond_mbar or cond_src or cond_dst:
                         can_eliminate = False
-                elif isinstance(op, Mma):
+                elif isinstance(op, (Mma, CollectiveStore)):
                     can_eliminate = False
-                elif isinstance(op, CollectiveStore):
+                # Do not eliminate memory barrier operations.
+                elif isinstance(op, (MBarrierArrive, MBarrierWait)):
                     can_eliminate = False
             elif isinstance(stmt, DeclareStmt):
                 call = stmt.init

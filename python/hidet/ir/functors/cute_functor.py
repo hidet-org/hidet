@@ -36,6 +36,10 @@ from hidet.ir.cute.ops import (
     Transpose,
     Atomic,
     WgmmaFenceOperand,
+    MBarriers,
+    MBarrierArrive,
+    MBarrierTryWait,
+    MBarrierWait,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -82,6 +86,16 @@ class CuteFunctor(BaseFunctor):
             return self.visit_Transpose(node)
         elif isinstance(node, Atomic):
             return self.visit_Atomic(node)
+        elif isinstance(node, WgmmaFenceOperand):
+            return self.visit_WgmmaFenceOperand(node)
+        elif isinstance(node, MBarriers):
+            return self.visit_MBarriers(node)
+        elif isinstance(node, MBarrierArrive):
+            return self.visit_MBarrierArrive(node)
+        elif isinstance(node, MBarrierTryWait):
+            return self.visit_MBarrierTryWait(node)
+        elif isinstance(node, MBarrierWait):
+            return self.visit_MBarrierWait(node)
         elif isinstance(node, WgmmaFenceOperand):
             return self.visit_WgmmaFenceOperand(node)
         elif isinstance(node, Op):
@@ -178,6 +192,18 @@ class CuteFunctor(BaseFunctor):
     def visit_WgmmaFenceOperand(self, n: WgmmaFenceOperand):
         raise NotImplementedError()
 
+    def visit_MBarriers(self, n: MBarriers):
+        raise NotImplementedError()
+
+    def visit_MBarrierArrive(self, n: MBarrierArrive):
+        raise NotImplementedError()
+
+    def visit_MBarrierTryWait(self, n: MBarrierTryWait):
+        raise NotImplementedError()
+
+    def visit_MBarrierWait(self, n: MBarrierWait):
+        raise NotImplementedError()
+
 
 class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_TiledTensorType(self, t: TiledTensorType):
@@ -194,6 +220,9 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_TensorView(self, e: TensorView):
         self.visit(e.args)
         self.visit_Layout(e.layout)
+        # TODO: commit this in the next PR
+        # self.visit(e.tile_shape)
+        # self.visit(e.tile_coords)
 
     def visit_PartitionSrc(self, e: PartitionSrc):
         self.visit(e.args)
@@ -211,7 +240,9 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
         self.visit(e.args)
 
     def visit_Copy(self, e: Copy):
-        self.visit(e.args)
+        for arg in e.args:
+            if arg is not None:
+                self.visit(arg)
 
     def visit_Rearrange(self, e: Rearrange):
         self.visit(e.args)
@@ -262,6 +293,21 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_WgmmaFenceOperand(self, n: WgmmaFenceOperand):
         self.visit(n.x)
 
+    def visit_MBarriers(self, n: MBarriers):
+        self.visit(n.num_barriers)
+
+    def visit_MBarrierArrive(self, n: MBarrierArrive):
+        self.visit(n.mbarrier)
+        self.visit(n.count)
+
+    def visit_MBarrierTryWait(self, n: MBarrierTryWait):
+        self.visit(n.mbarrier)
+        self.visit(n.phase)
+
+    def visit_MBarrierWait(self, n: MBarrierWait):
+        self.visit(n.mbarrier)
+        self.visit(n.phase)
+
 
 class CuteRewriter(CuteFunctor, BaseRewriter):
     def visit_TiledTensorType(self, t: TiledTensorType):
@@ -294,9 +340,18 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
     def visit_TensorView(self, e: TensorView):
         x = self.visit(e.x)
         layout = self.visit_Layout(e.layout)
-        if x is e.x and layout is e.layout:
+        # TODO: commit this in the next PR
+        # tile_shape = self.visit(e.tile_shape)
+        # tile_coords = self.visit(e.tile_coords)
+        if (
+            x is e.x
+            and layout is e.layout
+            # and all(x is y for x, y in zip(tile_shape, e.tile_shape))
+            # and all(x is y for x, y in zip(tile_coords, e.tile_coords))
+        ):
             return e
         else:
+            # TODO: commit this in the next PR
             return e.reforward([x], attrs_update={"layout": layout})
 
     def visit_PartitionSrc(self, e: PartitionSrc):
@@ -341,10 +396,14 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
             mask = self.visit(e.mask)
         else:
             mask = None
-        if src is e.src and dst is e.dst and mask is e.mask:
+        if e.mbarrier is not None:
+            mbarrier = self.visit(e.mbarrier)
+        else:
+            mbarrier = None
+        if src is e.src and dst is e.dst and mask is e.mask and mbarrier is e.mbarrier:
             return e
         else:
-            return e.reforward([src, dst, mask])
+            return e.reforward([src, dst, mask, mbarrier])
 
     def visit_Rearrange(self, e: Rearrange):
         x = self.visit(e.x)
@@ -455,3 +514,34 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
             return n
         else:
             return WgmmaFenceOperand(x)
+
+    def visit_MBarriers(self, n: MBarriers):
+        num_barriers = self.visit(n.num_barriers)
+        if num_barriers is n.num_barriers:
+            return n
+        else:
+            return MBarriers(num_barriers)
+
+    def visit_MBarrierArrive(self, n: MBarrierArrive):
+        mbarrier = self.visit(n.mbarrier)
+        count = self.visit(n.count)
+        if mbarrier is n.mbarrier and count is n.count:
+            return n
+        else:
+            return MBarrierArrive(mbarrier, count)
+
+    def visit_MBarrierTryWait(self, n: MBarrierTryWait):
+        mbarrier = self.visit(n.mbarrier)
+        phase = self.visit(n.phase)
+        if mbarrier is n.mbarrier and phase is n.phase:
+            return n
+        else:
+            return MBarrierTryWait(mbarrier, phase)
+
+    def visit_MBarrierWait(self, n: MBarrierWait):
+        mbarrier = self.visit(n.mbarrier)
+        phase = self.visit(n.phase)
+        if mbarrier is n.mbarrier and phase is n.phase:
+            return n
+        else:
+            return MBarrierWait(mbarrier, phase)

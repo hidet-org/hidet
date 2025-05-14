@@ -611,6 +611,24 @@ def common_reshape(a: TensorLayout, b: TensorLayout):
             _, _ = shape_b.pop(0), stride_b.pop(0)
         result_shape_a.append(s)
         result_shape_b.append(s)
+    if len(shape_a) > 0:
+        for s, d in zip(shape_a, stride_a):
+            if s == 1:
+                result_shape_a.append(s)
+                result_stride_a.append(d)
+                result_shape_b.append(s)
+                result_stride_b.append(1)
+            else:
+                break
+    elif len(shape_b) > 0:
+        for s, d in zip(shape_b, stride_b):
+            if s == 1:
+                result_shape_a.append(s)
+                result_stride_a.append(1)
+                result_shape_b.append(s)
+                result_stride_b.append(d)
+            else:
+                break
     return TensorLayout(tuple(result_shape_a), tuple(result_stride_a)), TensorLayout(
         tuple(result_shape_b), tuple(result_stride_b)
     )
@@ -1378,7 +1396,7 @@ def codomain_from_shape_and_tv_layout(shape: Tuple[int, ...], tv_layout: TensorL
     return make_layout(*layouts)
 
 
-def canonical_thread_value_layout(layout: TensorLayout):
+def canonicalize_thread_value_layout(layout: TensorLayout):
     """
     Canonicalize the thread-value layout. This function separates the thread layout and
     creates the separated flattened thread-mode and value-mode of the input layouts

@@ -13,6 +13,7 @@ from typing import Type, Union
 from enum import Enum
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
 from hidet.ir.type import tensor_type, BaseType, ArrayType
+from hidet.ir.type import void
 from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
@@ -330,7 +331,9 @@ class TypeInfer(IRFunctor):
         raise NotImplementedError()
 
     def visit_CallOp(self, call: CallOp):
-        arg_types = [self.visit(arg) for arg in call.op.args if not isinstance(arg, (tuple, list))]
+        arg_types = [
+            (self.visit(arg) if arg is not None else void) for arg in call.op.args if not isinstance(arg, (tuple, list))
+        ]
         return call.op.infer_type(arg_types)
 
 

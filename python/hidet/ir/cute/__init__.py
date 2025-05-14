@@ -61,7 +61,10 @@ from .layout import (
     slice_and_offset,
     group,
     codomain_from_shape_and_tv_layout,
-    canonical_thread_value_layout,
+    canonicalize_thread_value_layout,
+    left_inverse_ignore_zero_strides,
+    right_inverse_ignore_zero_strides,
+    common_reshape,
 )
 from .layout import CopyAtom, ThrValAtom, MmaAtom, Level
 from .swizzle import Swizzle, make_swizzle

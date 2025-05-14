@@ -55,7 +55,7 @@ from hidet.ir.cute.type import TiledTensorType
 
 from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
-from hidet.ir.stmt import Stmt, AssignStmt, LetStmt, DeclareStmt, SeqStmt, EvaluateStmt
+from hidet.ir.stmt import IfStmt, Stmt, AssignStmt, LetStmt, DeclareStmt, SeqStmt, EvaluateStmt
 
 
 class LetToDeclare(IRRewriter):
@@ -199,10 +199,23 @@ class Canonicalize(IRRewriter):
         else:
             return new_stmt
 
+    def visit_IfStmt(self, stmt: IfStmt):
+        if isinstance(stmt.cond, CallOp):
+            self.recursion_depth += 1
+            new_cond = self.visit(stmt.cond)
+            stmts = self.flush_stmts()
+            then_body = self.visit(stmt.then_body)
+            else_body = self.visit(stmt.else_body) if stmt.else_body is not None else None
+            if_stmt = IfStmt(new_cond, then_body, else_body)
+            return self.flatten_stmts(stmts + [if_stmt])
+        return super().visit_IfStmt(stmt)
+
     def visit_CallOp(self, call: CallOp):
         args: List[Expr] = []
         for arg in call.op.args:
-            if isinstance(arg, (tuple, list)):
+            if arg is None:
+                args.append(None)
+            elif isinstance(arg, (tuple, list)):
                 args.append(tuple(self.visit(v) for v in arg))
             elif isinstance(arg, CallOp):
                 self.recursion_depth += 1
