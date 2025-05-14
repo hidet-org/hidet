@@ -10,33 +10,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies via apt
-      shell: bash
-      run: |
-        apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz graphviz-dev
-
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.9"
-
-    - name: Download wheel
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ inputs.wheel_name }}
-
-    - name: Setup Hidet from Wheel
-      shell: bash
-      run: |
-        pip install ${{ inputs.wheel_name }}[dev]
-
-    - name: List installed packages
-      shell: bash
-      run: |
-        pip list
-
     - name: Run tests
       shell: bash
       run: |

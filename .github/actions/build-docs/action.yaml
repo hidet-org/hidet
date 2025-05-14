@@ -17,31 +17,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies via apt
-      shell: bash
-      run: |
-        apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz graphviz-dev
-
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.9"
-
-    - name: Setup cmake
-      uses: jwlawson/actions-setup-cmake@v1.13
-      with:
-        cmake-version: "3.19.x"
-
-    - name: Setup Hidet
-      uses: ./.github/actions/setup-hidet
-
-    - name: Install docs dependencies
-      shell: bash
-      run: pip install -r docs/requirements.txt
-
     - name: Build docs
       shell: bash
       run: |

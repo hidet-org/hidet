@@ -83,10 +83,7 @@ def data(M, N, K, L, dtype="bfloat16", device="cuda"):
     return a, b, c, bx1xn, bxmx1, mx1, x1xn
 
 
-@pytest.mark.requires_cuda
-@pytest.mark.parametrize("args,graph,mode", pattern_tests)
-@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
-def test_pattern(args, graph, mode, dtype):
+def run_pattern_benchmark(args, graph, mode, dtype):
     M, N, K, L = args
     graph_args = data(*args, dtype=dtype)
 
@@ -106,7 +103,7 @@ def test_pattern(args, graph, mode, dtype):
     print(f"baseline(torch.compile mode=max-autotune): {torch_mean} ms")
 
     with hidet.option.context():
-        hidet.option.parallel_k(strategy='disabled')
+        hidet.option.parallel_k(strategy="disabled")
 
         D = graph(*graph_args)
         dynamo.reset()
@@ -120,6 +117,14 @@ def test_pattern(args, graph, mode, dtype):
     hidet_mean, hidet_min, hidet_max = bench(graph_hidet, graph_args)
     print(f"hidet(torch.compile): {hidet_mean} ms")
     return torch_mean, hidet_mean
+
+
+@pytest.mark.requires_cuda
+@pytest.mark.parametrize("args,graph,mode", pattern_tests)
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_pattern(args, graph, mode, dtype):
+    torch_mean, hidet_mean = run_pattern_benchmark(args, graph, mode, dtype)
+    print(f"hidet(torch.compile): {hidet_mean} ms")
 
 
 # keep this function because we want to reproduce the benchmark result
@@ -147,7 +152,7 @@ def main():
             c = relu(c)
             return c
 
-        torch_time, hidet_time = test_pattern(problem, graph=graph, mode="max-autotune-no-cudagraphs")
+        torch_time, hidet_time = run_pattern_benchmark(problem, graph=graph, mode="max-autotune-no-cudagraphs")
         records.append([problem, torch_time, hidet_time, (torch_time / hidet_time - 1.0) * 100.0])
 
     with open("results_pattern.txt", "w") as f:

@@ -3,12 +3,6 @@ description: 'Install dependencies, build and install wheel'
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies via pip
-      shell: bash
-      run: |
-        python -m pip install --upgrade pip
-        pip install torch torchvision torchaudio 
-
     - name: Build hidet
       shell: bash
       run: |
