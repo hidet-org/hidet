@@ -366,6 +366,11 @@ class FlowGraph:
             raise TypeError('Expect to load FlowGraph, got {}'.format(type(ret)))
         return ret
 
+    def draw(self, filename: str):
+        from hidet.graph.impl.graph_impl import draw_graph
+
+        draw_graph(self, filename)
+
     def update_nodes(self):
         from hidet.graph.impl.graph_impl import graph_analyze
 

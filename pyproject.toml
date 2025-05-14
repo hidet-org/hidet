@@ -47,6 +47,8 @@ dependencies = [
   "gitpython",  # used to detect whether hidet is installed from a local repo or not, and determine default cache dir
   "importlib_metadata", # check installed packages
   "torch>=2.3.0",
+  "networkx", # for flow graph visualization
+  "pygraphviz", # for flow graph visualization
 ]
 
 [project.optional-dependencies]

@@ -20,7 +20,7 @@ runs:
     - name: Install dependencies via apt
       shell: bash
       run: |
-        apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+        apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz graphviz-dev
 
     - name: Checkout repository
       uses: actions/checkout@v4

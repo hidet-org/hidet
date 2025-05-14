@@ -286,7 +286,7 @@ jobs:
     steps:
       - name: Install dependencies via apt
         run: |
-          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz graphviz-dev
 
       - uses: actions/checkout@v4
 

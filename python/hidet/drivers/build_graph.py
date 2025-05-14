@@ -418,6 +418,9 @@ def build_flow_graph(graph, *, space=0) -> CompiledGraph:
         with open(os.path.join(cache_dir, 'netron_graph.json'), 'w') as f:
             dump(graph, f)
 
+        # Alternative format and rendering of Flow Graph
+        graph.draw(os.path.join(cache_dir, 'flowgraph.dot'))
+
     return compiled_graph
 
 

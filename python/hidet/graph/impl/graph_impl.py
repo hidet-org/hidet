@@ -260,3 +260,107 @@ def graph_as_text(graph: FlowGraph) -> str:
 
     graph_doc = head_doc + '{' + const_doc.indent() + body_doc.indent() + NewLine() + '}'
     return str(graph_doc)
+
+
+def draw_graph(graph: FlowGraph, filename: str, show_tensors: bool = False):
+    """
+    Draw the flow graph and save it to a DOT file.
+
+    To visualize the .dot file, you can use
+    https://dreampuf.github.io/GraphvizOnline/
+
+    Parameters
+    ----------
+    graph: FlowGraph
+        The flow graph to be visualized.
+    filename: str
+        The filename to save the graph visualization. If it ends with .dot, it will be used as is.
+        Otherwise, .dot extension will be added.
+    show_tensors: bool
+        Whether to show tensor nodes in the graph.
+    """
+    import networkx as nx
+    import os
+    from hidet.ir.tools.printer import IRPrinter
+
+    # Create directed graph and node mapping dictionary
+    G = nx.DiGraph()
+    printer = IRPrinter()
+    tensor_to_id = {}
+
+    # Add input nodes
+    for i, tensor in enumerate(graph.inputs):
+        tensor_id = f"input_{i}"
+        tensor_to_id[tensor] = tensor_id
+        G.add_node(tensor_id, label=f"Input {i}\n{tensor.shape}", node_type="input")
+
+    # Add operator nodes and edges
+    for i, op in enumerate(graph.nodes):
+        op_id = f"op_{i}"
+
+        # Create label with output shape
+        output_shapes = [str(out.shape) for out in op.outputs]
+        shape_str = output_shapes[0] if len(output_shapes) == 1 else ", ".join(output_shapes)
+        G.add_node(op_id, label=f"{op.name}\n{shape_str}", node_type="operator")
+
+        # Connect inputs
+        for inp in op.inputs:
+            if inp in tensor_to_id:
+                src_id = tensor_to_id[inp]
+                if src_id.startswith("input_"):
+                    G.add_edge(src_id, op_id)
+                elif show_tensors or src_id.startswith("op_"):
+                    G.add_edge(src_id, op_id)
+
+        # Add tensor nodes if needed
+        for j, out in enumerate(op.outputs):
+            tensor_id = f"tensor_{i}_{j}"
+            tensor_to_id[out] = op_id  # Default: map to producing operator
+
+            if show_tensors:
+                tensor_label = f"{printer.namer(out)}\n{out.shape}"
+                G.add_node(tensor_id, label=tensor_label, node_type="tensor")
+                G.add_edge(op_id, tensor_id)
+                tensor_to_id[out] = tensor_id  # Update to tensor node
+
+    # Add output nodes
+    for i, tensor in enumerate(graph.outputs):
+        output_id = f"output_{i}"
+        G.add_node(output_id, label=f"Output {i}", node_type="output")
+
+        if tensor in tensor_to_id:
+            src_id = tensor_to_id[tensor]
+            if src_id.startswith("op_") or show_tensors:
+                G.add_edge(src_id, output_id)
+
+    # Set DOT filename and create directory if needed
+    dot_filename = filename if filename.lower().endswith('.dot') else f"{os.path.splitext(filename)[0]}.dot"
+    os.makedirs(os.path.dirname(os.path.abspath(dot_filename)), exist_ok=True)
+
+    # Set node styles for DOT output
+    node_styles = {
+        'input': {'shape': 'ellipse', 'fillcolor': 'skyblue'},
+        'operator': {'shape': 'box', 'fillcolor': 'lightgreen'},
+        'tensor': {'shape': 'ellipse', 'fillcolor': 'lightyellow'},
+        'output': {'shape': 'ellipse', 'fillcolor': 'salmon'},
+        'matmul': {'shape': 'box', 'fillcolor': 'gold'},  # Special style for Matmul operators
+    }
+
+    # Apply styles to nodes
+    for n, data in G.nodes(data=True):
+        if 'node_type' in data:
+            # Use special style for Matmul operators
+            if data['node_type'] == 'operator' and 'label' in data and 'Matmul' in data['label']:
+                style = node_styles['matmul']
+            else:
+                style = node_styles[data['node_type']]
+            G.nodes[n].update({**style, 'style': 'filled'})
+
+    # Save DOT file
+    nx.nx_agraph.write_dot(G, dot_filename)
+
+    # Add link to online renderer at the beginning of the .dot file
+    with open(dot_filename, 'r') as f:
+        dot_content = f.read()
+    with open(dot_filename, 'w') as f:
+        f.write("# You can use https://dreampuf.github.io/GraphvizOnline/ to visualize the graph\n\n" + dot_content)
