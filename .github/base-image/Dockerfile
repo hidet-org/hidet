@@ -3,12 +3,6 @@ FROM nvidia/cuda:12.6.2-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/New_York
 
-# Add source files
-ADD . /workspace/hidet
-
-# Set working directory
-WORKDIR /workspace
-
 # Install tools
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y \
@@ -30,7 +24,6 @@ RUN apt-get update && \
 
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
 
-
 # Install system dependencies and CMake 3.19.8
 RUN apt-get update && \
     apt-get install -y wget gnupg software-properties-common && \
@@ -44,6 +37,12 @@ RUN cmake --version
 
 # Install pip
 RUN python -m pip install --upgrade pip
+
+# Add source files
+ADD . /workspace/hidet
+
+# Set working directory
+WORKDIR /workspace
 
 # Install Hidet Docs requirements
 RUN pip install --no-cache-dir -r hidet/docs/requirements.txt

@@ -21,7 +21,7 @@ jobs:
       runs-on:
         group: ${{ inputs.runner_group || 'arc-l4' }}
       container:
-        image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+        image: us-east4-docker.pkg.dev/github-workflow-runners/hidet-base-ci/hidet-base-ci:latest
         options: --gpus all
       steps:
         - name: Checkout source
