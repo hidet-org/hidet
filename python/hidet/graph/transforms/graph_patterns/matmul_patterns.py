@@ -17,6 +17,7 @@ from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
 from hidet.graph.ops.transform import TransposeOp2D
 from hidet.utils import same_list, initialize
+from hidet.ir.expr import is_constant
 
 # pylint: disable=unused-import
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
@@ -194,9 +195,80 @@ class MatmulTransposeRewriteRule(SubgraphRewriteRule):
         return [new_C]
 
 
+# Related to the issue #935
+# when the input A is a batched matrix, we want to flatten the batch dimensions and then reshape the result back
+class BatchedMatmulFlattenRule(SubgraphRewriteRule):
+    def __init__(self):
+        super().__init__('matmul(A_ND, B_2D) ==> flatten(A_ND) + matmul + reshape')
+        self.A = TensorPattern.tensor()
+        self.B = TensorPattern.tensor()
+        self.C = op_pattern(MatmulOp, [self.A, self.B])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.C]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        A, B, C = [matched[t] for t in [self.A, self.B, self.C]]
+
+        # Check if A has at least 3 dimensions and B is a 2D tensor
+        if len(A.shape) < 3 or len(B.shape) != 2:
+            return None
+
+        # Check if either A, B or C has more than one SymbolVar dimension in shape,
+        # if so, skip it for now: since this has downstream impact on the construction of the dispatch table.
+        # more specifically, say, we have a shape of [b, s, 256], if we want to reshape
+        # it to [b * s, 256], then during the dispatch table, the expression `b * s` will be
+        # treated as a new symbolic dimension aside from the original symbolic dimension `b` and `s`,
+        # which will cause runtime failure, and fixing it seems to be trickier than I initially thought.
+        # So for now, we just skip it.
+
+        # TODO: If there is value supporting it:
+        #  go back to the case where we have more than one SymbolVar dimension in shape
+
+        a_shape, b_shape = A.shape, B.shape
+        for tensor_shape in (a_shape, b_shape):
+            if len([dim for dim in tensor_shape if not is_constant(dim)]) > 1:
+                return None
+
+        *batch_dims, k = A.shape  # All leading dimensions plus the last dimension k
+
+        # Get transpose flag from the original operation
+        transpose_b = C.op.attrs.get('transpose_b', False)
+
+        # Check dimensions based on whether B is transposed
+        if transpose_b:
+            n, k2 = B.shape
+            if k != k2:
+                return None
+        else:
+            k2, n = B.shape
+            if k != k2:
+                return None
+
+        # Calculate batch size
+        batch_size = 1
+        for dim in batch_dims:
+            batch_size *= dim
+
+        # Reshape A to [batch_size, k]
+        A_reshaped = ops.reshape(A, [batch_size, k])
+
+        if transpose_b:
+            C_reshaped = ops.matmul_nt(A_reshaped, B)
+        else:
+            C_reshaped = ops.matmul(A_reshaped, B)
+
+        # Reshape result back to [*batch_dims, n]
+        output_shape = list(batch_dims) + [n]
+        new_C = ops.reshape(C_reshaped, output_shape)
+
+        return [new_C]
+
+
 @initialize()
 def matmul_patterns():
     register_rewrite_rule(MatmulTransposeRewriteRule())
+    register_rewrite_rule(BatchedMatmulFlattenRule())
     # The following pattern matching passes were temporarily disabled earlier
     # register_rewrite_rule(ThreeMatmulBiasFusionPattern())
     # register_rewrite_rule(ThreeMatmulFusionPattern())
