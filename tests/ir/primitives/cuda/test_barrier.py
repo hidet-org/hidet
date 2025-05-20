@@ -114,12 +114,7 @@ def test_mbarrier_cp_async_single_cta(wait_type: str):
                 elif wait_type == "try_wait":
                     fb += WhileStmt(
                         wait_complete == Constant(0, u32),
-                        SeqStmt(
-                            [
-                                AssignStmt(wait_complete, mbarrier_try_wait(mbar, i & 1, wait_complete)),
-                                AssignStmt(cnt, cnt + 1),
-                            ]
-                        ),
+                        SeqStmt([AssignStmt(wait_complete, mbarrier_try_wait(mbar, i & 1)), AssignStmt(cnt, cnt + 1)]),
                     )
 
                 fb += BlackBoxStmt('printf("c: %d\\n", {});', cnt)
