@@ -1,5 +1,8 @@
 name: Publish to CentML Internal PyPI
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:

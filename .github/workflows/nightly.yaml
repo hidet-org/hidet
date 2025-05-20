@@ -1,5 +1,8 @@
 name: Nightly Workflow
 
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: '0 0 * * *' # Run every day at midnight

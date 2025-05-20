@@ -3,6 +3,9 @@ name: Tests
 env:
   IMAGE_TAG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'latest' || github.sha }}
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
