@@ -16,6 +16,7 @@ import time
 import struct
 import os
 import atexit
+import signal
 import filelock
 
 
@@ -94,6 +95,24 @@ class FileStore(Store):
                     rest = self._add('cnt', -1)
                     if rest == 0:
                         os.remove(self._filename)
+
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.getsignal(signal.SIGTERM)
+
+        def signal_handler(signum, frame):
+            cleanup()
+            if signum == signal.SIGTERM and callable(old_term):
+                old_term(signum, frame)
+            if signum == signal.SIGINT and callable(old_int):
+                old_int(signum, frame)
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+        # Cleanup the file when the process is killed
+        # But if the process is killed by SIGKILL, we cannot do cleanup
+        # In this case we have to remove the file manually
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
     def _write(self, f, content):
         f.write(struct.pack('i', len(content)))
