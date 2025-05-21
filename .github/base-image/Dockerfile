@@ -44,6 +44,9 @@ ADD . /workspace/hidet
 # Set working directory
 WORKDIR /workspace
 
+# Install CI requirements
+RUN pip install -r hidet/.github/requirements-ci.txt
+
 # Install Hidet Docs requirements
 RUN pip install --no-cache-dir -r hidet/docs/requirements.txt
 
