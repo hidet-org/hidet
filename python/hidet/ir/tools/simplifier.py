@@ -230,7 +230,7 @@ class Simplifier(StmtRewriter, ExprRewriter, LayoutRewriter, BaseRewriter):
 def simplify(
     node: Union[Stmt, Expr, int, float, list, tuple], *, instantiate_symbols=False, repeat_limit=10, enable_rules=False
 ):
-    if isinstance(node, (int, float, SymbolVar)):
+    if isinstance(node, (int, float)):
         return node
 
     simplifier = Simplifier(instantiate_symbols)

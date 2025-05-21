@@ -17,6 +17,11 @@ import hidet
 import hidet.testing
 from hidet.graph import FlowGraph
 from hidet import ops
+import torch
+from hidet.ffi import runtime_api
+from hidet.graph.frontend.torch.utils import Placeholder, deserialize_output
+from hidet.ir.expr import SymbolVar
+from hidet.ir.type import data_type
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -72,3 +77,25 @@ def test_resnet50(device, bs, h, w):
     # we used random weights, thus the tolerance is larger than 1e-5
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy(), rtol=5e-4, atol=5e-4)
     numpy.testing.assert_allclose(y1.cpu().numpy(), y3.cpu().numpy(), rtol=5e-2, atol=5e-2)
+
+
+# @pytest.mark.parametrize('bs,h,w', [(1, 224, 224), (2, 224, 224), (1, 256, 256)])
+def test_deserialization():
+    runtime_api.set_symbol_value('s0', 4)
+
+    s0 = SymbolVar('s0', dtype=data_type('int32'))
+    tensors = [torch.ones(1, 1), torch.ones(2, 2)]
+
+    format = [Placeholder(0), (s0, 20), s0, Placeholder(1)]
+    outputs = deserialize_output(format, tensors)
+    assert outputs[0] is tensors[0]
+    assert outputs[1] == (4, 20)
+    assert outputs[2] == 4
+    assert outputs[3] is tensors[1]
+
+    format = [Placeholder(1), (20, s0), Placeholder(0), s0]
+    outputs = deserialize_output(format, tensors)
+    assert outputs[0] is tensors[1]
+    assert outputs[1] == (20, 4)
+    assert outputs[2] is tensors[0]
+    assert outputs[3] == 4
