@@ -27,14 +27,6 @@ add_library(hidet_runtime SHARED
         src/hidet/runtime/logging.cpp
         src/hidet/runtime/symbols.cpp
         src/hidet/runtime/int_fastdiv.cpp
-        src/hidet/runtime/llm/tokenizer/decoders.cpp
-        src/hidet/runtime/llm/tokenizer/models.cpp
-        src/hidet/runtime/llm/tokenizer/normalizers.cpp
-        src/hidet/runtime/llm/tokenizer/pattern.cpp
-        src/hidet/runtime/llm/tokenizer/postprocessors.cpp
-        src/hidet/runtime/llm/tokenizer/pretokenizers.cpp
-        src/hidet/runtime/llm/tokenizer/tokenizer.cpp
-        src/hidet/runtime/llm/tokenizer/utf8.cpp
         )
 target_include_directories(hidet_runtime PRIVATE ${CMAKE_SOURCE_DIR}/include /usr/include)
 set_target_properties(hidet_runtime PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
