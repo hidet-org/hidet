@@ -106,24 +106,24 @@ def sanitizer_run(func, *args, **kwargs):
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     # dump args
-    args_path: str = tempfile.mktemp() + '.pkl'
-    with open(args_path, 'wb') as f:
+    with tempfile.NamedTemporaryFile('wb', suffix='pkl') as f:
+        args_path: str = f.name
         pickle.dump((args, kwargs), f)
 
-    command = _sanitizer_template.format(
-        sanitizer_path=sanitizer_get_path(),
-        report_path=report_path,
-        python_executable=sys.executable,
-        python_script=__file__,
-        args='{} {} {}'.format(script_path, func_name, args_path),
-    )
-    command = " ".join(command.split())
-    print('Running command: ')
-    print(command)
-    subprocess.run(command, shell=True)
-    with open(report_path, 'r') as f:
-        print(f.read())
-    print('Sanitizer report is saved in: {}'.format(report_path))
+        command = _sanitizer_template.format(
+            sanitizer_path=sanitizer_get_path(),
+            report_path=report_path,
+            python_executable=sys.executable,
+            python_script=__file__,
+            args='{} {} {}'.format(script_path, func_name, args_path),
+        )
+        command = " ".join(command.split())
+        print('Running command: ')
+        print(command)
+        subprocess.run(command, shell=True)
+        with open(report_path, 'r') as f:
+            print(f.read())
+        print('Sanitizer report is saved in: {}'.format(report_path))
 
 
 def main():

@@ -134,25 +134,25 @@ def nsys_run(func, *args, **kwargs) -> NsightSystemReport:
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     # dump args
-    args_path: str = tempfile.mktemp() + '.pkl'
-    with open(args_path, 'wb') as f:
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='pkl') as f:
+        args_path = f.name
         pickle.dump((args, kwargs), f)
 
-    status = subprocess.run(
-        _nsys_template.format(
-            nsys_path=_nsys_path,
-            report_path=report_path,
-            python_executable=sys.executable,
-            python_script=__file__,
-            args='{} {} {}'.format(script_path, func_name, args_path),
-        ),
-        shell=True,
-    )
+        status = subprocess.run(
+            _nsys_template.format(
+                nsys_path=_nsys_path,
+                report_path=report_path,
+                python_executable=sys.executable,
+                python_script=__file__,
+                args='{} {} {}'.format(script_path, func_name, args_path),
+            ),
+            shell=True,
+        )
 
-    if status.returncode != 0:
-        raise RuntimeError('Error when running Nsight System.')
+        if status.returncode != 0:
+            raise RuntimeError('Error when running Nsight System.')
 
-    return NsightSystemReport(report_path)
+        return NsightSystemReport(report_path)
 
 
 def main():

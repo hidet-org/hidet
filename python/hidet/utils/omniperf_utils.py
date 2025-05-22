@@ -54,30 +54,32 @@ def omniperf_run(omniperf_path, func, *args, **kwargs) -> OmniperfReport:
     os.makedirs(report_path)
 
     # dump args
-    args_path: str = tempfile.mktemp() + '.pkl'
-    with open(args_path, 'wb') as f:
+    with tempfile.NamedTemporaryFile('wb', suffix='pkl') as f:
+        args_path: str = f.name
         pickle.dump((args, kwargs), f)
 
-    launch_file: str = report_path + "/launch.sh"
-    launch_command = f"{sys.executable} {str(__file__)} {str(script_path)} {str(func_name)} {str(args_path)}\n"
-    assert os.path.exists(script_path)
-    assert os.path.exists(args_path)
-    assert os.path.exists(__file__)
+        launch_file: str = report_path + "/launch.sh"
+        launch_command = f"{sys.executable} {str(__file__)} {str(script_path)} {str(func_name)} {str(args_path)}\n"
+        assert os.path.exists(script_path)
+        assert os.path.exists(args_path)
+        assert os.path.exists(__file__)
 
-    print("writing launch file: ", launch_command)
-    with open(launch_file, 'w') as f:
-        f.write(launch_command)
+        print("writing launch file: ", launch_command)
+        with open(launch_file, 'w') as f:
+            f.write(launch_command)
 
-    omniperf_data_dir = os.path.join(report_path, "data")
-    os.mkdir(omniperf_data_dir)
-    print(f"chmod +x {launch_file}")
-    subprocess.run(f"chmod +x {launch_file}", shell=True)
-    print(f"prerunning {launch_file}")
-    subprocess.run(launch_file, shell=True)
-    print(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}")
-    subprocess.run(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}", shell=True)
+        omniperf_data_dir = os.path.join(report_path, "data")
+        os.mkdir(omniperf_data_dir)
+        print(f"chmod +x {launch_file}")
+        subprocess.run(f"chmod +x {launch_file}", shell=True)
+        print(f"prerunning {launch_file}")
+        subprocess.run(launch_file, shell=True)
+        print(f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}")
+        subprocess.run(
+            f"{omniperf_path} profile -n experiment{idx} -p {omniperf_data_dir} -- {launch_file}", shell=True
+        )
 
-    return OmniperfReport(omniperf_data_dir, omniperf_path)
+        return OmniperfReport(omniperf_data_dir, omniperf_path)
 
 
 def main():
