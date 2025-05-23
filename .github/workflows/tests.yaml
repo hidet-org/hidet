@@ -62,7 +62,7 @@ jobs:
 
   build-and-push-docker:
     name: Build and Push Base Docker Image
-    runs-on: ubuntu-latest-16core-64gram-600gssd
+    runs-on: ubuntu-latest
     outputs:
       image_path: ${{ steps.build_docker.outputs.image_path }}
     steps:
