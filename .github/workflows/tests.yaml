@@ -16,6 +16,9 @@ on:
       - 'LICENSE'
       - '.github/ISSUE_TEMPLATE/**'
   pull_request:
+    branches:
+        - main
+        - public-synced-main
     paths-ignore:
       - 'README.md'
       - 'CODEOWNERS'
