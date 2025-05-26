@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 from tqdm import tqdm
-from collections import defaultdict
+import os
 
 # Configuration
 DIRECTORIES2LINELENGTH = {
@@ -11,71 +11,48 @@ DIRECTORIES2LINELENGTH = {
 }
 BLACK_ARGS = [
     "python", "-m", "black",
-    "--verbose",
     "--skip-string-normalization",
     "--skip-magic-trailing-comma",
+    "--workers", str(os.cpu_count())
 ]
 
 
 def main():
-    # Collect all Python files
-    py_files = {}
+    # Determine the number of workers for black
+    num_workers = os.cpu_count() or 1
+
+    # Prepare commands for each directory
+    commands = []
     for dir_path, line_length in DIRECTORIES2LINELENGTH.items():
         path = Path(dir_path)
         if path.exists() and path.is_dir():
-            for py_file in [str(p) for p in path.rglob("*.py")]:
-                py_files[py_file] = line_length
+            commands.append([
+                *BLACK_ARGS,
+                "--line-length", str(line_length),
+                str(path)  # The directory to format
+            ])
+        else:
+            tqdm.write(f"⚠️ Warning: Configured directory does not exist or is not a directory: {dir_path}")
 
-    # print(f"Found {len(py_files)} Python files to format")
+    if not commands:
+        tqdm.write("No valid directories found to format. Exiting.")
+        return
 
-    # Track results
-    results = defaultdict(list)
-
-    # Process files with progress bar
-    with tqdm(total=len(py_files), desc="Formatting", ncols=80) as pbar:
-        for file_path, line_length in py_files.items():
-            try:
-                # Run black and capture output
-                result = subprocess.run(
-                    [*BLACK_ARGS, "--line-length", str(line_length), file_path],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-
-                # Parse black output
-                for line in result.stderr.splitlines():
-                    if 'reformatted' in line:
-                        results['formatted'].append(file_path)
-                        tqdm.write(f"🟢 Reformatted: {file_path}")
-                    elif 'already well formatted' in line or "wasn't modified on disk since last run" in line:
-                        results['unchanged'].append(file_path)
-                        # tqdm.write(f"🟡 Unchanged:    {file_path}")
-
-            except subprocess.CalledProcessError as e:
-                results['errors'].append((file_path, e.stderr))
-                tqdm.write(f"🔴 Error:        {file_path}\n{'-' * 50}\n{e.stderr}\n{'-' * 50}")
-
-            pbar.update(1)
-
-    # Print summary
-    # print("\nFormatting Summary:")
-    # print(f"🟢 Reformatted:  {len(results['formatted'])} files")
-    # print(f"🟡 Unchanged:    {len(results['unchanged'])} files")
-    # print(f"🔴 Errors:       {len(results['errors'])} files")
-    #
-    # # Show example files in each category
-    # def show_examples(category, emoji, max_examples=5):
-    #     if results[category]:
-    #         print(f"\n{emoji} {category.capitalize()} files:")
-    #         for f in results[category][:max_examples]:
-    #             print(f"  - {f}")
-    #         if len(results[category]) > max_examples:
-    #             print(f"  ... and {len(results[category]) - max_examples} more")
-    #
-    # show_examples('formatted', '🟢')
-    # show_examples('unchanged', '🟡')
-    # show_examples('errors', '🔴')
+    # Process each directory sequentially, but black itself will parallelize within each directory
+    for command_args in commands:
+        directory_to_format = os.path.abspath(command_args[-1])  # The last argument is the directory path
+        # print the directory being formatted in green and bold font
+        # CYAN = "\033[96m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
+        print(f"> {BOLD}{directory_to_format}{RESET}")
+        try:
+            subprocess.run(command_args, check=False, text=True)
+        except FileNotFoundError:
+            print(f"🔴 Error: 'black' command not found. Please ensure black is installed and in your PATH.")
+            break  # Exit if black isn't found
+        except Exception as e:
+            print(f"🔴 An unexpected error occurred while processing {directory_to_format}: {e}")
 
 
 if __name__ == "__main__":
