@@ -48,7 +48,6 @@ dependencies = [
   "importlib_metadata", # check installed packages
   "torch>=2.3.0",
   "networkx", # for flow graph visualization
-  "pygraphviz", # for flow graph visualization
 ]
 
 [project.optional-dependencies]
