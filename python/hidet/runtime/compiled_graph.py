@@ -27,7 +27,7 @@ from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device
 from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
-from hidet.runtime.storage import Storage, current_memory_pool
+from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils.py import prod, median
 from hidet.utils.trace_utils import TraceEventEmitter
@@ -306,6 +306,8 @@ class CompiledGraph:
         return outputs
 
     def _prepare_workspace(self):
+        import torch
+
         if self.is_dynamic:
             buffer = Array(i64, 3)
             self._get_workspace_size(buffer)
@@ -319,12 +321,11 @@ class CompiledGraph:
             self._set_workspace(0, self.cpu_workspace.addr)
 
         global global_cuda_workspace
-        if global_cuda_workspace is not None and global_cuda_workspace.num_bytes < required_cuda_workspace:
+        if global_cuda_workspace is not None and global_cuda_workspace.nbytes < required_cuda_workspace:
             global_cuda_workspace = None
-            current_memory_pool('cuda').clear()
         if global_cuda_workspace is None:
-            global_cuda_workspace = Storage.new('cuda', required_cuda_workspace)
-        self._set_workspace(1, global_cuda_workspace.addr)
+            global_cuda_workspace = torch.empty(required_cuda_workspace, dtype=torch.uint8, device='cuda')
+        self._set_workspace(1, global_cuda_workspace.data_ptr())
 
         if hidet.hip.available() and (
             self.hip_workspace is None or self.hip_workspace.num_bytes < required_hip_workspace
@@ -342,6 +343,8 @@ class CompiledGraph:
         # run the kernels
         kernel_array = self.dispatch_table[symbol_dims]
         self._launch(*inputs, *outputs, kernel_array)
+        global global_cuda_workspace
+        global_cuda_workspace = None
         return outputs
 
     def _run_slow_path(self, inputs, symbol_dims: Tuple[int, ...]):
