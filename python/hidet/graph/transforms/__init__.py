@@ -16,7 +16,6 @@ from hidet.graph.flow_graph import FlowGraph
 from .base import GraphPass, PassContext, logger
 from .instruments import GraphPassInstrument, SaveGraphInstrument, ProfileInstrument
 from .subgraph_rewrite import subgraph_rewrite_pass
-from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
@@ -57,7 +56,6 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         passes = [
             conv_channel_last_pass(),
             subgraph_rewrite_pass(),
-            automatic_mix_precision_pass(),
             selective_quantize_pass(),
             resolve_variant_pass(),
             fuse_operator_pass(),
