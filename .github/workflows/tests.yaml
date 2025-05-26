@@ -9,8 +9,19 @@ permissions:
 on:
   push:
     branches: [main]
-
+    paths-ignore:
+      - 'README.md'
+      - 'CODEOWNERS'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
   pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'CODEOWNERS'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_call:
   workflow_dispatch:
     inputs:
