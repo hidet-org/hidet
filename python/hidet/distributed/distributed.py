@@ -15,7 +15,7 @@ from datetime import timedelta
 
 from hidet.graph import Tensor
 from hidet.cuda.nccl import nccl_available
-from .store import Store, FileStore
+from .store import Store, FileStore, TCPStore
 from .group import create_nccl_group, ProcessGroup
 
 
@@ -33,10 +33,18 @@ def init_process_group(
     rank: int = -1,
 ):
     """
-    We ues the same api as PyTorch.
-    Currently we only support FileStore. There are two ways to initialize via FileStore.
+    We use the same api as PyTorch.
+    Currently we support FileStore and TCPStore:
+    a. There are two ways to initialize via FileStore.
         1. Manually create a FileStore object and pass it as ``store``;
         2. Specify ``init_method`` with ``files://path-to-file```
+        3. If we are using FileStore, we need to make sure the file specificed
+              by ``init_method`` is cleared if there is an old one left from previous runs
+              before the initialization. Or the initilization could fail.
+    b. There are two ways to initialize via TCPStore.
+        1. Manually create a TCPStore object and pass it as ``store``;
+        2. Specify ``init_method`` with ``tcp://host:port``.
+    If ``store`` is specified, ``init_method`` must be None, vice versa.
     Now world_size and rank still need to be specified manually.
     """
     global DEFAULT_GROUP
@@ -50,14 +58,19 @@ def init_process_group(
     if store is None:
         if init_method is None:
             raise RuntimeError("One of 'init_method' and 'store' must be specified.")
-        else:
-            if not init_method.startswith('file://'):
-                raise RuntimeError(
-                    "Currently only FileStore is supported. "
-                    "Please speficy the path to the filestore with 'file://path-to-file'"
-                )
+        elif init_method.startswith('tcp://'):
+            store = TCPStore(
+                host_name=init_method[len('tcp://') :].split(':')[0],
+                port=int(init_method[len('tcp://') :].split(':')[1]),
+                world_size=world_size,
+                is_server=rank == 0,
+                timeout=timeout,
+            )
+        elif init_method.startswith('file://'):
             path_to_file = init_method[len('file://') :]
             store = FileStore(path_to_file)
+        else:
+            raise RuntimeError(f"Invalid init_method: {init_method}")
     else:
         if init_method is not None:
             raise RuntimeError("'init_method' and 'store' are mutually exclusive.")
@@ -67,6 +80,8 @@ def init_process_group(
         if not is_nccl_available():
             raise RuntimeError("NCCL is not found.")
         DEFAULT_GROUP = create_nccl_group(store, world_size, rank)
+        if isinstance(store, TCPStore):
+            store.shutdown()
     else:
         raise ValueError(f"Backend {backend} is not supported.")
 

@@ -17,6 +17,8 @@ import struct
 import os
 import atexit
 import signal
+import socket
+import threading
 import filelock
 
 
@@ -232,3 +234,269 @@ class FileStore(Store):
 
     def set_timeout(self, timeout: timedelta):
         self._timeout = timeout
+
+
+class TCPStore(Store):
+    """
+    A TCP-based distributed key-value store implementation.
+    """
+
+    # client message types
+    VALIDATE = 0
+    SET = 1
+    GET = 2
+    ADD = 3
+    CHECK = 4
+    # server response types
+    READY = 0
+    NOT_READY = 1
+
+    def __init__(
+        self,
+        host_name: str,
+        port: int,
+        world_size: Optional[int] = None,
+        is_server: bool = False,
+        timeout: timedelta = timedelta(seconds=20),
+    ):
+        super().__init__()
+        self.host = host_name
+        self.port = port
+        self.world_size = world_size
+        self.is_server = is_server
+        self.timeout = timeout
+
+        self._lock = threading.Lock()
+        self._store: Dict[str, bytes] = {}
+        self._server_socket = None
+        self._client_socket = None
+
+        self._shutdown = threading.Event()
+        self._server_thread = None
+        self._client_threads = []
+        self._client_threads_lock = threading.Lock()
+
+        if is_server:
+            self._start_server()
+        else:
+            self._connect_to_server()
+
+        num_peers = self.add('worker_count', 1)
+        if self.world_size is not None and num_peers > self.world_size:
+            raise RuntimeError("Warning: more peers than world size.")
+
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.getsignal(signal.SIGTERM)
+
+        def signal_handler(signum, frame):
+            self.shutdown()
+            if signum == signal.SIGTERM and callable(old_term):
+                old_term(signum, frame)
+            if signum == signal.SIGINT and callable(old_int):
+                old_int(signum, frame)
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+    def _send_message(self, msg_type: int, data: bytes = b''):
+        header = struct.pack('!B', msg_type)
+        self._client_socket.sendall(header + data)
+
+    def _receive_message(self) -> bytes:
+        try:
+            return self._client_socket.recv(4096)
+        except socket.timeout:
+            return b''
+
+    def _validate_connection(self):
+        self._send_message(self.VALIDATE, struct.pack('!I', 0x3C85F7CE))
+        response = self._receive_message()
+        if not response or response != b'\x01':
+            raise RuntimeError("Failed to validate connection")
+
+    def _start_server(self):
+        # create a server socket
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.bind((self.host, self.port))
+        self._server_socket.listen(5)
+        self.port = self._server_socket.getsockname()[1]
+        # Start server thread
+        self._server_thread = threading.Thread(target=self._server_loop)
+        self._server_thread.daemon = True
+        self._server_thread.start()
+
+    def _connect_to_server(self):
+        for _ in range(5):
+            try:
+                self._client_socket = socket.create_connection((self.host, self.port), timeout=2)
+                break
+            except ConnectionRefusedError:
+                time.sleep(0.5)
+        else:
+            raise RuntimeError("Could not connect to server after retries")
+        self._validate_connection()
+
+    def check(self, keys: List[str]) -> bool:
+        if self.is_server:
+            with self._lock:
+                return all(key in self._store for key in keys)
+        else:
+            self._send_message(
+                self.CHECK,
+                struct.pack('!I', len(keys)) + b''.join(struct.pack('!I', len(key)) + key.encode() for key in keys),
+            )
+            response = self._receive_message()
+            return struct.unpack('!B', response)[0] == self.READY
+
+    def wait(self, keys: List[str], timeout: Optional[timedelta] = None) -> None:
+        timeout = timeout or self.timeout
+        end_time = datetime.now() + timeout
+
+        while datetime.now() < end_time:
+            if all(self.check([key]) for key in keys):
+                return
+            time.sleep(0.01)
+        raise TimeoutError(f"Timeout waiting for keys: {keys}")
+
+    def set(self, key: str, value: bytes) -> None:
+        if self.is_server:
+            with self._lock:
+                self._store[key] = value
+        else:
+            self._send_message(self.SET, struct.pack('!I', len(key)) + key.encode() + value)
+            self._receive_message()
+
+    def get(self, key: str, wait: bool = True) -> bytes:
+        if self.is_server:
+            with self._lock:
+                return self._store.get(key, b'')
+        else:
+            if wait:
+                self.wait([key])
+            self._send_message(self.GET, struct.pack('!I', len(key)) + key.encode())
+            response_len = struct.unpack('!I', self._client_socket.recv(4))[0]
+            return self._client_socket.recv(response_len)
+
+    def add(self, key: str, amount: int) -> int:
+        if self.is_server:
+            with self._lock:
+                current = int(self._store.get(key, b'0'))
+                new_value = current + amount
+                self._store[key] = str(new_value).encode()
+                return new_value
+        else:
+            self._send_message(self.ADD, struct.pack('!I', len(key)) + key.encode() + struct.pack('!q', amount))
+            return struct.unpack('!q', self._receive_message())[0]
+
+    def set_timeout(self, timeout: timedelta):
+        self.timeout = timeout
+
+    def _server_loop(self):
+        while not self._shutdown.is_set():
+            try:
+                self._server_socket.settimeout(1.0)
+                client, _ = self._server_socket.accept()
+
+                client_thread = threading.Thread(target=self._handle_client, args=(client,))
+                client_thread.daemon = True
+                with self._client_threads_lock:
+                    self._client_threads.append(client_thread)
+                client_thread.start()
+
+                with self._client_threads_lock:
+                    self._client_threads = [t for t in self._client_threads if t.is_alive()]
+            except socket.timeout:
+                continue
+            except Exception as e:  # pylint: disable=broad-except
+                if not self._shutdown.is_set():
+                    raise RuntimeError(f"Error in TCP server loop: {e} pid: {os.getpid()}") from e
+                break
+
+    def _handle_client(self, client: socket.socket):
+        try:
+            while not self._shutdown.is_set():
+                client.settimeout(1)
+                try:
+                    msg_type_bytes = client.recv(1)
+                    if not msg_type_bytes:
+                        break
+                    msg_type = struct.unpack('!B', msg_type_bytes)[0]
+                    if msg_type == self.VALIDATE:
+                        magic_number = struct.unpack('!I', client.recv(4))[0]
+                        if magic_number == 0x3C85F7CE:
+                            client.sendall(b'\x01')
+                        else:
+                            client.sendall(b'\x00')
+                    elif msg_type == self.SET:
+                        key_len = struct.unpack('!I', client.recv(4))[0]
+                        key = client.recv(key_len).decode()
+                        value = client.recv(4096)
+                        self.set(key, value)
+                        client.sendall(b'\x01')
+                    elif msg_type == self.GET:
+                        key_len = struct.unpack('!I', client.recv(4))[0]
+                        key = client.recv(key_len).decode()
+                        value = self.get(key)
+                        client.sendall(struct.pack('!I', len(value)))
+                        client.sendall(value)
+                    elif msg_type == self.ADD:
+                        key_len = struct.unpack('!I', client.recv(4))[0]
+                        key = client.recv(key_len).decode()
+                        amount = struct.unpack('!q', client.recv(8))[0]
+                        result = self.add(key, amount)
+                        client.sendall(struct.pack('!q', result))
+                    elif msg_type == self.CHECK:
+                        key_count = struct.unpack('!I', client.recv(4))[0]
+                        keys = []
+                        for _ in range(key_count):
+                            key_len = struct.unpack('!I', client.recv(4))[0]
+                            key = client.recv(key_len).decode()
+                            keys.append(key)
+                        client.sendall(struct.pack('!B', self.READY if self.check(keys) else self.NOT_READY))
+                except socket.timeout:
+                    continue
+                except Exception as e:  # pylint: disable=broad-except
+                    if not self._shutdown.is_set():
+                        raise RuntimeError(
+                            f"Error handling client request: {e} pid: {os.getpid()} msg_type: {msg_type}"
+                        ) from e
+                    break
+        finally:
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            client.close()
+
+    def shutdown(self):
+        self._shutdown.set()
+        if self.is_server:
+            with self._client_threads_lock:
+                for thread in self._client_threads:
+                    if thread.is_alive():
+                        thread.join(timeout=1.0)
+            if self._server_thread:
+                self._server_thread.join()
+            if self._server_socket:
+                try:
+                    self._server_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                finally:
+                    self._server_socket.close()
+                    self._server_socket = None
+        else:
+            if self._client_socket:
+                try:
+                    self._client_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                finally:
+                    self._client_socket.close()
+                    self._client_socket = None
+
+    def __del__(self):
+        self.shutdown()

@@ -28,4 +28,4 @@ from .distributed import (
     get_default_group,
 )
 from .group import set_nccl_comms
-from .store import FileStore
+from .store import FileStore, TCPStore

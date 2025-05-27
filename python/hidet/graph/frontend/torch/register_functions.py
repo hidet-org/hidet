@@ -2023,7 +2023,7 @@ def torch_all_reduce(tensor: Tensor, op_name='sum', group_name=None):
         load_nccl_library()
         init_process_group(
             backend='nccl',
-            init_method='file:///tmp/hidet-nccl-init-group',
+            init_method='tcp://localhost:29500',
             world_size=torch.distributed.get_world_size(),
             rank=torch.distributed.get_rank(),
         )
