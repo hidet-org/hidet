@@ -13,4 +13,4 @@ ls ${SCRIPT_DIR}/dockerfiles/manylinux_2_28_x86_64/
 docker build -t hidet-manylinux_2_28_x86_64-build ${SCRIPT_DIR}/dockerfiles/manylinux_2_28_x86_64/
 
 # run the docker image
-docker run --rm -v $HIDET_DIR:/io hidet-manylinux_2_28_x86_64-build bash /io/scripts/wheel/build_wheel.sh $1
+docker run --rm -u $(id -u):$(id -g) -v $HIDET_DIR:/io hidet-manylinux_2_28_x86_64-build bash /io/scripts/wheel/build_wheel.sh

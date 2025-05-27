@@ -24,17 +24,6 @@ RUN apt-get update && \
 
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
 
-# Install system dependencies and CMake 3.19.8
-RUN apt-get update && \
-    apt-get install -y wget gnupg software-properties-common && \
-    wget https://github.com/Kitware/CMake/releases/download/v3.19.8/cmake-3.19.8-Linux-x86_64.sh && \
-    mkdir /opt/cmake && \
-    sh cmake-3.19.8-Linux-x86_64.sh --skip-license --prefix=/opt/cmake && \
-    ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake && \
-    rm cmake-3.19.8-Linux-x86_64.sh
-# Test CMake Installation
-RUN cmake --version
-
 # Install pip
 RUN python -m pip install --upgrade pip
 

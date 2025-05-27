@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 import numpy as np
 import pytest
 import torch
@@ -423,6 +424,7 @@ def test_matmul_cublas(a_shape, b_shape, transpose_b):
         torch_func = lambda x, y: torch.matmul(x, torch.transpose(y, 0, 1)) if len(b_shape) >= 2 else torch.matmul(x, y)
     else:
         torch_func = lambda x, y: torch.matmul(x, y)
+    k_size = a_shape[-1]
     check_torch_binary(
         a_shape,
         b_shape,
@@ -430,8 +432,10 @@ def test_matmul_cublas(a_shape, b_shape, transpose_b):
         hidet_func=lambda x, y: ops.matmul_cublas(x, y, transpose_b=transpose_b),
         device='cuda',
         dtype='float16',
-        atol=1e-1,
-        rtol=1e-1,
+        atol=2e-2,
+        rtol=2e-2,
+        a_input_scale=1.0 / math.sqrt(k_size),
+        b_input_scale=1.0 / math.sqrt(k_size),
     )
 
 

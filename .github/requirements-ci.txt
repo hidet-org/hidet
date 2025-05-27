@@ -1,4 +1,1 @@
 mysql-connector-python
-transformers
-accelerate
-sentencepiece

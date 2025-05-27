@@ -16,16 +16,13 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        with:
+          fetch-depth: 0  # we need the full history and tags for versioning
+          fetch-tags: 'true'
 
       - name: Build Hidet Wheel
         id: build_step
         uses: ./.github/actions/build-wheel
-        with:
-          version: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -103,15 +100,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Build and deploy release docs
         uses: ./.github/actions/build-docs
         with:
           docs_deploy_token: ${{ secrets.WEBSITE_REPO_TOKEN }}
-          version: ${{ steps.get_version.outputs.VERSION }}
           update_docs: true
 
   publish:

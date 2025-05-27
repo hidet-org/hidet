@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "cmake"]
+requires = ["setuptools", "cmake", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hidet"
-version = "0.6.0.dev"
+dynamic = ["version"]
 description = "Hidet: a compilation-based DNN inference framework."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
@@ -69,6 +69,9 @@ dev = [
   "transformers",
   "sentencepiece",
   "sacremoses",
+  "accelerate",
+
+  # utilities
   "pygraphviz",
 ]
 
@@ -90,3 +93,5 @@ find = { where = ["python"] }
 
 [tool.setuptools.package-dir]
 "" = "python"
+
+[tool.setuptools_scm]

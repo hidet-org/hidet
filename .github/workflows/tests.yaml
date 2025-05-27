@@ -89,32 +89,6 @@ jobs:
           tag: ${{ env.IMAGE_TAG }}
           gcp_secret: ${{ secrets.GCP_WORKFLOW_RUNNERS_SA_KEY }}
 
-  build-wheel:
-    outputs:
-      wheel_name: ${{ steps.build_step.outputs.wheel_name }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=0.0.1.dev${{ github.run_id }}" >> $GITHUB_OUTPUT
-
-      - name: Build Hidet Wheel
-        id: build_step
-        uses: ./.github/actions/build-wheel
-        with:
-          version: ${{ steps.get_version.outputs.VERSION }}
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.build_step.outputs.wheel_name }}
-          path: ${{ steps.build_step.outputs.wheel_path }}
-          retention-days: 3
-          if-no-files-found: "error"
-
   build-docs-l4:
     if: ${{ needs.set_gpu_types.outputs.gpu_l4 == 'true' }}
     name: build-docs (l4)
@@ -218,7 +192,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-l4
       cancel-in-progress: true
-    needs: [list-test-dirs, set_gpu_types, build-wheel, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -232,7 +206,6 @@ jobs:
         id: run_tests_l4
         uses: ./.github/actions/run-tests
         with:
-          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
           path: ${{ matrix.path }}
 
   run-test-h100:
@@ -241,7 +214,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-h100
       cancel-in-progress: true
-    needs: [list-test-dirs, build-wheel, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -255,7 +228,6 @@ jobs:
         id: run_tests_h100
         uses: ./.github/actions/run-tests
         with:
-          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
           path: ${{ matrix.path }}
 
   run-test-a100:
@@ -264,7 +236,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a100-80
       cancel-in-progress: true
-    needs: [list-test-dirs, build-wheel, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -278,7 +250,6 @@ jobs:
         id: run_tests_a100
         uses: ./.github/actions/run-tests
         with:
-          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
           path: ${{ matrix.path }}
 
   run-test-a10:
@@ -287,7 +258,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a10
       cancel-in-progress: true
-    needs: [list-test-dirs, build-wheel, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
@@ -301,7 +272,6 @@ jobs:
         id: run_tests_a10
         uses: ./.github/actions/run-tests
         with:
-          wheel_name: ${{ needs.build-wheel.outputs.wheel_name }}
           path: ${{ matrix.path }}
 
   run-test-amdgpu:
@@ -309,7 +279,6 @@ jobs:
       (github.event.pull_request &&
       (contains(github.event.pull_request.body, '$ hidet-ci amdgpu') ||
       contains(github.event.pull_request.comments.*.body, '$ hidet-ci amdgpu')))
-    needs: [build-wheel]
     runs-on:
       # on self-hosted runner
       [self-hosted, rocm]
@@ -330,15 +299,10 @@ jobs:
         with:
           python-version: "3.9"
 
-      - name: Download wheel
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build-wheel.outputs.wheel_name }}
-
-      - name: Setup Hidet from Wheel
+      - name: Install Hidet
         run: |
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
-          pip install ${{ needs.build-wheel.outputs.wheel_name }}[dev]
+          pip install .
 
       - name: List installed packages
         run: |

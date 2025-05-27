@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence, Tuple
+from typing import Union, Sequence, Tuple, Optional
 import numpy as np
 import torch
 from hidet import symbol, trace_from
@@ -53,7 +53,7 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'auto', dtype=np.float3
             check_unary(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
         return
     # wrap np.array(...) in case shape = []
-    data = np.array(np.random.randn(*shape)).astype(dtype)
+    data = np.array(np.random.randint(low=-10, high=10, size=shape) / 10.0).astype(dtype)
     numpy_result = numpy_op(data)
     hidet_result = hidet_op(asarray(data).to(device=device)).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
@@ -197,6 +197,8 @@ def check_torch_binary(
     dtype: str = 'float32',
     atol=0.0,
     rtol=0.0,
+    a_input_scale: Optional[Union[int, float]] = None,
+    b_input_scale: Optional[Union[int, float]] = None,
 ):
     assert device in ['auto', 'cuda', 'hip', 'cpu']
     if device == 'auto':
@@ -212,6 +214,10 @@ def check_torch_binary(
     else:
         torch_a = torch.randint(-10, 10, a_shape, dtype=getattr(torch, dtype)).to(device=torch_device) / 10
         torch_b = torch.randint(-10, 10, b_shape, dtype=getattr(torch, dtype)).to(device=torch_device) / 10
+    if a_input_scale is not None:
+        torch_a = torch_a * a_input_scale
+    if b_input_scale is not None:
+        torch_b = torch_b * b_input_scale
     hidet_a = hidet.from_torch(torch_a)
     hidet_b = hidet.from_torch(torch_b)
     torch_result: torch.Tensor = torch_func(torch_a, torch_b).cpu()

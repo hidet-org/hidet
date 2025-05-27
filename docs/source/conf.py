@@ -41,7 +41,8 @@ author = 'Hidet Team'
 copyright = '2025, Hidet Authors'
 
 # The full version, including alpha/beta/rc tags
-release = "0.6.0.dev"
+release = hidet.__version__
+print('Building docs for hidet', hidet.__version__)
 
 
 # -- General configuration ---------------------------------------------------

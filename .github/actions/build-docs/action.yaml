@@ -5,10 +5,6 @@ inputs:
   docs_deploy_token:
     description: "Token used to deploy the docs."
     required: false
-  version:
-    description: "Optional version string to deploy the docs to. For nightly builds, use 'nightly'. For stable releases, use v{VERSION_NUMBER}"
-    required: false
-    default: ""
   update_docs:
     description: "Set to 'true' to push the changes to the docs repository or 'false' to skip updating."
     required: false
@@ -28,10 +24,14 @@ runs:
 
         cd docs
         make clean; nice -n 10 make html
+        
+        # save the version to as an output of the step
+        VERSION=$(python -c "import hidet; print(hidet.__version__)")
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
     - name: Deploy docs
       env:
         DOCS_DEPLOY_TOKEN: ${{ inputs.docs_deploy_token }}
-        INPUT_VERSION: ${{ inputs.version }}
         UPDATE_DOCS: ${{ inputs.update_docs }}
       shell: bash
       run: |

@@ -1,9 +1,6 @@
 name: 'Run Tests'
 description: 'Runs test suite on a specified GPU'
 inputs:
-  wheel_name:
-    description: "The name of the wheel"
-    required: true
   path:
     description: "The path to the tests"
     required: true
