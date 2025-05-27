@@ -5,6 +5,7 @@ from flask_jwt_extended import JWTManager
 from flask_restful import Api
 
 from resources import CompilationResource, AuthResource, UserResource
+from resources.utils import validate_path
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
@@ -20,6 +21,8 @@ api.add_resource(UserResource, '/user')
 def download(filename):
     results_dir = os.path.join(os.getcwd(), 'results')
     path = os.path.join(results_dir, filename)
+    if not validate_path(path, results_dir):
+        return 'Invalid file path', 400
     if os.path.exists(path):
         return send_from_directory(results_dir, filename, as_attachment=True)
     else:

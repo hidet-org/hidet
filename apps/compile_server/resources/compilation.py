@@ -16,6 +16,7 @@ from hashlib import sha256
 from filelock import FileLock
 
 from .compile_worker import CompilationWorkers
+from .utils import validate_path
 
 '''
 The compilation server will launch as many Flask applications as there are vCPUs (using gunicorn). 
@@ -55,8 +56,13 @@ def should_update(repo_timestamp) -> bool:
 def clone_github_repo(owner: str, repo: str, version: str) -> str:
     repo_dir = os.path.join(REPOS_DIR, "{}_{}".format(owner, repo))
     repo_timestamp = os.path.join(REPOS_DIR, "{}_{}_timestamp".format(owner, repo))
+    lock_path = os.path.join(REPOS_DIR, '{}_{}.lock'.format(owner, repo))
+
+    if not validate_path([repo_dir, repo_timestamp, lock_path], base=REPOS_DIR):
+        raise ValueError("Path validation failed for one or more paths.")
+
     os.makedirs(repo_dir, exist_ok=True)
-    with FileLock(os.path.join(REPOS_DIR, '{}_{}.lock'.format(owner, repo))):
+    with FileLock(lock_path):
         if not os.path.exists(os.path.join(repo_dir, '.git')):
             repo = git.Repo.clone_from(
                 url="https://github.com/{}/{}.git".format(owner, repo),
