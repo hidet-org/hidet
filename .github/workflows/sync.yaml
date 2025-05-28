@@ -6,6 +6,9 @@ on:
       - main
       - public-synced-main
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
