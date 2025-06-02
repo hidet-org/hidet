@@ -23,8 +23,8 @@ elif [ "$GITHUB_EVENT_NAME" == "push" ]; then
   GPU_A100="false"
 elif [ "$GITHUB_EVENT_NAME" == "schedule" ]; then
   echo "Using scheduled run defaults"
-  GPU_L4="true"
-  GPU_H100="true"
+  GPU_L4="false"
+  GPU_H100="false"
   GPU_A10="true"
   GPU_A100="true"
 else
