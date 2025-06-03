@@ -158,6 +158,7 @@ from hidet.ir.cute.ops.arithmetic import (
     ElementwiseMin,
     ElementwiseMax,
 )
+from .instruction_selection import TmaCopyInstruction
 
 
 verbose = False
@@ -922,15 +923,22 @@ class LatencyModel(CostModel):
             cycles = self.ops_on_the_fly[op]
         annotations = copy.annotations
         assert len(annotations) > 0
-        src_layout = annotations["src_layout"]
-        dst_layout = annotations["dst_layout"]
-        bank_conflicts = annotations.get("bank_conflicts", None)
-        src_elements = src_layout[1].size()
-        dst_elements = dst_layout[1].size()
-        assert src_elements == dst_elements, f"elements mismatch.(src:{src_elements},dst:{dst_elements})"
+        inst = annotations["inst"]
+        if isinstance(inst, TmaCopyInstruction):
+            # We assume the memory bank conflicts are automatically resolved by the
+            # hardware, so the bank conflicts is always None.
+            issued_insts = 1
+            bank_conflicts = None
+        else:
+            src_layout = annotations["src_layout"]
+            dst_layout = annotations["dst_layout"]
+            bank_conflicts = annotations.get("bank_conflicts", None)
+            src_elements = src_layout[1].size()
+            dst_elements = dst_layout[1].size()
+            assert src_elements == dst_elements, f"elements mismatch.(src:{src_elements},dst:{dst_elements})"
+            issued_insts = src_elements
         opcode = self._get_op_code_for_copy(copy)
         issue_latency = independent_cpi_lut[opcode]
-        issued_insts = src_elements
         # the code generation will issue independent copy instructions in a loop
         # so we need to multiply the latency by the number of issued instructions
         issue_cycles = issue_latency * issued_insts

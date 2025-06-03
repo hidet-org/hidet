@@ -20,6 +20,7 @@ from hidet.ir.cute.ops import Copy, Mask, Atomic
 from hidet.ir.cute.layout import TensorLayout, composition
 from hidet.ir.cute.int_tuple import size, idx2crd
 from hidet.ir.cute.contexts import tid_in_groups
+from hidet.transforms.cute.cuda.instruction_selection import TmaCopyInstruction
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -69,7 +70,8 @@ class CopyEmitter(OpEmitter):
         assert all(arg is None or isinstance(arg, Buffer) for arg in args[2:])
         src: Buffer = args[0]
         dst: Buffer = args[1]
-        mask: Union[Buffer, None] = args[2]
+        mask: Optional[Buffer] = args[2]
+        mbarrier: Buffer = args[3]
         src_buf = src.buffer
         src_ty = infer_type(src_buf)
         assert isinstance(src_ty, PointerType)
@@ -84,6 +86,39 @@ class CopyEmitter(OpEmitter):
         annotations = op.annotations
         assert len(annotations) > 0
         inst = annotations["inst"]
+
+        if "group_ids" in annotations:
+            group_ids = annotations["group_ids"]
+            tid = tid_in_groups(group_ids)
+        else:
+            tid = threadIdx.x
+
+        if isinstance(inst, TmaCopyInstruction):
+            tma_tensor_idx = annotations["tma_tensor_idx"]
+            tma_coords_transform = annotations["tma_coords_transform"]
+
+            if src.is_tma_buffer():
+                src_tensor_map = src.tensor_maps[tma_tensor_idx]
+                src_coords = tma_coords_transform(*src.coords)
+                assert mbarrier is not None
+                with self.if_then(tid == 0):
+                    self.append(
+                        inst(
+                            dst.buffer + dst.offset,
+                            ~src_tensor_map,
+                            src_coords,
+                            mbarrier=mbarrier.buffer + mbarrier.offset,
+                        )
+                    )
+                return
+            elif dst.is_tma_buffer():
+                dst_tensor_map = dst.tensor_maps[tma_tensor_idx]
+                dst_coords = tma_coords_transform(*dst.coords)
+                assert mask is None
+                assert mbarrier is None
+                with self.if_then(tid == 0):
+                    self.append(inst(src.buffer + src.offset, ~dst_tensor_map, dst_coords))
+                return
 
         src_layout = annotations["src_layout"]
         dst_layout = annotations["dst_layout"]
@@ -134,6 +169,7 @@ class AtomicEmitter(OpEmitter):
         dst_shape = dst.layout.shape
         assert src_shape == dst_shape
         thr2mem = composition(dst.layout, thr)
+
         annotations = op.annotations
         assert len(annotations) > 0
         if "group_ids" in annotations:

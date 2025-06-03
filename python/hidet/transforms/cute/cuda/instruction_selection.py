@@ -9,12 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=too-many-lines
 from typing import Tuple, List, Dict, Union, Optional, Callable
+import functools
 
-from hidet.ir.type import DataType, PointerType, data_type
-from hidet.ir.expr import Var, Expr, var, deref, cast, if_then_else
-from hidet.ir.stmt import DeclareScope
-from hidet.ir.tools import TypeInfer, infer_type
+from hidet.ir.type import DataType, PointerType, data_type, TensorType, TensorPointerType
+from hidet.ir.expr import Add, Address, TensorElement, TensorSlice, Var, Expr, var, deref, cast, if_then_else, Cast
+from hidet.ir.stmt import DeclareScope, DeclareStmt, IfStmt
+from hidet.ir.tools import TypeInfer, infer_type, simplify, rewrite
 from hidet.ir.functors import IRVisitor, IRRewriter
 from hidet.ir.dtypes import u8, u32, float16, float16x2
 
@@ -23,7 +25,6 @@ from hidet.ir.cute.type import TiledTensorType
 
 from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
-from hidet.ir.stmt import DeclareStmt, IfStmt
 from hidet.ir.builders import StmtBuilder
 
 
@@ -51,8 +52,10 @@ from hidet.ir.primitives.cuda.mma import ldmatrix, mma_sync, MmaConfig, mma_conf
 from hidet.ir.primitives.cuda.wgmma import WgmmaConfig, wgmma_configs, wgmma_async
 from hidet.ir.primitives.cuda.cp_async import cp_async
 from hidet.ir.primitives.cuda.atomic import reduce_add, atomic_add
+from hidet.ir.primitives.cuda.copy_tma import copy_tensor_g2s, copy_tensor_s2g
 
-from hidet.ir.cute.ops import TensorBase, Copy, Mask, Mma, PartitionA, PartitionB, Atomic, AtomicAdd
+from hidet.ir.cute import Swizzle
+from hidet.ir.cute.ops import TensorBase, TensorView, Copy, Mask, Mma, PartitionA, PartitionB, Atomic, AtomicAdd
 from hidet.ir.cute.algorithm import TiledCopy, TiledMma
 from hidet.ir.cute.layout import (
     TiledTensorLayout,
@@ -70,12 +73,19 @@ from hidet.ir.cute.layout import (
     group,
     canonicalize_thread_value_layout,
 )
-from hidet.ir.cute.int_tuple import rank, compact_col_major, flatten, depth
+from hidet.ir.cute.int_tuple import is_tuple, rank, compact_col_major, flatten, depth, idx2crd, product, product_each
 from hidet.utils import initialize
 from hidet.transforms.cute.analysis import TensorAliasAnalysis
-from hidet.logging import logger, DEBUG
+from hidet.logging import logger, setConsoleLevel, stderr_handler, DEBUG
 from .resolve_bank_conflict import ApplySharedMemoryLayoutUpdate
-from .lower_ops import Buffer
+from .lower_ops import Buffer, TmaTensor, tma_tensor
+from .tma_layout_utils import (
+    common_reshape_per_dim,
+    coalesce_gmem_shape_and_smem_shape,
+    split_shapes,
+    coalesce_per_dim,
+    get_last_dim_strides,
+)
 
 
 def expr_to_buffer(expr: Expr, layout_: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = None) -> Buffer:
@@ -95,8 +105,6 @@ def expr_to_buffer(expr: Expr, layout_: Union[TiledTensorLayout, ComposedTensorL
 
 
 def convert_layout_type_to_layout(tensor2layout: Dict[TensorBase, str]):
-    from hidet.ir.cute import Swizzle
-
     _tensor2layout: Dict[TensorBase, LayoutBase] = {}
     for tensor, layout_type in tensor2layout.items():
         layout = tensor.layout
@@ -488,6 +496,214 @@ class ReduceInstruction(CopyInstruction):
             return self.apply(vector_type, dst_value, src_values)
 
 
+class TmaCopyInstruction(CopyInstruction):
+    def __init__(self, apply: Callable, src_scope: DeclareScope, dst_scope: DeclareScope):
+        # In TMA instruction, the shapes and layouts are not determined at the compile
+        # time, so we use dummy shapes and layouts to initialize the instruction.
+        dummy_shape = (1,)
+        # The TMA instruction requires the address alignment to be 128-bit. So, we set
+        # the dummy layout to be 128-bit.
+        dummy_layout = TensorLayout(((1,), (128,)), ((1,), (1,)))
+        super().__init__(apply, dummy_shape, src_scope, dst_scope, dummy_layout, dummy_layout)
+
+    def match(self, src: Buffer, dst: Buffer, tiled_copy: TiledCopy = None):
+        """
+        Check if the copy operation can be transformed to a TMA instruction.
+
+        Parameters:
+            src: The source buffer.
+            dst: The destination buffer.
+            tiled_copy: The tiled copy information.
+
+        Returns:
+            The TMA instruction if the copy operation can be transformed to a TMA instruction,
+            otherwise None.
+        """
+        assert tiled_copy is not None
+        # Check if the source and destination scopes match the expected scopes for TMA instructions.
+        if src.scope != self.src_scope or dst.scope != self.dst_scope:
+            return None
+        _, src_tv_layout = tiled_copy.src_tv_layout()
+        _, dst_tv_layout = tiled_copy.dst_tv_layout()
+        src_t, _ = canonicalize_thread_value_layout(src_tv_layout)
+        dst_t, _ = canonicalize_thread_value_layout(dst_tv_layout)
+
+        # Sanity check of the thread layouts. All threads must access the same tensor
+        # in the TMA instruction
+        if src_t != dst_t:
+            return None
+
+        # Sanity check of the stride of the thread layout.
+        # The stride being 0 indicates that all threads can access the same tensor
+        # memory.
+        flat_stride = flatten(src_t.stride)
+        if is_tuple(flat_stride):
+            if len(flat_stride) != 1:
+                return None
+            flat_stride = flat_stride[0]
+        if flat_stride != 0:
+            return None
+
+        if src.scope.is_shared():
+            gmem_layout = dst.layout
+            smem_layout = src.layout
+        else:
+            gmem_layout = src.layout
+            smem_layout = dst.layout
+
+        swizzle = 'NONE'
+        if isinstance(smem_layout, ComposedTensorLayout):
+            functor = smem_layout.functor
+            logbits = (src.dtype.nbits - 1).bit_length()
+            assert isinstance(functor, Swizzle)
+            if functor == Swizzle(1, 7 - logbits, 3):
+                swizzle = '32B'
+            elif functor == Swizzle(2, 7 - logbits, 3):
+                swizzle = '64B'
+            elif functor == Swizzle(3, 7 - logbits, 3):
+                swizzle = '128B'
+
+        divisor = 1
+        if src.dtype.is_integer_subbyte():
+            divisor = src.dtype.storage.nbits // src.dtype.nbits
+        MAX_ELEMENTS_PER_DIM = 256 * divisor
+
+        # Step 1. keep the shape of gmem layout and smem layout the same
+        gmem_layout, smem_layout = common_reshape_per_dim(gmem_layout, smem_layout)
+
+        f1 = []
+        f2 = []
+
+        def index2coords(idx, shape):
+            length = len(shape)
+            d = product(shape[: length - 1])
+            rst = [0] * (length - 1) + [idx // d]
+            return rst
+
+        def split(s, shape):
+            length = len(shape)
+            d = product(shape[: length - 1])
+            rst = shape[:-1] + (s // d,)
+            return rst
+
+        for g in gmem_layout:
+            f1.append(functools.partial(index2coords, shape=g.shape_tuple))
+            f2.append(functools.partial(split, shape=g.shape_tuple))
+
+        gmem_shape = flatten(gmem_layout.shape_tuple)
+        gmem_stride = flatten(gmem_layout.stride_tuple)
+        smem_shape = flatten(smem_layout.shape_tuple)
+        smem_stride = flatten(smem_layout.stride_tuple)
+        index = range(len(gmem_shape))
+        from builtins import filter as filter_
+
+        # Step 2. The smem layout must be contiguous, so we sort strides and shapes based on ascending order
+        # of the smem strides.
+        sorted_DS = sorted(filter_(lambda x: x[0] > 0, zip(smem_stride, smem_shape, gmem_stride, gmem_shape, index)))
+        smem_stride, smem_shape, gmem_stride, gmem_shape, permute = zip(*sorted_DS)
+        gmem_shape, gmem_stride, smem_shape, smem_stride, dims = coalesce_gmem_shape_and_smem_shape(
+            gmem_shape, smem_shape, gmem_stride, smem_stride
+        )
+        if gmem_stride[0] != 1 or (smem_shape[0] * src.dtype.nbits // 8) % 16 != 0:
+            return None
+        # check alignment
+        for ds, dg in zip(smem_stride[1:], gmem_stride[1:]):
+            smem_bytes = ds * src.dtype.nbits // 8
+            gmem_bytes = dg * src.dtype.nbits // 8
+            if (ds != 1 and smem_bytes % 16 != 0) or (dg != 1 and gmem_bytes % 16 != 0):
+                return None
+        # Step 3. Split the dimension if the number of elements in the dimension is larger than 256
+        gmem_shape, gmem_stride, smem_shape, smem_stride, split_dims = split_shapes(
+            gmem_shape, smem_shape, gmem_stride, smem_stride, MAX_ELEMENTS_PER_DIM
+        )
+        gmem_layout = TensorLayout(tuple(gmem_shape), tuple(gmem_stride))
+        smem_layout = TensorLayout(tuple(smem_shape), tuple(smem_stride))
+        box_shape = smem_shape
+        # check if smem layout is contiguous
+        smem_layout_ = coalesce(smem_layout)
+        if is_tuple(smem_layout_.stride):
+            if len(smem_layout_.stride) != 1:
+                return None
+            smem_stride = smem_layout_.stride[0]
+        else:
+            smem_stride = smem_layout_.stride
+        if smem_stride != 1:
+            return None
+        dim = rank(gmem_layout.shape)
+        # tma only supports tensor dimensions less than and equal to 5
+        if dim > 5:
+            return None
+
+        # coords_transform is a layout function that converts the global coordinates to
+        # the coordinates used in the tma instruction.
+        # construct the coords_transform
+        def coords_transform(*coords, shp2crd, permute, dims, shape, split_dims):
+            coords = list(coords)
+            rst = []
+            for f, crd in zip(shp2crd, coords):
+                rst.extend(f(crd))
+            rst_ = [rst[i] for i in permute]
+            rst = rst_
+            rst_ = []
+            idx = 0
+            cur_dim_beg = 0
+            for cur_dims in dims:
+                crd = None
+                for _ in cur_dims:
+                    if crd is None:
+                        crd = rst[idx]
+                    else:
+                        stride = product(shape[cur_dim_beg + 1 : idx])
+                        crd = rst[idx] * stride + crd
+                    idx = idx + 1
+                cur_dim_beg = idx
+                rst_.append(crd)
+            rst = list(simplify(e) for e in rst_)
+            for i, split_shape_list in split_dims.items():
+                crds = idx2crd(rst[i], split_shape_list)
+                rst[i] = tuple(crds)
+            return flatten(tuple(rst))
+
+        tma_coords_transform = functools.partial(
+            coords_transform, shp2crd=f1, permute=permute, dims=dims, shape=smem_shape, split_dims=split_dims
+        )
+
+        def extends_transform(shapes, split_shape_funcs, permute, dims, shape, split_dims):
+            shapes = list(shapes)
+            rst = []
+            for f, s in zip(split_shape_funcs, shapes):
+                rst.extend(f(s))
+            rst_ = [rst[i] for i in permute]
+            rst = rst_
+            rst_ = []
+            cur_dim_beg = 0
+            for cur_dims in dims:
+                from hidet.utils.py import prod
+
+                s = prod(rst[cur_dim_beg : cur_dim_beg + len(cur_dims)])
+                cur_dim_beg = cur_dim_beg + len(cur_dims)
+                rst_.append(s)
+            rst = list(simplify(e) for e in rst_)
+            for i, shape_list in split_dims.items():
+                d = product(shape_list[:-1])
+                rst[i] = shape_list[:-1] + (rst[i] // d,)
+            return flatten(tuple(rst))
+
+        tma_extends_transform = functools.partial(
+            extends_transform, split_shape_funcs=f2, permute=permute, dims=dims, shape=smem_shape, split_dims=split_dims
+        )
+
+        tma_strides = flatten(gmem_layout.stride_tuple)
+        return dim, box_shape, tma_strides, swizzle, tma_extends_transform, tma_coords_transform
+
+    def __call__(self, smem: Expr, tensor_map: Expr, coords: List[Expr], mbarrier: Optional[Expr] = None):
+        coords_rank = len(coords)
+        if mbarrier is None:
+            return self.apply(coords_rank, smem, tensor_map, *coords)
+        else:
+            return self.apply(coords_rank, smem, tensor_map, mbarrier, *coords)
+
+
 atomic_instructions = []
 
 
@@ -521,6 +737,7 @@ def register_reduce_instruction():
 
 
 memory_instructions = []
+tma_instructions = []
 
 
 @initialize()
@@ -565,6 +782,9 @@ def register_universal_copy_instruction():
         shape = (1, store_bits)
         src_layout = TensorLayout(((1), (1, store_bits)), ((1), (1, 1)))
         memory_instructions.append(UniversalCopyInstruction(inst, shape, "register", "shared", src_layout))
+
+    tma_instructions.append(TmaCopyInstruction(copy_tensor_g2s, "global", "shared"))
+    tma_instructions.append(TmaCopyInstruction(copy_tensor_s2g, "shared", "global"))
     memory_instructions = sorted(memory_instructions, key=lambda x: -x.bytes_per_inst)
 
 
@@ -652,6 +872,13 @@ class MmaInstruction:
         b_thr_layout, b_val_layout = canonicalize_thread_value_layout(b_tv_layout)
         c_thr_layout, c_val_layout = canonicalize_thread_value_layout(c_tv_layout)
 
+        if a_val_layout.size() < a_val_layout_inst.size():
+            return None
+        if b_val_layout.size() < b_val_layout_inst.size():
+            return None
+        if c_val_layout.size() < c_val_layout_inst.size():
+            return None
+
         a_thr_inst, a_thr_rest = group(a_thr_layout, a_thr_layout_inst.size())
         a_val_inst, a_val_rest = group(a_val_layout, a_val_layout_inst.size())
         b_thr_inst, b_thr_rest = group(b_thr_layout, b_thr_layout_inst.size())
@@ -690,6 +917,8 @@ class MmaInstruction:
             flat_stride = flatten(cvt.stride_tuple)
             flat_cvt = TensorLayout(flat_shape, flat_stride)
             m_mode, n_mode = group(flat_cvt, inst_m)
+            if m_mode is None or n_mode is None:
+                return None, None
             flat_shape = m_mode.shape_tuple + n_mode.shape_tuple
             flat_stride = m_mode.stride_tuple + n_mode.stride_tuple
             mode_m = list(filter_(lambda t: t[1] < m, zip(flat_shape, flat_stride)))
@@ -706,6 +935,9 @@ class MmaInstruction:
         m_mode, n_mode = split_mn(cvt_c, m, inst_m)
         m_mode_, k_mode = split_mn(cvt_a, m, inst_m)
         n_mode_, k_mode_ = split_mn(cvt_b, n, inst_n)
+
+        if any(v is None for v in [m_mode, n_mode, m_mode_, k_mode, n_mode_, k_mode_]):
+            return None
 
         # Step 3: check if the m_mode, n_mode, and k_mode are consistent
         # If not, the mma instruction should not be selected
@@ -1273,12 +1505,36 @@ def register_mma_instruction():
                 )
             )
 
+            shape = (64, n, 32)
+            # a in register
+            a = TensorLayout(((128,), (64, 32)), ((0,), (1, 64)))
+            b = TensorLayout(((128,), (n, 32)), ((0,), (1, n)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            mma_instructions.append(
+                WgmmaAsyncInstruction(
+                    wgmma_configs[f"m64n{n}k32_f32_f8e4m3_f8e4m3"],
+                    False,
+                    wgmma_async,
+                    shape,
+                    a,
+                    b,
+                    c,
+                    c,
+                    "f8e4m3",
+                    "f8e4m3",
+                    "f32",
+                    a_scope="shared",
+                    trans_a=False,
+                    trans_b=trans_b,
+                )
+            )
+
         for trans_a in [True, False]:
             shape = (n, 64, 16)
             # b in register
             a = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
             b = TensorLayout(((4, 8, 4), (2, 2, 2)), ((128, 1, 16), (64, 8, 512)))
-            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((2, n, 16 * n), (1, 8 * n, 8)))
             mma_instructions.append(
                 WgmmaAsyncInstruction(
                     wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
@@ -1323,7 +1579,7 @@ def register_mma_instruction():
             # b in shared
             a = TensorLayout(((128,), (n, 16)), ((0,), (1, n)))
             b = TensorLayout(((128,), (64, 16)), ((0,), (1, 64)))
-            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((128, 1, 16), (64, 8, 512)))
+            c = TensorLayout(((4, 8, 4), (2, 2, n // 8)), ((2, n, 16 * n), (1, 8 * n, 8)))
             mma_instructions.append(
                 WgmmaAsyncInstruction(
                     wgmma_configs[f"m64n{n}k16_f16_f16_f16"],
@@ -1386,7 +1642,7 @@ class MmaInstructionSelection(IRRewriter):
                     a = op.a
                     assert a in self.var2tensor
                     a_tensor_info = self.var2tensor[a]
-                elif inst.b_scope.is_shared():
+                if inst.b_scope.is_shared():
                     b = op.b
                     assert b in self.var2tensor
                     b_tensor_info = self.var2tensor[b]
@@ -1396,7 +1652,7 @@ class MmaInstructionSelection(IRRewriter):
                 layout_type_a, layout_type_b = result
                 if a_tensor_info is not None and layout_type_a is not None:
                     self.tensor2layout[a_tensor_info.tensor] = layout_type_a
-                elif b_tensor_info is not None and layout_type_b is not None:
+                if b_tensor_info is not None and layout_type_b is not None:
                     self.tensor2layout[b_tensor_info.tensor] = layout_type_b
                 return inst, d_rest, a_rest, b_rest, c_rest
             else:
@@ -1451,10 +1707,192 @@ class AnnotateLayoutRewritter(IRRewriter):
         return super().visit_PartitionB(e)
 
 
-class CopyInstructionSelection(IRRewriter):
+class TmaCopyInstructionSelection(IRRewriter):
     def __init__(self):
         super().__init__()
         self.infer_type = TypeInfer()
+        self.var2tensor: Dict[Var, TensorBase] = {}
+        self.tensor2tma_tensors: Dict[TensorBase, List[TmaTensor]] = {}
+        self.expr2param_idx: Dict[Expr, int] = {}
+        self.var2expr: Dict[Var, Expr] = {}
+        self.func_params: List[Var] = []
+
+    def visit_Cast(self, e: Cast):
+        new_expr = super().visit_Cast(e)
+        if e.expr in self.expr2param_idx:
+            expr_ty = self.infer_type(e.expr)
+            if expr_ty in [PointerType, TensorType, TensorPointerType]:
+                idx = self.expr2param_idx[e.expr]
+                self.expr2param_idx[e] = idx
+        return new_expr
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        new_stmt = super().visit_DeclareStmt(stmt)
+        if stmt.init in self.expr2param_idx:
+            idx = self.expr2param_idx[stmt.init]
+            self.expr2param_idx[stmt.var] = idx
+            self.var2expr[stmt.var] = rewrite(stmt.init, self.var2expr)
+        return new_stmt
+
+    def visit_TensorElement(self, e: TensorElement):
+        new_expr = super().visit_TensorElement(e)
+        if e.base in self.expr2param_idx:
+            idx = self.expr2param_idx[e.base]
+            self.expr2param_idx[e] = idx
+        return new_expr
+
+    def visit_Address(self, e: Address):
+        new_expr = super().visit_Address(e)
+        if e.expr in self.expr2param_idx:
+            idx = self.expr2param_idx[e.expr]
+            self.expr2param_idx[e] = idx
+        return new_expr
+
+    def visit_Add(self, e: Add):
+        new_expr = super().visit_Add(e)
+        idx = None
+        if e.a in self.expr2param_idx:
+            idx = self.expr2param_idx[e.a]
+        if e.b in self.expr2param_idx:
+            idx_ = self.expr2param_idx[e.b]
+            #            assert idx is None or idx == idx_
+            idx = idx_
+        if idx is not None:
+            self.expr2param_idx[e] = idx
+        return new_expr
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        new_expr = super().visit_TensorSlice(e)
+        if e.base in self.expr2param_idx:
+            idx = self.expr2param_idx[e.base]
+            self.expr2param_idx[e] = idx
+        return new_expr
+
+    def _select_tma_for_copy(self, e: Copy):
+        # can be tma tensors
+        src = e.src
+        dst = e.dst
+        src_ty = self.infer_type(src)
+        dst_ty = self.infer_type(dst)
+
+        # get global tensor and layout from src and dst
+        global_tensor = None
+        if src_ty.scope.is_global():
+            global_tensor = src
+            if not dst_ty.scope.is_shared():
+                return None
+        elif dst_ty.scope.is_global():
+            global_tensor = dst
+            if not src_ty.scope.is_shared():
+                return None
+        # no global tensor involved, cannot use tma
+        if global_tensor is None:
+            return None
+        tensor_info = self.var2tensor[global_tensor]
+        tensor = tensor_info.tensor
+        assert isinstance(tensor, TensorView)
+        global_layout = tensor.layout
+        tile_shape = e.tiled_copy.shape
+
+        src, dst = [expr_to_buffer(arg) for arg in [src, dst]]
+
+        # check if the tensor is a tile of a global tensor
+        last_dim_strides = get_last_dim_strides(tile_shape, global_layout)
+        if last_dim_strides is None:
+            return None
+
+        # canonicalize the layout of src and dst
+        smem_last_dim_strides = [None] * len(tile_shape)
+        if src.scope.is_global():
+            gmem_layout = coalesce_per_dim(src.layout, tile_shape, last_dim_strides)
+            smem_layout = coalesce_per_dim(dst.layout, tile_shape, smem_last_dim_strides)
+            src.layout = gmem_layout
+            dst.layout = smem_layout
+        else:
+            gmem_layout = coalesce_per_dim(dst.layout, tile_shape, last_dim_strides)
+            smem_layout = coalesce_per_dim(src.layout, tile_shape, smem_last_dim_strides)
+            dst.layout = gmem_layout
+            src.layout = smem_layout
+
+        # tma match
+        candidate = None
+        for inst in tma_instructions:
+            result = inst.match(src, dst, e.tiled_copy)
+            if result is not None:
+                candidate = (inst, *result)
+                break
+        if candidate is None:
+            return None
+        return candidate, tensor, global_layout
+
+    def visit_Copy(self, e: Copy):
+        rst = self._select_tma_for_copy(e)
+        if rst is not None:
+            args = [self.visit(arg) for arg in e.args]
+            candidate, tensor, global_layout = rst
+            base_ptr = rewrite(tensor.x, self.var2expr)
+            assert base_ptr in self.expr2param_idx
+            param_idx = self.expr2param_idx[base_ptr]
+            param = self.func_params[param_idx]
+            # unpack result
+            inst, dim, box_shape, tma_strides, swizzle, tma_extends_transform, tma_coords_transform = candidate
+            extents = product_each(global_layout.shape_tuple)
+            tma_extents = tma_extends_transform(*extents)
+
+            # determine dimensions
+            def tma_pointer_functor(arg: Expr, base_ptr: Expr = base_ptr, param: Var = param):
+                remap = {param: arg}
+                return rewrite(base_ptr, remap)
+
+            pointer_functor = functools.partial(tma_pointer_functor, base_ptr=base_ptr, param=param)
+
+            tma = tma_tensor(
+                param_idx, dim, box_shape, tma_strides, tma_extents, pointer_functor=pointer_functor, swizzle=swizzle
+            )
+            if tensor in self.tensor2tma_tensors:
+                tma_tensor_idx = None
+                for i, t in enumerate(self.tensor2tma_tensors[tensor]):
+                    if t == tma:
+                        tma_tensor_idx = i
+                        break
+                if tma_tensor_idx is None:
+                    tma_tensor_idx = len(self.tensor2tma_tensors[tensor])
+                    self.tensor2tma_tensors[tensor].append(tma)
+            else:
+                tma_tensor_idx = 0
+                self.tensor2tma_tensors[tensor] = [tma]
+            annotations = {}
+            annotations["inst"] = inst
+            annotations["tma_tensor_idx"] = tma_tensor_idx
+            annotations["tma_coords_transform"] = tma_coords_transform
+            return e.reforward(args, annotations_update=annotations)
+        return super().visit_Copy(e)
+
+    def visit_Function(self, func: Function):
+        tensor_alias_analysis = TensorAliasAnalysis()
+        tensor_alias_analysis.visit(func)
+        self.var2tensor.update(tensor_alias_analysis.var2tensor)
+
+        for i, param in enumerate(func.params):
+            self.expr2param_idx[param] = i
+        self.func_params = func.params
+        return super().visit_Function(func)
+
+
+class CopyInstructionSelection(IRRewriter):
+    def __init__(self, tensor2tma_tensors: Dict[TensorBase, List[TmaTensor]]):
+        super().__init__()
+        self.infer_type = TypeInfer()
+        self.tensor2tma_tensors: Dict[TensorBase, List[TmaTensor]] = tensor2tma_tensors
+
+    def visit_TensorView(self, e: TensorView):
+        if e in self.tensor2tma_tensors:
+            x = self.visit(e.x)
+            tma_tensors = self.tensor2tma_tensors[e]
+            annotations = {}
+            annotations["tma_tensors"] = tma_tensors
+            return e.reforward([x], annotations_update=annotations)
+        return super().visit_TensorView(e)
 
     def visit_Atomic(self, e: Atomic):
         if isinstance(e, AtomicAdd):
@@ -1505,6 +1943,9 @@ class CopyInstructionSelection(IRRewriter):
         return e.reforward(args, annotations_update=annotations)
 
     def visit_Copy(self, e: Copy):
+        if e.annotations is not None and "tma_coords_transform" in e.annotations:
+            return e
+
         args = [self.visit(arg) for arg in e.args]
 
         bufs = [expr_to_buffer(arg) for arg in args[:2]]
@@ -1589,14 +2030,20 @@ class MaskAnnotation(IRRewriter):
         src = self.visit(e.src)
         dst = self.visit(e.dst)
         if e.mask is not None:
-            assert e.mask in self.old2new
-            mask = self.old2new[e.mask]
+            if e.mask in self.old2new:
+                mask = self.old2new[e.mask]
+            else:
+                mask = self.visit(e.mask)
         else:
             mask = None
-        if src is e.src and dst is e.dst and mask is e.mask:
+        if e.mbarrier is not None:
+            mbarrier = self.visit(e.mbarrier)
+        else:
+            mbarrier = None
+        if src is e.src and dst is e.dst and mask is e.mask and mbarrier is e.mbarrier:
             return e
         else:
-            return e.reforward([src, dst, mask])
+            return e.reforward([src, dst, mask, mbarrier])
 
     def visit_Atomic(self, e: Atomic):
         src = self.visit(e.src)
@@ -1706,8 +2153,10 @@ class InstructionSelectionPass(FunctionPass):
 
     def process_func(self, func: Function) -> Function:
         origin_level = logger.level
+        origin_handler_level = stderr_handler.level
         if DEBUG_VERBOSE:
             logger.setLevel(DEBUG)
+            setConsoleLevel(DEBUG)
 
         # Step 1: Perform tensor alias analysis
         tensor_alias_analysis = TensorAliasAnalysis()
@@ -1728,11 +2177,16 @@ class InstructionSelectionPass(FunctionPass):
         rewriter = ApplySharedMemoryLayoutUpdate(_tensor2layout, {})
         func = rewriter(func)
 
-        # Step 5: Perform instruction selection for copy operations
-        copy_inst_selection = CopyInstructionSelection()
+        # Step 5: Perform tma instruction selection for copy operations
+        tma_inst_selection = TmaCopyInstructionSelection()
+        func = tma_inst_selection(func)
+        tensor2tma_tensors = tma_inst_selection.tensor2tma_tensors
+
+        # Step 6: Perform instruction selection for copy operations
+        copy_inst_selection = CopyInstructionSelection(tensor2tma_tensors)
         func = copy_inst_selection(func)
 
-        # Step 6: Annotate the mask for each copy operation
+        # Step 7: Annotate the mask for each copy operation
         marker = MaskUsageMarker()
         mask2user = marker.mark(func)
         mask_annotation = MaskAnnotation(mask2user)
@@ -1740,6 +2194,7 @@ class InstructionSelectionPass(FunctionPass):
 
         if DEBUG_VERBOSE:
             logger.setLevel(origin_level)
+            setConsoleLevel(origin_handler_level)
         return func
 
 

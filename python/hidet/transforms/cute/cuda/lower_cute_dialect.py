@@ -12,21 +12,36 @@
 from typing import List, Dict, Union, Optional, Tuple, Type
 
 from hidet.ir.tools import TypeInfer
-from hidet.ir.functors import IRRewriter
+from hidet.ir.functors import IRRewriter, IRVisitor
 from hidet.ir.cute import filter
 from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout
 from hidet.ir.cute.expr import Op, CallOp
 from hidet.ir.cute.type import TiledTensorType
 
 from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.expr import Var, Expr, tensor_var
-from hidet.ir.type import BaseType, DataType
-from hidet.ir.stmt import Stmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt, LetStmt, DeclareScope
-from hidet.transforms.base import FunctionPass
+from hidet.ir.type import BaseType, DataType, OpaqueType, tensor_type
+from hidet.ir.primitives.cuda.tensor_map import create_tensor_map
+from hidet.ir.dtypes import u64, u32, boolean
+from hidet.ir.stmt import (
+    IfStmt,
+    LaunchKernelStmt,
+    Stmt,
+    AssignStmt,
+    DeclareStmt,
+    EvaluateStmt,
+    SeqStmt,
+    LetStmt,
+    DeclareScope,
+    BufferStoreStmt,
+)
+from hidet.transforms.base import Pass
 from hidet.transforms.declare_to_let import DeclareToLetRewriter
-from hidet.ir.cute.ops import Tensor, TensorView, Partition, SubTensor, Broadcast, Transpose
+from hidet.ir.cute.ops import Tensor, TensorView, Partition, SubTensor, Broadcast, Transpose, MBarriers
 
-from .lower_ops import Buffer, emit_op
+from hidet.transforms.lower_integer_subbyte import is_pointer_type, get_pointer_base_type
+from .lower_ops import Buffer, emit_op, TmaTensor
 
 
 class LowerCuteDialectRewriter(IRRewriter):
@@ -65,6 +80,7 @@ class LowerCuteDialectRewriter(IRRewriter):
         self.type_infer = TypeInfer()
         self.var2buffer: Dict[Var, Buffer] = {}
         self.lower_ops = lower_ops
+        self.func_params: List[Var] = []
 
     def _if_lower(self, op: Op):
         """
@@ -105,7 +121,7 @@ class LowerCuteDialectRewriter(IRRewriter):
             size = filter(layout).size()
 
         if isinstance(op_or_type, Op):
-            if isinstance(op_or_type, (TensorView, Partition, SubTensor, Broadcast, Transpose)) or (
+            if isinstance(op_or_type, (MBarriers, TensorView, Partition, SubTensor, Broadcast, Transpose)) or (
                 isinstance(op_or_type, Tensor) and scope.is_shared()
             ):
                 # no need to allocate buffer
@@ -280,7 +296,6 @@ class LowerCuteDialectRewriter(IRRewriter):
         Returns:
             Union[Buffer, None]: The result of processing the CallOp.
         """
-
         if self._if_lower(call.op):
             args: List[Union[Expr, Buffer]] = []
             for arg in call.op.args:
@@ -302,6 +317,16 @@ class LowerCuteDialectRewriter(IRRewriter):
                 output: Optional[Buffer] = self.alloc_buffer(call.op.name, call.op)
             else:
                 raise NotImplementedError()
+
+            if isinstance(call.op, TensorView):
+                tensor = call.op
+                annotations = tensor.annotations
+                if "tma_tensors" in annotations:
+                    tma_tensors = annotations["tma_tensors"]
+                    for _ in tma_tensors:
+                        tensor_map = Var("tensor_map", OpaqueType("CUtensorMap", "const", "__grid_constant__"))
+                        self.func_params.append(tensor_map)
+                        output.tensor_maps.append(tensor_map)
             self.append_stmt(emit_op(call.op, args=args, output=output))
             return output
         else:
@@ -335,15 +360,204 @@ class LowerCuteDialectRewriter(IRRewriter):
                     return SeqStmt(stmts)
         return super().visit_EvaluateStmt(stmt)
 
+    def visit_IfStmt(self, stmt: IfStmt):
+        cond_ty = self.type_infer(stmt.cond)
+        if isinstance(cond_ty, TiledTensorType):
+            assert isinstance(stmt.cond, Var)
+            cond_buffer = self.var2buffer[stmt.cond]
+            if isinstance(cond_buffer, Buffer):
+                then_body = self.visit(stmt.then_body)
+                else_body = self.visit(stmt.else_body) if stmt.else_body is not None else None
+                assert cond_buffer.dtype.is_boolean() or cond_buffer.dtype.is_integer()
+                assert cond_buffer.layout.size() == 1
+                new_cond = boolean(cond_buffer.buffer[0])
+                return IfStmt(new_cond, then_body, else_body)
+        return super().visit_IfStmt(stmt)
 
-class LowerCuteDialectPass(FunctionPass):
+    def visit_Function(self, func: Function):
+        self.func_params = func.params
+        body = self.visit(func.body)
+        return Function(func.name, self.func_params, body, func.ret_type, func.kind, func.attrs)
+
+
+class CollectTmaTensors(IRVisitor):
+    def __init__(self):
+        super().__init__()
+        self.tma_tensors = []
+
+    def visit_TensorView(self, e: TensorView):
+        annotations = e.annotations
+        if "tma_tensors" in annotations:
+            tma_tensors = annotations["tma_tensors"]
+            self.tma_tensors.extend(tma_tensors)
+
+    def collect(self, func: Function):
+        self.visit(func)
+
+        return self.tma_tensors
+
+
+class TmaTensorExtractor(IRVisitor):
+    def __init__(self, func_name2tma_tensors: Dict[str, List[TmaTensor]]):
+        super().__init__()
+        self.func_name2tma_tensors = func_name2tma_tensors
+        self.tma_tensors: List[TmaTensor] = []
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        func_name = stmt.func_var.name
+        if func_name in self.func_name2tma_tensors:
+            tma_tensors = self.func_name2tma_tensors[func_name]
+            for tma_tensor in tma_tensors:
+                tma_tensor.set_base_pointer(stmt.args[tma_tensor.param_idx])
+            self.tma_tensors.extend(tma_tensors)
+
+    def extract(self, func: Function):
+        self.visit(func)
+        return self.tma_tensors
+
+
+class TmaTensorRewriter(IRRewriter):
+    def __init__(self, tma_tensors: List[TmaTensor], func_name2tma_tensors: Dict[str, List[TmaTensor]]):
+        super().__init__()
+        self.infer_type = TypeInfer()
+        self.tma_tensors = tma_tensors
+        self.func_name2tma_tensors = func_name2tma_tensors
+        self.stmts: List[Stmt] = []
+        self.tma_tensor2tensor_map: Dict[TmaTensor, Var] = {}
+
+    def declare_var(self, v: Var = None, hint: str = None, e: Expr = None):
+        if v is not None:
+            if e is not None:
+                self.stmts.append(DeclareStmt(v, e))
+            else:
+                self.stmts.append(DeclareStmt(v))
+            return v
+        else:
+            v_ty = self.infer_type(e)
+            v = Var(hint, v_ty)
+            self.stmts.append(DeclareStmt(v, e))
+            return v
+
+    def assign(self, lhs: Var, rhs: Expr):
+        self.stmts.append(AssignStmt(lhs, rhs))
+
+    def buffer_store(self, buf: Var, indices: List[Expr], value: Expr):
+        self.stmts.append(BufferStoreStmt(buf, indices, value))
+
+    def append_stmt(self, stmt: Union[Stmt, Expr]):
+        if isinstance(stmt, Expr):
+            stmt = EvaluateStmt(stmt)
+        self.stmts.append(stmt)
+
+    def flush_stmts(self):
+        stmts = self.stmts
+        self.stmts = []
+        return stmts
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        func_name = stmt.func_var.name
+        if func_name in self.func_name2tma_tensors:
+            func_var = self.visit(stmt.func_var)
+            tma_tensors = self.func_name2tma_tensors[func_name]
+            args = [self.visit(arg) for arg in stmt.args]
+            args += [self.tma_tensor2tensor_map[tma_tensor] for tma_tensor in tma_tensors]
+            grid_dim = self.visit(stmt.grid_dim)
+            cluster_dim = self.visit(stmt.cluster_dim)
+            block_dim = self.visit(stmt.block_dim)
+            shared_mem_bytes = self.visit(stmt.shared_mem_bytes)
+            target = self.visit(stmt.target)
+            return LaunchKernelStmt(func_var, args, grid_dim, cluster_dim, block_dim, shared_mem_bytes, target)
+        return super().visit_LaunchKernelStmt(stmt)
+
+    def visit_Function(self, func: Function):
+        tensor_map_ty = OpaqueType("CUtensorMap")
+        for tma_tensor in self.tma_tensors:
+            rank = tma_tensor.dim
+            swizzle = tma_tensor.swizzle
+            base_pointer = tma_tensor.get_base_pointer()
+            base_pointer_ty = self.infer_type(base_pointer)
+            assert is_pointer_type(base_pointer_ty)
+            data_type = get_pointer_base_type(base_pointer_ty)
+            if data_type.is_integer_subbyte():
+                divisor = data_type.storage.nbits // data_type.nbits
+                data_type = data_type.storage
+            else:
+                divisor = 1
+            tensor_map = self.declare_var(Var("tensor_map", tensor_map_ty))
+            size = self.declare_var(Var("size", tensor_type(u64, [rank])))
+            for i in range(rank):
+                extent = tma_tensor.extents[i]
+                extent = extent // divisor if i == 0 else extent
+                self.buffer_store(size, [i], extent)
+            stride = self.declare_var(Var("stride", tensor_type(u64, [rank - 1])))
+            for i in range(rank - 1):
+                self.buffer_store(stride, [i], (tma_tensor.strides[i + 1] // divisor) * data_type.nbytes)
+            box_size = self.declare_var(Var("box_size", tensor_type(u32, [rank])))
+            for i in range(rank):
+                box_shape = tma_tensor.box_shape[i]
+                box_shape = box_shape // divisor if i == 0 else box_shape
+                self.buffer_store(box_size, [i], box_shape)
+            elem_stride = self.declare_var(Var("elem_stride", tensor_type(u32, [rank])))
+            for i in range(rank):
+                self.buffer_store(elem_stride, [i], u32(1))
+            self.append_stmt(
+                create_tensor_map(
+                    ~tensor_map,
+                    data_type.name,
+                    rank,
+                    base_pointer,
+                    size,
+                    stride,
+                    box_size,
+                    elem_stride,
+                    swizzle=swizzle,
+                )
+            )
+            self.tma_tensor2tensor_map[tma_tensor] = tensor_map
+        stmts = self.flush_stmts()
+        body = self.visit(func.body)
+        if isinstance(body, SeqStmt):
+            body = stmts + list(body.seq)
+        else:
+            body = stmts + [body]
+        if len(body) == 1:
+            body = body[0]
+        else:
+            body = SeqStmt(body)
+
+        return Function(func.name, func.params, body, func.ret_type, func.kind, func.attrs)
+
+
+class LowerCuteDialectPass(Pass):
     def __init__(self, lower_ops: Tuple[Type[Op], ...] = None):
         super().__init__()
         self.lower_ops = lower_ops
 
-    def process_func(self, func: Function) -> Function:
-        return self.apply_transforms(func, [LowerCuteDialectRewriter(self.lower_ops), DeclareToLetRewriter()])
+    def process_module(self, ir_module: IRModule) -> IRModule:
+        # collect tma tensors
+        func_name2tma_tensors = {}
+        for name, func in ir_module.functions.items():
+            tma_tensors = CollectTmaTensors().collect(func)
+            if len(tma_tensors) > 0:
+                func_name2tma_tensors[name] = tma_tensors
+
+        new_funcs = {}
+        for name, func in ir_module.functions.items():
+            if name.startswith("launch") and func.kind == "public":
+                tma_tensors = TmaTensorExtractor(func_name2tma_tensors).extract(func)
+                rewriter = TmaTensorRewriter(tma_tensors, func_name2tma_tensors)
+                func = rewriter(func)
+                new_funcs[name] = func
+
+        for name, func in ir_module.functions.items():
+            func = new_funcs.get(name, func)
+            lower_cute_rewriter = LowerCuteDialectRewriter(self.lower_ops)
+            func = lower_cute_rewriter(func)
+            declare_to_let = DeclareToLetRewriter()
+            func = declare_to_let(func)
+            new_funcs[name] = func
+        return ir_module.copy().reset_funcs(new_funcs, ir_module.global_vars)
 
 
-def lower_cute_dialect_pass(lower_ops: Tuple[Type[Op], ...] = None) -> FunctionPass:
+def lower_cute_dialect_pass(lower_ops: Tuple[Type[Op], ...] = None) -> Pass:
     return LowerCuteDialectPass(lower_ops)

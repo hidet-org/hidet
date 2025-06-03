@@ -220,9 +220,8 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_TensorView(self, e: TensorView):
         self.visit(e.args)
         self.visit_Layout(e.layout)
-        # TODO: commit this in the next PR
-        # self.visit(e.tile_shape)
-        # self.visit(e.tile_coords)
+        self.visit(e.tile_shape)
+        self.visit(e.tile_coords)
 
     def visit_PartitionSrc(self, e: PartitionSrc):
         self.visit(e.args)
@@ -340,19 +339,19 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
     def visit_TensorView(self, e: TensorView):
         x = self.visit(e.x)
         layout = self.visit_Layout(e.layout)
-        # TODO: commit this in the next PR
-        # tile_shape = self.visit(e.tile_shape)
-        # tile_coords = self.visit(e.tile_coords)
+        tile_shape = self.visit(e.tile_shape)
+        tile_coords = self.visit(e.tile_coords)
         if (
             x is e.x
             and layout is e.layout
-            # and all(x is y for x, y in zip(tile_shape, e.tile_shape))
-            # and all(x is y for x, y in zip(tile_coords, e.tile_coords))
+            and all(x is y for x, y in zip(tile_shape, e.tile_shape))
+            and all(x is y for x, y in zip(tile_coords, e.tile_coords))
         ):
             return e
         else:
-            # TODO: commit this in the next PR
-            return e.reforward([x], attrs_update={"layout": layout})
+            return e.reforward(
+                [x], attrs_update={"layout": layout, "tile_shape": tile_shape, "tile_coords": tile_coords}
+            )
 
     def visit_PartitionSrc(self, e: PartitionSrc):
         x = self.visit(e.x)

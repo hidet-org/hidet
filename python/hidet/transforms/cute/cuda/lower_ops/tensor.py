@@ -58,10 +58,22 @@ class TensorViewEmitter(OpEmitter):
             tensor_size = None
         if isinstance(op.layout, TiledTensorLayout):
             assert tensor_size is None or tensor_size == op.layout.val_count()
+            offset = 0
         else:
             assert isinstance(op.layout, (TensorLayout, ComposedTensorLayout))
             assert tensor_size is None or tensor_size == op.layout.size()
+            if isinstance(op.layout, ComposedTensorLayout):
+                apply_layout = op.layout.layout
+            else:
+                apply_layout = op.layout
+            offset = apply_layout(tuple(op.tile_coords))
         if isinstance(src_ty, (TensorType, TensorPointerType)):
             output.buffer = self.auto_var(hint=op.name, e=~src[indices])
+            output.offset = offset
         else:
             output.buffer = self.auto_var(hint=op.name, e=src)
+            output.offset = offset
+
+        if output.is_tma_buffer():
+            assert op.tile_coords is not None and len(op.tile_coords) > 0
+            output.coords = op.tile_coords

@@ -9,22 +9,109 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, Type, List, Union, Tuple, Optional, cast
+from typing import Dict, Type, List, Union, Tuple, Optional, cast, Callable
 import inspect
-from hidet.ir.expr import Expr, Var, var
+from hidet.ir.expr import Expr, Var, var, is_constant
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.type import DataType
 from hidet.ir.dtypes import i32
 from hidet.ir.stmt import Stmt, ForMappingStmt
 
 from hidet.ir.cute.expr import Op
-from hidet.ir.cute.int_tuple import is_integer
+from hidet.ir.cute.int_tuple import is_integer, Int
 from hidet.ir.cute.layout import TiledTensorLayout, ComposedTensorLayout, TensorLayout
 
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.builders.stmt_builder import StmtScope
 from hidet.ir.mapping import repeat_map
 from hidet.ir.tools import infer_type
+
+
+class TmaTensor:
+    def __init__(
+        self,
+        param_idx: int,
+        dim: int,
+        box_shape: Tuple[int, ...],
+        strides: Tuple[Int, ...],
+        extents: Tuple[Int, ...],
+        pointer_functor: Callable[[Expr], Expr] = None,
+        swizzle: Optional[str] = None,
+    ):
+        self.param_idx = param_idx
+        self.dim = dim
+        self.box_shape = box_shape
+        self.strides = strides
+        self.extents = extents
+        self.pointer_functor = pointer_functor
+        self.base_pointer = None
+        if swizzle is None:
+            swizzle = 'NONE'
+        self.swizzle = swizzle
+
+    def __str__(self):
+        return (
+            f"tma_tensor(param_idx={self.param_idx}, dim={self.dim}, box_shape={self.box_shape}, "
+            f"strides={self.strides}, extents={self.extents}, swizzle={self.swizzle})"
+        )
+
+    def __repr__(self):
+        return str(self)
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def set_base_pointer(self, base_pointer: Expr):
+        self.base_pointer = base_pointer
+
+    def get_base_pointer(self):
+        if self.pointer_functor is None:
+            return self.base_pointer
+        return self.pointer_functor(self.base_pointer)
+
+    def __eq__(self, other):
+        if not isinstance(other, TmaTensor):
+            return False
+        if self.param_idx != other.param_idx:
+            return False
+        if self.dim != other.dim:
+            return False
+        if self.swizzle != other.swizzle:
+            return False
+        if len(self.box_shape) != len(other.box_shape):
+            return False
+        if len(self.strides) != len(other.strides):
+            return False
+        if len(self.extents) != len(other.extents):
+            return False
+
+        def expr_eq(e1, e2):
+            if is_constant(e1) and is_constant(e2):
+                return e1 == e2
+            elif isinstance(e1, Expr) and isinstance(e2, Expr):
+                e1_str = str(e1)
+                e2_str = str(e2)
+                return e1_str == e2_str
+            else:
+                return False
+
+        return (
+            all(expr_eq(s1, s2) for s1, s2 in zip(self.box_shape, other.box_shape))
+            and all(expr_eq(s1, s2) for s1, s2 in zip(self.strides, other.strides))
+            and all(expr_eq(e1, e2) for e1, e2 in zip(self.extents, other.extents))
+        )
+
+
+def tma_tensor(
+    param_idx: int,
+    dim: int,
+    box_shape: Tuple[int, ...],
+    strides: Tuple[Int, ...],
+    extents: Tuple[Int, ...],
+    pointer_functor: Callable[[Expr], Expr] = None,
+    swizzle: Optional[str] = None,
+) -> TmaTensor:
+    return TmaTensor(param_idx, dim, box_shape, strides, extents, pointer_functor=pointer_functor, swizzle=swizzle)
 
 
 class Buffer:
@@ -45,6 +132,12 @@ class Buffer:
         self.dtype: DataType = dtype
         self.layout: Union[TiledTensorLayout, ComposedTensorLayout, TensorLayout] = layout
         self.scope = scope
+        # TMA specific
+        self.tensor_maps: List[Var] = []
+        self.coords: List[Expr] = []
+
+    def is_tma_buffer(self):
+        return len(self.tensor_maps) > 0
 
 
 class OpEmitter(StmtBuilder):

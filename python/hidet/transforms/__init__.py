@@ -56,6 +56,7 @@ from .cute.cuda.instantiate_auto_annotation import instantiate_auto_annotation_p
 from .cute.cuda.resolve_bank_conflict import resolve_bank_conflict_pass
 from .cute.cuda.vectorize_elementwise import vectorize_elementwise_pass
 from .cute.cuda.shared_memory_allocation import shared_memory_allocation_pass
+from .cute.cuda.annotate_mbarrier import annotate_mbarrier_pass
 
 
 def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
@@ -73,6 +74,7 @@ def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
 def lower(ir_module: IRModule) -> IRModule:
 
     cute_generic_transforms = [
+        inline_function_pass(),
         canonicalize_arithmetic_expression_pass(),
         canonicalize_pass(),
         deadcode_elimination_pass(),
@@ -87,7 +89,11 @@ def lower(ir_module: IRModule) -> IRModule:
         instruction_selection_pass(),
         resolve_bank_conflict_pass(),
         instruction_selection_pass(),
+        annotate_mbarrier_pass(),
+        # TODO: commit this in the next PR
+        # tma_fallback_copy_pass(),
         shared_memory_allocation_pass(),
+        generate_launch_func_pass(),
         lower_cute_dialect_pass(),
     ]
 

@@ -19,12 +19,19 @@ from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
 from hidet.ir.expr import Var, var
 from hidet.ir.stmt import DeclareStmt
-from hidet.ir.cute import LayoutBase, TensorLayout, ComposedTensorLayout, composition, canonicalize_thread_value_layout
+from hidet.ir.cute import (
+    Swizzle,
+    LayoutBase,
+    TensorLayout,
+    ComposedTensorLayout,
+    composition,
+    canonicalize_thread_value_layout,
+    group,
+    make_swizzle,
+)
 from hidet.ir.cute.ops import Copy, TensorBase, Tensor, TensorView, Mma
 from hidet.ir.cute.expr import CConst
 from hidet.transforms.cute.analysis import TensorAliasAnalysis
-
-from .instruction_selection import group
 
 
 class ResolveBankConflict(TensorAliasAnalysis):
@@ -177,7 +184,6 @@ class ResolveBankConflict(TensorAliasAnalysis):
         verbose = False
 
         from hidet.logging import logger, setConsoleLevel, DEBUG
-        from hidet.ir.cute import make_swizzle
 
         origin_level = logger.level
         need_annotate = tensor in self.immutable_tensors
@@ -191,6 +197,7 @@ class ResolveBankConflict(TensorAliasAnalysis):
         # src_tv_layout() or dst_tv_layout() repeatedly. These functions are
         # very time-consuming.
         tcache = []
+        swizzle_candidates = []
         for copy in copys:
             annotations = copy.annotations
             bytes_per_phase = NR_BANKS * BYTES_PER_BANK
@@ -221,17 +228,31 @@ class ResolveBankConflict(TensorAliasAnalysis):
             if need_annotate:
                 self.copy2conflicts[copy] = bank_conflicts
             elif bank_conflicts > 1:
-                yshft_max = max(int(phase_layout.cosize()).bit_length(), yshft_max)
                 need_resolve = True
+                from .instruction_selection import TmaCopyInstruction
+
+                # For TMA instructions, all four swizzling modes below are valid and can resolve
+                # shared memory bank conflicts during the TMA copy itself.
+                #
+                # However, each swizzling function interacts differently with other copy operations
+                # that use the same shared memory tensor. While all four options avoid bank conflicts
+                # for the TMA transfer, they may introduce or reduce conflicts in other accesses.
+                #
+                # Therefore, we must evaluate all four swizzling configurations and select the one
+                # that minimizes bank conflicts across all shared memory accesses—not just the TMA copy.
+                if isinstance(inst, TmaCopyInstruction):
+                    if len(swizzle_candidates) == 0:
+                        logbits = (src_ty.dtype.nbits - 1).bit_length()
+                        swizzle_candidates = [
+                            Swizzle(0, 7 - logbits, 3),
+                            Swizzle(1, 7 - logbits, 3),
+                            Swizzle(2, 7 - logbits, 3),
+                            Swizzle(3, 7 - logbits, 3),
+                        ]
+                yshft_max = max(int(phase_layout.cosize()).bit_length(), yshft_max)
                 bits_max = max(int(phase_layout.cosize()).bit_length(), bits_max)
 
-        import sys
-
-        if need_resolve:
-            min_conflicts = sys.maxsize
-            best_swizzle = None
-            num_copys = len(copys)
-            found = False
+        if len(swizzle_candidates) == 0:
             for bits in range(1, bits_max):
                 bits_mask = (1 << bits) - 1
                 for zshft in range(zshft_min - 1, bits_max - bits):
@@ -239,37 +260,41 @@ class ResolveBankConflict(TensorAliasAnalysis):
                     for yshft in range(bits + zshft, yshft_max):
                         y = bits_mask << yshft
                         swizzle = make_swizzle(y, z)
-                        current_conflicts = 0
-                        for copy, t in zip(copys, tcache):
-                            annotations = copy.annotations
-                            bytes_per_phase = NR_BANKS * BYTES_PER_BANK
-                            assert "inst" in annotations
-                            inst = annotations["inst"]
-                            bytes_per_inst = inst.alignment
-                            threads_per_phase = bytes_per_phase // bytes_per_inst
-                            src_ty = self.infer_type(copy.src)
-                            dst_ty = self.infer_type(copy.dst)
-                            if src_ty.scope.is_shared():
-                                elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // src_ty.dtype.nbits
-                            else:
-                                assert dst_ty.scope.is_shared()
-                                elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // dst_ty.dtype.nbits
-                            memory_layout = self.copy2layout[copy]
-                            phase_layout, _ = group(composition(memory_layout, t), threads_per_phase)
-                            banks = bytes_per_phase // bytes_per_inst
-                            composed_layout = ComposedTensorLayout(phase_layout, 0, swizzle)
-                            bank_conflicts = self._bank_conflicts(composed_layout, elements_per_inst, banks)
-                            current_conflicts += bank_conflicts
-                        if current_conflicts <= min_conflicts:
-                            min_conflicts = current_conflicts
-                            best_swizzle = swizzle
-                            found = min_conflicts == num_copys
-                            if found:
-                                break
-                    if found:
+                        swizzle_candidates.append(swizzle)
+
+        import sys
+
+        if need_resolve:
+            min_conflicts = sys.maxsize
+            best_swizzle = None
+            num_copys = len(copys)
+            for swizzle in swizzle_candidates:
+                current_conflicts = 0
+                for copy, t in zip(copys, tcache):
+                    annotations = copy.annotations
+                    bytes_per_phase = NR_BANKS * BYTES_PER_BANK
+                    assert "inst" in annotations
+                    inst = annotations["inst"]
+                    bytes_per_inst = inst.alignment
+                    threads_per_phase = bytes_per_phase // bytes_per_inst
+                    src_ty = self.infer_type(copy.src)
+                    dst_ty = self.infer_type(copy.dst)
+                    if src_ty.scope.is_shared():
+                        elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // src_ty.dtype.nbits
+                    else:
+                        assert dst_ty.scope.is_shared()
+                        elements_per_inst = (bytes_per_inst * BITS_PER_BYTE) // dst_ty.dtype.nbits
+                    memory_layout = self.copy2layout[copy]
+                    phase_layout, _ = group(composition(memory_layout, t), threads_per_phase)
+                    banks = bytes_per_phase // bytes_per_inst
+                    composed_layout = ComposedTensorLayout(phase_layout, 0, swizzle)
+                    bank_conflicts = self._bank_conflicts(composed_layout, elements_per_inst, banks)
+                    current_conflicts += bank_conflicts
+                if current_conflicts <= min_conflicts:
+                    min_conflicts = current_conflicts
+                    best_swizzle = swizzle
+                    if min_conflicts == num_copys:
                         break
-                if found:
-                    break
 
             swizzle = best_swizzle
             if verbose:

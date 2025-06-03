@@ -240,7 +240,8 @@ from hidet.ir.cute import (
     is_auto_layout,
     max_common_vector,
     flatten,
-    concat_tuple,
+    is_tuple,
+    rank,
 )
 from hidet.ir.cute.ops import (
     TensorBase,
@@ -261,12 +262,13 @@ from hidet.ir.cute.ops import (
     Broadcast,
     Transpose,
     Atomic,
+    MBarriers,
 )
 from hidet.ir.cute.algorithm import TiledCopy, TiledMma, is_auto_copy, is_auto_mma
 from hidet.ir.cute import coalesce, composition, left_inverse, make_layout, product_each
 from hidet.transforms.cute.analysis import TensorAliasAnalysis, TensorInfo
 
-from hidet.logging import logger, setConsoleLevel, DEBUG, WARNING
+from hidet.logging import logger, stderr_handler, setConsoleLevel, DEBUG
 from hidet.utils.py import gcd
 
 from .instruction_selection import (
@@ -275,6 +277,16 @@ from .instruction_selection import (
     MmaInstruction,
     get_mma_instructions,
     expr_to_buffer,
+)
+from .tma_layout_utils import (
+    get_last_dim_strides,
+    coalesce_per_dim,
+    common_reshape_per_dim,
+    coalesce_gmem_shape_and_smem_shape,
+    split_shapes,
+    sort_dims,
+    make_contiguous_stride,
+    construct_memory_constraint,
 )
 
 
@@ -308,7 +320,6 @@ class MarkUnresolved(IRVisitor):
             else:
                 self.op2vars[op] = [v]
 
-    # TODO
     def visit_AssignStmt(self, stmt: AssignStmt):
         v = stmt.var
         if isinstance(stmt.value, CallOp):
@@ -323,7 +334,10 @@ class MarkUnresolved(IRVisitor):
     def visit_Copy(self, e: Copy):
         self.visit(e.src)
         self.visit(e.dst)
-        self.visit(e.mask)
+        if e.mask is not None:
+            self.visit(e.mask)
+        if e.mbarrier is not None:
+            self.visit(e.mbarrier)
         if is_auto_copy(e.tiled_copy):
             self.ops_unresolved.append(e)
         else:
@@ -365,7 +379,8 @@ class MarkUnresolved(IRVisitor):
 
     def visit_PartitionSrc(self, e: PartitionSrc):
         self.visit(e.x)
-        if is_auto_copy(e.tiled_copy):
+        x_ty = self.infer_type(e.x)
+        if is_auto_copy(e.tiled_copy) or is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
             self.ops_resolved.append(e)
@@ -373,7 +388,8 @@ class MarkUnresolved(IRVisitor):
 
     def visit_PartitionDst(self, e: PartitionDst):
         self.visit(e.x)
-        if is_auto_copy(e.tiled_copy):
+        x_ty = self.infer_type(e.x)
+        if is_auto_copy(e.tiled_copy) or is_auto_layout(x_ty.layout):
             self.ops_unresolved.append(e)
         else:
             self.ops_resolved.append(e)
@@ -490,11 +506,11 @@ class InferLogicalShape(IRVisitor):
         self, in_shape: Tuple[ShapeVar], out_shape: Tuple[ShapeVar], shape: Optional[Tuple[ShapeVar]] = None
     ):
         if shape is not None:
-            rank = len(shape)
+            shape_rank = len(shape)
             if in_shape is not None:
                 in_shape = list(in_shape)
-                assert len(in_shape) == rank
-                for i in range(rank):
+                assert len(in_shape) == shape_rank
+                for i in range(shape_rank):
                     s = shape[i]
                     si = in_shape[i]
                     if is_constant(si):
@@ -506,8 +522,8 @@ class InferLogicalShape(IRVisitor):
                 in_shape = shape
             if out_shape is not None:
                 out_shape = list(out_shape)
-                assert len(out_shape) == rank
-                for i in range(rank):
+                assert len(out_shape) == shape_rank
+                for i in range(shape_rank):
                     s = shape[i]
                     so = out_shape[i]
                     if is_constant(so):
@@ -873,10 +889,11 @@ class InferLogicalShape(IRVisitor):
     def infer(self):
         for op in self.ops_resolved:
             if isinstance(op, TensorBase):
+                ty = self.infer_type(op.make_call())
                 shape = (
-                    op.layout.shape
-                    if isinstance(op.layout, (TensorLayout, ComposedTensorLayout))
-                    else op.layout.shape()
+                    ty.layout.shape
+                    if isinstance(ty.layout, (TensorLayout, ComposedTensorLayout))
+                    else ty.layout.shape()
                 )
                 if shape is not None:
                     shape = product_each(shape)
@@ -887,15 +904,17 @@ class InferLogicalShape(IRVisitor):
                 vars = self.op2vars[op]
                 x_var, out_var = vars
                 x_type = self.infer_type(op.x)
-                x_shape = x_type.layout.shape_tuple
+                x_shape = product_each(x_type.layout.shape_tuple)
                 out_type = self.infer_type(op.make_call())
-                out_shape = out_type.layout.shape_tuple
+                out_shape = product_each(out_type.layout.shape_tuple)
                 x_shp = self._get_var_shape(x_var)
                 out_shp = self._get_var_shape(out_var)
                 x_shape, x_shp = self._align_shape(x_shape, x_shp)
                 out_shape, out_shp = self._align_shape(out_shape, out_shp)
                 self._update_var_shape(x_var, x_shape)
                 self._update_var_shape(out_var, out_shape)
+            elif isinstance(op, (PartitionSrc, PartitionDst, SubTensor)):
+                pass
             else:
                 res = op.resolve_logical_encoding()
                 if isinstance(res, NotImplementedError):
@@ -1257,8 +1276,6 @@ class InferLogicalLayout(IRVisitor):
             self.ops_resolved.append(op)
 
     def visit_Transpose(self, op: Transpose):
-        from hidet.ir.cute import rank
-
         vars = self.op2vars[op]
         x_var, out_var = vars
         x_shape = self.var2shape[x_var]
@@ -1395,7 +1412,8 @@ class InferLogicalLayout(IRVisitor):
             elif isinstance(op, TensorBase):
                 out_var = self.op2vars[op][-1]
                 assert op.layout is not auto_layout
-                layout = self._inst_logical_layout_for_tensor(op.layout)
+                ty = self.infer_type(op.make_call())
+                layout = self._inst_logical_layout_for_tensor(ty.layout)
                 self._update_var_layout(out_var, layout)
             elif isinstance(op, Transpose):
                 vars = self.op2vars[op]
@@ -1412,6 +1430,8 @@ class InferLogicalLayout(IRVisitor):
                     out_layout = out_type.layout
                     layout = self._inst_logical_layout_for_tensor(out_layout)
                     self._update_var_layout(out_var, layout)
+            elif isinstance(op, SubTensor):
+                pass
             else:
                 res = op.resolve_logical_encoding()
                 if isinstance(res, NotImplementedError):
@@ -1622,8 +1642,6 @@ class MemoryConstraintsUnifier:
         TensorLayout
             The unified memory constraint or None if unification fails.
         """
-        from hidet.ir.cute import rank
-
         if memory_constraints1 is None:
             return memory_constraints2
         elif memory_constraints2 is None:
@@ -1748,9 +1766,9 @@ class MemoryConstraintsUnifier:
                     return None
                 s1 = shape_div(size, current_idx)
                 s = shape_div(s, s1)
-                d = var("v") if isinstance(d, Var) else d * s1
                 cur_shape.append(s1)
                 cur_stride.append(d)
+                d = var("v") if isinstance(d, Var) else d * s1
                 result_shape.append(tuple(cur_shape))
                 result_stride.append(tuple(cur_stride))
                 cur_shape = []
@@ -1787,10 +1805,7 @@ class MemoryConstraintsUnifier:
 def infer_memory_constraints(ctx: InferContext, tensor_info: TensorInfo, value: TensorLayout, elements_per_inst):
     tensor = tensor_info.tensor
     tensor_memory = tensor_info.layout
-    if tensor in ctx.solution:
-        tensor_memory_constraints = ctx.solution[tensor]
-    else:
-        tensor_memory_constraints = None
+    tensor_memory_constraints = ctx.solution.get(tensor, None)
     value_inst, _ = group(value, elements_per_inst)
     unifier = MemoryConstraintsUnifier()
     memory_constraints = unifier.infer(tensor_memory, value_inst)
@@ -1890,11 +1905,12 @@ class MmaInferRules(InferRules):
 
     @staticmethod
     def get_equivalent_value_layout(v: TensorLayout, core_matrix_layout: TensorLayout):
-        core_matrix_shape = core_matrix_layout.shape_tuple
+        core_matrix_shape = flatten(core_matrix_layout.shape_tuple)
         v_reshape = composition(v, TensorLayout(core_matrix_shape))
-        shape = concat_tuple(v_reshape.shape_tuple[0], v_reshape.shape_tuple[1])
-        stride = concat_tuple(v_reshape.stride_tuple[0], v_reshape.stride_tuple[1])
+        shape = v_reshape.shape_tuple
+        stride = v_reshape.stride_tuple
         core_matrix_stride = flatten(core_matrix_layout.stride_tuple)
+        assert len(shape) == len(stride) == len(core_matrix_stride)
         sorted_DS = sorted(zip(core_matrix_stride, shape, stride))
         result_shape = flatten(tuple(s for _, s, _ in sorted_DS))
         result_stride = flatten(tuple(d for _, _, d in sorted_DS))
@@ -2343,13 +2359,14 @@ class ResolveAuto(IRVisitor):
 
         self.op2vars: Dict[Op, List[Var]] = {}
         self.op2copys: Dict[Union[PartitionSrc, PartitionDst, Mask], List[Copy]] = {}
+        self.op2mmas: Dict[Union[PartitionA, PartitionB], List[Mma]] = {}
         self.var2expr: Dict[Var, Union[Var, Expr]] = {}
         self.infer_type = TypeInfer()
 
         self.threads = None
 
     def get_partition_op(self, v: Var):
-        expr = self.var2expr[v]
+        expr = self.var2expr.get(v, None)
         while isinstance(expr, Var):
             assert expr in self.var2expr
             expr = self.var2expr[expr]
@@ -2365,7 +2382,7 @@ class ResolveAuto(IRVisitor):
                 self.op2vars[op].append(v)
             else:
                 self.op2vars[op] = [v]
-            if isinstance(op, (PartitionSrc, PartitionDst, Mask)):
+            if isinstance(op, (Partition, Mask, MBarriers)):
                 self.var2expr[v] = op
             elif isinstance(op, SubTensor):
                 self.var2expr[v] = op.x
@@ -2388,8 +2405,13 @@ class ResolveAuto(IRVisitor):
 
     def append_constraint(self, op: Op):
         if isinstance(op, Copy):
-            self.constraints.append(make_constraint([op.src], op.dst, op, "i2o"))
-            self.constraints.append(make_constraint([op.dst], op.src, op, "o2i"))
+            src_ty = self.infer_type(op.src)
+            dst_ty = self.infer_type(op.dst)
+            is_gmem = src_ty.scope.is_global() or dst_ty.scope.is_global()
+            is_smem = src_ty.scope.is_shared() or dst_ty.scope.is_shared()
+            if not (is_gmem and is_smem):
+                self.constraints.append(make_constraint([op.src], op.dst, op, "i2o"))
+                self.constraints.append(make_constraint([op.dst], op.src, op, "o2i"))
         elif isinstance(op, Partition):
             x_ty = self.infer_type(op.x)
             out_var = self.op2vars[op][-1]
@@ -2433,8 +2455,16 @@ class ResolveAuto(IRVisitor):
     def visit_Copy(self, e: Copy):
         self.visit(e.src)
         self.visit(e.dst)
-        self.visit(e.mask)
-        if is_auto_copy(e.tiled_copy):
+        if e.mask is not None:
+            self.visit(e.mask)
+        if e.mbarrier is not None:
+            self.visit(e.mbarrier)
+        src_ty = self.infer_type(e.src)
+        dst_ty = self.infer_type(e.dst)
+        is_src_auto_layout = src_ty.scope.is_shared() and is_auto_layout(src_ty.layout)
+        is_dst_auto_layout = dst_ty.scope.is_shared() and is_auto_layout(dst_ty.layout)
+        is_auto_copy_ = is_auto_copy(e.tiled_copy)
+        if is_src_auto_layout or is_dst_auto_layout or is_auto_copy_:
             self.ops_unresolved.append(e)
             self.append_constraint(e)
         else:
@@ -2455,6 +2485,8 @@ class ResolveAuto(IRVisitor):
         on_var(e.dst)
         if e.mask is not None:
             on_var(e.mask)
+        if e.mbarrier is not None:
+            on_var(e.mbarrier)
 
     def visit_Mask(self, e: Mask):
         for ex in e.extents:
@@ -2518,6 +2550,20 @@ class ResolveAuto(IRVisitor):
                 self.append_constraint(e)
             self.ops_resolved.append(e)
 
+        def on_var(v: Var):
+            assert isinstance(v, Var)
+            v_ty = self.infer_type(v)
+            if v_ty.scope.is_shared():
+                op = self.get_partition_op(v)
+                assert isinstance(op, Op)
+                if op not in self.op2mmas:
+                    self.op2mmas[op] = [e]
+                else:
+                    self.op2mmas[op].append(e)
+
+        on_var(e.a)
+        on_var(e.b)
+
     def visit_SubTensor(self, e: SubTensor):
         self.visit(e.x)
         x_ty = self.infer_type(e.x)
@@ -2577,6 +2623,17 @@ class ResolveAuto(IRVisitor):
                 self._resolve(op)
             current_state.constraints.remove(c)
 
+    def _get_equivalent_copies(self, op: Op):
+        par = self.get_partition_op(op.src)
+        return self.op2copys[par]
+
+    def _update_equivalent_ops(self, op: Copy, equivalent_ops: List[Copy], state: StackFrame):
+        for copy in equivalent_ops:
+            for j, v in enumerate(self.op2vars[copy]):
+                if v not in state.var2logical_encoding:
+                    ev = self.op2vars[op][j]
+                    state.var2logical_encoding[v] = state.var2logical_encoding[ev]
+
     def _update_state(self, infer_result_: InferResult, constraint_: Constraint, state: StackFrame):
         output = constraint_.output
         if output is not None:
@@ -2593,22 +2650,25 @@ class ResolveAuto(IRVisitor):
                 state.solution[tensor] = memory_constraints
         op = constraint_.op
         if isinstance(op, Mma):
-            state.constraints.remove(constraint_)
+            a_ty = self.infer_type(op.a)
+            b_ty = self.infer_type(op.b)
+            if a_ty.scope.is_shared():
+                par = self.get_partition_op(op.a)
+            else:
+                assert b_ty.scope.is_shared()
+                par = self.get_partition_op(op.b)
+            equivalents = self.op2mmas[par]
+            assert op in equivalents
+            for equivalent_constraint in state.constraints:
+                if equivalent_constraint.op in equivalents:
+                    state.constraints.remove(equivalent_constraint)
             return
         vars = self.op2vars[op]
         is_resolved = all(v in state.var2logical_encoding for v in vars)
         if is_resolved:
             if isinstance(op, Copy):
-                src = op.src
-                par = self.get_partition_op(src)
-                equivalents = self.op2copys[par]
-                ops = equivalents
-                assert op in ops
-                for copy in equivalents:
-                    for j, v in enumerate(self.op2vars[copy]):
-                        if v not in state.var2logical_encoding:
-                            ev = self.op2vars[op][j]
-                            state.var2logical_encoding[v] = state.var2logical_encoding[ev]
+                ops = self._get_equivalent_copies(op)
+                self._update_equivalent_ops(op, ops, state)
             else:
                 ops = [op]
             for _op in ops:
@@ -2686,9 +2746,13 @@ class ResolveAuto(IRVisitor):
         dtype: DataType,
         tile_layout: TensorLayout,
         bits_per_memory_inst: int,
-        extra_memory_hint: TensorLayout = None,
-        extra_memory_constraints: TensorLayout = None,
+        extra_memory_hint: Optional[TensorLayout] = None,
+        extra_memory_constraints: Optional[TensorLayout] = None,
+        num_threads: Optional[int] = None,
     ):
+        if num_threads is None:
+            num_threads = self.threads
+
         tile_shape = product_each(tile_layout.shape)
         shape = flatten(tile_layout.shape_tuple)
         stride = flatten(tile_layout.stride_tuple)
@@ -2758,7 +2822,7 @@ class ResolveAuto(IRVisitor):
 
         thr_shape = []
         thr_stride = []
-        remaining_threads = self.threads
+        remaining_threads = num_threads
         sorted_dsi = sorted(zip(stride, shape, costride), key=key)
 
         for _, s, d in sorted_dsi:
@@ -2791,16 +2855,188 @@ class ResolveAuto(IRVisitor):
         copy_atom = CopyAtom("thread_block", tile_shape, make_layout(thr_layout, val_layout))
         return TiledCopy(copy_atom), memory_constraints
 
+    def _schedule_tma_copy(
+        self,
+        dtype: DataType,
+        global_layout: TensorLayout,
+        tile_shape: Tuple[int, ...],
+        gmem_tile_layout: TensorLayout,
+        extra_memory_hint: TensorLayout,
+        extra_memory_constraints: TensorLayout,
+        num_threads: int,
+    ):
+        """
+        Determine an optimal shared memory layout to minimize the rank of the TMA tensor.
+
+        This function searches for a valid shared memory layout that allows TMA (Tensor Memory Access)
+        to be used for a given global tensor and tiling configuration. The goal is to reduce the number
+        of dimensions (rank) required by the TMA tensor, while satisfying all hardware and software constraints.
+
+        If a valid layout is found, the function returns both the configured TMA copy operation and
+        the corresponding memory constraint layout. Otherwise, it returns `None`.
+
+        ### Returned Memory Constraints
+        - **Constrained strides** (fixed by TMA hardware): Actual computed stride values
+        - **Unconstrained strides** (flexible): Represented symbolically using variables (e.g., `'v'`)
+
+        ### Parameters:
+        - **dtype** (`DataType`):
+          The data type of the tensor involved in the TMA operation.
+
+        - **global_layout** (`TensorLayout`):
+          The layout of the tensor in global memory.
+
+        - **tile_shape** (`Tuple[int]`):
+          The shape of the tile used for the TMA copy.
+
+        - **gmem_tile_layout** (`TensorLayout`):
+          The layout of the global memory tile.
+
+        - **extra_memory_hint** (`Tuple`):
+          A hint describing the expected shared memory shape or stride layout.
+
+        - **extra_memory_constraints** (`TensorLayout`):
+          Constraints imposed by other memory copies (e.g., load/store conflicts).
+
+        - **num_threads** (`int`):
+          The number of threads participating in the copy.
+          - For non-warp-specialized kernels: threads per block
+          - For warp-specialized kernels: threads per warp group (producer/consumer)
+
+        ### Returns:
+        - `Optional[Tuple[TiledCopy, TensorLayout]]`:
+          A tuple of:
+          1. `TiledCopy`: The configured TMA-based copy operation
+          2. `TensorLayout`: The shared memory layout with stride constraints
+          Returns `None` if no valid layout satisfying all constraints is found.
+        """
+        # find a shared memory layout such that the rank of the tma tensor is the smallest
+        # Step 1. We align the shape of global memory layout and shared memory layout
+        last_dim_strides = get_last_dim_strides(tile_shape, global_layout)
+
+        smem_last_dim_strides = [None] * len(tile_shape)
+        if extra_memory_constraints is None:
+            smem_layout = coalesce_per_dim(extra_memory_hint, tile_shape, smem_last_dim_strides)
+        else:
+            smem_layout = coalesce_per_dim(extra_memory_constraints, tile_shape, smem_last_dim_strides)
+        gmem_layout = coalesce_per_dim(gmem_tile_layout, tile_shape, last_dim_strides)
+
+        divisor = 1
+        MAX_ELEMENTS_PER_DIM = 256
+        if dtype.is_integer_subbyte():
+            divisor = dtype.storage.nbits // dtype.nbits
+            MAX_ELEMENTS_PER_DIM = 256 * divisor
+
+        gmem_layout, smem_layout = common_reshape_per_dim(gmem_layout, smem_layout)
+
+        gmem_shape = flatten(gmem_layout.shape_tuple)
+        gmem_stride = flatten(gmem_layout.stride_tuple)
+        smem_shape = flatten(smem_layout.shape_tuple)
+        smem_stride = flatten(smem_layout.stride_tuple)
+        index = range(len(gmem_shape))
+
+        # Step 2. Ensure the shared memory (smem) layout is contiguous by sorting dimensions
+        # based on the ascending order of smem strides.
+        #
+        # Goal:
+        #   Identify a shared memory layout that minimizes the rank (number of dimensions)
+        #   of the resulting TMA tensor.
+        #
+        # Explanation:
+        # - For dimensions with **known (constrained) smem strides** (typically from memory constraints
+        #   imposed by other copy operations), we must preserve their order and sort them by increasing stride.
+        #
+        # - For dimensions with **unknown (unconstrained) smem strides**, we sort them based on
+        #   the ascending order of the **global memory (gmem) strides**. This heuristic maximizes
+        #   the chance of coalescing gmem dimensions — reducing TMA rank.
+        #
+        # - Important: Two dimensions can be merged (coalesced) only if **both** the gmem and smem
+        #   strides are contiguous. i.e.
+        #   smem_stride[i + 1] = smem_shape[i] * smem_stride[i]
+        #   gmem_stride[i + 1] = gmem_shape[i] * gmem_stride[i]
+        #
+        # - When smem strides are unknown, we initialize them using contiguous strides
+        #   **in the same order as gmem strides** to maintain mergeability and alignment.
+        #
+        # Outcome:
+        #   This strategy yields a valid shared memory layout with minimal TMA rank.
+        #   While multiple valid layouts may exist with the same rank, this method currently can
+        #   only selects one.
+        smem_stride, smem_shape, gmem_stride, gmem_shape, permute = sort_dims(
+            smem_stride, smem_shape, gmem_stride, gmem_shape, index
+        )
+
+        sorted_shape = smem_shape
+
+        # Merge the dimensions of the global memory and shared memory if the strides are contiguous.
+        gmem_shape, gmem_stride, smem_shape, smem_stride, _ = coalesce_gmem_shape_and_smem_shape(
+            gmem_shape, smem_shape, gmem_stride, smem_stride
+        )
+
+        innermost_shape = gmem_shape[0] * dtype.nbits // 8
+        if gmem_stride[0] != 1 or innermost_shape % 16 != 0:
+            return None
+
+        # Determine the contiguous strides for the shared memory layout.
+        smem_shape, smem_stride = make_contiguous_stride(smem_shape, smem_stride)
+
+        # check alignment
+        for ds, dg in zip(smem_stride[1:], gmem_stride[1:]):
+            smem_bytes = ds * dtype.nbits // 8
+            gmem_bytes = dg * dtype.nbits // 8
+            if (ds != 1 and smem_bytes % 16 != 0) or (dg != 1 and gmem_bytes % 16 != 0):
+                return None
+
+        # Merge the dimensions again since the shared memory strides are updated.
+        gmem_shape, gmem_stride, smem_shape, smem_stride, _ = coalesce_gmem_shape_and_smem_shape(
+            gmem_shape, smem_shape, gmem_stride, smem_stride
+        )
+
+        # Step 3. Split the dimension if the number of elements in the dimension is larger than 256
+        gmem_shape, gmem_stride, smem_shape, smem_stride, _ = split_shapes(
+            gmem_shape, smem_shape, gmem_stride, smem_stride, MAX_ELEMENTS_PER_DIM
+        )
+
+        gmem_layout = TensorLayout(tuple(gmem_shape), tuple(gmem_stride))
+        smem_layout = TensorLayout(tuple(smem_shape), tuple(smem_stride))
+        # check if smem layout is contiguous
+        smem_layout_ = coalesce(smem_layout)
+        if is_tuple(smem_layout_.stride):
+            if len(smem_layout_.stride) != 1:
+                return None
+            smem_stride = smem_layout_.stride[0]
+        else:
+            smem_stride = smem_layout_.stride
+        if smem_stride != 1:
+            return None
+        dim = rank(gmem_layout.shape)
+        # tma only supports tensor dimensions less than and equal to 5
+        if dim > 5:
+            return None
+
+        # Step 4. Convert the shared memory layout candidate to a memory constraint layout.
+        memory_constraints = construct_memory_constraint(sorted_shape, smem_layout, permute, extra_memory_hint)
+        unifier = MemoryConstraintsUnifier()
+        memory_constraints = unifier.unify(extra_memory_constraints, memory_constraints)
+        if memory_constraints is None:
+            return None
+        thread_layout = TensorLayout(tuple([num_threads]), tuple([0]))
+        value_layout = TensorLayout(tile_shape)
+        copy_atom = CopyAtom("thread_block", tuple(tile_shape), make_layout(thread_layout, value_layout))
+        return TiledCopy(copy_atom, []), memory_constraints
+
     def _coalesce_memory_access(self, e: Copy):
         src_ty = self.infer_type(e.src)
         dst_ty = self.infer_type(e.dst)
         if src_ty.scope.is_global():
             src_tensor = self.var2tensor[e.src]
-            mem = src_tensor.layout
+            gmem_layout = src_tensor.tensor.layout
+            gmem_tile_layout = src_tensor.layout
             dtype = src_ty.dtype
         else:
             dst_tensor = self.var2tensor[e.dst]
-            mem = dst_tensor.layout
+            gmem_layout = dst_tensor.tensor.layout
+            gmem_tile_layout = dst_tensor.layout
             dtype = dst_ty.dtype
 
         current_state = self._current_state()
@@ -2811,29 +3047,60 @@ class ResolveAuto(IRVisitor):
             shared_tensor_info = self.var2tensor[e.dst]
         shared_tensor = shared_tensor_info.tensor if shared_tensor_info is not None else None
         extra_memory_hint = shared_tensor_info.layout if shared_tensor_info is not None else None
+        if shared_tensor is not None and is_auto_layout(extra_memory_hint):
+            extra_memory_constraints = (
+                current_state.solution[shared_tensor] if shared_tensor in current_state.solution else None
+            )
+        else:
+            extra_memory_constraints = None
 
-        shape = e.tiled_copy.shape
-        tile = TensorLayout(shape)
-        tile_layout = composition(mem, tile)
+        if "group_ids" in e.annotations:
+            num_threads = e.annotations["group_threads"]
+        else:
+            num_threads = self.threads
 
-        candidates = []
-        for inst in memory_instructions:
-            if inst.src_scope == src_ty.scope and inst.dst_scope == dst_ty.scope:
-                candidates.append(inst)
-        candidates = sorted(candidates, key=lambda x: -x.bytes_per_inst)
-        for inst in candidates:
-            bits_per_memory_inst = inst.alignment * 8
-            if shared_tensor is not None and is_auto_layout(extra_memory_hint):
-                extra_memory_constraints = (
-                    current_state.solution[shared_tensor] if shared_tensor in current_state.solution else None
-                )
-                sche = self._schedule_tiled_copy(
-                    dtype, tile_layout, bits_per_memory_inst, shared_tensor_info.layout, extra_memory_constraints
-                )
-            else:
-                sche = self._schedule_tiled_copy(dtype, tile_layout, bits_per_memory_inst)
-            if sche is not None:
-                break
+        tile_shape = e.tiled_copy.shape
+        sche = None
+        mbarrier = e.mbarrier
+        mask = e.mask
+        # Step 1. Try to schedule the copy operation using TMA
+        if shared_tensor is not None and mask is None and mbarrier is not None:
+            sche = self._schedule_tma_copy(
+                dtype,
+                gmem_layout,
+                tile_shape,
+                gmem_tile_layout,
+                shared_tensor_info.layout,
+                extra_memory_constraints,
+                num_threads,
+            )
+            if not is_auto_copy(e.tiled_copy) and sche is None:
+                return False
+
+        # Step 2. Try to schedule the copy operation using normal cp_async
+        if sche is None:
+            tile = TensorLayout(tile_shape)
+            tile_layout = composition(gmem_tile_layout, tile)
+            candidates = []
+            for inst in memory_instructions:
+                if inst.src_scope == src_ty.scope and inst.dst_scope == dst_ty.scope:
+                    candidates.append(inst)
+            candidates = sorted(candidates, key=lambda x: -x.bytes_per_inst)
+            for inst in candidates:
+                bits_per_memory_inst = inst.alignment * 8
+                if extra_memory_constraints is not None:
+                    sche = self._schedule_tiled_copy(
+                        dtype,
+                        tile_layout,
+                        bits_per_memory_inst,
+                        shared_tensor_info.layout,
+                        extra_memory_constraints,
+                        num_threads,
+                    )
+                else:
+                    sche = self._schedule_tiled_copy(dtype, tile_layout, bits_per_memory_inst, num_threads=num_threads)
+                if sche is not None:
+                    break
 
         if sche is None:
             return False
@@ -2850,6 +3117,11 @@ class ResolveAuto(IRVisitor):
         shp, tv = tiled_copy.dst_tv_layout()
         tv = make_layout(tv[0][0], coalesce(make_layout(tv[0][1], tv[1])))
         current_state.var2logical_encoding[e.dst] = logical_encoding(shp, tv)
+
+        ops = self._get_equivalent_copies(e)
+        for op in ops:
+            current_state.solution[op] = tiled_copy
+        self._update_equivalent_ops(e, ops, current_state)
         return True
 
     def _materialize_memory_layout(self, solution: Dict[Op, Union[TensorLayout, TiledCopy, TiledMma]]):
@@ -2897,8 +3169,9 @@ class ResolveAuto(IRVisitor):
             src_ty = self.infer_type(op.src)
             dst_ty = self.infer_type(op.dst)
             is_gmem = src_ty.scope.is_global() or dst_ty.scope.is_global()
+            is_smem = src_ty.scope.is_shared() or dst_ty.scope.is_shared()
             has_auto = is_auto_copy(op.tiled_copy)
-            return is_gmem and has_auto
+            return is_gmem and has_auto and not is_smem
 
         unresolved_copys = [op for op in unresolved_copys if f(op)]
 
@@ -2921,6 +3194,26 @@ class ResolveAuto(IRVisitor):
         if len(unresolved_copys) > 0:
             return unresolved_copys[0]
 
+    def _finalize_global_shared_copy(self):
+        state = self._current_state()
+        unresolved_copys = [op for op in self.ops_unresolved if op not in state.solution and isinstance(op, Copy)]
+        visited = set()
+        for op in unresolved_copys:
+            if op in visited:
+                continue
+            src_ty = self.infer_type(op.src)
+            dst_ty = self.infer_type(op.dst)
+            is_gmem = src_ty.scope.is_global() or dst_ty.scope.is_global()
+            is_smem = src_ty.scope.is_shared() or dst_ty.scope.is_shared()
+            assert is_gmem and is_smem
+            top_frame_valid = self._coalesce_memory_access(op)
+            if not top_frame_valid:
+                return False
+            ops = self._get_equivalent_copies(op)
+            for copy in ops:
+                visited.add(copy)
+        return True
+
     def resolve(self, func: Function):
         if func.kind == "cuda_kernel":
             assert "cuda.block_dim" in func.attrs
@@ -2934,7 +3227,7 @@ class ResolveAuto(IRVisitor):
         var2logical_encoding: Dict[Var, LogicalEncoding] = {}
         for op in self.ops_resolved:
             res = op.resolve_logical_encoding()
-            if isinstance(op, (Rearrange, PartitionSrc, PartitionDst, Arithmetic, Copy, Mask)):
+            if isinstance(op, (Rearrange, PartitionSrc, PartitionDst, Arithmetic, Copy, Mask, SubTensor)):
                 pass
             elif isinstance(res, NotImplementedError):
                 raise NotImplementedError(
@@ -2994,7 +3287,12 @@ class ResolveAuto(IRVisitor):
                     self._resolve(op)
 
                 op = self._select_unresolved_copy()
+
             if not top_frame_valid:
+                continue
+            top_frame_valid = self._finalize_global_shared_copy()
+            if not top_frame_valid:
+                self.state_stack.pop()
                 continue
 
             # Step 5. If all constraints are resolved, we find a solution and
@@ -3046,21 +3344,21 @@ class MaterializeAuto(IRRewriter):
         return super().visit_DeclareStmt(stmt)
 
     def visit_Copy(self, e: Copy):
-        src = self.visit(e.src)
-        dst = self.visit(e.dst)
-        if e.mask is not None:
-            mask = self.visit(e.mask)
-        else:
-            mask = None
         if is_auto_copy(e.tiled_copy) and e in self.solution:
+            src = self.visit(e.src)
+            dst = self.visit(e.dst)
+            if e.mask is not None:
+                mask = self.visit(e.mask)
+            else:
+                mask = None
+            if e.mbarrier is not None:
+                mbarrier = self.visit(e.mbarrier)
+            else:
+                mbarrier = None
             tiled_copy = self.solution[e]
             assert isinstance(tiled_copy, TiledCopy)
-            return e.reforward([src, dst, mask], attrs_update={"tiled_copy": tiled_copy})
-        else:
-            if e is e.src and dst is e.dst and mask is e.mask:
-                return e
-            else:
-                return e.reforward([src, dst, mask])
+            return e.reforward([src, dst, mask, mbarrier], attrs_update={"tiled_copy": tiled_copy})
+        return super().visit_Copy(e)
 
     def visit_Tensor(self, e: Tensor):
         dtype = self.visit(e.dtype)
@@ -3148,7 +3446,12 @@ class MaterializeAuto(IRRewriter):
 
 class InstantiateAutoAnnotationPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
+        orig_level = None
+        orig_handler_level = None
         if verbose:
+            orig_level = logger.level
+            orig_handler_level = stderr_handler.level
+            logger.setLevel(DEBUG)
             setConsoleLevel(DEBUG)
 
         marker = MarkUnresolved()
@@ -3187,7 +3490,7 @@ class InstantiateAutoAnnotationPass(FunctionPass):
         model = LatencyModel()
         func2lat: Dict[Function, float] = {}
         for _, fn in str2func.items():
-            transforms = [instruction_selection_pass(), resolve_bank_conflict_pass(), instruction_selection_pass()]
+            transforms = [instruction_selection_pass(), resolve_bank_conflict_pass()]
             f = None
             for ps in transforms:
                 if f is None:
@@ -3201,7 +3504,8 @@ class InstantiateAutoAnnotationPass(FunctionPass):
 
         if verbose:
             logger.debug(f"{func}")
-            setConsoleLevel(WARNING)
+            stderr_handler.setLevel(orig_handler_level)
+            logger.setLevel(orig_level)
 
         return func
 

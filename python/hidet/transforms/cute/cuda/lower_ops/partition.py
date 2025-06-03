@@ -53,11 +53,10 @@ class PartitionSrcEmitter(OpEmitter):
             dst.buffer = src_buf
             dst.offset = self.auto_var(hint=op.name, e=thr_layout(tid, base=src_off))
 
-        # TODO: commit this in the next PR
-        # if src.is_tma_buffer():
-        #     assert src.scope.is_global()
-        #     dst.tensor_maps = src.tensor_maps
-        #     dst.coords = src.coords
+        if src.is_tma_buffer():
+            assert src.scope.is_global()
+            dst.tensor_maps = src.tensor_maps
+            dst.coords = src.coords
 
 
 @register_impl(PartitionDst)
@@ -88,11 +87,10 @@ class PartitionDstEmitter(OpEmitter):
             dst.buffer = src_buf
             dst.offset = self.auto_var(hint=op.name, e=thr_layout(tid, base=src_off))
 
-        # TODO: commit this in the next PR
-        # if src.is_tma_buffer():
-        #     assert src.scope.is_global()
-        #     dst.tensor_maps = src.tensor_maps
-        #     dst.coords = src.coords
+        if src.is_tma_buffer():
+            assert src.scope.is_global()
+            dst.tensor_maps = src.tensor_maps
+            dst.coords = src.coords
 
 
 # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-descriptor-format
