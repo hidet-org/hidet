@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - public-synced-main
 
 permissions:
   contents: write
@@ -13,7 +12,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     if: |
-      (github.repository == 'CentML/hidet' && github.ref == 'refs/heads/public-synced-main') ||
+      (github.repository == 'CentML/hidet' && github.ref == 'refs/heads/main') ||
       (github.repository == 'hidet-org/hidet' && github.ref == 'refs/heads/main')
 
     env:
@@ -24,12 +23,12 @@ jobs:
         id: set_context_vars
         run: |
           if [[ "$GITHUB_REPOSITORY" == "CentML/hidet" ]]; then
-            echo "LOCAL_BRANCH=public-synced-main" >> $GITHUB_ENV
+            echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
             echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
             echo "REMOTE_REPO=hidet-org/hidet" >> $GITHUB_ENV
           elif [[ "$GITHUB_REPOSITORY" == "hidet-org/hidet" ]]; then
             echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
-            echo "REMOTE_BRANCH=public-synced-main" >> $GITHUB_ENV
+            echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
             echo "REMOTE_REPO=CentML/hidet" >> $GITHUB_ENV
           else
             echo "::error ::Unexpected repository: $GITHUB_REPOSITORY"
