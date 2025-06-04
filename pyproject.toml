@@ -73,6 +73,8 @@ dev = [
 
   # utilities
   "pygraphviz",
+
+  "einops",
 ]
 
 [project.urls]

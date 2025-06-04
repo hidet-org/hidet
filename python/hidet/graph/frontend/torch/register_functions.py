@@ -11,6 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=protected-access, c-extension-no-member, function-redefined
+import sys
 from typing import Optional, Union, Sequence, Any, Tuple, List
 import math
 import operator
@@ -897,6 +898,15 @@ def torch_embedding_bag(
     assert offsets is not None, "embedding_bag: currently we only support 1d inputs with offsets"
 
     return ops.embedding_bag(input, weight, offsets, mode=mode)
+
+
+if "einops" in sys.modules:
+    einops = sys.modules.get("einops")
+
+    @register_function(einops.rearrange)
+    def rearrange(x: Tensor, pattern: str, **axes_lengths) -> Tensor:
+        """Rearrange the tensor according to the pattern."""
+        return ops.einops_rearrange(x, pattern, **axes_lengths)
 
 
 @register_function(torch.permute)

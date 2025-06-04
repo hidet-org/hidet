@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Dict, Tuple, Callable, Type
+from typing import Any, List, Sequence, Union, Dict, Tuple, Callable, Type, Optional
 import operator
 from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
@@ -20,12 +20,19 @@ from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.dtypes import int32
 from hidet.ir.tools import rewrite
 from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter, LayoutRewriter
+from hidet.ir.node import Node
 
 
 class Simplifier(StmtRewriter, ExprRewriter, LayoutRewriter, BaseRewriter):
-    def __init__(self, instantiate_symbols: bool = False):
+    def __init__(self, instantiate_symbols: bool = False, skip_node_types: Optional[Sequence[Type[Expr]]] = None):
         super().__init__()
         self.instantiate_symbols = instantiate_symbols
+        self.skip_node_types = skip_node_types
+
+    def visit(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float]):
+        if self.skip_node_types and isinstance(node, tuple(self.skip_node_types)):
+            return node
+        return super().visit(node)
 
     def visit_Binary(self, e: BinaryExpr):  # pylint: disable=too-many-branches
         a = self(e.a)
@@ -228,12 +235,17 @@ class Simplifier(StmtRewriter, ExprRewriter, LayoutRewriter, BaseRewriter):
 
 
 def simplify(
-    node: Union[Stmt, Expr, int, float, list, tuple], *, instantiate_symbols=False, repeat_limit=10, enable_rules=False
+    node: Union[Stmt, Expr, int, float, list, tuple],
+    *,
+    instantiate_symbols=False,
+    repeat_limit=10,
+    enable_rules=False,
+    skip_node_types: Optional[Sequence[Type[Expr]]] = None,
 ):
     if isinstance(node, (int, float)):
         return node
 
-    simplifier = Simplifier(instantiate_symbols)
+    simplifier = Simplifier(instantiate_symbols, skip_node_types)
     for _ in range(repeat_limit):
         old_node = node
         node = simplifier(node)
@@ -244,7 +256,7 @@ def simplify(
     if enable_rules:
         from hidet.transforms.rule_based_simplifier import rule_based_simplify
 
-        node = rule_based_simplify(node)
+        node = rule_based_simplify(node, skip_node_types=skip_node_types)
 
     return node
 

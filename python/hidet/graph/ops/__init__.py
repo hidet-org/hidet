@@ -64,5 +64,6 @@ from .distributed import all_reduce, all_gather, reduce_scatter, wait_tensor
 from .linear import einsum
 from .embedding_bag import embedding_bag
 from .scatter import scatter_add_, scatter_
+from .einops import einops_rearrange
 
 from . import utils

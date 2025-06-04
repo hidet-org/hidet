@@ -196,7 +196,7 @@ def reduce(shape, fcompute, reduce_type, accumulate_dtype='float32', name: Optio
     reduce_type = ReduceType(reduce_type)
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
-    value = simplify(convert(fcompute(*axes)), enable_rules=True)
+    value = simplify(convert(fcompute(*axes)), enable_rules=True, skip_node_types=[TensorInput])
     if name is None:
         name = f'acc_{reduce_type.name}'
     return ReduceCompute(
@@ -234,7 +234,7 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
 
     shape = [simplify(convert(v), enable_rules=True) for v in shape]
     axes = [var() for _ in shape]
-    value = simplify(convert(fcompute(*axes)), enable_rules=True)
+    value = simplify(convert(fcompute(*axes)), enable_rules=True, skip_node_types=[TensorInput])
     return GridCompute(name=name, shape=shape, axes=axes, value=value, layout=layout)
 
 

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import operator
-from typing import Dict
+from typing import Dict, Sequence, Type, Optional
 from itertools import product
 
 from hidet.ir import dtypes
@@ -96,7 +96,7 @@ class ConstExprSimplifier(IRRewriter):
 class RuleBasedSimplifier(IRRewriter):
     _enumerate_limit = 256
 
-    def __init__(self):
+    def __init__(self, skip_node_types: Optional[Sequence[Type[Expr]]] = None):
         super().__init__()
         self.analyzer = BoundAnalyzer()
         self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
@@ -173,6 +173,10 @@ class RuleBasedSimplifier(IRRewriter):
             ((ec1, c1), (ec1,), lambda ec1, c1: ec1 % c1, lambda ec1: ec1),
             ((ec1, c1, c2), (ec1, c2), lambda ec1, c1, c2: (ec1 % c1) % c2, lambda ec1, c2: ec1 % c2),
         ]
+        if skip_node_types:
+            for skip_type in skip_node_types:
+                if getattr(self, f'visit_{skip_type.__name__}', None) is not None:
+                    setattr(self, f'visit_{skip_type.__name__}', lambda x: x)
 
     def apply_rule(self, e):
         for items in self.patterns:
@@ -313,11 +317,11 @@ def rule_based_simplify_pass():
     return RuleBasedSimplifyPass()
 
 
-def rule_based_simplify(expr: Expr) -> Expr:
+def rule_based_simplify(expr: Expr, skip_node_types: Optional[Sequence[Type[Expr]]] = None):
     if isinstance(expr, (int, float, SymbolVar)):
         return expr
     elif isinstance(expr, Constant) and expr.type is dtypes.default_int_dtype:
         return int(expr)
     else:
-        simplifier = RuleBasedSimplifier()
+        simplifier = RuleBasedSimplifier(skip_node_types=skip_node_types)
         return simplifier(expr)

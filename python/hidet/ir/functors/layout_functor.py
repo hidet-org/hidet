@@ -12,6 +12,7 @@
 from hidet.ir.layout import (
     DataLayout,
     StridesLayout,
+    RowMajorLayout,
     LocalLayout,
     ComposedLayout,
     SwizzleLayout,
@@ -105,6 +106,8 @@ class LayoutRewriter(BaseRewriter, LayoutFunctor):
         if same_list(shape, layout.shape) and same_list(strides, layout.strides):
             return layout
         else:
+            if isinstance(layout, RowMajorLayout):
+                return RowMajorLayout(shape)
             return StridesLayout(shape, strides)
 
     def visit_LocalLayout(self, layout: LocalLayout):
