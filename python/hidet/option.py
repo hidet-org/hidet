@@ -29,6 +29,7 @@ class OptionRegistry:
         normalizer: Optional[Callable[[Any], Any]] = None,
         choices: Optional[Iterable[Any]] = None,
         checker: Optional[Callable[[Any], bool]] = None,
+        env: Optional[str] = None,
     ):
         self.name = name
         self.type_hint = type_hint
@@ -37,6 +38,22 @@ class OptionRegistry:
         self.normalizer = normalizer
         self.choices = choices
         self.checker = checker
+        self.env = env
+
+    def parse_env_value(self, env_value):
+        try:
+            if self.type_hint == 'int':
+                return int(env_value)
+            else:
+                raise NotImplementedError(
+                    'Parsing of environment variable values is not implemented for type hint: {}'.format(self.type_hint)
+                )
+        except Exception as e:
+            raise ValueError(
+                'Cannot parse environment variable value "{}" for option "{}" with type hint "{}"'.format(
+                    env_value, self.name, self.type_hint
+                )
+            ) from e
 
 
 def create_toml_doc() -> tomlkit.TOMLDocument:
@@ -122,11 +139,14 @@ def register_option(
     normalizer: Optional[Callable[[Any], Any]] = None,
     choices: Optional[Iterable[Any]] = None,
     checker: Optional[Callable[[Any], bool]] = None,
+    env: Optional[str] = None,
 ):
     registered_options = OptionRegistry.registered_options
     if name in registered_options:
         raise KeyError(f'Option {name} has already been registered.')
-    registered_options[name] = OptionRegistry(name, type_hint, description, default_value, normalizer, choices, checker)
+    registered_options[name] = OptionRegistry(
+        name, type_hint, description, default_value, normalizer, choices, checker, env
+    )
 
 
 def register_hidet_options():
@@ -188,6 +208,7 @@ def register_hidet_options():
         name='num_local_workers',
         type_hint='int',
         default_value=os.cpu_count(),
+        env='HIDET_NUM_WORKERS',
         description='Number of local worker processes to use for parallel compilation/tuning',
     )
     register_option(
@@ -398,8 +419,14 @@ def register_hidet_options():
     if os.path.exists(config_file_path):
         _load_config(config_file_path)
 
-
-register_hidet_options()
+    # Load environment variables
+    env_ctx = OptionContext()
+    for name, registry in OptionRegistry.registered_options.items():
+        if registry.env is not None and registry.env in os.environ:
+            env_value: str = os.environ.get(registry.env)
+            parsed_value: Any = registry.parse_env_value(env_value)
+            env_ctx.set_option(name, parsed_value)
+    OptionContext.append_context(env_ctx)
 
 
 class OptionContext:
@@ -444,6 +471,18 @@ class OptionContext:
             The current option context.
         """
         return OptionContext.stack[-1]
+
+    @staticmethod
+    def append_context(ctx: OptionContext):
+        """
+        Append a new context to the stack.
+
+        Parameters
+        ----------
+        ctx: OptionContext
+            The context to append.
+        """
+        OptionContext.stack.append(ctx)
 
     def load_from_file(self, config_path: str):
         import configparser
@@ -1517,7 +1556,4 @@ class internal:
             return OptionContext.current().get_option('internal.dispatch_table.enabled_idt')
 
 
-# load the options from config file (e.g., ~/.config/hidet.config) if exists
-_config_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet.config')
-if os.path.exists(_config_path):
-    OptionContext.current().load_from_file(_config_path)
+register_hidet_options()
