@@ -51,6 +51,12 @@ _compute_capability = {
     'sm_90a': CudaComputeCapability(
         maxThreadsPerBlock=1024, sharedMemPerBlock=227 * 1024, regsPerBlock=64 * 1024, regsPerMultiprocessor=64 * 1024
     ),
+    'sm_100': CudaComputeCapability(
+        maxThreadsPerBlock=1024, sharedMemPerBlock=227 * 1024, regsPerBlock=64 * 1024, regsPerMultiprocessor=64 * 1024
+    ),
+    'sm_100a': CudaComputeCapability(
+        maxThreadsPerBlock=1024, sharedMemPerBlock=227 * 1024, regsPerBlock=64 * 1024, regsPerMultiprocessor=64 * 1024
+    ),
 }
 
 

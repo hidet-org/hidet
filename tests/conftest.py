@@ -29,6 +29,9 @@ def pytest_configure(config):
 
     config.addinivalue_line("markers", "requires_cuda: mark test that requires NVIDIA GPUs")
     config.addinivalue_line("markers", "requires_cuda_hopper: mark test that requires NVIDIA GPUs with Hopper arch")
+    config.addinivalue_line(
+        "markers", "requires_cuda_blackwell: mark test that requires NVIDIA GPUs with Blackwell arch"
+    )
     config.addinivalue_line("markers", "requires_hip: mark test that requires hip AMD GPUs")
 
 
@@ -61,6 +64,8 @@ def pytest_collection_modifyitems(config, items):
         keyword2mark['requires_cuda'] = pytest.mark.skip(reason="test requires CUDA GPUs")
     if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair() < (9, 0):
         keyword2mark['requires_cuda_hopper'] = pytest.mark.skip(reason="test requires Hopper CUDA GPUs")
+    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair() < (10, 0):
+        keyword2mark['requires_cuda_blackwell'] = pytest.mark.skip(reason="test requires Blackwell CUDA GPUs")
     if 'hip' not in available_devices():
         keyword2mark['requires_hip'] = pytest.mark.skip(reason="test requires HIP GPUs")
 

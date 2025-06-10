@@ -138,9 +138,9 @@ class NVCC(SourceCompiler):
         else:
             arch = hidet.option.cuda.get_arch()
 
-        # use `sm_90a` for all `sm_90` GPUs, update this when there are other `sm_90` GPUs
-        # that do not support the features in `sm_90a`.
-        arch = 'sm_90a' if arch == 'sm_90' else arch
+        # We use the `a` suffix for all `sm_90` and `sm_100` GPUs.
+        need_suffix = {'sm_90', 'sm_100'}
+        arch = arch + 'a' if arch in need_suffix else arch
 
         if 'cpu_arch' in target.attrs:
             cpu_arch = target.attrs['cpu_arch']

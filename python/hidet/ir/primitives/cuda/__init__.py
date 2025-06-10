@@ -35,3 +35,7 @@ from .tensor_map import create_tensor_map
 from .half import sub_f16x2, fma_f16x2
 from .lop3 import lop3
 from .prmt import prmt
+
+from .tmem import tcgen05_alloc, tcgen05_dealloc, tcgen05_relinquish_alloc_permit
+from .tmem import compute_tmem_address, compute_tmem_offset_address, get_register_count
+from .tcgen05_ldst import tcgen05_ld, tcgen05_st, tcgen05_wait

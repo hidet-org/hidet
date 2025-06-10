@@ -38,5 +38,7 @@ from .cuda import lds64, lds32, lds16, lds8
 from .cuda import sts64, sts32, sts16, sts8
 from .cuda import active_mask, set_kernel_max_dynamic_smem_bytes
 from .cuda import cvt, cvtv
+from .cuda import tcgen05_alloc, tcgen05_dealloc, tcgen05_relinquish_alloc_permit
+from .cuda import tcgen05_ld, tcgen05_st, tcgen05_wait
 
 from . import hip
