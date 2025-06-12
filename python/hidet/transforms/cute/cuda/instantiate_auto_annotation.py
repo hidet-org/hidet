@@ -242,6 +242,7 @@ from hidet.ir.cute import (
     flatten,
     is_tuple,
     rank,
+    prefix_product,
 )
 from hidet.ir.cute.ops import (
     TensorBase,
@@ -1854,8 +1855,11 @@ class MmaInferRules(InferRules):
 
             a_v = arg_tv[1]
             b_v = arg_tv[2]
+            a_shape = op.tiled_mma.a_shape
+            b_shape = op.tiled_mma.b_shape
             infers = []
             for inst in candidates:
+                m, n, k = inst.shape_mnk
                 constr_a: List[MemoryConstraint] = []
                 if a_ty.scope.is_shared():
                     a_tensor_info = ctx.var2tensor[a]
@@ -1864,7 +1868,7 @@ class MmaInferRules(InferRules):
                     for core_matrix_layout in core_matrix_layouts:
                         if core_matrix_layout is None:
                             continue
-                        a_v_reorder = self.get_equivalent_value_layout(a_v, core_matrix_layout)
+                        a_v_reorder = self.get_equivalent_value_layout(a_v, core_matrix_layout, (m, k), a_shape)
                         if is_auto_layout(a_memory_layout):
                             constr = infer_memory_constraints(
                                 ctx, a_tensor_info, a_v_reorder, core_matrix_layout.size()
@@ -1879,7 +1883,7 @@ class MmaInferRules(InferRules):
                     for core_matrix_layout in core_matrix_layouts:
                         if core_matrix_layout is None:
                             continue
-                        b_v_reorder = self.get_equivalent_value_layout(b_v, core_matrix_layout)
+                        b_v_reorder = self.get_equivalent_value_layout(b_v, core_matrix_layout, (n, k), b_shape)
                         if is_auto_layout(b_memory_layout):
                             constr = infer_memory_constraints(
                                 ctx, b_tensor_info, b_v_reorder, core_matrix_layout.size()
@@ -1904,12 +1908,78 @@ class MmaInferRules(InferRules):
         self.update_infer_rules("shared_ab", infer_shared_ab)
 
     @staticmethod
-    def get_equivalent_value_layout(v: TensorLayout, core_matrix_layout: TensorLayout):
-        core_matrix_shape = flatten(core_matrix_layout.shape_tuple)
-        v_reshape = composition(v, TensorLayout(core_matrix_shape))
+    def get_equivalent_value_layout(
+        v: TensorLayout, core_matrix_layout: TensorLayout, inst_shape: Tuple[int, int], value_shape: Tuple[int, int]
+    ):
+        # The constraints on shared memory layout imposed by WG-MMA (Warp-Group Matrix Multiply-Accumulate)
+        # can be described as follows:
+        #
+        # 1. Define a mapping function `f` from coordinates in the *core matrix* to logical positions in the shared
+        #    memory tensor.
+        # 2. The composition of this mapping function and the shared memory layout `M` must reconstruct the core matrix
+        #    layout.
+        #
+        # Formally, if `f` denotes the mapping function and `M` denotes the shared memory layout, then:
+        #     core_matrix_layout = composition(M, f)
+        #
+        # By checking whether M(f) matches the core matrix layout, we can verify if the shared memory layout satisfies
+        # the constraints required by WG-MMA. Alternatively, we can derive the necessary constraints on `M` by inverting
+        # the function `f`. Thus, the central challenge becomes constructing the mapping function `f`.
+        #
+        # Suppose we have:
+        # - A value layout `v`, which represents the logical portion of the shared matrix accessed by each thread.
+        #
+        # In most cases, the coordinates of the core matrix lie within the bounds of the value layout `v`.
+        # In these scenarios, we can directly construct the mapping function `f` as:
+        #     f = v
+        #
+        # However, for certain layouts—such as SW32_N, SW64_N, and SW128_N—the coordinate range of the core matrix
+        # exceeds the boundary of the value layout. Notably, these overflows occur exclusively along the **K**
+        # dimension.
+        #
+        # Assume the following:
+        # - `core_matrix_mn`, `core_matrix_k`: dimensions of the full core matrix
+        # - `inst_mn`, `inst_k`: dimensions of each individual hardware instruction tile
+        #
+        # In these extended cases:
+        # - For coordinates **within** the value layout, the mapping function `f` can be constructed as:
+        #     f = composition(group(v, core_matrix_mn * inst_k), Layout(core_matrix_mn, inst_k))
+        #
+        # - For coordinates **outside** the value layout:
+        #     - When `core_matrix_k > inst_k` and `core_matrix_mn == inst_mn`,
+        #       the mapping along the **K** dimension can be expressed as:
+        #           f = (core_matrix_k // inst_k,)
+        #
+        # This corresponds to a logical layout with strides:
+        #     (shape_mn * inst_k,)
+        # where `shape_mn` denotes the shape in the **M/N** dimension for matrix `A` or `B`.
+        #
+        # The reason for this stride pattern is that WG-MMA instructions are **serially executed along the K dimension**
+        # within each warp group.
+        #
+        # The instruction scheduling follows a pattern similar to:
+        #
+        #   ------------------------------------------------------ K
+        #   | inst0, inst1, inst2 --> executed by warp-group 0
+        #   | inst3, inst4, inst5 --> executed by warp-group 1
+        #   |
+        #   M / N
+        mn_mode, k_mode = core_matrix_layout
+        assert mn_mode.size() == inst_shape[0]
+        k_mode_inner, k_mode_outer = group(k_mode, inst_shape[1])
+        core_matrix_shape_inner = flatten(mn_mode.shape_tuple + k_mode_inner.shape_tuple)
+        stride_outer = value_shape[0] * k_mode_inner.size()
+        k_mode_outer_shape = flatten(k_mode_outer.shape_tuple)
+        k_mode_outer_stride = prefix_product(k_mode_outer_shape, stride_outer)
+        v_reshape = composition(v, TensorLayout(core_matrix_shape_inner))
         shape = v_reshape.shape_tuple
         stride = v_reshape.stride_tuple
-        core_matrix_stride = flatten(core_matrix_layout.stride_tuple)
+        if k_mode_outer.size() > 1:
+            shape = shape + k_mode_outer_shape
+            stride = stride + k_mode_outer_stride
+            core_matrix_stride = flatten(mn_mode.stride_tuple + k_mode_inner.stride_tuple + k_mode_outer.stride_tuple)
+        else:
+            core_matrix_stride = flatten(mn_mode.stride_tuple + k_mode_inner.stride_tuple)
         assert len(shape) == len(stride) == len(core_matrix_stride)
         sorted_DS = sorted(zip(core_matrix_stride, shape, stride))
         result_shape = flatten(tuple(s for _, s, _ in sorted_DS))

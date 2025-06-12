@@ -235,7 +235,7 @@ def gemm_single_stage_rs(m, n, k, wgmma_n=64, trans_b=True):
     bm_, bn_ = c_shape
     assert bm == bm_ and bn == bn_ and inst_k == inst_k_
     threads = a_t.size()
-    bk = 64
+    bk = 32
 
     with hidet.script_module() as script_module:
 

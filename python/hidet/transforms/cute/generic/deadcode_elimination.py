@@ -46,7 +46,7 @@ from hidet.ir.cute.type import TiledTensorType
 
 from hidet.ir.func import Function
 from hidet.transforms.base import FunctionPass
-from hidet.ir.stmt import Stmt, LetStmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt
+from hidet.ir.stmt import Stmt, LetStmt, AssignStmt, DeclareStmt, EvaluateStmt, SeqStmt, IfStmt
 
 from hidet.ir.cute.ops import (
     PartitionSrc,
@@ -194,6 +194,13 @@ class DeadcodeElimination(IRVisitor):
                     if self._is_cute_tile(arg):
                         self._add_user(arg, stmt)
         self.visit(stmt.body)
+
+    def visit_IfStmt(self, stmt: IfStmt):
+        cond = stmt.cond
+        if self._is_cute_tile(cond):
+            self._add_user(cond, stmt)
+        self.visit(stmt.then_body)
+        self.visit(stmt.else_body)
 
     def _extract_call_from_stmt(self, stmt: Stmt):
         if isinstance(stmt, EvaluateStmt):

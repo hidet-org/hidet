@@ -72,6 +72,8 @@ from hidet.ir.cute.layout import (
     common_reshape,
     group,
     canonicalize_thread_value_layout,
+    prefix_product,
+    filter_zeros,
 )
 from hidet.ir.cute.int_tuple import is_tuple, rank, compact_col_major, flatten, depth, idx2crd, product, product_each
 from hidet.utils import initialize
@@ -668,7 +670,7 @@ class TmaCopyInstruction(CopyInstruction):
             coords_transform, shp2crd=f1, permute=permute, dims=dims, shape=smem_shape, split_dims=split_dims
         )
 
-        def extends_transform(shapes, split_shape_funcs, permute, dims, shape, split_dims):
+        def extents_transform(*shapes, split_shape_funcs, permute, dims, shape, split_dims):
             shapes = list(shapes)
             rst = []
             for f, s in zip(split_shape_funcs, shapes):
@@ -689,12 +691,12 @@ class TmaCopyInstruction(CopyInstruction):
                 rst[i] = shape_list[:-1] + (rst[i] // d,)
             return flatten(tuple(rst))
 
-        tma_extends_transform = functools.partial(
-            extends_transform, split_shape_funcs=f2, permute=permute, dims=dims, shape=smem_shape, split_dims=split_dims
+        tma_extents_transform = functools.partial(
+            extents_transform, split_shape_funcs=f2, permute=permute, dims=dims, shape=smem_shape, split_dims=split_dims
         )
 
         tma_strides = flatten(gmem_layout.stride_tuple)
-        return dim, box_shape, tma_strides, swizzle, tma_extends_transform, tma_coords_transform
+        return dim, box_shape, tma_strides, swizzle, tma_extents_transform, tma_coords_transform
 
     def __call__(self, smem: Expr, tensor_map: Expr, coords: List[Expr], mbarrier: Optional[Expr] = None):
         coords_rank = len(coords)
@@ -1310,10 +1312,11 @@ class WgmmaAsyncInstruction(MmaInstruction):
         return rst
 
     def layout_match(self, a_tensor_info, b_tensor_info, tiled_mma: TiledMma):
+        _, _, inst_k = self.shape_mnk
         layout_type_a = None
         layout_type_b = None
         if a_tensor_info is not None:
-            _, tv = tiled_mma.a_tv_layout()
+            a_shape, tv = tiled_mma.a_tv_layout()
             _, v = canonicalize_thread_value_layout(tv)
             _, value_inst = self.a_layout
             v_inst, _ = group(v, value_inst.size())
@@ -1322,7 +1325,15 @@ class WgmmaAsyncInstruction(MmaInstruction):
                 if core_matrix_layout is None:
                     continue
                 flat_core_matrix_layout = coalesce(core_matrix_layout)
-                v_reshape = composition(v_inst, TensorLayout(core_matrix_layout.shape_tuple))
+                _, k_mode = core_matrix_layout
+                k_mode_inner, k_mode_outer = group(k_mode, inst_k)
+                if k_mode_inner.size() > 1:
+                    stride_outer = a_shape[0] * k_mode_inner.size()
+                    k_mode_outer_shape = flatten(k_mode_outer.shape_tuple)
+                    k_mode_outer_stride = prefix_product(k_mode_outer_shape, stride_outer)
+                    v_reshape = make_layout(v_inst, TensorLayout(k_mode_outer_shape, k_mode_outer_stride))
+                else:
+                    v_reshape = v_inst
                 core_matrix_layout = coalesce(composition(a_tensor_info.layout, v_reshape))
                 if core_matrix_layout == flat_core_matrix_layout:
                     layout_type = i
@@ -1331,7 +1342,7 @@ class WgmmaAsyncInstruction(MmaInstruction):
                 return None
             layout_type_a = self._get_layout_type(layout_type, self.trans_a)
         if b_tensor_info is not None:
-            _, tv = tiled_mma.b_tv_layout()
+            b_shape, tv = tiled_mma.b_tv_layout()
             _, v = canonicalize_thread_value_layout(tv)
             _, value_inst = self.b_layout
             v_inst, _ = group(v, value_inst.size())
@@ -1340,7 +1351,15 @@ class WgmmaAsyncInstruction(MmaInstruction):
                 if core_matrix_layout is None:
                     continue
                 flat_core_matrix_layout = coalesce(core_matrix_layout)
-                v_reshape = composition(v_inst, TensorLayout(core_matrix_layout.shape_tuple))
+                _, k_mode = core_matrix_layout
+                k_mode_inner, k_mode_outer = group(k_mode, inst_k)
+                if k_mode_inner.size() > 1:
+                    stride_outer = b_shape[0] * k_mode_inner.size()
+                    k_mode_outer_shape = flatten(k_mode_outer.shape_tuple)
+                    k_mode_outer_stride = prefix_product(k_mode_outer_shape, stride_outer)
+                    v_reshape = make_layout(v_inst, TensorLayout(k_mode_outer_shape, k_mode_outer_stride))
+                else:
+                    v_reshape = v_inst
                 core_matrix_layout_ = coalesce(composition(b_tensor_info.layout, v_reshape))
                 if core_matrix_layout_ == flat_core_matrix_layout:
                     layout_type = i
@@ -1721,7 +1740,7 @@ class TmaCopyInstructionSelection(IRRewriter):
         new_expr = super().visit_Cast(e)
         if e.expr in self.expr2param_idx:
             expr_ty = self.infer_type(e.expr)
-            if expr_ty in [PointerType, TensorType, TensorPointerType]:
+            if isinstance(expr_ty, (PointerType, TensorType, TensorPointerType)):
                 idx = self.expr2param_idx[e.expr]
                 self.expr2param_idx[e] = idx
         return new_expr
@@ -1835,9 +1854,9 @@ class TmaCopyInstructionSelection(IRRewriter):
             param_idx = self.expr2param_idx[base_ptr]
             param = self.func_params[param_idx]
             # unpack result
-            inst, dim, box_shape, tma_strides, swizzle, tma_extends_transform, tma_coords_transform = candidate
+            inst, dim, box_shape, tma_strides, swizzle, tma_extents_transform, tma_coords_transform = candidate
             extents = product_each(global_layout.shape_tuple)
-            tma_extents = tma_extends_transform(*extents)
+            tma_extents = tma_extents_transform(*extents)
 
             # determine dimensions
             def tma_pointer_functor(arg: Expr, base_ptr: Expr = base_ptr, param: Var = param):
@@ -1910,7 +1929,6 @@ class CopyInstructionSelection(IRRewriter):
         val_shape = val_layout.shape_tuple
         val_stride = val_layout.stride_tuple
         from hidet.ir.cute.ops.partition import reg_tensor_stride
-        from hidet.ir.cute import prefix_product, filter_zeros
 
         val_shape_fz = filter_zeros(val_stride, val_shape)
         val_stride = reg_tensor_stride(prefix_product(val_shape_fz), val_stride)

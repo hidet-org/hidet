@@ -32,7 +32,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[arrive_count, smem_addr])
+        asm(template=template_string, inputs=[arrive_count, smem_addr], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_init, Function)
     register_primitive_function(name=cuda_mbarrier_init.name, func_or_type=cuda_mbarrier_init)
@@ -48,7 +48,7 @@ def register_mbarrier():
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
         ticks = u32(10_000_000)
-        asm(template=template_string, inputs=[smem_addr, phase, ticks])
+        asm(template=template_string, inputs=[smem_addr, phase, ticks], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_wait, Function)
     register_primitive_function(name=cuda_mbarrier_wait.name, func_or_type=cuda_mbarrier_wait)
@@ -61,7 +61,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, outputs=[wait_complete], inputs=[smem_addr, phase, pred])
+        asm(template=template_string, outputs=[wait_complete], inputs=[smem_addr, phase, pred], is_volatile=True)
         return wait_complete
 
     assert isinstance(cuda_mbarrier_test_wait, Function)
@@ -76,7 +76,7 @@ def register_mbarrier():
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
         wait_complete = u32(0)
-        asm(template=template_string, outputs=[wait_complete], inputs=[smem_addr, phase])
+        asm(template=template_string, outputs=[wait_complete], inputs=[smem_addr, phase], is_volatile=True)
         return wait_complete
 
     assert isinstance(cuda_mbarrier_try_wait, Function)
@@ -90,7 +90,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr, cta_id, pred])
+        asm(template=template_string, inputs=[smem_addr, cta_id, pred], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_arrive, Function)
     register_primitive_function(name=cuda_mbarrier_arrive.name, func_or_type=cuda_mbarrier_arrive)
@@ -103,7 +103,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr])
+        asm(template=template_string, inputs=[smem_addr], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_arrive_on_local, Function)
     register_primitive_function(name=cuda_mbarrier_arrive_on_local.name, func_or_type=cuda_mbarrier_arrive_on_local)
@@ -116,7 +116,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr])
+        asm(template=template_string, inputs=[smem_addr], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_invalidate, Function)
     register_primitive_function(name=cuda_mbarrier_invalidate.name, func_or_type=cuda_mbarrier_invalidate)
@@ -129,7 +129,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[transaction_bytes, smem_addr])
+        asm(template=template_string, inputs=[transaction_bytes, smem_addr], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_arrive_and_expect_tx_on_local, Function)
     register_primitive_function(
@@ -144,7 +144,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr, cta_id, pred, transaction_bytes])
+        asm(template=template_string, inputs=[smem_addr, cta_id, pred, transaction_bytes], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_arrive_and_expect_tx, Function)
     register_primitive_function(
@@ -159,7 +159,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr, transaction_bytes])
+        asm(template=template_string, inputs=[smem_addr, transaction_bytes], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_expect_transaction, Function)
     register_primitive_function(
@@ -174,7 +174,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr, dst_cta_id, pred, transaction_bytes])
+        asm(template=template_string, inputs=[smem_addr, dst_cta_id, pred, transaction_bytes], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_complete_transaction, Function)
     register_primitive_function(
@@ -189,7 +189,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr, transaction_bytes])
+        asm(template=template_string, inputs=[smem_addr, transaction_bytes], is_volatile=True)
 
     assert isinstance(cuda_mbarrier_complete_transaction_on_local, Function)
     register_primitive_function(
@@ -203,7 +203,7 @@ def register_mbarrier():
     def cuda_fence_barrier_init():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
-        asm(template=template_string, inputs=[])
+        asm(template=template_string, inputs=[], is_volatile=True)
 
     assert isinstance(cuda_fence_barrier_init, Function)
     register_primitive_function(name=cuda_fence_barrier_init.name, func_or_type=cuda_fence_barrier_init)
@@ -215,7 +215,7 @@ def register_mbarrier():
     def cuda_fence_view_async_shared():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
-        asm(template=template_string, inputs=[])
+        asm(template=template_string, inputs=[], is_volatile=True)
 
     assert isinstance(cuda_fence_view_async_shared, Function)
     register_primitive_function(name=cuda_fence_view_async_shared.name, func_or_type=cuda_fence_view_async_shared)
@@ -228,7 +228,7 @@ def register_mbarrier():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_addr = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_addr])
+        asm(template=template_string, inputs=[smem_addr], is_volatile=True)
 
     assert isinstance(cuda_cp_async_barrier_arrive, Function)
     register_primitive_function(name=cuda_cp_async_barrier_arrive.name, func_or_type=cuda_cp_async_barrier_arrive)

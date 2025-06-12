@@ -328,6 +328,7 @@ def register_wgmma_instructions_generic(config: WgmmaConfig):
                     template_sub_strings[-1] = template_sub_strings[-1].rstrip(',') + ';'
 
                 template_string = " ".join(template_sub_strings)
+                rc_dtype = "float32" if config.output_dtype == "f32" else "uint32"
 
                 @script
                 def cuda_wgmma(a: ~data_type(config.a_input_dtype), c: ~data_type(config.output_dtype), b_desc: uint64):
@@ -335,7 +336,7 @@ def register_wgmma_instructions_generic(config: WgmmaConfig):
                     attrs.func_name = func_name
 
                     ra = cast(a, PointerType("uint32"))
-                    rc = cast(c, PointerType("uint32"))
+                    rc = cast(c, PointerType(rc_dtype))
 
                     asm(
                         template=template_string,
@@ -366,13 +367,14 @@ def register_wgmma_instructions_generic(config: WgmmaConfig):
                     template_sub_strings[-1] = template_sub_strings[-1].rstrip(',') + ';'
 
                 template_string = " ".join(template_sub_strings)
+                rc_dtype = "float32" if config.output_dtype == "f32" else "uint32"
 
                 @script
                 def cuda_wgmma(a_desc: uint64, c: ~data_type(config.output_dtype), b_desc: uint64):
                     attrs.func_kind = 'cuda_internal'
                     attrs.func_name = func_name
 
-                    rc = cast(c, PointerType("uint32"))
+                    rc = cast(c, PointerType(rc_dtype))
 
                     asm(
                         template=template_string,
@@ -446,7 +448,7 @@ def register_wgmma_fence():
     def cuda_wgmma_fence():
         attrs.func_name = func_name
         attrs.func_kind = "cuda_internal"
-        asm(template=template_string)
+        asm(template=template_string, is_volatile=True, memory_fence=True)
 
     assert isinstance(cuda_wgmma_fence, Function)
     register_primitive_function(name=cuda_wgmma_fence.name, func_or_type=cuda_wgmma_fence)
@@ -461,7 +463,7 @@ def register_wgmma_commit_group():
     def cuda_wgmma_commit_group():
         attrs.func_name = func_name
         attrs.func_kind = "cuda_internal"
-        asm(template=template_string)
+        asm(template=template_string, is_volatile=True, memory_fence=True)
 
     assert isinstance(cuda_wgmma_commit_group, Function)
     register_primitive_function(name=cuda_wgmma_commit_group.name, func_or_type=cuda_wgmma_commit_group)
@@ -478,7 +480,7 @@ def register_wgmma_wait_group():
             attrs.func_kind = "cuda_internal"
             # assert N >= 0 and N <=7
             template = "wgmma.wait_group.sync.aligned {};".format(n)
-            asm(template=template)
+            asm(template=template, is_volatile=True, memory_fence=True)
 
         assert isinstance(cuda_wgmma_wait_group, Function)
         register_primitive_function(name=cuda_wgmma_wait_group.name, func_or_type=cuda_wgmma_wait_group)

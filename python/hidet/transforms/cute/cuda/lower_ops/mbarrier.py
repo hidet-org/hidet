@@ -22,6 +22,7 @@ from hidet.ir.primitives.cuda.barrier import (
     mbarrier_try_wait,
     mbarrier_wait,
     mbarrier_init,
+    fence_view_async_shared,
 )
 from hidet.ir.primitives.cuda import cp_async_barrier_arrive
 from hidet.ir.primitives.cuda import threadIdx
@@ -50,6 +51,7 @@ class MBarriersEmitter(OpEmitter):
             num_threads = annotations["num_threads"]
             with self.for_grid([op.num_barriers]) as i:
                 self.append(mbarrier_init(output.buffer + i, num_threads))
+            self.append(fence_view_async_shared())
 
 
 @register_impl(MBarrierArrive)
@@ -79,7 +81,7 @@ class MBarrierTryWaitEmitter(OpEmitter):
         mbarrier = args[0]
         mbarrier = mbarrier.buffer + mbarrier.offset
         phase = u32(op.phase)
-        self.assign(output.buffer[0], mbarrier_try_wait(mbarrier, phase))
+        self.buffer_store(output.buffer, [0], mbarrier_try_wait(mbarrier, phase))
 
 
 @register_impl(MBarrierWait)

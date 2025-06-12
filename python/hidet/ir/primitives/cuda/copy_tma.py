@@ -43,7 +43,12 @@ def register_copy_bulk():
         attrs.func_kind = 'cuda_internal'
         smem_int_ptr = cvta_generic_to_shared(dst)
         smem_int_mbar = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_int_ptr, src, size, smem_int_mbar, multicastmask])
+        asm(
+            template=template_string,
+            inputs=[smem_int_ptr, src, size, smem_int_mbar, multicastmask],
+            is_volatile=True,
+            memory_fence=True,
+        )
 
     assert isinstance(cuda_copy_bulk_g2s_multicast, Function)
     register_primitive_function(name=cuda_copy_bulk_g2s_multicast.name, func_or_type=cuda_copy_bulk_g2s_multicast)
@@ -59,7 +64,12 @@ def register_copy_bulk():
         attrs.func_kind = 'cuda_internal'
         smem_int_ptr = cvta_generic_to_shared(dst)
         smem_int_mbar = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[smem_int_ptr, src, size, smem_int_mbar])
+        asm(
+            template=template_string,
+            inputs=[smem_int_ptr, src, size, smem_int_mbar],
+            is_volatile=True,
+            memory_fence=True,
+        )
 
     assert isinstance(cuda_copy_bulk_g2s, Function)
     register_primitive_function(name=cuda_copy_bulk_g2s.name, func_or_type=cuda_copy_bulk_g2s)
@@ -77,7 +87,12 @@ def register_copy_bulk():
         dst_smem_int_ptr = cvta_generic_to_shared(dst)
         src_smem_int_ptr = cvta_generic_to_shared(src)
         smem_int_mbar = cvta_generic_to_shared(mbar)
-        asm(template=template_string, inputs=[dst_smem_int_ptr, src_smem_int_ptr, size, smem_int_mbar])
+        asm(
+            template=template_string,
+            inputs=[dst_smem_int_ptr, src_smem_int_ptr, size, smem_int_mbar],
+            is_volatile=True,
+            memory_fence=True,
+        )
 
     assert isinstance(cuda_copy_bulk_s2s, Function)
     register_primitive_function(name=cuda_copy_bulk_s2s.name, func_or_type=cuda_copy_bulk_s2s)
@@ -93,7 +108,7 @@ def register_copy_bulk():
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
         smem_int_ptr = cvta_generic_to_shared(src)
-        asm(template=template_string, inputs=[dst, smem_int_ptr, size])
+        asm(template=template_string, inputs=[dst, smem_int_ptr, size], is_volatile=True, memory_fence=True)
 
     assert isinstance(cuda_copy_bulk_s2g, Function)
     register_primitive_function(name=cuda_copy_bulk_s2g.name, func_or_type=cuda_copy_bulk_s2g)
@@ -106,7 +121,7 @@ def register_copy_bulk():
     def cuda_copy_bulk_prefetch(src: PointerType(VoidType()), size: i32):
         attrs.func_name = func_name
         attrs.func_kind = 'cuda_internal'
-        asm(template=template_string, inputs=[src, size])
+        asm(template=template_string, inputs=[src, size], is_volatile=True, memory_fence=True)
 
     assert isinstance(cuda_copy_bulk_prefetch, Function)
     register_primitive_function(name=cuda_copy_bulk_prefetch.name, func_or_type=cuda_copy_bulk_prefetch)
@@ -153,6 +168,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, multicastmask, crd0],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_multicast_1d, Function)
@@ -178,6 +195,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, multicastmask, crd0, crd1],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_multicast_2d, Function)
@@ -204,6 +223,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, multicastmask, crd0, crd1, crd2],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_multicast_3d, Function)
@@ -231,6 +252,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, multicastmask, crd0, crd1, crd2, crd3],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_multicast_4d, Function)
@@ -269,6 +292,8 @@ def register_copy_tensor_nd():
                             crd3,
                             crd4,
                         ],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_multicast_5d, Function)
@@ -301,7 +326,12 @@ def register_copy_tensor_nd():
                     gmem_int_desc = cast(src, u64)
                     smem_int_ptr = cvta_generic_to_shared(dst)
                     smem_int_mbar = cvta_generic_to_shared(mbar)
-                    asm(template=template_string, inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0])
+                    asm(
+                        template=template_string,
+                        inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_g2s_1d, Function)
                 register_primitive_function(name=cuda_copy_tensor_g2s_1d.name, func_or_type=cuda_copy_tensor_g2s_1d)
@@ -316,7 +346,12 @@ def register_copy_tensor_nd():
                     gmem_int_desc = cast(src, u64)
                     smem_int_ptr = cvta_generic_to_shared(dst)
                     smem_int_mbar = cvta_generic_to_shared(mbar)
-                    asm(template=template_string, inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1])
+                    asm(
+                        template=template_string,
+                        inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_g2s_2d, Function)
                 register_primitive_function(name=cuda_copy_tensor_g2s_2d.name, func_or_type=cuda_copy_tensor_g2s_2d)
@@ -336,7 +371,12 @@ def register_copy_tensor_nd():
                     gmem_int_desc = cast(src, u64)
                     smem_int_ptr = cvta_generic_to_shared(dst)
                     smem_int_mbar = cvta_generic_to_shared(mbar)
-                    asm(template=template_string, inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1, crd2])
+                    asm(
+                        template=template_string,
+                        inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1, crd2],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_g2s_3d, Function)
                 register_primitive_function(name=cuda_copy_tensor_g2s_3d.name, func_or_type=cuda_copy_tensor_g2s_3d)
@@ -360,6 +400,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1, crd2, crd3],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_4d, Function)
@@ -385,6 +427,8 @@ def register_copy_tensor_nd():
                     asm(
                         template=template_string,
                         inputs=[smem_int_ptr, gmem_int_desc, smem_int_mbar, crd0, crd1, crd2, crd3, crd4],
+                        is_volatile=True,
+                        memory_fence=True,
                     )
 
                 assert isinstance(cuda_copy_tensor_g2s_5d, Function)
@@ -412,7 +456,12 @@ def register_copy_tensor_nd():
                     attrs.func_kind = 'cuda_internal'
                     gmem_int_desc = cast(dst, u64)
                     smem_int_ptr = cvta_generic_to_shared(src)
-                    asm(template=template_string, inputs=[gmem_int_desc, smem_int_ptr, crd0])
+                    asm(
+                        template=template_string,
+                        inputs=[gmem_int_desc, smem_int_ptr, crd0],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_s2g_1d, Function)
                 register_primitive_function(name=cuda_copy_tensor_s2g_1d.name, func_or_type=cuda_copy_tensor_s2g_1d)
@@ -426,7 +475,12 @@ def register_copy_tensor_nd():
                     attrs.func_kind = 'cuda_internal'
                     gmem_int_desc = cast(dst, u64)
                     smem_int_ptr = cvta_generic_to_shared(src)
-                    asm(template=template_string, inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1])
+                    asm(
+                        template=template_string,
+                        inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_s2g_2d, Function)
                 register_primitive_function(name=cuda_copy_tensor_s2g_2d.name, func_or_type=cuda_copy_tensor_s2g_2d)
@@ -440,7 +494,12 @@ def register_copy_tensor_nd():
                     attrs.func_kind = 'cuda_internal'
                     gmem_int_desc = cast(dst, u64)
                     smem_int_ptr = cvta_generic_to_shared(src)
-                    asm(template=template_string, inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2])
+                    asm(
+                        template=template_string,
+                        inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_s2g_3d, Function)
                 register_primitive_function(name=cuda_copy_tensor_s2g_3d.name, func_or_type=cuda_copy_tensor_s2g_3d)
@@ -459,7 +518,12 @@ def register_copy_tensor_nd():
                     attrs.func_kind = 'cuda_internal'
                     gmem_int_desc = cast(dst, u64)
                     smem_int_ptr = cvta_generic_to_shared(src)
-                    asm(template=template_string, inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2, crd3])
+                    asm(
+                        template=template_string,
+                        inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2, crd3],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_s2g_4d, Function)
                 register_primitive_function(name=cuda_copy_tensor_s2g_4d.name, func_or_type=cuda_copy_tensor_s2g_4d)
@@ -479,7 +543,12 @@ def register_copy_tensor_nd():
                     attrs.func_kind = 'cuda_internal'
                     gmem_int_desc = cast(dst, u64)
                     smem_int_ptr = cvta_generic_to_shared(src)
-                    asm(template=template_string, inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2, crd3, crd4])
+                    asm(
+                        template=template_string,
+                        inputs=[gmem_int_desc, smem_int_ptr, crd0, crd1, crd2, crd3, crd4],
+                        is_volatile=True,
+                        memory_fence=True,
+                    )
 
                 assert isinstance(cuda_copy_tensor_s2g_5d, Function)
                 register_primitive_function(name=cuda_copy_tensor_s2g_5d.name, func_or_type=cuda_copy_tensor_s2g_5d)
@@ -493,7 +562,7 @@ def register_copy_bulk_commit_group():
     def cuda_copy_bulk_commit_group():
         attrs.func_name = 'cuda_copy_bulk_commit_group'
         attrs.func_kind = 'cuda_internal'
-        asm('cp.async.bulk.commit_group;')
+        asm('cp.async.bulk.commit_group;', is_volatile=True)
 
     assert isinstance(cuda_copy_bulk_commit_group, Function)
     register_primitive_function(cuda_copy_bulk_commit_group.name, cuda_copy_bulk_commit_group)
@@ -511,7 +580,7 @@ def register_copy_bulk_wait_group():
             def cuda_copy_bulk_wait_group():
                 attrs.func_name = func_name
                 attrs.func_kind = 'cuda_internal'
-                asm('cp.async.bulk.wait_group{} {};'.format(read, groups))
+                asm('cp.async.bulk.wait_group{} {};'.format(read, groups), is_volatile=True, memory_fence=True)
 
             assert isinstance(cuda_copy_bulk_wait_group, Function)
             register_primitive_function(cuda_copy_bulk_wait_group.name, cuda_copy_bulk_wait_group)
