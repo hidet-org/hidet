@@ -379,7 +379,7 @@ class StridedSliceTask(Task):
 
 
 class BroadcastTask(Task):
-    def __init__(self, data: TensorNode, shape: List[int]):
+    def __init__(self, data: TensorNode, shape: List[Int]):
         data_shape = data.shape
         if not can_broadcast(data_shape, shape):
             raise ValueError('Can not broadcast a tensor with shape {} to {}'.format(data_shape, shape))
@@ -800,7 +800,7 @@ class StridedSliceOp(Operator):
 
 
 class BroadcastOp(Operator):
-    def __init__(self, data: Tensor, shape: List[int]):
+    def __init__(self, data: Tensor, shape: List[Int]):
         super().__init__(
             inputs=[data], attributes={'shape': shape}, task=BroadcastTask(input_like(data, 'data'), shape)
         )

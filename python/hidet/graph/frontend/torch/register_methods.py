@@ -203,7 +203,7 @@ def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
         if sizes[i] == -1:
             ri = len(sizes) - 1 - i
             assert ri < len(self.shape)
-            sizes[i] = int(self.shape[len(self.shape) - 1 - ri])
+            sizes[i] = self.shape[len(self.shape) - 1 - ri]
     return ops.broadcast(self, sizes)
 
 

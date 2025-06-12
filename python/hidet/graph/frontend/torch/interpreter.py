@@ -11,6 +11,7 @@
 # limitations under the License.
 
 from typing import Dict, Any, Callable, Optional, Tuple, Set, List
+import traceback
 import logging
 import inspect
 import tabulate
@@ -207,13 +208,12 @@ class Interpreter:
                 raise RuntimeError('\n'.join(msg))
             caused_callable = dispatched
 
-        callable_name, filename, lineno = Interpreter._callable_info(caused_callable)
+        callable_name, _, lineno = Interpreter._callable_info(caused_callable)
         raise RuntimeError(
-            f'{exception}, occurred when interpreting {target_name} with\n'
+            f'Interpreting "{target_name}" with\n'
             f'  {callable_name}({", ".join(argument_strings)})\n'
-            f'{callable_name} is defined at\n'
-            f'  File "{filename}", line {lineno}'
-        ) from exception
+            f'failed. {traceback.format_exc()}'
+        )
 
     def forward(self, *args):
         # pylint: disable=broad-except
