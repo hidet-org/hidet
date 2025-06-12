@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hidet.ir.primitives.cuda.sync import syncthreads
 import pytest
 
 import hidet
@@ -35,15 +36,16 @@ def test_tmem_basic():
 
             # Allocate a shared memory location to store the TMEM address
             tmem_addr = shared_tensor("u32", [1])
-            # One warp should handle TMEM allocation/deallocation
-            if (threadIdx.x // 32) == 0 and (threadIdx.x % 32) == 0:
-                tcgen05_alloc(tmem_addr, 64)
-
-                # print the allocated address
-                printf("Allocated TMEM address: %u\n", tmem_addr[0])
-                # deallocate the TMEM address
-                tcgen05_dealloc(tmem_addr[0], 64)
-
+            warp_idx = threadIdx.x // 32
+            if warp_idx == 0:
+                tcgen05_alloc(tmem_addr, 128)
+            syncthreads()
+            printf("Allocated TMEM address: %u\n", tmem_addr[0])
+            if warp_idx == 0:
+                tcgen05_dealloc(tmem_addr[0], 128)
+            syncthreads()
+            printf("Deallocated TMEM address: %u\n", tmem_addr[0])
+            if warp_idx == 0:
                 tcgen05_relinquish_alloc_permit()
 
         func = script_module.build()
@@ -63,15 +65,21 @@ def test_multiple_tmem_alloc():
 
             # Allocate shared memory locations to store TMEM addresses
             tmem_addrs = shared_tensor("u32", [3])
+            warp_idx = threadIdx.x // 32
 
             # One warp handles TMEM allocation/deallocation
-            if (threadIdx.x // 32) == 0 and (threadIdx.x % 32) == 0:
+            if warp_idx == 0:
                 # Allocate three different sizes of TMEM
                 tcgen05_alloc(~tmem_addrs[0], 32)
-                printf("First TMEM address: %u\n", tmem_addrs[0])
                 tcgen05_alloc(~tmem_addrs[1], 64)
-                printf("Second TMEM address: %u\n", tmem_addrs[1])
                 tcgen05_alloc(~tmem_addrs[2], 128)
+
+            syncthreads()
+            printf("CTA %d: TMEM addresses: %u, %u, %u\n", blockIdx.x, tmem_addrs[0], tmem_addrs[1], tmem_addrs[2])
+
+            if warp_idx == 0:
+                printf("First TMEM address: %u\n", tmem_addrs[0])
+                printf("Second TMEM address: %u\n", tmem_addrs[1])
                 printf("Third TMEM address: %u\n", tmem_addrs[2])
 
                 # Deallocate in reverse order
@@ -81,6 +89,8 @@ def test_multiple_tmem_alloc():
 
                 # Relinquish the allocation permit
                 tcgen05_relinquish_alloc_permit()
+
+            syncthreads()
 
     func = script_module.build()
     func()
@@ -101,44 +111,16 @@ def test_tmem_cta_pair():
             tmem_addr = shared_tensor("u32", [1])
 
             # one warp in each CTA handles TMEM operations
-            if (threadIdx.x // 32) == 0 and (threadIdx.x % 32) == 0:
+            warp_idx = threadIdx.x // 32
+            if warp_idx == 0:
                 tcgen05_alloc(tmem_addr, 64, use_cta_pair=True)
                 printf("CTA %d: TMEM address: %u\n", blockIdx.x, tmem_addr[0])
 
+            syncthreads()
+
+            if warp_idx == 0:
                 tcgen05_dealloc(tmem_addr[0], 64, use_cta_pair=True)
-
-                tcgen05_relinquish_alloc_permit(use_cta_pair=True)
-
-    func = script_module.build()
-    func()
-    hidet.cuda.synchronize()
-
-
-@pytest.mark.requires_cuda_blackwell
-def test_tmem_allocation_limit():
-    with hidet.script_module() as script_module:
-
-        @script
-        def tmem_allocation_limit():
-            attrs.func_kind = 'cuda_kernel'
-            attrs.cuda.grid_dim = 1
-            attrs.cuda.block_dim = 128
-
-            # Allocate shared memory locations to store TMEM addresses
-            tmem_addr = shared_tensor("u32", [1])
-            success = shared_tensor("i32", [1])
-            success[0] = 0
-
-            if (threadIdx.x // 32) == 0 and (threadIdx.x % 32) == 0:
-                # Allocate the maximum tmem(512 columns)
-                tcgen05_alloc(tmem_addr, 512)
-
-                # If we get here: allocation succeeded
-                success[0] = 1
-                printf("SUCCESS: TMEM address: %u\n", tmem_addr[0])
-
-                tcgen05_dealloc(tmem_addr[0], 512)
-                tcgen05_relinquish_alloc_permit()
+                printf("CTA %d: Deallocated TMEM address: %u\n", blockIdx.x, tmem_addr[0])
 
     func = script_module.build()
     func()

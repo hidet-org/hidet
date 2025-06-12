@@ -39,3 +39,5 @@ from .prmt import prmt
 from .tmem import tcgen05_alloc, tcgen05_dealloc, tcgen05_relinquish_alloc_permit
 from .tmem import compute_tmem_address, compute_tmem_offset_address, get_register_count
 from .tcgen05_ldst import tcgen05_ld, tcgen05_st, tcgen05_wait
+from .tcgen05_cp import tcgen05_cp, tcgen05_shift
+from .tcgen05_cp import make_tcgen05_cp_desc, matrix_descriptor_encode

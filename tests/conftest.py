@@ -62,9 +62,10 @@ def pytest_collection_modifyitems(config, items):
         keyword2mark['release'] = pytest.mark.skip(reason="need --release option to run")
     if 'cuda' not in available_devices():
         keyword2mark['requires_cuda'] = pytest.mark.skip(reason="test requires CUDA GPUs")
-    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair() < (9, 0):
+    # Note: WGMMA cannot be used on Blackwell GPUs
+    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair()[0] != 9:
         keyword2mark['requires_cuda_hopper'] = pytest.mark.skip(reason="test requires Hopper CUDA GPUs")
-    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair() < (10, 0):
+    if 'cuda' not in available_devices() or hidet.option.cuda.get_arch_pair()[0] != 10:
         keyword2mark['requires_cuda_blackwell'] = pytest.mark.skip(reason="test requires Blackwell CUDA GPUs")
     if 'hip' not in available_devices():
         keyword2mark['requires_hip'] = pytest.mark.skip(reason="test requires HIP GPUs")

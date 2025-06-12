@@ -1210,6 +1210,7 @@ class cuda:
 
             # get the architecture of the first CUDA GPU
             properties = hidet.cuda.properties(0)
+            # Format: sm_XY where X is major (can be multi-digit), Y is minor (single digit)
             arch = 'sm_{}{}'.format(properties.major, properties.minor)
         return arch
 
@@ -1221,10 +1222,30 @@ class cuda:
         Returns
         -------
         ret: Tuple[int, int]
-            The CUDA architecture, e.g., (3, 5), (7, 0), (8, 0), etc.
+            The CUDA architecture, e.g., (3, 5), (7, 0), (8, 0), (9, 0), (10, 0), etc.
         """
-        arch = cuda.get_arch()
-        return int(arch[3]), int(arch[4])
+
+        arch_str = cuda.get_arch()
+        if not arch_str.startswith('sm_'):
+            raise ValueError(f"Invalid architecture format: {arch_str}")
+
+        # Remove 'sm_' prefix
+        version_str = arch_str[3:]
+
+        # The format is sm_XY where:
+        # - X is the major version (can be 1-3 digits)
+        # - Y is the minor version (always last digit)
+        # Examples: sm_70 (7,0), sm_90 (9,0), sm_100 (10,0)
+
+        if len(version_str) < 2:
+            raise ValueError(f"Invalid architecture format: {arch_str}")
+
+        # Minor version is always the last digit
+        minor = int(version_str[-1])
+        # Major version is everything before the last digit
+        major = int(version_str[:-1])
+
+        return major, minor
 
     class build:
         @staticmethod
