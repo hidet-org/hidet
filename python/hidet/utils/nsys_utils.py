@@ -134,9 +134,10 @@ def nsys_run(func, *args, **kwargs) -> NsightSystemReport:
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     # dump args
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='pkl') as f:
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pkl', delete=False) as f:
         args_path = f.name
         pickle.dump((args, kwargs), f)
+        f.close()
 
         status = subprocess.run(
             _nsys_template.format(

@@ -54,9 +54,10 @@ def omniperf_run(omniperf_path, func, *args, **kwargs) -> OmniperfReport:
     os.makedirs(report_path)
 
     # dump args
-    with tempfile.NamedTemporaryFile('wb', suffix='pkl') as f:
+    with tempfile.NamedTemporaryFile('wb', suffix='.pkl', delete=False) as f:
         args_path: str = f.name
         pickle.dump((args, kwargs), f)
+        f.close()
 
         launch_file: str = report_path + "/launch.sh"
         launch_command = f"{sys.executable} {str(__file__)} {str(script_path)} {str(func_name)} {str(args_path)}\n"

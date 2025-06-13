@@ -106,9 +106,10 @@ def sanitizer_run(func, *args, **kwargs):
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     # dump args
-    with tempfile.NamedTemporaryFile('wb', suffix='pkl') as f:
+    with tempfile.NamedTemporaryFile('wb', suffix='.pkl', delete=False) as f:
         args_path: str = f.name
         pickle.dump((args, kwargs), f)
+        f.close()
 
         command = _sanitizer_template.format(
             sanitizer_path=sanitizer_get_path(),

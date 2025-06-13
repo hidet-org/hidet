@@ -151,9 +151,10 @@ def ncu_run(func, *args, **kwargs) -> NsightComputeReport:
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     # dump args
-    with tempfile.NamedTemporaryFile('wb', suffix='pkl') as f:
+    with tempfile.NamedTemporaryFile('wb', suffix='.pkl', delete=False) as f:
         args_path: str = f.name
         pickle.dump((args, kwargs), f)
+        f.close()
 
         status = subprocess.run(
             _ncu_template.format(
