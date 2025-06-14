@@ -140,12 +140,12 @@ class LowerIntegerSubbyteRewriter(IRRewriter):
                 original = sb.declare(Var("original", u16))
                 result = sb.declare(Var("result", u16))
                 with sb.while_loop(boolean.true):
+                    u16_ptr = cast(cast(base, ~u16) + (idx >> 1), ~u16)
+                    sb.assign(original, value=u16_ptr[0])
                     updated_value = (
                         ((((original >> (8 * (idx % 2))) & u8(0xFF)) & updated_mask) | new_bits) << (8 * (idx % 2))
                     ) | (original & (u16(0xFF) << (1 - idx % 2)))
-                    updated = sb.declare(Var("updated", storage_ty), init=updated_value)
-                    u16_ptr = cast(cast(base, ~u16) + (idx >> 1), ~u16)
-                    sb.assign(original, value=u16_ptr[0])
+                    updated = sb.declare(Var("updated", u16), init=updated_value)
                     sb.assign(result, value=atomic_cas(u16_ptr, compare=original, value=updated))
                     with sb.if_then(result == original):
                         sb.brk()
