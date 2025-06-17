@@ -231,9 +231,9 @@ def f8_gemm_multiple_stage_ss(m, n, k, wgmma_n=64, trans_b=True, group_k=128):
                     tr_c = make_tensor("float32", layout_auto((bm, bn)), "register")
                     mbarrier_wait(mbar_tma[smem_pipe_read], read_phase)
                     fill(tr_c, 0.0)
-                    copy(auto_copy((bm, bn)), txSsa[:, :, smem_pipe_read], txrsa)
-                    copy(auto_copy((bm, bn)), txSsb[:, :, smem_pipe_read], txrsb)
-                    scale = tr_sa * tr_sb
+                    copy(auto_copy(), txSsa[:, :, smem_pipe_read], txrsa)
+                    copy(auto_copy(), txSsb[:, :, smem_pipe_read], txrsb)
+                    scale = txrsa * txrsb
                     wgmma_fence_operand(tr_c)
                     wgmma_fence()
                     for ki in range(k_tiles):

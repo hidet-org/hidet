@@ -1179,7 +1179,7 @@ def flash_attention_v4_bwd(batch_size, seqlen_q, num_heads, head_size, seqlen_k,
                     copy(auto_copy((bc, br)), txgli, txrli)
                     copy(auto_copy((bc, br)), txgmi, txrmi)
 
-                    p = exp(tr_qk - li)
+                    p = exp(tr_qk - txrli)
 
                     # compute v*do^T
                     tr_dp = make_tensor("float32", auto_layout, "register")

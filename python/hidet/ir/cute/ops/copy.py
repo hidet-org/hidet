@@ -198,7 +198,14 @@ class Copy(Op):
         elif any(ty is not void and is_auto_layout(ty.layout) for ty in [src_ty, dst_ty, mask_ty, mbarrier_ty]):
             return void
         elif not (
-            all(isinstance(ty.layout, (TensorLayout, ComposedTensorLayout)) for ty in [src_ty, dst_ty])
+            all(
+                (
+                    ty.scope.is_memory()
+                    and isinstance(ty.layout, (TensorLayout, ComposedTensorLayout))
+                    or (ty.scope.is_register() and isinstance(ty.layout, TiledTensorLayout))
+                )
+                for ty in [src_ty, dst_ty]
+            )
             and all(ty is void or isinstance(ty.layout, TensorLayout) for ty in [mask_ty, mbarrier_ty])
         ):
             raise TypeError(
@@ -209,8 +216,12 @@ class Copy(Op):
             # as long as the total element of non-zero-stride dimensions are
             # equal, we can perform the copy. The zero-stride dimensions can be
             # redistributed arbitrarily.
-            src_count = src_ty.layout.count()
-            dst_count = dst_ty.layout.count()
+            src_count = (
+                src_ty.layout.val_count() if isinstance(src_ty.layout, TiledTensorLayout) else src_ty.layout.count()
+            )
+            dst_count = (
+                dst_ty.layout.val_count() if isinstance(dst_ty.layout, TiledTensorLayout) else dst_ty.layout.count()
+            )
             if src_count != dst_count:
                 raise TypeError(f"Tensor count mismatch. (got:src({src_count}),dst({dst_count}))")
         return void

@@ -17,7 +17,8 @@ from hidet.ir.tools import infer_type
 
 from hidet.ir.cute.int_tuple import has_none, product_each
 from hidet.ir.cute.ops.subtensor import SubTensor
-from hidet.ir.cute import slice_and_offset, TensorLayout
+from hidet.ir.cute import slice_and_offset, TensorLayout, TiledTensorLayout
+from hidet.ir.cute.layout import register_tensor_layout
 
 from .registry import OpEmitter, Buffer, register_impl
 
@@ -34,10 +35,15 @@ class SubTensorEmitter(OpEmitter):
         assert isinstance(src_ty, PointerType) or src_ty == u64
         coords = args[1]
         coords = coords[0] if len(coords) == 1 else coords
+        layout = (
+            register_tensor_layout(op.get_value_layout(src.layout))
+            if isinstance(src.layout, TiledTensorLayout)
+            else src.layout
+        )
         if has_none(coords):
-            _, offset = slice_and_offset(args[1], src.layout)
+            _, offset = slice_and_offset(args[1], layout)
         else:
-            offset = src.layout(coords)
+            offset = layout(coords)
         dst.buffer = self.auto_var(hint=op.name, e=src_buf)
         from hidet.ir.dtypes import i32
 
@@ -50,9 +56,8 @@ class SubTensorEmitter(OpEmitter):
             assert src.scope.is_global()
             tile_shape = src.layout[0].shape_tuple
             tile_shape = product_each(tile_shape)
-            # assert len(tile_shape) == len(src.coords)
+            assert len(tile_shape) == len(src.coords)
             rank = len(tile_shape)
-            rank = 2
             crd_layout = TensorLayout(src.layout[rank:].shape_tuple)
             crd = coords[rank:]
             dst.tensor_maps = src.tensor_maps

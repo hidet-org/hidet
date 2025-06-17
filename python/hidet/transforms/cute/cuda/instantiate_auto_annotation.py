@@ -2693,7 +2693,7 @@ class ResolveAuto(IRVisitor):
                 self._resolve(op)
             current_state.constraints.remove(c)
 
-    def _get_equivalent_copies(self, op: Op):
+    def _get_equivalent_copies(self, op: Copy):
         par = self.get_partition_op(op.src)
         return self.op2copys[par]
 

@@ -73,6 +73,7 @@ from hidet.ir.cute.layout import (
     group,
     canonicalize_thread_value_layout,
     prefix_product,
+    register_tensor_layout,
     filter_zeros,
 )
 from hidet.ir.cute.int_tuple import is_tuple, rank, compact_col_major, flatten, depth, idx2crd, product, product_each
@@ -103,6 +104,8 @@ def expr_to_buffer(expr: Expr, layout_: Union[TiledTensorLayout, ComposedTensorL
     )
     dtype: DataType = expr_ty.dtype
     scope: DeclareScope = expr_ty.scope
+    if scope.is_register() and isinstance(layout, TiledTensorLayout):
+        layout = register_tensor_layout(layout.val_layout())
     return Buffer(buffer=expr, offset=None, dtype=dtype, scope=scope, layout=layout)
 
 
@@ -1928,10 +1931,9 @@ class CopyInstructionSelection(IRRewriter):
         val_layout: TensorLayout = src_layout.val_layout()
         val_shape = val_layout.shape_tuple
         val_stride = val_layout.stride_tuple
-        from hidet.ir.cute.ops.partition import reg_tensor_stride
 
+        val_stride = register_tensor_layout(val_layout).stride_tuple
         val_shape_fz = filter_zeros(val_stride, val_shape)
-        val_stride = reg_tensor_stride(prefix_product(val_shape_fz), val_stride)
         src_layout: TensorLayout = TensorLayout(val_shape_fz, val_stride)
         src_dtype: DataType = src_ty.dtype
         src_scope: DeclareScope = src_ty.scope

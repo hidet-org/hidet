@@ -1013,10 +1013,10 @@ def flash_decoding_v3(
                     copy(auto_copy((bm, bn)), txgmi, txrmi)
                     scale = exp(tr_qk_max - elementwise_max(tr_qk_max, tr_li))
                     tr_qk_max = elementwise_max(tr_qk_max, tr_li)
-                    scale1 = exp(tr_li - tr_qk_max)
+                    scale1 = exp(txrli - tr_qk_max)
                     tr_qk_sum = tr_qk_sum * scale
-                    tr_mi = tr_mi * scale1
-                    alpha = tr_qk_sum / (tr_qk_sum + tr_mi)
+                    txrmi = txrmi * scale1
+                    alpha = tr_qk_sum / (tr_qk_sum + txrmi)
                     tr_qk_sum = tr_qk_sum + tr_mi
                     alpha1 = broadcast_to(alpha, tr_o)
                     tr_o = tr_o * alpha1 + cast(tr_oi, f32) * (1.0 - alpha1)

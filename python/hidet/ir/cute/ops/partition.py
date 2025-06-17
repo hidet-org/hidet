@@ -12,12 +12,12 @@
 from typing import List, Tuple
 
 from hidet.ir.type import BaseType
-from hidet.ir.expr import Expr, is_constant
+from hidet.ir.expr import Expr
 
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.algorithm import TiledCopy, is_auto_copy, TiledMma, is_auto_mma
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType, logical_encoding
-from hidet.ir.cute.layout import is_auto_layout
+from hidet.ir.cute.layout import is_auto_layout, canonicalize_thread_value_layout, coalesce, group, ThrValAtom
 from hidet.ir.cute import (
     TensorLayout,
     TiledTensorLayout,
@@ -26,50 +26,10 @@ from hidet.ir.cute import (
     auto_layout,
     logical_divide,
     product_each,
-    prefix_product,
-    is_integer,
-    filter_zeros,
 )
 
 
-def reg_tensor_stride(a, b):
-    if isinstance(a, tuple):
-        assert isinstance(b, tuple) and len(a) == len(b)
-        return tuple(reg_tensor_stride(x, y) for x, y in zip(a, b))
-    else:
-        assert is_integer(b)
-        return 0 if is_constant(b) and b == 0 else a
-
-
-def infer_type(x_type: BaseType, shape: Tuple[int], thrval_layout: TensorLayout):
-    if x_type.scope.is_register():
-        shape = (thrval_layout[0][1].shape, thrval_layout[1].shape)
-        stride = (thrval_layout[0][1].stride, thrval_layout[1].stride)
-        shape_fz = filter_zeros(stride, shape)
-        stride = reg_tensor_stride(prefix_product(shape_fz), stride)
-        layout = TensorLayout(shape, stride)
-        if not isinstance(x_type.layout, TiledTensorLayout):
-            raise TypeError(
-                "Invalid layout for partitioning register tensor. "
-                f"got(x({x_type.layout}),expected(TiledTensorLayout))"
-            )
-        x_layout = x_type.layout
-        if x_layout.val_count() == layout.count():
-            return tiled_tensor(x_type.dtype, layout, x_type.scope)
-        else:
-            x_cnt = x_layout.val_count()
-            cnt = layout.count()
-            if x_cnt % cnt != 0:
-                raise TypeError(
-                    "Can't partition the register tensor due to divisibility. "
-                    f"got(x({x_layout.val_layout()}),expected({layout}))"
-                )
-            shape = layout.shape + (x_cnt // cnt,)
-            stride = layout.stride + (cnt,)
-            return tiled_tensor(x_type.dtype, TensorLayout(shape, stride), x_type.scope)
-
-    layouts = [thrval_layout[0][1], thrval_layout[1]]
-    x_shape = product_each(x_type.layout.shape)
+def validate_shape(x_shape: Tuple[int], shape: Tuple[int]):
     if x_shape != shape:
         if (
             len(x_shape) < len(shape)
@@ -80,14 +40,57 @@ def infer_type(x_type: BaseType, shape: Tuple[int], thrval_layout: TensorLayout)
         rest = logical_divide(TensorLayout(x_shape), TensorLayout(shape))[1:]
         from hidet.ir.cute.int_tuple import size
 
-        remain = x_shape[len(shape) :]
-        remain_dim = rest.size() // size(remain)
-        remain = (remain_dim,) + remain if remain_dim > 1 else remain
-        rest = composition(rest, TensorLayout(remain))
-        for i in rest:
-            layouts.append(i)
-    layout = auto_layout if is_auto_layout(x_type.layout) else x_type.layout.compose(make_layout(*layouts))
-    return tiled_tensor(x_type.dtype, layout, x_type.scope)
+        rest_shape = x_shape[len(shape) :]
+        remain_dim = rest.size() // size(rest_shape)
+        rest_shape = (remain_dim,) + rest_shape if remain_dim > 1 else rest_shape
+        rest_layout = composition(rest, TensorLayout(rest_shape))
+        return rest_shape, rest_layout
+    else:
+        return [], TensorLayout(1)
+
+
+def infer_type(x_type: BaseType, shape: Tuple[int], thrval_layout: TensorLayout):
+    if x_type.scope.is_register():
+        thrval_layout = canonicalize_thread_value_layout(thrval_layout)
+        thr_layout, val_layout = thrval_layout
+        if not isinstance(x_type.layout, TiledTensorLayout):
+            raise TypeError(
+                "Invalid layout for partitioning register tensor. "
+                f"got(x({x_type.layout}),expected(TiledTensorLayout))"
+            )
+        x_layout = x_type.layout
+        x_shape = x_layout.shape()
+        x_thrval_layout = canonicalize_thread_value_layout(x_layout.thrval_layout())
+        x_thr_layout, x_val_layout = x_thrval_layout
+        if coalesce(x_thr_layout) != coalesce(thr_layout):
+            raise TypeError(
+                "Invalid thread layout for partitioning register tensor. "
+                f"got(x({x_thr_layout}),expected({thr_layout}))"
+            )
+        part, remain = group(x_val_layout, val_layout.size())
+        layouts = [part]
+        layouts.extend([TensorLayout(1) for _ in range(len(x_shape) - 1)])
+        if remain.size() > 1:
+            layouts.append(remain)
+        partition_val_layout = make_layout(*layouts)
+        ret_thrval_layout = make_layout(thr_layout, partition_val_layout)
+        rest_shape, _ = validate_shape(x_shape, shape)
+        if len(rest_shape) > 0:
+            x_shape = shape + rest_shape
+        atom = ThrValAtom("thread_block", x_shape, ret_thrval_layout)
+        tiled_layout = TiledTensorLayout(atom)
+        return tiled_tensor(x_type.dtype, tiled_layout, x_type.scope)
+    else:
+        _, val_layout = canonicalize_thread_value_layout(thrval_layout)
+        x_shape = product_each(x_type.layout.shape)
+        layouts = [val_layout]
+        layouts.extend([TensorLayout(1) for _ in range(len(shape) - 1)])
+        rest_shape, rest_layout = validate_shape(x_shape, shape)
+        if len(rest_shape) > 0:
+            for i in rest_layout:
+                layouts.append(i)
+        layout = auto_layout if is_auto_layout(x_type.layout) else x_type.layout.compose(make_layout(*layouts))
+        return tiled_tensor(x_type.dtype, layout, x_type.scope)
 
 
 class Partition(Op):

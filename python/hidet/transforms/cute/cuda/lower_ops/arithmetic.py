@@ -10,8 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union, Tuple
-from hidet.ir.expr import Expr, Var, call
-from hidet.ir.type import DataType, TensorType, TensorPointerType, FuncType
+from hidet.ir.expr import Expr, Var, call, deref
+from hidet.ir.type import DataType, TensorType, TensorPointerType, FuncType, PointerType
+from hidet.ir.tools import infer_type
 
 from hidet.ir.cute.ops.arithmetic import Arithmetic, Fill
 from hidet.ir.cute import TiledTensorLayout, TensorLayout, coalesce, flatten, size
@@ -105,17 +106,12 @@ class ArithmeticEmitter(OpEmitter):
     def emit(self, op: Arithmetic, args: List[Buffer], output: Buffer):
         assert all(isinstance(arg, Buffer) for arg in args)
         dst: Var = output.buffer
-        from hidet.ir.cute.ops.arithmetic import local_broadcast, distributed_broadcast, broadcast_layout
+        from hidet.ir.cute.ops.arithmetic import distributed_broadcast, broadcast_layout
 
-        if isinstance(args[0].layout, TiledTensorLayout):
-            layouts: List[TiledTensorLayout] = [arg.layout for arg in args]
-            shapes: List[Tuple] = [layout.shape() for layout in layouts]
-            _, _, val_layouts = distributed_broadcast(shapes, layouts)
-            dst_val_layout = broadcast_layout(val_layouts)
-        else:
-            assert all(isinstance(arg.layout, TensorLayout) for arg in args)
-            val_layouts: List[TensorLayout] = [arg.layout for arg in args]
-            dst_val_layout = local_broadcast(val_layouts)
+        layouts: List[TiledTensorLayout] = [arg.layout for arg in args]
+        shapes: List[Tuple] = [layout.shape() for layout in layouts]
+        _, _, val_layouts = distributed_broadcast(shapes, layouts)
+        dst_val_layout = broadcast_layout(val_layouts)
 
         def canonicalize(layout: TensorLayout):
             shape = list(flatten(layout.shape_tuple))
@@ -148,10 +144,21 @@ class ArithmeticEmitter(OpEmitter):
 
             apply = func_wrapper
 
+        def get_value(buffer: Expr, offset: Expr):
+            buffer_ty = infer_type(buffer)
+            if isinstance(buffer_ty, (TensorType, TensorPointerType)):
+                return buffer[offset]
+            else:
+                assert isinstance(buffer_ty, PointerType)
+                return deref(buffer + offset)
+
         if vector_size == 1:
             extents = dst_val_layout.shape
             with self.for_grid(extents) as indices:
-                srcs = [src.buffer[layout(indices, base=src.offset)] for src, layout in zip(args, src_val_layouts)]
+                srcs = [
+                    get_value(src.buffer, layout(indices, base=src.offset))
+                    for src, layout in zip(args, src_val_layouts)
+                ]
                 self.buffer_store(dst, [dst_val_layout(indices)], func(*srcs))
         else:
             src_val_layouts = [group(layout, vector_size) for layout in src_val_layouts]
@@ -161,7 +168,7 @@ class ArithmeticEmitter(OpEmitter):
             extents = outer.shape
             with self.for_grid(extents) as indices:
                 operands = tuple(
-                    ~src.buffer[src_outer(indices, base=src.offset)]
+                    ~get_value(src.buffer, src_outer(indices, base=src.offset))
                     for src, (_, src_outer), src_ty in zip(args, src_val_layouts, param_types[:-1])
                 )
                 operands += (~dst[outer(indices)],)

@@ -192,39 +192,24 @@ class Arithmetic(Op):
         if any(is_auto_layout(arg_ty.layout) for arg_ty in arg_types):
             return auto_layout
 
-        distributed_arithmetic = None
         for arg_ty in arg_types:
             if not isinstance(arg_ty, TiledTensorType):
                 raise TypeError(f"Type mismatch.(got:{arg_ty},expected:TiledTensorType)")
-            elif not isinstance(arg_ty.layout, (TensorLayout, TiledTensorLayout)):
-                raise TypeError(f"Type mismatch.(got:{arg_ty.layout},expected:TiledTensorLayout or TensorLayout)")
+            elif not isinstance(arg_ty.layout, TiledTensorLayout):
+                raise TypeError(f"Type mismatch.(got:{arg_ty.layout},expected:TiledTensorLayout)")
             elif not arg_ty.scope.is_register():
                 raise TypeError(
                     f"Type mismatch(got:{arg_ty.scope},expected:Register) arithmetic operations only "
                     "support data stored in register files."
                 )
-            if distributed_arithmetic is None:
-                distributed_arithmetic = isinstance(arg_ty.layout, TiledTensorLayout)
-            else:
-                checked = distributed_arithmetic and isinstance(arg_ty.layout, TiledTensorLayout)
-                checked |= (not distributed_arithmetic) and isinstance(arg_ty.layout, TensorLayout)
-                if not checked:
-                    raise TypeError(
-                        f"Type mismatch.(got:{arg_ty.layout},expected:"
-                        "{TiledTensorLayout if distributed_arithmetic else TensorLayout})"
-                    )
 
-        if distributed_arithmetic:
-            layouts = [arg.layout for arg in arg_types]
-            shapes = [layout.shape() for layout in layouts]
-            shape, thr_layouts, val_layouts = distributed_broadcast(shapes, layouts)
-            thr_layout = broadcast_layout(thr_layouts)
-            val_layout = broadcast_layout(val_layouts)
-            tv_atom = ThrValAtom("thread_block", shape, make_layout(thr_layout, val_layout))
-            return TiledTensorLayout(tv_atom)
-        else:
-            layouts = [arg.layout for arg in arg_types]
-            return local_broadcast(layouts)
+        layouts = [arg.layout for arg in arg_types]
+        shapes = [layout.shape() for layout in layouts]
+        shape, thr_layouts, val_layouts = distributed_broadcast(shapes, layouts)
+        thr_layout = broadcast_layout(thr_layouts)
+        val_layout = broadcast_layout(val_layouts)
+        tv_atom = ThrValAtom("thread_block", shape, make_layout(thr_layout, val_layout))
+        return TiledTensorLayout(tv_atom)
 
     def infer_type(self, arg_types: List[BaseType]) -> BaseType:
         """

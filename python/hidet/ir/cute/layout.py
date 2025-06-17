@@ -1402,3 +1402,34 @@ def canonicalize_thread_value_layout(layout: TensorLayout):
     creates the separated flattened thread-mode and value-mode of the input layouts
     """
     return layout[0][0], coalesce(make_layout(layout[0][1], layout[1]))
+
+
+def register_tensor_layout(value_layout: TensorLayout):
+    """
+    Convert a value layout to a register layout
+
+    Example:
+        >>> thread_value_layout = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 8)))
+        >>> register_layout = thread_value_layout.register_tensor_layout()
+        >>> print(register_layout)
+        (2, 2):(1, 2)
+
+        >>> thread_value_layout = TensorLayout(((4, 8), (2, 2)), ((32, 1), (16, 0)))
+        >>> register_layout = thread_value_layout.register_tensor_layout()
+        >>> print(register_layout)
+        (2, 2):(1, 0)
+    """
+
+    def get_stride(a, b):
+        if isinstance(a, tuple):
+            assert isinstance(b, tuple) and len(a) == len(b)
+            return tuple(get_stride(x, y) for x, y in zip(a, b))
+        else:
+            assert is_integer(b)
+            return 0 if is_constant(b) and b == 0 else a
+
+    shape = value_layout.shape_tuple
+    stride = value_layout.stride_tuple
+    shape_fz = filter_zeros(stride, shape)
+    stride = get_stride(prefix_product(shape_fz), stride)
+    return TensorLayout(shape, stride)

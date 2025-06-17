@@ -15,10 +15,11 @@ from typing import List, Tuple, Optional
 from hidet.ir.type import BaseType
 from hidet.ir.expr import Expr
 
-from hidet.ir.cute.int_tuple import is_integer
+from hidet.ir.cute.int_tuple import is_integer, flatten
 from hidet.ir.cute.expr import Op
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType
-from hidet.ir.cute import LayoutBase, TensorLayout, auto_layout, is_auto_layout
+from hidet.ir.cute import LayoutBase, TensorLayout, TiledTensorLayout, auto_layout, is_auto_layout
+from hidet.ir.cute.layout import ThrValAtom, make_layout, coalesce
 
 
 class SubTensor(Op):
@@ -49,6 +50,16 @@ class SubTensor(Op):
         self.x: Expr = x
         self.coord: tuple = coord
 
+    def get_value_layout(self, layout: TiledTensorLayout):
+        """
+        Get the value layout from the thread-value layout.
+        """
+        thrval_layout = layout.thrval_layout()
+        val_layout = thrval_layout[0][1]
+        rest = coalesce(thrval_layout[1])
+        assert rest == TensorLayout(1)
+        return val_layout
+
     def infer_type(self, arg_types: List[BaseType]) -> BaseType:
         """
         Infers the type of the sub-tensor based on the types of its arguments.
@@ -71,12 +82,25 @@ class SubTensor(Op):
         if not isinstance(x_type.layout, LayoutBase):
             raise TypeError(f"Can't slice a distributed tensor.(got:x({x_type}))")
         coord = self.coord[0] if len(self.coord) == 1 else self.coord
-        layout = x_type.layout(coord)
-        if is_integer(layout):
-            return tiled_tensor(x_type.dtype, TensorLayout(1), x_type.scope)
-        if not isinstance(layout, LayoutBase):
-            raise ValueError(f"Invalid coord({self.coord}) for SubTensor")
-        return tiled_tensor(x_type.dtype, layout, x_type.scope)
+        if isinstance(x_type.layout, TiledTensorLayout):
+            thr_layout = x_type.layout.thr_layout()
+            val_layout = self.get_value_layout(x_type.layout)
+            val_layout = val_layout(coord)
+            if is_integer(val_layout):
+                val_layout = TensorLayout(1)
+            x_shape = x_type.layout.shape()
+            sub_shape_layout = TensorLayout(x_shape)(coord)
+            sub_shape = flatten(sub_shape_layout.shape_tuple)
+            atom = ThrValAtom("thread_block", sub_shape, make_layout(thr_layout, val_layout))
+            tiled_layout = TiledTensorLayout(atom)
+            return tiled_tensor(x_type.dtype, tiled_layout, x_type.scope)
+        else:
+            layout = x_type.layout(coord)
+            if is_integer(layout):
+                return tiled_tensor(x_type.dtype, TensorLayout(1), x_type.scope)
+            if not isinstance(layout, LayoutBase):
+                raise ValueError(f"Invalid coord({self.coord}) for SubTensor")
+            return tiled_tensor(x_type.dtype, layout, x_type.scope)
 
 
 def sub_tensor(x: Expr, coord: Tuple[Optional[Expr], ...]):
