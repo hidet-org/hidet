@@ -64,7 +64,10 @@ from .arithmetic import (
     elementwise_min,
     Fill,
     fill,
+    softplus,
+    exp2,
 )
+from .algorithm import InclusiveScan, inclusive_scan
 from .mma import Mma, mma, WgmmaFenceOperand, wgmma_fence_operand
 from .subtensor import SubTensor, sub_tensor
-from .misc import Broadcast, broadcast_to, Transpose, transpose
+from .misc import Broadcast, broadcast_to, Transpose, transpose, Pack, pack, GetItem, get

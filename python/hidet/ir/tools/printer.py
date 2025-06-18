@@ -82,6 +82,9 @@ from hidet.ir.cute.ops import (
     MBarriers,
     MBarrierArrive,
     MBarrierTryWait,
+    Pack,
+    GetItem,
+    InclusiveScan,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -801,6 +804,15 @@ class IRPrinter(IRFunctor):
         return self.visit_CuteOp(op)
 
     def visit_MBarrierTryWait(self, op: MBarrierTryWait):
+        return self.visit_CuteOp(op)
+
+    def visit_Pack(self, op: Pack):
+        return self.visit_CuteOp(op)
+
+    def visit_GetItem(self, op: GetItem):
+        return self.visit_CuteOp(op)
+
+    def visit_InclusiveScan(self, op: InclusiveScan):
         return self.visit_CuteOp(op)
 
 

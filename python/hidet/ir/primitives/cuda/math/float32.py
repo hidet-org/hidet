@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.expr import Expr
-from hidet.ir.type import FuncType
+from hidet.ir.type import FuncType, func_type
+from hidet.ir.dtypes import float32, float32x2, float32x4
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
@@ -64,11 +65,33 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
                         ret_type='float32' if name not in ['isfinite', 'isinf', 'isnan'] else 'bool',
                     ),
                 )
+        register_primitive_function(
+            name='cuda_f32_make_float2',
+            func_or_type=func_type([float32, float32], float32x2),
+            codegen_name='make_float2',
+        )
+        register_primitive_function(
+            name='cuda_f32_make_float4',
+            func_or_type=func_type([float32, float32, float32, float32], float32x4),
+            codegen_name='make_float4',
+        )
 
     @staticmethod
     def call(name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name('cuda_f32_{}'.format(name))
         return entry.var(*args)
+
+    def make_vector(self, *items) -> Expr:
+        if not isinstance(items, (list, tuple)):
+            raise ValueError('float32 requires a list of items')
+        items = list(items)
+
+        if len(items) == 2:
+            return self.call('make_float2', items[0], items[1])
+        elif len(items) == 4:
+            return self.call('make_float4', items[0], items[1], items[2], items[3])
+        else:
+            raise ValueError('float32 requires 2 or 4 elements')
 
     def sin(self, a: Expr) -> Expr:
         return self.call('sin', a)

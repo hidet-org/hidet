@@ -40,6 +40,9 @@ from hidet.ir.cute.ops import (
     MBarrierArrive,
     MBarrierTryWait,
     MBarrierWait,
+    Pack,
+    GetItem,
+    InclusiveScan,
 )
 from hidet.ir.cute.collective import CollectiveStore
 
@@ -98,6 +101,12 @@ class CuteFunctor(BaseFunctor):
             return self.visit_MBarrierWait(node)
         elif isinstance(node, WgmmaFenceOperand):
             return self.visit_WgmmaFenceOperand(node)
+        elif isinstance(node, Pack):
+            return self.visit_Pack(node)
+        elif isinstance(node, GetItem):
+            return self.visit_GetItem(node)
+        elif isinstance(node, InclusiveScan):
+            return self.visit_InclusiveScan(node)
         elif isinstance(node, Op):
             raise NotImplementedError("Rewriter for the following op is not implemented: \n{}".format(node.op_name()))
         else:
@@ -204,6 +213,15 @@ class CuteFunctor(BaseFunctor):
     def visit_MBarrierWait(self, n: MBarrierWait):
         raise NotImplementedError()
 
+    def visit_Pack(self, n: Pack):
+        raise NotImplementedError()
+
+    def visit_GetItem(self, n: GetItem):
+        raise NotImplementedError()
+
+    def visit_InclusiveScan(self, n: InclusiveScan):
+        raise NotImplementedError()
+
 
 class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_TiledTensorType(self, t: TiledTensorType):
@@ -306,6 +324,17 @@ class CuteVisitor(CuteFunctor, BaseVisitor):
     def visit_MBarrierWait(self, n: MBarrierWait):
         self.visit(n.mbarrier)
         self.visit(n.phase)
+
+    def visit_Pack(self, n: Pack):
+        self.visit(n.args)
+
+    def visit_GetItem(self, n: GetItem):
+        self.visit(n.x)
+        self.visit(n.index)
+
+    def visit_InclusiveScan(self, n: InclusiveScan):
+        self.visit(n.x)
+        self.visit(n.init)
 
 
 class CuteRewriter(CuteFunctor, BaseRewriter):
@@ -544,3 +573,25 @@ class CuteRewriter(CuteFunctor, BaseRewriter):
             return n
         else:
             return MBarrierWait(mbarrier, phase)
+
+    def visit_Pack(self, n: Pack):
+        args = [self.visit(arg) for arg in n.args]
+        if all(x is y for x, y in zip(args, n.args)):
+            return n
+        else:
+            return n.reforward(args)
+
+    def visit_GetItem(self, n: GetItem):
+        x = self.visit(n.x)
+        if x is n.x:
+            return n
+        else:
+            return n.reforward([x])
+
+    def visit_InclusiveScan(self, n: InclusiveScan):
+        x = self.visit(n.x)
+        init = self.visit(n.init)
+        if x is n.x and init is n.init:
+            return n
+        else:
+            return n.reforward([x, init])

@@ -9,12 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from hidet.ir.type import BaseType
 from hidet.ir.expr import Expr
+from hidet.ir.dtypes.vector import VectorType, vectorize
 
-from hidet.ir.cute.expr import Op
+from hidet.ir.cute.expr import Op, CConst
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType
 from hidet.ir.cute.layout import ThrValAtom, remove_lo_hi, filter_lo_hi, common_reshape
 from hidet.ir.cute import TensorLayout, TiledTensorLayout, auto_layout, is_auto_layout, flatten, make_layout, product
@@ -298,3 +299,110 @@ class Transpose(Op):
 
 def transpose(x: Expr, *dims):
     return Transpose(x, list(dims)).make_call()
+
+
+class Pack(Op):
+    """
+    Pack a list of tensors into a single tensor.
+
+    The input tensors must have the same shape and layout.
+
+    Attributes:
+        tensors (List[Expr]): The list of tensors to be packed.
+
+    Examples:
+        a = make_tensor(f16, shape=(16, 8), register)
+        b = make_tensor(f16, shape=(16, 8), register)
+        c = pack(a, b)
+        # c is a vector of length 2 with element type f16.
+
+    Note:
+        The tensors must be distributed across the threads in the same way,
+        otherwise, the behavior is undefined.
+    """
+
+    def __init__(self, tensors: List[Expr]):
+        super().__init__(args=tensors)
+        self.tensors: List[Expr] = tensors
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        if any(not isinstance(t, TiledTensorType) for t in arg_types):
+            raise TypeError("interleave requires all arguments to be tensors")
+        if any(not t.scope.is_register() for t in arg_types):
+            raise TypeError("interleave requires all arguments to be tensors in registers")
+        if any(not is_auto_layout(t.layout) and not isinstance(t.layout, TiledTensorLayout) for t in arg_types):
+            raise TypeError("interleave requires all arguments to be tensors with auto layout or tiled layout")
+        layout = None
+        dtype = arg_types[0].dtype
+        vector_type = vectorize(dtype, len(arg_types))
+        for t in arg_types:
+            cur_layout = t.layout
+            if isinstance(cur_layout, TiledTensorLayout):
+                if layout is None:
+                    layout = cur_layout
+                else:
+                    cur_thr_layout = cur_layout.thr_layout()
+                    cur_val_layout = cur_layout.val_layout()
+                    thr_layout = layout.thr_layout()
+                    val_layout = layout.val_layout()
+                    if cur_thr_layout != thr_layout or cur_val_layout != val_layout:
+                        raise ValueError("interleave requires all arguments to have the same layout")
+        if layout is None:
+            return tiled_tensor(vector_type, auto_layout, arg_types[0].scope)
+        else:
+            return tiled_tensor(vector_type, layout, arg_types[0].scope)
+
+    def reforward(
+        self, args: List[Expr], attrs_update: Dict[str, CConst] = None, annotations_update: Dict[str, CConst] = None
+    ):
+        attrs = self.attrs.copy()
+        annotations = self.annotations.copy()
+        if attrs_update is not None:
+            attrs.update(attrs_update)
+        if annotations_update is not None:
+            annotations.update(annotations_update)
+        ret = self.__class__(args, **attrs)
+        ret.annotations = annotations
+        return ret
+
+
+def pack(*tensors):
+    return Pack(tensors).make_call()
+
+
+class GetItem(Op):
+    """
+    Get an element from a tensor. Typically, each element in the
+    input tensor is a vector. This operator creates a new tensor
+    with the same shape as the input tensor, but with each element
+    being a single lane of the input vector.
+
+    Attributes:
+        x (Expr): The tensor to get the element from.
+        index (int): The index of the element to get.
+    """
+
+    def __init__(self, x: Expr, index: int):
+        super().__init__(args=[x], attrs={"index": index})
+        self.x: Expr = x
+        self.index: int = index
+
+    def infer_type(self, arg_types: List[BaseType]) -> BaseType:
+        if not isinstance(arg_types[0], TiledTensorType):
+            raise TypeError("getitem requires the input to be a tensor")
+        if not arg_types[0].scope.is_register():
+            raise TypeError("getitem requires the input to be a tensor in registers")
+        if not is_auto_layout(arg_types[0].layout) and not isinstance(arg_types[0].layout, TiledTensorLayout):
+            raise TypeError("getitem requires the input to have auto layout or tiled layout")
+        vector_type = arg_types[0].dtype
+        if not isinstance(vector_type, VectorType):
+            raise TypeError("getitem requires the input to be a vector")
+        num_lanes = vector_type.num_lanes
+        if self.index >= num_lanes:
+            raise ValueError(f"index out of range.(index:{self.index},num_lanes:{num_lanes})")
+        layout = arg_types[0].layout
+        return tiled_tensor(vector_type.lane_type, layout, arg_types[0].scope)
+
+
+def get(x: Expr, index: int):
+    return GetItem(x, index).make_call()

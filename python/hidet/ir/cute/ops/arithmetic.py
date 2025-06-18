@@ -11,9 +11,10 @@
 # limitations under the License.
 from typing import Union, List, Callable, Any, Tuple, Dict
 from functools import partial
+import math as builtin_math
 
 from hidet.ir.type import BaseType, DataType, TensorType, TensorPointerType, FuncType, void
-from hidet.ir.expr import Expr, Var, Constant, PyScalar, var, convert
+from hidet.ir.expr import Expr, Var, Constant, PyScalar, var, convert, if_then_else
 from hidet.ir.func import Function
 
 from hidet.ir.cute.layout import (
@@ -30,6 +31,9 @@ from hidet.ir.cute.layout import (
 )
 from hidet.ir.cute.type import tiled_tensor, TiledTensorType, LogicalEncoding, logical_encoding
 from hidet.ir.cute.expr import Op, CConst
+
+
+LOG2E = builtin_math.log2(builtin_math.e)
 
 
 def local_broadcast(layouts: List[TensorLayout]):
@@ -454,6 +458,29 @@ class Relu(UnaryOp):
         return ir_relu
 
 
+class Softplus(UnaryOp):
+    def scalar_op(self):
+        from hidet.ir.primitives import math
+
+        def ir_softplus(x):
+            from hidet.ir.tools import infer_type
+
+            dtype = infer_type(x)
+            return if_then_else(x <= dtype(20.0), math.log1p(math.exp2(x * dtype(LOG2E))), x)
+
+        return ir_softplus
+
+
+class Exp2(UnaryOp):
+    def scalar_op(self):
+        from hidet.ir.primitives import math
+
+        def ir_exp2(x):
+            return math.exp2(x)
+
+        return ir_exp2
+
+
 class Silu(UnaryOp):
     def scalar_op(self):
         from hidet.ir.primitives import math
@@ -463,7 +490,7 @@ class Silu(UnaryOp):
 
             dtype = infer_type(x)
             assert isinstance(dtype, DataType)
-            return x / (dtype.one + math.exp(-x))
+            return x / (dtype.one + math.exp2(-x * dtype(LOG2E)))
 
         return ir_silu
 
@@ -516,6 +543,14 @@ def relu(x: Expr):
 
 def exp(x: Expr):
     return Exp(x).make_call()
+
+
+def softplus(x: Expr):
+    return Softplus(x).make_call()
+
+
+def exp2(x: Expr):
+    return Exp2(x).make_call()
 
 
 def silu(x: Expr):

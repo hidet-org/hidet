@@ -2,7 +2,7 @@ from hidet.ir.cute.contexts import warp_groups_consumer, warp_groups_producer
 import torch
 import pytest
 
-from hidet.lang.types import f8e4m3, f8e5m2, f16, f32
+from hidet.lang.types import f8e4m3, f8e5m2, bf16, f16, f32
 from hidet.lang import attrs, grid
 from hidet.lang.cuda import blockIdx, threadIdx
 from hidet.ir.primitives.cuda.wgmma import wgmma_fence, wgmma_commit_group, wgmma_wait_group
@@ -57,17 +57,29 @@ def data(M, N, K, trans_a=False, trans_b=False, dtype="float16", device="cuda", 
     return a, b, c
 
 
-def f8_quant_data(M, N, K, trans_a=False, trans_b=False, dtype="int8", device="cuda", return_hidet=False, group_k=64):
+def f8_quant_data(
+    M,
+    N,
+    K,
+    trans_a=False,
+    trans_b=False,
+    dtype="int8",
+    device="cuda",
+    return_hidet=False,
+    group_m=1,
+    group_n=128,
+    group_k=64,
+):
     dtype = getattr(torch, dtype)
     lo = -3
     hi = 3
     shape_a = (K, M) if trans_a else (M, K)
     shape_b = (N, K) if trans_b else (K, N)
-    a = torch.randint(low=lo, high=hi, size=shape_a, dtype=torch.int8, device=device)
-    b = torch.randint(low=lo, high=hi, size=shape_b, dtype=torch.int8, device=device)
-    scale_a = torch.randint(low=lo, high=hi, size=(M, K // group_k), dtype=torch.float32, device=device)
-    scale_b = torch.randint(low=lo, high=hi, size=(N, K // group_k), dtype=torch.float32, device=device)
-    c = torch.empty((M, N), dtype=dtype, device=device)
+    a = torch.randint(low=lo, high=hi, size=shape_a, dtype=torch.float32, device=device).to(dtype=torch.float8_e4m3fn)
+    b = torch.randint(low=lo, high=hi, size=shape_b, dtype=torch.float32, device=device).to(dtype=torch.float8_e4m3fn)
+    scale_a = torch.randint(low=lo, high=hi, size=(M // group_m, K // group_k), dtype=torch.float32, device=device)
+    scale_b = torch.randint(low=lo, high=hi, size=(N // group_n, K // group_k), dtype=torch.float32, device=device)
+    c = torch.zeros((M, N), dtype=torch.bfloat16, device=device)
 
     if return_hidet:
         a = hidet.from_torch(a)
@@ -97,7 +109,6 @@ def f8_gemm_multiple_stage_ss(m, n, k, wgmma_n=64, trans_b=True, group_k=128):
     _, _ = canonicalize(c_tv)
 
     bm, inst_k = a_shape
-    print(inst_k)
     bn, inst_k_ = b_shape
     bm_, bn_ = c_shape
     assert bm == bm_ and bn == bn_ and inst_k == inst_k_
@@ -115,7 +126,7 @@ def f8_gemm_multiple_stage_ss(m, n, k, wgmma_n=64, trans_b=True, group_k=128):
         def func(
             a: f8e4m3[m, k],
             b_ptr: ~f8e4m3,
-            c: f8e4m3[m, n],
+            c: bf16[m, n],
             scale_a: f32[m, k // group_k],
             scale_b: f32[n // group_k, k // group_k],
         ):
@@ -253,7 +264,7 @@ def f8_gemm_multiple_stage_ss(m, n, k, wgmma_n=64, trans_b=True, group_k=128):
                         smem_pipe_release = 0
                         release_phase = not release_phase
 
-                tr_C = rearrange(cast(tr_c_final, f8e4m3), auto_layout, "register")
+                tr_C = rearrange(cast(tr_c_final, bf16), auto_layout, "register")
 
                 tg_c = tensor_view(
                     c[bid_x * bm : (bid_x + 1) * bm, bid_y * bn : (bid_y + 1) * bn],
@@ -441,25 +452,70 @@ def test_f8_hopper_gemm_multiple_stage_ss(m, n, k, wgmma_n, group_k=128):
 
     n = cdiv(n, wgmma_n) * wgmma_n
     func = f8_gemm_multiple_stage_ss(m, n, k, wgmma_n=wgmma_n, group_k=group_k)
-    a, b, scale_a, scale_b, c = f8_quant_data(m, n, k, trans_b=True, return_hidet=True, group_k=group_k)
+    a, b, scale_a, scale_b, c = f8_quant_data(
+        m, n, k, trans_b=True, return_hidet=True, group_m=1, group_n=group_k, group_k=group_k
+    )
 
     def fn():
         func(a, b, c, scale_a, scale_b)
 
     mean = do_bench(fn, percentiles=None)
-    print(f"{m}x{n}x{k} took {mean:.2f} ms, throughput: {2.0 * m * n * k / mean / 1e9:.2f} TFLOPS")
+    print(f"Hexcute: {m}x{n}x{k} took {mean:.2f} ms, throughput: {2.0 * m * n * k / mean / 1e9:.2f} TFLOPS")
     func(a, b, c, scale_a, scale_b)
 
+    torch_a = a.torch()
+    torch_b = b.torch()
+    torch_scale_a = scale_a.torch().transpose(0, 1).contiguous()
+    torch_scale_b = scale_b.torch()
 
-#    mean = do_bench(fn2, percentiles=None)
-#    print(f"{m}x{n}x{k} took {mean:.2f} ms, throughput: {2.0 * m * n * k / mean / 1e9:.2f} TFLOPS")
-#
-#    c2 = a @ b.T
-#
-#    import numpy as np
-#
-#    np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-#    np.testing.assert_allclose(actual=c.cpu().numpy(), desired=c2.cpu().numpy(), rtol=1e-2)
+    try:
+        from vllm import _custom_ops as ops
+
+        cutlass_scaled_fp8_gemm = ops.cutlass_scaled_mm
+        cutlass_scaled_fp8_gemm(torch_a, torch_b.T, torch_scale_a.T, torch_scale_b.T, out_dtype=torch.bfloat16)
+    except (ImportError, AttributeError):
+        cutlass_scaled_fp8_gemm = None
+
+    try:
+        from vllm.model_executor.layers.quantization.utils.fp8_utils import w8a8_block_fp8_matmul
+
+        vllm_scaled_fp8_gemm = w8a8_block_fp8_matmul
+        vllm_scaled_fp8_gemm(
+            torch_a, torch_b, torch_scale_a.T, torch_scale_b, block_size=[group_k, group_k], output_dtype=torch.bfloat16
+        )
+    except (ImportError, AttributeError):
+        vllm_scaled_fp8_gemm = None
+
+    def fn2():
+        return cutlass_scaled_fp8_gemm(torch_a, torch_b.T, torch_scale_a.T, torch_scale_b.T, out_dtype=torch.bfloat16)
+
+    def fn3():
+        return vllm_scaled_fp8_gemm(
+            torch_a, torch_b, torch_scale_a.T, torch_scale_b, block_size=[group_k, group_k], output_dtype=torch.bfloat16
+        )
+
+    if cutlass_scaled_fp8_gemm is not None:
+        mean = do_bench(fn2, percentiles=None)
+        print(f"cutlass:{m}x{n}x{k} took {mean:.2f} ms, throughput: {2.0 * m * n * k / mean / 1e9:.2f} TFLOPS")
+
+    if vllm_scaled_fp8_gemm is not None:
+        mean = do_bench(fn3, percentiles=None)
+        print(f"triton: {m}x{n}x{k} took {mean:.2f} ms, throughput: {2.0 * m * n * k / mean / 1e9:.2f} TFLOPS")
+
+    import numpy as np
+
+    np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
+
+    if cutlass_scaled_fp8_gemm is not None:
+        c2 = fn2()
+        np.testing.assert_allclose(
+            actual=c.torch().to(torch.float32).cpu().numpy(), desired=c2.to(torch.float32).cpu().numpy(), rtol=1e-2
+        )
+        if vllm_scaled_fp8_gemm is not None:
+            c3 = fn2()
+            np.testing.assert_allclose(
+                actual=c2.to(torch.float32).cpu().numpy(), desired=c3.to(torch.float32).cpu().numpy(), rtol=1e-2
+            )
 
 
 @pytest.mark.requires_cuda_hopper
@@ -954,3 +1010,7 @@ if __name__ == "__main__":
     # test_hopper_gemm_multiple_stage_rs(512, 8192, 512, 256)
     # test_hopper_gemm_multiple_stage_rs(4096, 28672, 8192, 256)
     # test_f8_hopper_gemm_multiple_stage_ss(4096 + 8, 4096, 7168, 128)
+    # test_f8_hopper_gemm_multiple_stage_ss(4096, 24576, 1536, 128)
+    # test_f8_hopper_gemm_multiple_stage_ss(4096, 4096, 16384, 128)
+    # test_f8_hopper_gemm_multiple_stage_ss(4096, 4096, 4096, 128)
+    # test_f8_hopper_gemm_multiple_stage_ss(4096, 4096, 2048, 128)

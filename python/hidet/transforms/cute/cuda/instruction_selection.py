@@ -261,11 +261,15 @@ class CopyInstruction:
 
     def _get_register_pointers(self, e: Expr):
         element_bits = self._get_element_bits(e)
-        assert element_bits <= BITS_PER_GPR
-        incr = BITS_PER_GPR // element_bits
         pointers: List[Expr] = []
-        for inc in range(0, (self.bytes_per_inst * BITS_PER_BYTE) // element_bits, incr):
-            pointers.append(e + inc)
+        if element_bits <= BITS_PER_GPR:
+            incr = BITS_PER_GPR // element_bits
+            for inc in range(0, (self.bytes_per_inst * BITS_PER_BYTE) // element_bits, incr):
+                pointers.append(e + inc)
+        else:
+            assert element_bits % BITS_PER_GPR == 0
+            for inc in range(self.bytes_per_inst * BITS_PER_BYTE // BITS_PER_GPR):
+                pointers.append(cast(e, ~u32) + inc)
         return pointers
 
     def get_layout_in_element(self, e: Expr, layout: TensorLayout):

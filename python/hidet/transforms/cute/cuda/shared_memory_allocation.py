@@ -209,8 +209,8 @@ class SharedMemoryAllocationAnalysis(IRVisitor):
         for stmt in self.for_stmt_stack:
             if stmt not in self.forstmt2local_tensors or tensor not in self.forstmt2local_tensors[stmt]:
                 if stmt in self.forstmt2non_local_tensors:
-                    if tensor not in self.forstmt2non_local_tensors[stmt]:
-                        self.forstmt2non_local_tensors[stmt][tensor] = is_reader
+                    # TODO: fix me
+                    self.forstmt2non_local_tensors[stmt][tensor] = is_reader
                 else:
                     self.forstmt2non_local_tensors[stmt] = {tensor: is_reader}
 

@@ -22,3 +22,4 @@ from . import subtensor
 from . import reduce
 from . import misc
 from . import mbarrier
+from . import algorithm
