@@ -69,7 +69,7 @@ def register_cp_async():
                         attrs.func_name = func_name
                         attrs.func_kind = 'cuda_internal'
                         dst_smem_ptr = cvta_generic_to_shared(dst)
-                        asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
+                        asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size], is_volatile=True)
 
                     assert isinstance(cuda_cp_async, Function)
                     register_primitive_function(name=cuda_cp_async.name, func_or_type=cuda_cp_async)
@@ -83,7 +83,7 @@ def register_cp_async_commit_group():
     def cuda_cp_async_commit_group():
         attrs.func_name = 'cuda_cp_async_commit_group'
         attrs.func_kind = 'cuda_internal'
-        asm('cp.async.commit_group;')
+        asm('cp.async.commit_group;', is_volatile=True)
 
     assert isinstance(cuda_cp_async_commit_group, Function)
     register_primitive_function(cuda_cp_async_commit_group.name, cuda_cp_async_commit_group)
@@ -100,7 +100,7 @@ def register_cp_async_wait_group():
         def cuda_cp_async_wait_group():
             attrs.func_name = func_name
             attrs.func_kind = 'cuda_internal'
-            asm('cp.async.wait_group {};'.format(groups))
+            asm('cp.async.wait_group {};'.format(groups), is_volatile=True)
 
         assert isinstance(cuda_cp_async_wait_group, Function)
         register_primitive_function(cuda_cp_async_wait_group.name, cuda_cp_async_wait_group)
@@ -114,7 +114,7 @@ def register_cp_async_wait_all():
     def cuda_cp_async_wait_all():
         attrs.func_name = 'cuda_cp_async_wait_all'
         attrs.func_kind = 'cuda_internal'
-        asm('cp.async.wait_all;')
+        asm('cp.async.wait_all;', is_volatile=True)
 
     assert isinstance(cuda_cp_async_wait_all, Function)
     register_primitive_function(cuda_cp_async_wait_all.name, cuda_cp_async_wait_all)
