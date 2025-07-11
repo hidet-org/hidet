@@ -34,7 +34,7 @@ on:
         description: Run Tests on L4 GPU
         type: boolean
         required: false
-        default: true
+        default: false
       gpu_h100:
         description: Run Tests on H100 GPU
         type: boolean

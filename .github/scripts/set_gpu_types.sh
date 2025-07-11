@@ -11,22 +11,22 @@ if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
   GPU_A100="$INPUT_GPU_A100"
 elif [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
   echo "Using pull request defaults"
-  GPU_L4="true"
+  GPU_L4="false"
   GPU_H100="true"
   GPU_A10="false"
   GPU_A100="false"
 elif [ "$GITHUB_EVENT_NAME" == "push" ]; then
   echo "Using push defaults"
-  GPU_L4="true"
+  GPU_L4="false"
   GPU_H100="true"
   GPU_A10="false"
   GPU_A100="false"
 elif [ "$GITHUB_EVENT_NAME" == "schedule" ]; then
   echo "Using scheduled run defaults"
   GPU_L4="false"
-  GPU_H100="false"
-  GPU_A10="true"
-  GPU_A100="true"
+  GPU_H100="true"
+  GPU_A10="false"
+  GPU_A100="false"
 else
   echo "Unknown event type. Exiting."
   exit 1
