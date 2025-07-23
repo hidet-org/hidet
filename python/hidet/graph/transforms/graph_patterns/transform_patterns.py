@@ -171,6 +171,29 @@ class DoubleCast(SubgraphRewriteRule):
         return [x]
 
 
+class MultiInputCompositeElementwiseLeftRightRewriteRule(SubgraphRewriteRule):
+    def __init__(self):
+        super().__init__('binaryOp(unaryOp(x), unaryOp(y)) => compositeOp(x, y)')
+        self.x1 = TensorPattern()
+        self.x2 = TensorPattern()
+        self.y1 = op_pattern(UnaryElementwiseOp, [self.x1])
+        self.y2 = op_pattern(UnaryElementwiseOp, [self.x2])
+        self.z = op_pattern(BinaryElementwiseOp, [self.y1, self.y2])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.z]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        x1, x2, y1, y2, z = [matched[v] for v in [self.x1, self.x2, self.y1, self.y2, self.z]]
+        left_unary_op: UnaryElementwiseOperation = y1.op.op
+        right_unary_op: UnaryElementwiseOperation = y2.op.op
+        if left_unary_op.name != right_unary_op.name:
+            return None
+        binary_op: BinaryElementwiseOperation = z.op.op
+        out = ops.arithmetic.composite_multi_input_elementwise(x1, x2, left_unary_op, right_unary_op, binary_op)
+        return [out]
+
+
 class CompositeElementwiseLeftRightRewriteRule(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('binaryOp(unaryOp_left(x), unaryOp_right(x)) => compositeOp(x)')
@@ -235,6 +258,7 @@ def transform_patterns():
     register_rewrite_rule(FanoutTwoCast())
     register_rewrite_rule(FanoutThreeCast())
     register_rewrite_rule(DoubleCast())
+    register_rewrite_rule(MultiInputCompositeElementwiseLeftRightRewriteRule())
     register_rewrite_rule(CompositeElementwiseLeftRightRewriteRule())
     register_rewrite_rule(CompositeElementwiseLeftRewriteRule())
     register_rewrite_rule(CompositeElementwiseRightRewriteRule())

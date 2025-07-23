@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Tuple, Union, Sequence
+from hidet.graph.ops.arithmetic import UnaryElementwiseOp
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant, logical_or
 from hidet.ir.expr import Int
@@ -697,15 +698,9 @@ class PermuteDimsOp(Operator):
         return result
 
 
-class CastOp(Operator):
+class CastOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, dtype: DataType):
-        from .arithmetic import UnaryElementwiseTask
-
-        super().__init__(
-            inputs=[x],
-            attributes={'dtype': dtype},
-            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: ir_cast(v, dtype)),
-        )
+        super().__init__(x, op=lambda v: ir_cast(v, dtype), name='cast', attributes={'dtype': dtype})
 
     def run_torch(self):
         x = self.inputs[0]

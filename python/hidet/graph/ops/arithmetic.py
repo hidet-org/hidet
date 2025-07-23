@@ -135,6 +135,53 @@ class VariadicElementwiseTask(Task):
         super().__init__(name=name, inputs=list(args), outputs=[out], inverse_map=inverse_map)
 
 
+class MultiInputCompositeElementwiseTask(Task):
+    def __init__(
+        self,
+        name: str,
+        x1: TensorNode,
+        x2: TensorNode,
+        left_unary_op: Callable[[Any], Any],
+        right_unary_op: Callable[[Any], Any],
+        binary_op: Callable[[Any, Any], Any],
+        attrs=None,
+    ):
+        def composite_op(binary_op, left_unary_op, right_unary_op, x1, x2):
+            if left_unary_op is None:
+                left_unary_op = lambda x1: x1
+            if right_unary_op is None:
+                right_unary_op = lambda x2: x2
+            return binary_op(left_unary_op(x1), right_unary_op(x2))
+
+        z_shape = broadcast_shape(x1.shape, x2.shape)
+        z = compute(
+            name='z',
+            shape=z_shape,
+            fcompute=lambda *indices: composite_op(
+                binary_op, left_unary_op, right_unary_op, x1.__getitem__(indices), x2.__getitem__(indices)
+            ),
+        )
+
+        inverse_map = {}
+        for inp, inp_shape in zip([x1, x2], [x1.shape, x2.shape]):
+            if same_list(inp_shape, z_shape):
+                inverse_map[inp] = InverseMap.from_lambda(lambda *indices: indices, num_args=len(inp_shape))
+            elif prod(inp_shape) == prod(z_shape):
+                inverse_map[inp] = InverseMap.from_lambda(
+                    lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
+                    num_args=len(inp_shape),
+                )
+        # layout := 1:0 means identity layout
+        # It's obvious that arithmetic operations don't apply layout
+        # modification on tensors, so the tile mapping function can be
+        # considered as identity
+        for _, v in inverse_map.items():
+            v.tile_mapping = TensorLayout(1)
+        super().__init__(
+            name=name, inputs=[x1, x2], outputs=[z], inverse_map=inverse_map, attributes={} if attrs is None else attrs
+        )
+
+
 class CompositeElementwiseTask(Task):
     def __init__(
         self,
@@ -352,6 +399,29 @@ def get_dtype(scalar: Expr):
     if not isinstance(inferred_type, DataType):
         raise TypeError(f'Expected scalar to be of type DataType, got {type(inferred_type)}')
     return inferred_type
+
+
+class MultiInputCompositeElementwiseOp(Operator):
+    def __init__(
+        self,
+        x1: Tensor,
+        x2: Tensor,
+        left_unary_op: UnaryElementwiseOperation,
+        right_unary_op: UnaryElementwiseOperation,
+        binary_op: BinaryElementwiseOperation,
+    ):
+        name = 'multi_input_composite'
+        for op in [left_unary_op, right_unary_op, binary_op]:
+            if op is not None:
+                name += '_' + op.name
+        attributes = {'left_unary_op': left_unary_op, 'right_unary_op': right_unary_op, 'binary_op': binary_op}
+        super().__init__(
+            inputs=[x1, x2],
+            attributes=attributes,
+            task=MultiInputCompositeElementwiseTask(
+                name, input_like(x1, 'x1'), input_like(x2, 'x2'), left_unary_op, right_unary_op, binary_op
+            ),
+        )
 
 
 class CompositeElementwiseOp(Operator):
@@ -1200,6 +1270,16 @@ def roll(x: Tensor, shifts: Union[int, Sequence[int]], dims: Union[int, Sequence
         return reshape(RollOp(flatten(x), shifts, dims=[0]).outputs[0], shape)
     dims = normalize_dim(dims, len(x.shape))
     return RollOp(x, shifts, dims).outputs[0]
+
+
+def composite_multi_input_elementwise(
+    x1: Tensor,
+    x2: Tensor,
+    left_unary_op: UnaryElementwiseOperation,
+    right_unary_op: UnaryElementwiseOperation,
+    binary_op: BinaryElementwiseOperation,
+) -> Tensor:
+    return MultiInputCompositeElementwiseOp(x1, x2, left_unary_op, right_unary_op, binary_op).outputs[0]
 
 
 # out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
