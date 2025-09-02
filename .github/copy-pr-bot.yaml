@@ -1,0 +1,3 @@
+# see https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/#configuration for more details
+enabled: true
+auto_sync_draft: false
