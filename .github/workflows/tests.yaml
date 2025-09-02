@@ -18,11 +18,6 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
-      gpu_general:
-        description: Run Tests on NVIDIA GPU (not specific a GPU type)
-        type: boolean
-        required: false
-        default: true
       gpu_l4:
         description: Run Tests on L4 GPU
         type: boolean
