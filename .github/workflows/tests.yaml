@@ -44,6 +44,9 @@ jobs:
       gpu_a100: ${{ steps.set_gpu_types.outputs.gpu_a100 }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
       - name: Set GPU Types Based on Trigger
         id: set_gpu_types
         env:
@@ -69,6 +72,9 @@ jobs:
     steps:
         - name: Checkout source
           uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+            fetch-tags: 'true'
 
         - name: Install Hidet
           uses: ./.github/actions/install-hidet
@@ -92,6 +98,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -115,6 +124,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -138,6 +150,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -153,6 +168,9 @@ jobs:
     steps:
       - name: Checkout Hidet
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -180,6 +198,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -207,6 +228,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -233,6 +257,9 @@ jobs:
       options: --gpus all
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
 
       - name: Install Hidet
         uses: ./.github/actions/install-hidet
@@ -259,6 +286,9 @@ jobs:
       options: --gpus all
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: 'true'
       - name: Run Tests
         id: run_tests_a10
         uses: ./.github/actions/run-tests
