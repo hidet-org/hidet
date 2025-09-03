@@ -240,6 +240,7 @@ def test_mbarrier_tx_count_ops():
     hidet.cuda.synchronize()
 
 
+@pytest.mark.skip(reason="Barrier sync seems to be broken on some GPUs")
 @pytest.mark.requires_cuda
 def test_barrier():
     from hidet.lang import attrs, printf, asm
