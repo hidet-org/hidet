@@ -1,0 +1,52 @@
+name: Install Hidet CI environment
+description: Set up system dependencies, Python 3.9, and build/install Hidet wheel
+runs:
+  using: composite
+  steps:
+    # - name: Install apt packages
+    #   shell: bash
+    #   run: |
+    #     set -euo pipefail
+    #     export DEBIAN_FRONTEND=noninteractive
+    #     apt-get update
+    #     apt-get install -y \
+    #       software-properties-common \
+    #       git \
+    #       graphviz \
+    #       graphviz-dev \
+    #       curl
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Upgrade pip
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+
+    - name: Install CI requirements
+      shell: bash
+      run: |
+        python -m pip install -r .github/requirements-ci.txt
+
+    - name: Install docs requirements
+      shell: bash
+      run: |
+        python -m pip install --no-cache-dir -r docs/requirements.txt
+
+    - name: Build Hidet wheel
+      shell: bash
+      run: |
+        bash scripts/wheel/build_wheel.sh
+
+    - name: Install built wheel
+      shell: bash
+      run: |
+        set -euo pipefail
+        WHEEL=$(find scripts/wheel/built_wheel -maxdepth 1 -name '*.whl' | head -n 1)
+        if [ -z "${WHEEL}" ]; then echo "❌ No wheel file found!"; exit 1; fi
+        echo "✅ Found wheel: ${WHEEL}"
+        python -m pip install "${WHEEL}[dev]"
+
