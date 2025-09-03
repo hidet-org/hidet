@@ -31,7 +31,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_l4 == 'true' }}
     name: build-docs (l4)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-l4
+      group: ${{ github.workflow }}-${{ github.ref_name }}-l4
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
@@ -87,7 +87,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_h100 == 'true' }}
     name: build-docs (h100)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-h100
+      group: ${{ github.workflow }}-${{ github.ref_name }}-h100
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
@@ -113,7 +113,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_a10 == 'true' }}
     name: build-docs (a10)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a10
+      group: ${{ github.workflow }}-${{ github.ref_name }}-a10
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
@@ -139,7 +139,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_a100 == 'true' }}
     name: build-docs (a100)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a100
+      group: ${{ github.workflow }}-${{ github.ref_name }}-a100
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
@@ -185,7 +185,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_l4 == 'true' }}
     name: ${{ matrix.path }} (l4)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-l4
+      group: ${{ github.workflow }}-${{ github.ref_name }}-${{ matrix.path }}-l4
       cancel-in-progress: true
     needs: [list-test-dirs, set_gpu_types]
     strategy:
@@ -215,7 +215,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_h100 == 'true' }}
     name: ${{ matrix.path }} (h100)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-h100
+      group: ${{ github.workflow }}-${{ github.ref_name }}-${{ matrix.path }}-h100
       cancel-in-progress: true
     needs: [list-test-dirs, set_gpu_types]
     strategy:
@@ -245,7 +245,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_a100 == 'true' }}
     name: ${{ matrix.path }} (a100-80)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a100-80
+      group: ${{ github.workflow }}-${{ github.ref_name }}-${{ matrix.path }}-a100-80
       cancel-in-progress: true
     needs: [list-test-dirs, set_gpu_types]
     strategy:
@@ -274,7 +274,7 @@ jobs:
     if: ${{ needs.set_gpu_types.outputs.gpu_a10 == 'true' }}
     name: ${{ matrix.path }} (a10)
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a10
+      group: ${{ github.workflow }}-${{ github.ref_name }}-${{ matrix.path }}-a10
       cancel-in-progress: true
     needs: [list-test-dirs, set_gpu_types]
     strategy:
