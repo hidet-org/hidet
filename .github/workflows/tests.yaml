@@ -1,8 +1,5 @@
 name: Tests
 
-env:
-  IMAGE_TAG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'latest' || github.sha }}
-
 permissions:
   contents: read
 
@@ -37,6 +34,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
   cancel-in-progress: true
 
+env:
+  NVIDIA_CUDA_IMAGE: nvidia/cuda:12.8.1-devel-ubuntu22.04
+
 jobs:
   set_gpu_types:
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
       gpu_a10: ${{ steps.set_gpu_types.outputs.gpu_a10 }}
       gpu_a100: ${{ steps.set_gpu_types.outputs.gpu_a100 }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set GPU Types Based on Trigger
         id: set_gpu_types
         env:
@@ -57,33 +57,18 @@ jobs:
         run: |
           bash .github/scripts/set_gpu_types.sh
 
-  # build-and-push-docker:
-  #   name: Build and Push Base Docker Image
-  #   runs-on: ubuntu-latest
-  #   outputs:
-  #     image_path: ${{ steps.build_docker.outputs.image_path }}
-  #   steps:
-  #     - name: Checkout source
-  #       uses: actions/checkout@v4
-  #     - name: Build Docker image 
-  #       id: build_docker
-  #       uses: ./.github/actions/build-base-image
-  #       with:
-  #         tag: ${{ env.IMAGE_TAG }}
-  #         gcp_secret: ${{ secrets.GCP_WORKFLOW_RUNNERS_SA_KEY }}
-
   build-docs-l4:
     if: ${{ needs.set_gpu_types.outputs.gpu_l4 == 'true' }}
     name: build-docs (l4)
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-l4
       cancel-in-progress: true
-    needs: [set_gpu_types, build-and-push-docker]
+    needs: [set_gpu_types]
     timeout-minutes: 120
     runs-on:
       group: linux-amd64-gpu-l4-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
       options: --gpus all
     steps:
         - name: Checkout source
@@ -102,12 +87,12 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-h100
       cancel-in-progress: true
-    needs: [set_gpu_types, build-and-push-docker]
+    needs: [set_gpu_types]
     timeout-minutes: 120
     runs-on:
       group: linux-amd64-gpu-h100-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
       options: --gpus all
     steps:
       - name: Checkout source
@@ -126,12 +111,12 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a10
       cancel-in-progress: true
-    needs: [set_gpu_types, build-and-push-docker]
+    needs: [set_gpu_types]
     timeout-minutes: 120
     runs-on:
       group: linux-amd64-gpu-a10-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
       options: --gpus all
     steps:
       - name: Checkout source
@@ -150,12 +135,12 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-a100
       cancel-in-progress: true
-    needs: [set_gpu_types, build-and-push-docker]
+    needs: [set_gpu_types]
     timeout-minutes: 120
     runs-on:
       group: linux-amd64-gpu-a100-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
       options: --gpus all
     steps:
       - name: Checkout source
@@ -191,14 +176,15 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-l4
       cancel-in-progress: true
-    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
       group: linux-amd64-gpu-l4-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      options: --gpus all
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -218,14 +204,15 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-h100
       cancel-in-progress: true
-    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
       group: linux-amd64-gpu-h100-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      options: --gpus all
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -245,14 +232,15 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a100-80
       cancel-in-progress: true
-    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
       group: linux-amd64-gpu-a100-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      options: --gpus all
     steps:
       - uses: actions/checkout@v4
 
@@ -271,14 +259,15 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}-${{ matrix.path }}-a10
       cancel-in-progress: true
-    needs: [list-test-dirs, set_gpu_types, build-and-push-docker]
+    needs: [list-test-dirs, set_gpu_types]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
     runs-on:
       group: linux-amd64-gpu-a10-latest-1
     container:
-      image: ${{ needs.build-and-push-docker.outputs.image_path }}
+      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      options: --gpus all
     steps:
       - uses: actions/checkout@v4
       - name: Run Tests
