@@ -9,13 +9,7 @@ permissions:
 on:
   push:
     branches: 
-      - "pull-request/[0-9]+"
-    paths-ignore:
-      - 'README.md'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
-  workflow_call:
+      - "pull-request/[0-9]*"
   workflow_dispatch:
     inputs:
       gpu_l4:
@@ -44,7 +38,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   set_gpu_types:
     runs-on: ubuntu-latest
     outputs:
@@ -64,20 +57,20 @@ jobs:
         run: |
           bash .github/scripts/set_gpu_types.sh
 
-  build-and-push-docker:
-    name: Build and Push Base Docker Image
-    runs-on: ubuntu-latest
-    outputs:
-      image_path: ${{ steps.build_docker.outputs.image_path }}
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-      - name: Build Docker image 
-        id: build_docker
-        uses: ./.github/actions/build-base-image
-        with:
-          tag: ${{ env.IMAGE_TAG }}
-          gcp_secret: ${{ secrets.GCP_WORKFLOW_RUNNERS_SA_KEY }}
+  # build-and-push-docker:
+  #   name: Build and Push Base Docker Image
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     image_path: ${{ steps.build_docker.outputs.image_path }}
+  #   steps:
+  #     - name: Checkout source
+  #       uses: actions/checkout@v4
+  #     - name: Build Docker image 
+  #       id: build_docker
+  #       uses: ./.github/actions/build-base-image
+  #       with:
+  #         tag: ${{ env.IMAGE_TAG }}
+  #         gcp_secret: ${{ secrets.GCP_WORKFLOW_RUNNERS_SA_KEY }}
 
   build-docs-l4:
     if: ${{ needs.set_gpu_types.outputs.gpu_l4 == 'true' }}
@@ -95,6 +88,10 @@ jobs:
     steps:
         - name: Checkout source
           uses: actions/checkout@v4
+
+        - name: Install Hidet
+          uses: ./.github/actions/install-hidet
+
         - name: Build docs
           id: build_step
           uses: ./.github/actions/build-docs
@@ -115,6 +112,10 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Build docs
         id: build_step
         uses: ./.github/actions/build-docs
@@ -135,6 +136,10 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Build docs
         id: build_step
         uses: ./.github/actions/build-docs
@@ -155,6 +160,10 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Build docs
         id: build_step
         uses: ./.github/actions/build-docs
@@ -191,7 +200,12 @@ jobs:
     container:
       image: ${{ needs.build-and-push-docker.outputs.image_path }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Run Tests
         id: run_tests_l4
         uses: ./.github/actions/run-tests
@@ -213,7 +227,12 @@ jobs:
     container:
       image: ${{ needs.build-and-push-docker.outputs.image_path }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Run Tests
         id: run_tests_h100
         uses: ./.github/actions/run-tests
@@ -236,6 +255,10 @@ jobs:
       image: ${{ needs.build-and-push-docker.outputs.image_path }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Hidet
+        uses: ./.github/actions/install-hidet
+
       - name: Run Tests
         id: run_tests_a100
         uses: ./.github/actions/run-tests
