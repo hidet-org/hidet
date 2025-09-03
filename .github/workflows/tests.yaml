@@ -62,8 +62,7 @@ jobs:
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
-    runs-on:
-      group: linux-amd64-gpu-l4-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -86,8 +85,7 @@ jobs:
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
-    runs-on:
-      group: linux-amd64-gpu-h100-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -110,8 +108,7 @@ jobs:
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
-    runs-on:
-      group: linux-amd64-gpu-a10-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -134,8 +131,7 @@ jobs:
       cancel-in-progress: true
     needs: [set_gpu_types]
     timeout-minutes: 120
-    runs-on:
-      group: linux-amd64-gpu-a100-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -177,8 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on:
-      group: linux-amd64-gpu-l4-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -205,8 +200,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on:
-      group: linux-amd64-gpu-h100-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -233,8 +227,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on:
-      group: linux-amd64-gpu-a100-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
@@ -260,8 +253,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.list-test-dirs.outputs.matrix) }}
-    runs-on:
-      group: linux-amd64-gpu-a10-latest-1
+    runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
