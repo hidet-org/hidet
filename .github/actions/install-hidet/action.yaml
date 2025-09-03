@@ -3,18 +3,17 @@ description: Set up system dependencies, Python 3.9, and build/install Hidet whe
 runs:
   using: composite
   steps:
-    # - name: Install apt packages
-    #   shell: bash
-    #   run: |
-    #     set -euo pipefail
-    #     export DEBIAN_FRONTEND=noninteractive
-    #     apt-get update
-    #     apt-get install -y \
-    #       software-properties-common \
-    #       git \
-    #       graphviz \
-    #       graphviz-dev \
-    #       curl
+    - name: Install apt packages
+      shell: bash
+      run: |
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          software-properties-common \
+          git \
+          graphviz \
+          graphviz-dev 
 
     - name: Set up Python 3.9
       uses: actions/setup-python@v5
