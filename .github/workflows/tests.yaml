@@ -34,9 +34,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
   cancel-in-progress: true
 
-env:
-  NVIDIA_CUDA_IMAGE: nvidia/cuda:12.8.1-devel-ubuntu22.04
-
 jobs:
   set_gpu_types:
     runs-on: ubuntu-latest
@@ -68,7 +65,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-l4-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
         - name: Checkout source
@@ -92,7 +89,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-h100-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - name: Checkout source
@@ -116,7 +113,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-a10-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - name: Checkout source
@@ -140,7 +137,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-a100-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - name: Checkout source
@@ -183,7 +180,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-l4-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - name: Checkout source
@@ -211,7 +208,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-h100-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - name: Checkout source
@@ -239,7 +236,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-a100-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - uses: actions/checkout@v4
@@ -266,7 +263,7 @@ jobs:
     runs-on:
       group: linux-amd64-gpu-a10-latest-1
     container:
-      image: ${{ env.NVIDIA_CUDA_IMAGE }}
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
       - uses: actions/checkout@v4
