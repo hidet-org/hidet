@@ -70,6 +70,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+        - name: Install git for checkout
+          run: |
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y git
         - name: Checkout source
           uses: actions/checkout@v4
           with:
@@ -96,6 +100,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -122,6 +130,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -148,6 +160,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -196,6 +212,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -226,6 +246,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -256,6 +280,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -285,6 +313,10 @@ jobs:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
       options: --gpus all
     steps:
+      - name: Install git for checkout
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
