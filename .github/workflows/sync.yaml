@@ -1,84 +1,84 @@
-name: Synchronization
+# name: Synchronization
 
-on:
-  push:
-    branches:
-      - main
+# on:
+#   push:
+#     branches:
+#       - main
 
-permissions:
-  contents: write
+# permissions:
+#   contents: write
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    if: |
-      (github.repository == 'CentML/hidet' && github.ref == 'refs/heads/main') ||
-      (github.repository == 'hidet-org/hidet' && github.ref == 'refs/heads/main')
+# jobs:
+#   sync:
+#     runs-on: ubuntu-latest
+#     if: |
+#       (github.repository == 'CentML/hidet' && github.ref == 'refs/heads/main') ||
+#       (github.repository == 'hidet-org/hidet' && github.ref == 'refs/heads/main')
 
-    env:
-      REMOTE_TOKEN: ${{ github.repository == 'CentML/hidet' && secrets.HIDET_ORG_HIDET_REPO_TOKEN || secrets.CENTML_HIDET_REPO_TOKEN }}
+#     env:
+#       REMOTE_TOKEN: ${{ github.repository == 'CentML/hidet' && secrets.HIDET_ORG_HIDET_REPO_TOKEN || secrets.CENTML_HIDET_REPO_TOKEN }}
 
-    steps:
-      - name: Set context variables
-        id: set_context_vars
-        run: |
-          if [[ "$GITHUB_REPOSITORY" == "CentML/hidet" ]]; then
-            echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
-            echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
-            echo "REMOTE_REPO=hidet-org/hidet" >> $GITHUB_ENV
-          elif [[ "$GITHUB_REPOSITORY" == "hidet-org/hidet" ]]; then
-            echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
-            echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
-            echo "REMOTE_REPO=CentML/hidet" >> $GITHUB_ENV
-          else
-            echo "::error ::Unexpected repository: $GITHUB_REPOSITORY"
-            exit 1
-          fi
+#     steps:
+#       - name: Set context variables
+#         id: set_context_vars
+#         run: |
+#           if [[ "$GITHUB_REPOSITORY" == "CentML/hidet" ]]; then
+#             echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
+#             echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
+#             echo "REMOTE_REPO=hidet-org/hidet" >> $GITHUB_ENV
+#           elif [[ "$GITHUB_REPOSITORY" == "hidet-org/hidet" ]]; then
+#             echo "LOCAL_BRANCH=main" >> $GITHUB_ENV
+#             echo "REMOTE_BRANCH=main" >> $GITHUB_ENV
+#             echo "REMOTE_REPO=CentML/hidet" >> $GITHUB_ENV
+#           else
+#             echo "::error ::Unexpected repository: $GITHUB_REPOSITORY"
+#             exit 1
+#           fi
 
-      - name: Checkout local branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ env.LOCAL_BRANCH }}
+#       - name: Checkout local branch
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+#           ref: ${{ env.LOCAL_BRANCH }}
 
-      - name: Configure Git user
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+#       - name: Configure Git user
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Add remote, fetch, and capture remote HEAD SHA
-        id: fetch_remote
-        run: |
-          git config --local --unset-all http.https://github.com/.extraheader || true
-          git remote add other https://x-access-token:${{ env.REMOTE_TOKEN }}@github.com/$REMOTE_REPO.git
-          git -c http.verbose=true fetch other ${{ env.REMOTE_BRANCH }}
+#       - name: Add remote, fetch, and capture remote HEAD SHA
+#         id: fetch_remote
+#         run: |
+#           git config --local --unset-all http.https://github.com/.extraheader || true
+#           git remote add other https://x-access-token:${{ env.REMOTE_TOKEN }}@github.com/$REMOTE_REPO.git
+#           git -c http.verbose=true fetch other ${{ env.REMOTE_BRANCH }}
           
-          # Capture the SHA of the remote branch right after the fetch
-          REMOTE_HEAD_SHA=$(git rev-parse other/${{ env.REMOTE_BRANCH }})
-          echo "REMOTE_HEAD_SHA=$REMOTE_HEAD_SHA" >> $GITHUB_OUTPUT
-          echo "Fetched other/${{ env.REMOTE_BRANCH }} at SHA: $REMOTE_HEAD_SHA"
+#           # Capture the SHA of the remote branch right after the fetch
+#           REMOTE_HEAD_SHA=$(git rev-parse other/${{ env.REMOTE_BRANCH }})
+#           echo "REMOTE_HEAD_SHA=$REMOTE_HEAD_SHA" >> $GITHUB_OUTPUT
+#           echo "Fetched other/${{ env.REMOTE_BRANCH }} at SHA: $REMOTE_HEAD_SHA"
           
-          # Create temporary local branch from the fetched remote branch
-          git branch temp_remote_sync other/${{ env.REMOTE_BRANCH }}
+#           # Create temporary local branch from the fetched remote branch
+#           git branch temp_remote_sync other/${{ env.REMOTE_BRANCH }}
 
-      - name: Rebase remote branch onto local branch
-        run: |
-          git checkout ${{ env.LOCAL_BRANCH }}
-          git rebase ${{ env.LOCAL_BRANCH }} temp_remote_sync || {
-            echo "::error ::Rebase failed due to conflicts. Manual intervention required."
-            exit 1
-          }
+#       - name: Rebase remote branch onto local branch
+#         run: |
+#           git checkout ${{ env.LOCAL_BRANCH }}
+#           git rebase ${{ env.LOCAL_BRANCH }} temp_remote_sync || {
+#             echo "::error ::Rebase failed due to conflicts. Manual intervention required."
+#             exit 1
+#           }
 
-      - name: Push rebased branch to remote
-        run: |
-          git checkout temp_remote_sync
+#       - name: Push rebased branch to remote
+#         run: |
+#           git checkout temp_remote_sync
 
-          # IMPORTANT: We use the REMOTE_HEAD_SHA captured *before* the rebase
-          # This tells --force-with-lease what version of the remote branch
-          # we expect to overwrite.
-          echo "Attempting to push to ${{ env.REMOTE_REPO }}:${{ env.REMOTE_BRANCH }}"
-          echo "Expecting remote branch to be at SHA: ${{ steps.fetch_remote.outputs.REMOTE_HEAD_SHA }}"
+#           # IMPORTANT: We use the REMOTE_HEAD_SHA captured *before* the rebase
+#           # This tells --force-with-lease what version of the remote branch
+#           # we expect to overwrite.
+#           echo "Attempting to push to ${{ env.REMOTE_REPO }}:${{ env.REMOTE_BRANCH }}"
+#           echo "Expecting remote branch to be at SHA: ${{ steps.fetch_remote.outputs.REMOTE_HEAD_SHA }}"
 
-          git push https://x-access-token:${{ env.REMOTE_TOKEN }}@github.com/$REMOTE_REPO.git \
-            temp_remote_sync:${{ env.REMOTE_BRANCH }} \
-            --force-with-lease=${{ env.REMOTE_BRANCH }}:${{ steps.fetch_remote.outputs.REMOTE_HEAD_SHA }}
+#           git push https://x-access-token:${{ env.REMOTE_TOKEN }}@github.com/$REMOTE_REPO.git \
+#             temp_remote_sync:${{ env.REMOTE_BRANCH }} \
+#             --force-with-lease=${{ env.REMOTE_BRANCH }}:${{ steps.fetch_remote.outputs.REMOTE_HEAD_SHA }}
